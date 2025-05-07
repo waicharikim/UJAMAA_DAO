@@ -4,7 +4,7 @@
 
 import request from 'supertest';
 import express, { Express } from 'express';
-import userRoutes from '../src/routes/user';
+import userRoutes from '../src/routes/user.js';
 
 // Setup an Express app instance for testing with JSON middleware
 const app: Express = express();

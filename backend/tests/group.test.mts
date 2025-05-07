@@ -1,6 +1,6 @@
 import request from 'supertest';
 import express from 'express';
-import groupRoutes from '../src/routes/group';
+import groupRoutes from '../src/routes/group.js';
 
 const app = express();
 app.use(express.json());

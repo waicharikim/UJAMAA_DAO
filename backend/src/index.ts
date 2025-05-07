@@ -1,7 +1,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
-import userRoutes from './routes/user'; // Importing user routes
-import groupRoutes from './routes/group'; // Importing group routes
+import userRoutes from './routes/user.js'; // Importing user routes
+import groupRoutes from './routes/group.js'; // Importing group routes
 
 
 dotenv.config();
