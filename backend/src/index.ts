@@ -1,28 +1,30 @@
-/**
- * Entry point for UjamaaDAO backend API.
- * A simple Express server setup as a placeholder.
- * This will evolve to handle authentication, API routes, blockchain integration, etc.
- */
-
 import express from 'express';
 import dotenv from 'dotenv';
+import userRoutes from './routes/user'; // Importing user routes
 
 dotenv.config();
 
 const app = express();
-
 const PORT = process.env.PORT || 4000;
 
-// Middleware for JSON parsing
+// Middleware to parse JSON bodies
 app.use(express.json());
 
-// Basic health check route
+// Register User routes under /api/users
+app.use('/api/users', userRoutes);
+
+/**
+ * Health Check endpoint to verify server status.
+ */
 app.get('/health', (_req, res) => {
-  res.status(200).send({ status: 'OK', timestamp: new Date().toISOString() });
+  res.status(200).json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+  });
 });
 
-// Start listening on the configured port
+// Start server
 app.listen(PORT, () => {
   // eslint-disable-next-line no-console
-  console.log(`UjamaaDAO backend server listening on port ${PORT}`);
+  console.log(`UjamaaDAO backend listening on port ${PORT}`);
 });
