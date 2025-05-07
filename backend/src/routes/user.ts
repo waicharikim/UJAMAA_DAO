@@ -1,44 +1,44 @@
 /**
  * User-related routes for UjamaaDAO backend API.
- * 
- * This module handles individual user registration and related user endpoints.
+ *
+ * This module handles individual user registration and related user endpoints,
+ * now integrated with Prisma Client for database persistence.
  */
 
 import { Router, Request, Response } from 'express';
+import prisma from '../prismaClient.js'; // Prisma client instance (make sure the path and extension match your setup)
 
-// Create an Express router instance for user routes
 const router = Router();
 
 /**
  * POST /api/users/register
- * 
- * Registers a new individual user in the system.
  *
- * Expected request body (JSON):
+ * Registers a new individual user in the database.
+ *
+ * Expected Request Body (JSON):
  * {
  *   walletAddress: string;      // Blockchain wallet address (required)
- *   email: string;              // User contact email (required)
- *   name: string;               // User's full name (required)
- *   constituency: string;       // Registered constituency (required)
- *   county: string;             // Registered county (required)
+ *   email: string;              // User email (required)
+ *   name: string;               // Full name (required)
+ *   constituency: string;       // Constituency of residence (required)
+ *   county: string;             // County of residence (required)
  *   industry?: string;          // Industry user identifies with (optional)
- *   goodsServices?: string[];   // Goods or services user offers (optional)
+ *   goodsServices?: string[];   // Goods and services offered (optional)
  * }
- * 
- * Validation rules:
- *   - Required fields must be present and non-empty.
- *   - walletAddress should conform to expected blockchain address format 
- *     (format validation to be implemented).
- *   - Email format validation to be added in future iterations.
- * 
- * Response:
- *   - 201 Created with JSON { success: true, userId: string } on success.
- *   - 400 Bad Request with JSON { success: false, error: string } on validation failure.
- *   - 500 Internal Server Error on unexpected failures.
+ *
+ * Validation:
+ * - Required fields must be present and non-empty.
+ * - Rejects registration if walletAddress or email already exists.
+ *
+ * Responses:
+ * - 201 Created with JSON { success: true, userId: string } on success.
+ * - 400 Bad Request with JSON { success: false, error: string } if validation fails.
+ * - 409 Conflict if user already exists.
+ * - 500 Internal Server Error on unexpected failures.
  */
 router.post('/register', async (req: Request, res: Response) => {
   try {
-    // Destructure relevant fields from request body
+    // Extract required and optional fields from the request body
     const {
       walletAddress,
       email,
@@ -49,7 +49,7 @@ router.post('/register', async (req: Request, res: Response) => {
       goodsServices,
     } = req.body;
 
-    // Basic presence validation for mandatory fields
+    // Validate presence of mandatory fields
     if (!walletAddress || !email || !name || !constituency || !county) {
       return res.status(400).json({
         success: false,
@@ -57,26 +57,44 @@ router.post('/register', async (req: Request, res: Response) => {
       });
     }
 
-    // TODO:
-    // - Validate walletAddress format (e.g., regex or web3 utils)
-    // - Validate email format
-    // - Check for existing user by walletAddress or email in DB
-    // - Persist user record into database and generate UUID
+    // Check if a user with the same wallet address or email already exists
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        OR: [{ walletAddress }, { email }],
+      },
+    });
 
-    // For now, returning dummy userId to complete API contract
-    const userId = 'dummy-uuid';
+    if (existingUser) {
+      return res.status(409).json({
+        success: false,
+        error: 'User with this wallet address or email already exists',
+      });
+    }
 
-    // Send success response
+    // Create a new user record in the database
+    const newUser = await prisma.user.create({
+      data: {
+        walletAddress,
+        email,
+        name,
+        constituency,
+        county,
+        industry: industry || null,
+        goodsServices: goodsServices || [],
+      },
+    });
+
+    // Respond with success and the new user's ID
     return res.status(201).json({
       success: true,
-      userId,
+      userId: newUser.id,
     });
-  } catch (err) {
-    // Log error server-side for diagnostics
+  } catch (error) {
+    // Log the error for debugging purposes on server side
     // eslint-disable-next-line no-console
-    console.error('Error in user registration:', err);
+    console.error('User registration error:', error);
 
-    // Return generic error response to client
+    // Respond with a generic internal server error message
     return res.status(500).json({
       success: false,
       error: 'Internal server error',
@@ -84,5 +102,4 @@ router.post('/register', async (req: Request, res: Response) => {
   }
 });
 
-// Export the router to be used by backend application
 export default router;

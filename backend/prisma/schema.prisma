@@ -1,0 +1,100 @@
+// Prisma schema for UjamaaDAO backend DB v1.0
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String    @id @default(uuid())
+  walletAddress  String    @unique
+  email          String    @unique
+  name           String
+  constituency   String
+  county         String
+  industry       String?
+  goodsServices  String[]
+  groups         GroupMember[]
+
+  proposals      Proposal[] @relation("UserProposals")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model Group {
+  id              String        @id @default(uuid())
+  name            String        @unique
+  description     String?
+  walletAddress   String        @unique
+  constituency    String
+  county          String
+  industryFocus   String
+  productsServices String[]
+  members         GroupMember[]
+  proposals       Proposal[]    @relation("GroupProposals")
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+model GroupMember {
+  id       String  @id @default(uuid())
+  user     User    @relation(fields: [userId], references: [id])
+  userId   String
+  group    Group   @relation(fields: [groupId], references: [id])
+  groupId  String
+  role     GroupRole @default(MEMBER)
+  joinedAt DateTime @default(now())
+
+  @@unique([userId, groupId])
+}
+
+enum GroupRole {
+  ADMIN
+  MEMBER
+}
+
+model Proposal {
+  id             String    @id @default(uuid())
+  title          String
+  description    String
+  proposalType   ProposalType
+  funded         Boolean
+  budget         Int?
+  timeline       String?
+  locationScope  LocationScope
+  constituency   String?
+  county         String?
+  purposeDetails Json?     // Flexible JSON for business/nonprofit/bill details
+  status         ProposalStatus @default(DRAFT)
+  creatorUser    User?     @relation("UserProposals", fields: [creatorUserId], references: [id])
+  creatorUserId  String?
+  creatorGroup   Group?    @relation("GroupProposals", fields: [creatorGroupId], references: [id])
+  creatorGroupId String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+enum ProposalType {
+  BUSINESS
+  NON_PROFIT
+  BILL
+}
+
+enum LocationScope {
+  LOCAL
+  COUNTY
+  NATIONAL
+}
+
+enum ProposalStatus {
+  DRAFT
+  VOTING
+  APPROVED
+  REJECTED
+  EXECUTING
+  COMPLETED
+}

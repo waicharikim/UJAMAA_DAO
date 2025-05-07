@@ -11,6 +11,7 @@ COPY package.json package-lock.json* ./
 RUN npm ci --production
 
 # Copy source code
+COPY . .
 COPY ./dist ./dist
 
 # Expose default port
