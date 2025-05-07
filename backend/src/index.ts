@@ -1,6 +1,8 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import userRoutes from './routes/user'; // Importing user routes
+import groupRoutes from './routes/group'; // Importing group routes
+
 
 dotenv.config();
 
@@ -12,6 +14,9 @@ app.use(express.json());
 
 // Register User routes under /api/users
 app.use('/api/users', userRoutes);
+
+// Register Group routes under /api/groups
+app.use('/api/groups', groupRoutes);
 
 /**
  * Health Check endpoint to verify server status.
