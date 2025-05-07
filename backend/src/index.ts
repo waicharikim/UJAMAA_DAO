@@ -2,7 +2,7 @@ import express from 'express';
 import dotenv from 'dotenv';
 import userRoutes from './routes/user.js'; // Importing user routes
 import groupRoutes from './routes/group.js'; // Importing group routes
-
+import proposalRoutes from './routes/proposal.js'; // Importing proposal routes
 
 dotenv.config();
 
@@ -17,6 +17,9 @@ app.use('/api/users', userRoutes);
 
 // Register Group routes under /api/groups
 app.use('/api/groups', groupRoutes);
+
+// Register Proposal routes under /api/proposals
+app.use('/api/proposals', proposalRoutes);
 
 /**
  * Health Check endpoint to verify server status.
