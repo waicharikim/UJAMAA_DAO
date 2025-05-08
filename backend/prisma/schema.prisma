@@ -140,6 +140,16 @@ model TokenBalance {
   @@unique([holderType, holderId])
 }
 
+model ImpactPoint {
+  id         String   @id @default(uuid())
+  holderType HolderType
+  holderId   String
+  points     Int      @default(0)
+  updatedAt  DateTime @updatedAt
+
+  @@unique([holderType, holderId])
+}
+
 enum HolderType {
   USER
   GROUP
