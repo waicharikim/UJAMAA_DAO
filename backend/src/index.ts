@@ -3,6 +3,9 @@ import dotenv from 'dotenv';
 import userRoutes from './routes/user.js'; // Importing user routes
 import groupRoutes from './routes/group.js'; // Importing group routes
 import proposalRoutes from './routes/proposal.js'; // Importing proposal routes
+import voteRoutes from './routes/vote.js'; // Importing vote routes
+import projectRoutes from './routes/project.js'; // Importing project routes
+
 
 dotenv.config();
 
@@ -20,6 +23,12 @@ app.use('/api/groups', groupRoutes);
 
 // Register Proposal routes under /api/proposals
 app.use('/api/proposals', proposalRoutes);
+
+// Register Vote routes under /api/votes
+app.use('/api/votes', voteRoutes);
+
+// Register Project routes under /api/projects
+app.use('/api/projects', projectRoutes);
 
 /**
  * Health Check endpoint to verify server status.

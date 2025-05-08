@@ -65,9 +65,10 @@ export async function deductTokens(holderType: HolderType, holderId: string, amo
           holderId,
         },
       },
-      lock: {
+     /**lock: {
         mode: 'Update', // Explicit row lock for transaction safety
       },
+     */ 
     });
 
     if (!record) {
@@ -117,9 +118,9 @@ export async function mintTokens(holderType: HolderType, holderId: string, amoun
           holderId,
         },
       },
-      lock: {
-        mode: 'Update',
-      },
+     // lock: {
+       // mode: 'Update',
+     // },
     });
 
     if (!record) {

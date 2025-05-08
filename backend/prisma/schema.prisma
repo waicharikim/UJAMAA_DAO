@@ -1,4 +1,4 @@
-// Prisma schema for UjamaaDAO backend DB v1.0
+// Prisma schema for UjamaaDAO backend DB v1.1
 
 generator client {
   provider = "prisma-client-js"
@@ -8,6 +8,9 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+//////////////////////////////////////////////////////////////////////////
+// Core Models (existing)
 
 model User {
   id             String    @id @default(uuid())
@@ -21,6 +24,8 @@ model User {
   groups         GroupMember[]
 
   proposals      Proposal[] @relation("UserProposals")
+  projectParticipants ProjectParticipant[] @relation("UserProjectParticipants") // projects joined
+
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 }
@@ -36,6 +41,7 @@ model Group {
   productsServices String[]
   members         GroupMember[]
   proposals       Proposal[]    @relation("GroupProposals")
+
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 }
@@ -50,6 +56,11 @@ model GroupMember {
   joinedAt DateTime @default(now())
 
   @@unique([userId, groupId])
+}
+
+enum GroupRole {
+  ADMIN
+  MEMBER
 }
 
 model County {
@@ -69,32 +80,6 @@ model Constituency {
   updatedAt DateTime @updatedAt
 
   @@unique([name, countyId])
-}
-
-enum GroupRole {
-  ADMIN
-  MEMBER
-}
-
-model Proposal {
-  id             String    @id @default(uuid())
-  title          String
-  description    String
-  proposalType   ProposalType
-  funded         Boolean
-  budget         Int?
-  timeline       String?
-  locationScope  LocationScope
-  constituency   String?
-  county         String?
-  purposeDetails Json?     // Flexible JSON for business/nonprofit/bill details
-  status         ProposalStatus @default(DRAFT)
-  creatorUser    User?     @relation("UserProposals", fields: [creatorUserId], references: [id])
-  creatorUserId  String?
-  creatorGroup   Group?    @relation("GroupProposals", fields: [creatorGroupId], references: [id])
-  creatorGroupId String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
 }
 
 enum ProposalType {
@@ -118,10 +103,33 @@ enum ProposalStatus {
   COMPLETED
 }
 
+model Proposal {
+  id             String    @id @default(uuid())
+  title          String
+  description    String
+  proposalType   ProposalType
+  funded         Boolean
+  budget         Int?
+  timeline       String?
+  locationScope  LocationScope
+  constituency   String?
+  county         String?
+  purposeDetails Json?     // Flexible JSON for business/nonprofit/bill details
+  status         ProposalStatus @default(DRAFT)
+  creatorUser    User?     @relation("UserProposals", fields: [creatorUserId], references: [id])
+  creatorUserId  String?
+  creatorGroup   Group?    @relation("GroupProposals", fields: [creatorGroupId], references: [id])
+  creatorGroupId String?
+  project        Project?  @relation("ProposalToProject")
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
 model Vote {
   id          String   @id @default(uuid())
   proposalId  String
-  voterId     String   // either userId or groupId
+  voterId     String   // userId or groupId
   isGroup     Boolean
   vote        Boolean
   tokensSpent Int
@@ -130,27 +138,124 @@ model Vote {
   @@index([proposalId])
 }
 
+enum HolderType {
+  USER
+  GROUP
+}
+
 model TokenBalance {
-  id        String   @id @default(uuid())
-  holderType HolderType   // enum: USER or GROUP
-  holderId  String            // user.id or group.id depending on holderType
-  balance   Int          @default(0)   // token amount available
-  updatedAt DateTime     @updatedAt
+  id         String     @id @default(uuid())
+  holderType HolderType
+  holderId   String
+  balance    Int        @default(0)
+  updatedAt  DateTime   @updatedAt
 
   @@unique([holderType, holderId])
 }
 
 model ImpactPoint {
-  id         String   @id @default(uuid())
+  id         String     @id @default(uuid())
   holderType HolderType
   holderId   String
-  points     Int      @default(0)
-  updatedAt  DateTime @updatedAt
+  points     Int        @default(0)
+  updatedAt  DateTime   @updatedAt
 
   @@unique([holderType, holderId])
 }
 
-enum HolderType {
-  USER
-  GROUP
+//////////////////////////////////////////////////////////////////////////
+// New Models for Projects and Participation
+
+enum ProjectStatus {
+  ACTIVE
+  COMPLETED
+  ON_HOLD
+  CANCELLED
 }
+
+enum ParticipantRole {
+  MEMBER
+  ADMIN
+}
+
+model Project {
+  id            String           @id @default(uuid())
+  proposalId    String           @unique
+  title         String
+  description   String
+  budget        Int?
+  timeline      String?
+  status        ProjectStatus    @default(ACTIVE)
+  locationScope LocationScope
+  constituency  String?
+  county        String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  proposal      Proposal         @relation("ProposalToProject", fields: [proposalId], references: [id])
+  participants  ProjectParticipant[]
+}
+
+model ProjectParticipant {
+  id          String           @id @default(uuid())
+  project     Project          @relation(fields: [projectId], references: [id])
+  projectId   String
+
+  participant User             @relation(fields: [userId], references: [id], name: "UserProjectParticipants")
+  userId      String
+
+  role        ParticipantRole  @default(MEMBER)
+  joinedAt    DateTime         @default(now())
+
+  @@unique([projectId, userId])
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Future-Ready Expansions (placeholders)
+
+// Delegated voting & proxy system (conceptual)
+// model Delegation {
+//   id         String @id @default(uuid())
+//   delegator  User   @relation(fields: [delegatorId], references: [id])
+//   delegatorId String
+//   delegatee  User   @relation(fields: [delegateeId], references: [id])
+//   delegateeId String
+//   createdAt  DateTime @default(now())
+// }
+
+// Staking & token lockups
+// model TokenStake {
+//   id         String @id @default(uuid())
+//   user       User   @relation(fields: [userId], references: [id])
+//   userId     String
+//   amount     Int
+//   lockedUntil DateTime
+//   createdAt  DateTime @default(now())
+// }
+
+// Milestone tracking for projects
+// model ProjectMilestone {
+//   id         String @id @default(uuid())
+//   project    Project @relation(fields: [projectId], references: [id])
+//   projectId  String
+//   description String
+//   dueDate    DateTime
+//   status     MilestoneStatus @default(PENDING)
+//   createdAt  DateTime @default(now())
+// }
+
+// enum MilestoneStatus {
+//   PENDING
+//   COMPLETED
+//   OVERDUE
+// }
+
+// Notification system placeholder
+// model Notification {
+//   id        String @id @default(uuid())
+//   user      User   @relation(fields: [userId], references: [id])
+//   userId    String
+//   content   String
+//   read      Boolean @default(false)
+//   createdAt DateTime @default(now())
+// }

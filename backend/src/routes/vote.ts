@@ -1,18 +1,23 @@
-/**
- * Voting API routes for UjamaaDAO.
- *
- * Handles casting votes (individual and group),
- * enforcing impact points and token rules,
- * and retrieving aggregated voting results.
- */
 // backend/src/routes/vote.ts
 
 import { Router, Request, Response } from "express";
 import prisma from '../prismaClient.js';
 import { ProposalStatus } from "@prisma/client";
-import { getTokenBalance, deductTokens, HolderType } from '../services/tokenServices.js';
+import {
+  getTokenBalance,
+  deductTokens,
+  HolderType as TokenHolderType,
+} from '../services/tokenServices.js';
+import {
+  getImpactPoints,
+  addImpactPoints,
+  HolderType as ImpactHolderType,
+} from '../services/impactPointService.js';
 
 const router = Router();
+
+const MIN_IMPACT_POINTS_TO_VOTE = 10;  // Example threshold
+const IMPACT_POINTS_REWARD = 5;        // Points rewarded per vote
 
 /**
  * POST /api/votes/cast
@@ -40,7 +45,7 @@ router.post("/cast", async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: "Invalid input" });
     }
 
-    // Fetch proposal to verify status
+    // Fetch proposal to verify voting status
     const proposal = await prisma.proposal.findUnique({ where: { id: proposalId } });
     if (!proposal) {
       return res.status(404).json({ success: false, error: "Proposal not found" });
@@ -49,23 +54,25 @@ router.post("/cast", async (req: Request, res: Response) => {
       return res.status(403).json({ success: false, error: "Voting not open" });
     }
 
-    // Determine holder type for tokenService use
-    const holderType = isGroup ? HolderType.GROUP : HolderType.USER;
+    // Determine holder types
+    const tokenHolderType = isGroup ? TokenHolderType.GROUP : TokenHolderType.USER;
+    const impactHolderType = isGroup ? ImpactHolderType.GROUP : ImpactHolderType.USER;
 
-    // Check token balance
-    const currentBalance = await getTokenBalance(holderType, voterId);
-    if (currentBalance < tokensSpent) {
+    // Check impact points eligibility
+    const currentImpactPoints = await getImpactPoints(impactHolderType, voterId);
+    if (currentImpactPoints < MIN_IMPACT_POINTS_TO_VOTE) {
+      return res.status(403).json({
+        success: false,
+        error: `Insufficient impact points (${currentImpactPoints}). Minimum required is ${MIN_IMPACT_POINTS_TO_VOTE}.`,
+      });
+    }
+
+    // Check token balance and deduct tokens
+    const currentTokenBalance = await getTokenBalance(tokenHolderType, voterId);
+    if (currentTokenBalance < tokensSpent) {
       return res.status(403).json({ success: false, error: "Insufficient tokens" });
     }
-
-    // Deduct tokens atomically
-    try {
-      await deductTokens(holderType, voterId, tokensSpent);
-    } catch (err: any) {
-      return res.status(500).json({ success: false, error: `Token deduction failed: ${err.message}` });
-    }
-
-    // TODO: Check Impact Points eligibility here in next steps
+    await deductTokens(tokenHolderType, voterId, tokensSpent);
 
     // Record the vote
     await prisma.vote.create({
@@ -77,6 +84,9 @@ router.post("/cast", async (req: Request, res: Response) => {
         tokensSpent,
       },
     });
+
+    // Reward impact points for voting participation
+    await addImpactPoints(impactHolderType, voterId, IMPACT_POINTS_REWARD);
 
     return res.status(200).json({ success: true, message: "Vote recorded" });
   } catch (error) {

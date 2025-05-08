@@ -1,8 +1,16 @@
+/**
+ * Integration tests for Proposal API routes.
+ *
+ * Covers proposal creation, retrieval, listing, and updating,
+ * with real database operations using Prisma.
+ */
+
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import request from 'supertest';
 import express from 'express';
-import prisma from '../src/prismaClient';
-import { ProposalType, ProposalStatus, LocationScope } from '@prisma/client';
+// In test files
+import prisma from '../src/prismaClient';    // NO .js here inside tests!
+import { ProposalType, ProposalStatus, LocationScope } from '@prisma/client';  // Enums from the module
 import proposalRoutes from '../src/routes/proposal';
 
 const app = express();
@@ -10,6 +18,7 @@ app.use(express.json());
 app.use('/api/proposals', proposalRoutes);
 
 beforeAll(async () => {
+  // Clean all relevant tables before starting test suite for a clean state
   await prisma.proposal.deleteMany();
   await prisma.groupMember.deleteMany();
   await prisma.group.deleteMany();
@@ -17,10 +26,12 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  // Disconnect Prisma Client after all tests are done to prevent open handles
   await prisma.$disconnect();
 });
 
 beforeEach(async () => {
+  // Clean tables before every test for isolation and test consistency
   await prisma.proposal.deleteMany();
   await prisma.groupMember.deleteMany();
   await prisma.group.deleteMany();
@@ -28,22 +39,24 @@ beforeEach(async () => {
 });
 
 describe('Proposal API', () => {
-  it('returns 400 when required fields are missing on create', async () => {
+  it('should return 400 when required fields are missing on create', async () => {
     const res = await request(app).post('/api/proposals/create').send({});
     expect(res.status).toBe(400);
     expect(res.body.success).toBe(false);
+    // Check for error message about required creator id
     expect(res.body.error).toContain('creatorUserId or creatorGroupId');
   });
 
-  it('creates a new funded proposal successfully', async () => {
+  it('should create a new funded proposal successfully', async () => {
+    // Create group first (required for FK constraint)
     const group = await prisma.group.create({
       data: {
-        name: 'Test Group',
-        walletAddress: '0x123abc',
+        name: `Test Group ${Date.now()}`,
+        walletAddress: `0x${Date.now()}abc`,
         constituency: 'Nairobi West',
         county: 'Nairobi',
-        industryFocus: 'Tech',
-        productsServices: ['Software'],
+        industryFocus: 'Technology',
+        productsServices: ['Software Development'],
       },
     });
 
@@ -52,7 +65,7 @@ describe('Proposal API', () => {
       proposalType: ProposalType.BUSINESS,
       funded: true,
       title: 'New Business Proposal',
-      description: 'Description of proposal',
+      description: 'Details of the business proposal',
       budget: 10000,
       timeline: '6 months',
       locationScope: LocationScope.LOCAL,
@@ -72,25 +85,25 @@ describe('Proposal API', () => {
     expect(typeof res.body.proposalId).toBe('string');
   });
 
-  it('gets proposal details by id', async () => {
+  it('should retrieve proposal details by ID', async () => {
     const group = await prisma.group.create({
       data: {
-        name: 'Details Group',
-        walletAddress: '0x456def',
+        name: `Detail Group ${Date.now()}`,
+        walletAddress: `0x${Date.now()}def`,
         constituency: 'Nairobi West',
         county: 'Nairobi',
-        industryFocus: 'Tech',
+        industryFocus: 'Technology',
         productsServices: [],
       },
     });
 
-    const created = await prisma.proposal.create({
+    const createdProposal = await prisma.proposal.create({
       data: {
         creatorGroupId: group.id,
         proposalType: ProposalType.NON_PROFIT,
         funded: false,
         title: 'Community Cleanup',
-        description: 'Cleaning the park',
+        description: 'Cleaning the local park',
         locationScope: LocationScope.LOCAL,
         constituency: 'Nairobi West',
         county: 'Nairobi',
@@ -98,24 +111,24 @@ describe('Proposal API', () => {
       },
     });
 
-    const res = await request(app).get(`/api/proposals/${created.id}`);
+    const res = await request(app).get(`/api/proposals/${createdProposal.id}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.id).toBe(created.id);
+    expect(res.body.id).toBe(createdProposal.id);
     expect(res.body.title).toBe('Community Cleanup');
   });
 
-  it('returns 404 for non-existent proposal', async () => {
+  it('should return 404 for non-existent proposal', async () => {
     const res = await request(app).get('/api/proposals/non-existent-id');
     expect(res.status).toBe(404);
     expect(res.body.success).toBe(false);
   });
 
-  it('lists proposals with optional filtering', async () => {
+  it('should list proposals filtered by locationScope', async () => {
     const group1 = await prisma.group.create({
       data: {
-        name: 'G1',
-        walletAddress: '0xabc1',
+        name: `Group One ${Date.now()}`,
+        walletAddress: `0x${Date.now()}abc1`,
         constituency: 'Nairobi West',
         county: 'Nairobi',
         industryFocus: 'Business',
@@ -125,8 +138,8 @@ describe('Proposal API', () => {
 
     const group2 = await prisma.group.create({
       data: {
-        name: 'G2',
-        walletAddress: '0xabc2',
+        name: `Group Two ${Date.now()}`,
+        walletAddress: `0x${Date.now()}abc2`,
         constituency: 'Kisumu East',
         county: 'Kisumu',
         industryFocus: 'Non-Profit',
@@ -140,8 +153,8 @@ describe('Proposal API', () => {
           creatorGroupId: group1.id,
           proposalType: ProposalType.BUSINESS,
           funded: true,
-          title: 'Proposal 1',
-          description: '',
+          title: 'Local Health Program',
+          description: 'Healthcare program in Nairobi',
           locationScope: LocationScope.LOCAL,
           constituency: 'Nairobi West',
           county: 'Nairobi',
@@ -151,8 +164,8 @@ describe('Proposal API', () => {
           creatorGroupId: group2.id,
           proposalType: ProposalType.NON_PROFIT,
           funded: false,
-          title: 'Proposal 2',
-          description: '',
+          title: 'County Education Support',
+          description: 'Education support initiative',
           locationScope: LocationScope.COUNTY,
           constituency: null,
           county: 'Kisumu',
@@ -169,11 +182,11 @@ describe('Proposal API', () => {
     expect(res.body[0].locationScope).toBe(LocationScope.LOCAL);
   });
 
-  it('updates proposal status and other fields', async () => {
+  it('should update proposal status and other fields', async () => {
     const group = await prisma.group.create({
       data: {
-        name: 'Update Group',
-        walletAddress: '0xxyz123',
+        name: `Update Group ${Date.now()}`,
+        walletAddress: `0x${Date.now()}xyz`,
         constituency: 'Nairobi West',
         county: 'Nairobi',
         industryFocus: 'Tech',
@@ -187,7 +200,7 @@ describe('Proposal API', () => {
         proposalType: ProposalType.BUSINESS,
         funded: true,
         title: 'Update Me',
-        description: 'Initial',
+        description: 'Initial description',
         locationScope: LocationScope.LOCAL,
         constituency: 'Nairobi West',
         county: 'Nairobi',
@@ -206,16 +219,16 @@ describe('Proposal API', () => {
     expect(res.body.success).toBe(true);
     expect(res.body.updatedStatus).toBe(ProposalStatus.VOTING);
 
-    const updated = await prisma.proposal.findUnique({ where: { id: proposal.id } });
-    expect(updated?.title).toBe('Updated Title');
-    expect(updated?.status).toBe(ProposalStatus.VOTING);
+    const updatedProposal = await prisma.proposal.findUnique({ where: { id: proposal.id } });
+    expect(updatedProposal?.title).toBe('Updated Title');
+    expect(updatedProposal?.status).toBe(ProposalStatus.VOTING);
   });
 
-  it('returns 400 on invalid status update', async () => {
+  it('should return 400 on invalid status update', async () => {
     const group = await prisma.group.create({
       data: {
-        name: 'Invalid Group',
-        walletAddress: '0xabc999',
+        name: `Invalid Group ${Date.now()}`,
+        walletAddress: `0x${Date.now()}abc999`,
         constituency: 'Nairobi West',
         county: 'Nairobi',
         industryFocus: 'Tech',
@@ -228,7 +241,7 @@ describe('Proposal API', () => {
         creatorGroupId: group.id,
         proposalType: ProposalType.BUSINESS,
         funded: true,
-        title: 'Invalid Status Update',
+        title: 'Invalid Status',
         description: '',
         locationScope: LocationScope.LOCAL,
         constituency: 'Nairobi West',
@@ -243,7 +256,7 @@ describe('Proposal API', () => {
     expect(res.body.success).toBe(false);
   });
 
-  it('returns 404 when updating non-existent proposal', async () => {
+  it('should return 404 when updating non-existent proposal', async () => {
     const res = await request(app).patch('/api/proposals/non-existent-id').send({ status: ProposalStatus.VOTING });
     expect(res.status).toBe(404);
     expect(res.body.success).toBe(false);

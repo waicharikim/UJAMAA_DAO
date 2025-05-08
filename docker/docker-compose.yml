@@ -1,0 +1,33 @@
+version: '3.8'
+services:
+  db:
+    image: postgres:14-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ujamaa_user
+      POSTGRES_PASSWORD: ujamaa_pass
+      POSTGRES_DB: ujamaa_db
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    restart: on-failure
+    ports:
+      - "4000:4000"
+    environment:
+      DATABASE_URL: "postgresql://ujamaa_user:ujamaa_pass@db:5432/ujamaa_db"
+    depends_on:
+      - db
+    volumes:
+      - ../backend:/usr/src/app
+      - /usr/src/app/node_modules
+    profiles:
+      - local
+
+volumes:
+  db_data:
