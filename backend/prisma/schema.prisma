@@ -117,3 +117,30 @@ enum ProposalStatus {
   EXECUTING
   COMPLETED
 }
+
+model Vote {
+  id          String   @id @default(uuid())
+  proposalId  String
+  voterId     String   // either userId or groupId
+  isGroup     Boolean
+  vote        Boolean
+  tokensSpent Int
+  createdAt   DateTime @default(now())
+
+  @@index([proposalId])
+}
+
+model TokenBalance {
+  id        String   @id @default(uuid())
+  holderType HolderType   // enum: USER or GROUP
+  holderId  String            // user.id or group.id depending on holderType
+  balance   Int          @default(0)   // token amount available
+  updatedAt DateTime     @updatedAt
+
+  @@unique([holderType, holderId])
+}
+
+enum HolderType {
+  USER
+  GROUP
+}
