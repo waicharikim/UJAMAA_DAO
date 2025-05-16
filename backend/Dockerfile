@@ -1,21 +1,21 @@
-# Use lightweight Node Alpine image
-FROM node:20-alpine
+# Use full Node 22 Alpine base
+FROM node:22-alpine
 
-# Create app directory
 WORKDIR /usr/src/app
 
-# Copy package files first (for better caching)
-COPY package.json package-lock.json* ./
+# Install all deps including dev
+COPY package*.json ./
+RUN npm ci
 
-# Install dependencies
-RUN npm ci --production
-
-# Copy source code
+# Copy all source files
 COPY . .
-COPY ./dist ./dist
 
-# Expose default port
+# Generate Prisma client
+RUN npx prisma generate
+
+# No build command; ts-node will run TS files directly in dev
+
+# Expose port
 EXPOSE 4000
 
-# Start the app
-CMD ["node", "dist/index.js"]
+CMD ["npm", "run", "dev"]

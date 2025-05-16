@@ -1,5 +1,3 @@
-// Prisma schema for UjamaaDAO backend DB v1.1
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -9,89 +7,17 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-//////////////////////////////////////////////////////////////////////////
-// Core Models (existing)
-
-model User {
-  id             String    @id @default(uuid())
-  walletAddress  String    @unique
-  email          String    @unique
-  name           String
-  constituency   String
-  county         String
-  industry       String?
-  goodsServices  String[]
-  groups         GroupMember[]
-
-  proposals      Proposal[] @relation("UserProposals")
-  projectParticipants ProjectParticipant[] @relation("UserProjectParticipants") // projects joined
-
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-}
-
-model Group {
-  id              String        @id @default(uuid())
-  name            String        @unique
-  description     String?
-  walletAddress   String        @unique
-  constituency    String
-  county          String
-  industryFocus   String
-  productsServices String[]
-  members         GroupMember[]
-  proposals       Proposal[]    @relation("GroupProposals")
-
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-}
-
-model GroupMember {
-  id       String  @id @default(uuid())
-  user     User    @relation(fields: [userId], references: [id])
-  userId   String
-  group    Group   @relation(fields: [groupId], references: [id])
-  groupId  String
-  role     GroupRole @default(MEMBER)
-  joinedAt DateTime @default(now())
-
-  @@unique([userId, groupId])
-}
+/// -------- ENUMS --------
 
 enum GroupRole {
   ADMIN
   MEMBER
 }
 
-model County {
-  id           String         @id @default(uuid())
-  name         String         @unique
-  constituencies Constituency[]
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-}
-
-model Constituency {
-  id        String   @id @default(uuid())
-  name      String
-  county    County   @relation(fields: [countyId], references: [id])
-  countyId  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([name, countyId])
-}
-
 enum ProposalType {
   BUSINESS
   NON_PROFIT
   BILL
-}
-
-enum LocationScope {
-  LOCAL
-  COUNTY
-  NATIONAL
 }
 
 enum ProposalStatus {
@@ -103,68 +29,17 @@ enum ProposalStatus {
   COMPLETED
 }
 
-model Proposal {
-  id             String    @id @default(uuid())
-  title          String
-  description    String
-  proposalType   ProposalType
-  funded         Boolean
-  budget         Int?
-  timeline       String?
-  locationScope  LocationScope
-  constituency   String?
-  county         String?
-  purposeDetails Json?     // Flexible JSON for business/nonprofit/bill details
-  status         ProposalStatus @default(DRAFT)
-  creatorUser    User?     @relation("UserProposals", fields: [creatorUserId], references: [id])
-  creatorUserId  String?
-  creatorGroup   Group?    @relation("GroupProposals", fields: [creatorGroupId], references: [id])
-  creatorGroupId String?
-  project        Project?  @relation("ProposalToProject")
-
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-}
-
-model Vote {
-  id          String   @id @default(uuid())
-  proposalId  String
-  voterId     String   // userId or groupId
-  isGroup     Boolean
-  vote        Boolean
-  tokensSpent Int
-  createdAt   DateTime @default(now())
-
-  @@index([proposalId])
+enum LocationScope {
+  LOCAL
+  CONSTITUENCY
+  COUNTY
+  NATIONAL
 }
 
 enum HolderType {
   USER
   GROUP
 }
-
-model TokenBalance {
-  id         String     @id @default(uuid())
-  holderType HolderType
-  holderId   String
-  balance    Int        @default(0)
-  updatedAt  DateTime   @updatedAt
-
-  @@unique([holderType, holderId])
-}
-
-model ImpactPoint {
-  id         String     @id @default(uuid())
-  holderType HolderType
-  holderId   String
-  points     Int        @default(0)
-  updatedAt  DateTime   @updatedAt
-
-  @@unique([holderType, holderId])
-}
-
-//////////////////////////////////////////////////////////////////////////
-// New Models for Projects and Participation
 
 enum ProjectStatus {
   ACTIVE
@@ -178,84 +53,215 @@ enum ParticipantRole {
   ADMIN
 }
 
+enum MilestoneStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum GroupStatus {
+  PENDING
+  ACTIVE
+  REJECTED
+}
+
+/// -------- MODELS --------
+
+model User {
+  id                 String   @id @default(uuid()) @db.Uuid
+  walletAddress      String   @unique
+  email              String   @unique
+  name               String
+  phoneNumber        String? 
+  constituencyOrigin String
+  countyOrigin       String
+  constituencyLive   String
+  countyLive         String
+  industry           String?
+  goodsServices      String[]
+
+  nonce              String 
+
+  groups              GroupMember[]
+  proposals           Proposal[]           @relation("UserProposals")
+  impactPoints        ImpactPoint[]        @relation("UserImpactPoints")
+  tokenBalances       TokenBalance[]       @relation("UserTokenBalances")
+  projectParticipants ProjectParticipant[] @relation("UserProjectParticipants")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Group {
+  id               String   @id @default(uuid()) @db.Uuid
+  name             String   @unique
+  description      String?
+  walletAddress    String   @unique
+  constituency     String
+  county           String
+  industryFocus    String
+  productsServices String[]
+
+  status GroupStatus @default(PENDING)
+
+  members       GroupMember[]
+  proposals     Proposal[]     @relation("GroupProposals")
+  impactPoints  ImpactPoint[]  @relation("GroupImpactPoints")
+  tokenBalances TokenBalance[] @relation("GroupTokenBalances")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model GroupMember {
+  id       String    @id @default(uuid()) @db.Uuid
+  user     User      @relation(fields: [userId], references: [id])
+  userId   String    @db.Uuid
+  group    Group     @relation(fields: [groupId], references: [id])
+  groupId  String    @db.Uuid
+  role     GroupRole @default(MEMBER)
+  joinedAt DateTime  @default(now())
+  active   Boolean   @default(true)
+
+  @@unique([userId, groupId])
+}
+
+model County {
+  id             String         @id @default(uuid()) @db.Uuid
+  name           String         @unique
+  constituencies Constituency[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Constituency {
+  id       String @id @default(uuid()) @db.Uuid
+  name     String
+  county   County @relation(fields: [countyId], references: [id])
+  countyId String @db.Uuid
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name, countyId])
+}
+
+model Proposal {
+  id             String         @id @default(uuid()) @db.Uuid
+  title          String
+  description    String
+  proposalType   ProposalType
+  funded         Boolean
+  budget         Int?
+  timeline       String?
+  locationScope  LocationScope
+  constituency   String?
+  county         String?
+  isPrivate      Boolean        @default(false)
+  purposeDetails Json?
+  status         ProposalStatus @default(DRAFT)
+
+  creatorUserId  String? @db.Uuid
+  creatorGroupId String? @db.Uuid
+
+  creatorUser  User?  @relation("UserProposals", fields: [creatorUserId], references: [id])
+  creatorGroup Group? @relation("GroupProposals", fields: [creatorGroupId], references: [id])
+
+  project Project? @relation("ProposalToProject")
+
+  votes Vote[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Vote {
+  id          String   @id @default(uuid()) @db.Uuid
+  proposalId  String   @db.Uuid
+  voterId     String   @db.Uuid
+  isGroup     Boolean
+  vote        Boolean
+  tokensSpent Int
+  createdAt   DateTime @default(now())
+
+  proposal Proposal @relation(fields: [proposalId], references: [id])
+
+  @@index([proposalId])
+}
+
+model ImpactPoint {
+  id            String         @id @default(uuid()) @db.Uuid
+  holderType    HolderType
+  userId        String?        @db.Uuid
+  groupId       String?        @db.Uuid
+  points        Int            @default(0)
+  locationScope LocationScope?
+  constituency  String?
+  county        String?
+  updatedAt     DateTime       @updatedAt
+
+  user  User?  @relation(fields: [userId], references: [id], name: "UserImpactPoints")
+  group Group? @relation(fields: [groupId], references: [id], name: "GroupImpactPoints")
+
+  @@unique([holderType, userId, groupId, locationScope])
+}
+
+model TokenBalance {
+  id         String     @id @default(uuid()) @db.Uuid
+  holderType HolderType
+  userId     String?    @db.Uuid
+  groupId    String?    @db.Uuid
+  balance    Int        @default(0)
+  updatedAt  DateTime   @updatedAt
+
+  user  User?  @relation("UserTokenBalances", fields: [userId], references: [id])
+  group Group? @relation("GroupTokenBalances", fields: [groupId], references: [id])
+
+  @@unique([holderType, userId, groupId])
+}
+
 model Project {
-  id            String           @id @default(uuid())
-  proposalId    String           @unique
+  id            String        @id @default(uuid()) @db.Uuid
+  proposalId    String        @unique @db.Uuid
   title         String
   description   String
   budget        Int?
   timeline      String?
-  status        ProjectStatus    @default(ACTIVE)
+  status        ProjectStatus @default(ACTIVE)
   locationScope LocationScope
   constituency  String?
   county        String?
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
-  proposal      Proposal         @relation("ProposalToProject", fields: [proposalId], references: [id])
-  participants  ProjectParticipant[]
+  proposal     Proposal             @relation("ProposalToProject", fields: [proposalId], references: [id])
+  participants ProjectParticipant[]
+  milestones   ProjectMilestone[]
 }
 
 model ProjectParticipant {
-  id          String           @id @default(uuid())
-  project     Project          @relation(fields: [projectId], references: [id])
-  projectId   String
-
-  participant User             @relation(fields: [userId], references: [id], name: "UserProjectParticipants")
-  userId      String
-
-  role        ParticipantRole  @default(MEMBER)
-  joinedAt    DateTime         @default(now())
+  id          String          @id @default(uuid()) @db.Uuid
+  project     Project         @relation(fields: [projectId], references: [id])
+  projectId   String          @db.Uuid
+  participant User            @relation(fields: [userId], references: [id], name: "UserProjectParticipants")
+  userId      String          @db.Uuid
+  role        ParticipantRole @default(MEMBER)
+  joinedAt    DateTime        @default(now())
 
   @@unique([projectId, userId])
 }
 
-//////////////////////////////////////////////////////////////////////////
-// Future-Ready Expansions (placeholders)
-
-// Delegated voting & proxy system (conceptual)
-// model Delegation {
-//   id         String @id @default(uuid())
-//   delegator  User   @relation(fields: [delegatorId], references: [id])
-//   delegatorId String
-//   delegatee  User   @relation(fields: [delegateeId], references: [id])
-//   delegateeId String
-//   createdAt  DateTime @default(now())
-// }
-
-// Staking & token lockups
-// model TokenStake {
-//   id         String @id @default(uuid())
-//   user       User   @relation(fields: [userId], references: [id])
-//   userId     String
-//   amount     Int
-//   lockedUntil DateTime
-//   createdAt  DateTime @default(now())
-// }
-
-// Milestone tracking for projects
-// model ProjectMilestone {
-//   id         String @id @default(uuid())
-//   project    Project @relation(fields: [projectId], references: [id])
-//   projectId  String
-//   description String
-//   dueDate    DateTime
-//   status     MilestoneStatus @default(PENDING)
-//   createdAt  DateTime @default(now())
-// }
-
-// enum MilestoneStatus {
-//   PENDING
-//   COMPLETED
-//   OVERDUE
-// }
-
-// Notification system placeholder
-// model Notification {
-//   id        String @id @default(uuid())
-//   user      User   @relation(fields: [userId], references: [id])
-//   userId    String
-//   content   String
-//   read      Boolean @default(false)
-//   createdAt DateTime @default(now())
-// }
+model ProjectMilestone {
+  id            String          @id @default(uuid()) @db.Uuid
+  project       Project         @relation(fields: [projectId], references: [id])
+  projectId     String          @db.Uuid
+  title         String
+  description   String
+  dueDate       DateTime?
+  status        MilestoneStatus @default(PENDING)
+  fundingAmount Int
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+}

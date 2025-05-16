@@ -1,14 +1,15 @@
-version: '3.8'
+
 services:
-  db:
-    image: postgres:14-alpine
+  postgres:
+    image: postgres:15-alpine
+    container_name: ujamaa_postgres
     restart: always
     environment:
       POSTGRES_USER: ujamaa_user
       POSTGRES_PASSWORD: ujamaa_pass
       POSTGRES_DB: ujamaa_db
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - ujamaa_pgdata:/var/lib/postgresql/data
     ports:
       - "5432:5432"
 
@@ -16,18 +17,23 @@ services:
     build:
       context: ../backend
       dockerfile: Dockerfile
-    restart: on-failure
+    container_name: ujamaa_backend
+    depends_on:
+      - postgres
+    environment:
+      DATABASE_URL: postgresql://ujamaa_user:ujamaa_pass@postgres:5432/ujamaa_db
+      NODE_ENV: development
     ports:
       - "4000:4000"
-    environment:
-      DATABASE_URL: "postgresql://ujamaa_user:ujamaa_pass@db:5432/ujamaa_db"
-    depends_on:
-      - db
     volumes:
-      - ../backend:/usr/src/app
-      - /usr/src/app/node_modules
-    profiles:
-      - local
+      - ../backend:/usr/src/app  # Mount backend code for live updates
+      - /usr/src/app/node_modules # Preserve node_modules inside container
+    command: sh -c "npx prisma migrate deploy --schema ./prisma/schema.prisma && npx tsx watch src/index.ts" # Runs nodemon + ts-node
+    restart: on-failure
+
+  # Add frontend & blockchain-node services here as needed e.g.
+  # frontend:
+  #   ...
 
 volumes:
-  db_data:
+  ujamaa_pgdata:
