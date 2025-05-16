@@ -45,16 +45,16 @@ npm test        # Run all tests sequentially for stable results
 
 ## Documentation
 
-    API docs available in /docs folder (Markdown).
-    Architecture and operational guides included.
-    You can generate and extend OpenAPI specs as needed.
+- API docs available in /docs folder (Markdown).
+- Architecture and operational guides included.
+- You can generate and extend OpenAPI specs as needed.
 
 ## Contributing
 
-    Follow code style and commit message conventions.
-    Write comprehensive tests for new features.
-    Update documentation accordingly.
-    Use feature branches and pull requests.
+- Follow code style and commit message conventions.
+- Write comprehensive tests for new features.
+- Update documentation accordingly.
+- Use feature branches and pull requests.
 
 ## License
 
