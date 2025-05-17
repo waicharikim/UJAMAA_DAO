@@ -205,21 +205,23 @@ model ImpactPoint {
   user  User?  @relation(fields: [userId], references: [id], name: "UserImpactPoints")
   group Group? @relation(fields: [groupId], references: [id], name: "GroupImpactPoints")
 
-  @@unique([holderType, userId, groupId, locationScope])
+  @@unique([holderType, userId, locationScope], name: "holderType_userId_locationScope")
+  @@unique([holderType, groupId, locationScope], name: "holderType_groupId_locationScope")
 }
 
 model TokenBalance {
-  id         String     @id @default(uuid()) @db.Uuid
+  id         String   @id @default(uuid())
   holderType HolderType
-  userId     String?    @db.Uuid
-  groupId    String?    @db.Uuid
-  balance    Int        @default(0)
-  updatedAt  DateTime   @updatedAt
+  userId     String?  @db.Uuid
+  groupId    String?  @db.Uuid
+  balance    Int      @default(0)
+  updatedAt  DateTime @updatedAt
 
   user  User?  @relation("UserTokenBalances", fields: [userId], references: [id])
   group Group? @relation("GroupTokenBalances", fields: [groupId], references: [id])
 
-  @@unique([holderType, userId, groupId])
+  @@unique([holderType, userId], name: "holderType_userId")  // Unique for USERs
+  @@unique([holderType, groupId], name: "holderType_groupId") // Unique for GROUPs
 }
 
 model Project {

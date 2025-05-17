@@ -15,6 +15,8 @@ import morgan from 'morgan';
 import userRoutes from './routes/user.routes.js';
 import authRoutes from './routes/auth.routes.js';
 import groupRoutes from './routes/group.routes.js';
+import impactRoutes from './routes/impactPoint.routes.js';
+import tokenRoutes from './routes/token.routes.js'; // <-- Import token routes if needed
 
 import logger from './utils/logger.js';  // <-- Import your logger
 
@@ -43,6 +45,12 @@ app.use('/api/groups', groupRoutes);
 // Mount authentication routes under /api/auth
 app.use('/api/auth', authRoutes);
 
+// Mount impact-related routes under /api/impact
+app.use('/api', impactRoutes);
+
+// Mount token-related routes under /api/token
+app.use('/api', tokenRoutes); // <-- Mount token routes if needed
+
 // Basic health check endpoint
 app.get('/health', (_req: Request, res: Response) => {
   res.json({ status: 'OK' });
@@ -52,6 +60,8 @@ app.get('/health', (_req: Request, res: Response) => {
 app.use((_req: Request, res: Response) => {
   res.status(404).json({ error: 'Route not found' });
 });
+
+
 
 // Global error handler middleware
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {

@@ -1,3 +1,21 @@
+/**
+ * @file group.service.ts
+ *
+ * @description
+ * Service layer for managing Group entities and related business logic.
+ * 
+ * Responsibilities include:
+ * - Creating groups and assigning initial admin members.
+ * - Fetching group details along with active members’ information.
+ * - Updating group information.
+ * - Handling user invitations to groups and managing invite acceptance.
+ * - Changing group member roles (e.g., promoting members to admins).
+ * 
+ * Utilizes Prisma ORM for database operations and throws ApiError
+ * for controlled error handling consistent with API response codes.
+ * All functions assume validated input as per group.validation schemas.
+ */
+
 import prisma from '../prismaClient.js';
 import { ApiError } from '../utils/ApiError.js';
 import type { CreateGroupInput, UpdateGroupInput } from '../validation/group.validation.js';

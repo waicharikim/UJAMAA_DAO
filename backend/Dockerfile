@@ -4,6 +4,11 @@ FROM node:22-alpine
 WORKDIR /usr/src/app
 
 # Install all deps including dev
+
+RUN npm config set fetch-timeout 600000
+RUN npm config set registry https://registry.npmjs.org/
+RUN npm cache clean --force
+
 COPY package*.json ./
 RUN npm ci
 
