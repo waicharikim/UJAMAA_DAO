@@ -141,3 +141,55 @@ export async function getImpactPoints(
     throw err;
   }
 }
+
+/**
+ * Calculates the percentile ranking of a user within a location scope.
+ * Considers optional constituency/county filters for geographic accuracy.
+ */
+export async function getUserImpactPercentile(
+  userId: string,
+  locationScope: string,
+  constituency?: string,
+  county?: string
+): Promise<number> {
+  try {
+    const whereClause: any = {
+      holderType: 'USER',
+      locationScope,
+    };
+
+    if (constituency && constituency.trim() !== '') {
+      whereClause.constituency = constituency;
+    }
+    if (county && county.trim() !== '') {
+      whereClause.county = county;
+    }
+
+    logger.info('Percentile query filter', whereClause);
+
+    const allPoints = await prisma.impactPoint.findMany({
+      where: whereClause,
+      select: {
+        userId: true,
+        points: true,
+      },
+    });
+
+    logger.info('All points count for percentile calc', allPoints.length);
+
+    if (!allPoints || allPoints.length === 0) return 0;
+
+    const userRecord = allPoints.find(record => record.userId === userId);
+    logger.info('User record for percentile calc', userRecord);
+
+    if (!userRecord) return 0;
+
+    const countBelow = allPoints.filter(record => record.points < userRecord.points).length;
+    const percentile = (countBelow / allPoints.length) * 100;
+
+    return percentile;
+  } catch (err) {
+    logger.error('Error calculating user impact percentile', { error: err, userId, locationScope, constituency, county });
+    throw new ApiError('Failed to calculate user impact percentile', 500);
+  }
+}

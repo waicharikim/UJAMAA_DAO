@@ -17,6 +17,8 @@ import authRoutes from './routes/auth.routes.js';
 import groupRoutes from './routes/group.routes.js';
 import impactRoutes from './routes/impactPoint.routes.js';
 import tokenRoutes from './routes/token.routes.js'; // <-- Import token routes if needed
+import proposalRoutes from './routes/proposal.routes.js'; // <-- Import proposal routes if needed 
+
 
 import logger from './utils/logger.js';  // <-- Import your logger
 
@@ -50,6 +52,9 @@ app.use('/api', impactRoutes);
 
 // Mount token-related routes under /api/token
 app.use('/api', tokenRoutes); // <-- Mount token routes if needed
+
+// Mount proposal-related routes under /api/proposals 
+app.use('/api/proposals', proposalRoutes); // <-- Mount proposal routes if needed
 
 // Basic health check endpoint
 app.get('/health', (_req: Request, res: Response) => {
