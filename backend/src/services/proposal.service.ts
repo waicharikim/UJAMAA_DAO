@@ -4,6 +4,7 @@ import { ApiError } from '../utils/ApiError.js';
 import * as ImpactPointService from './impactPoint.service.js';
 
 export class ProposalService {
+  // Main entry for creating proposals
   static async createProposal(data: CreateProposalInput) {
     try {
       if (!data.creatorUserId && !data.creatorGroupId) {
@@ -23,7 +24,7 @@ export class ProposalService {
           data.county
         );
       } else if (data.creatorGroupId) {
-        await this.checkGroupProposalEligibility(data.creatorGroupId, data.locationScope);
+        await this.checkGroupProposalEligibility(data.creatorGroupId, data.locationScope, data.funded);
       }
 
       return await prisma.proposal.create({ data: { ...data, status: 'DRAFT' } });
@@ -118,8 +119,7 @@ export class ProposalService {
         throw new ApiError('Invalid location scope for eligibility.', 400);
     }
 
-    // You might want to update ImpactPointService.getImpactPoints() to accept constituency & county for filtering
-    const points = await ImpactPointService.getImpactPoints('USER', userId, locationScope /* Optionally add constituency, county */);
+    const points = await ImpactPointService.getImpactPoints('USER', userId, locationScope);
 
     if (points < minPoints) {
       throw new ApiError(
@@ -129,8 +129,57 @@ export class ProposalService {
     }
   }
 
-  static async checkGroupProposalEligibility(groupId: string, locationScope: string) {
-    // Placeholder for group eligibility checks - e.g., backing
+  // The new method, which distinguishes between normal and county groups for eligibility
+  static async checkGroupProposalEligibility(groupId: string, locationScope: string, funded: boolean) {
+    const group = await prisma.group.findUnique({
+      where: { id: groupId },
+      select: {
+        id: true,
+        industryFocus: true,
+        constituency: true,
+        county: true,
+      },
+    });
+
+    if (!group) {
+      throw new ApiError('Group not found', 404);
+    }
+
+    // Identify if this is a county group
+    const isCountyGroup = group.industryFocus.toLowerCase() === 'county-group'; // or your actual check for county groups
+
+    if (isCountyGroup) {
+      // County group logic: Can create county and national level proposals
+      if (
+        locationScope === 'LOCAL' ||
+        (locationScope === 'CONSTITUENCY' && group.constituency !== null) // Assuming county groups don't work at constituency level
+      ) {
+        throw new ApiError('County groups cannot create proposals at local or constituency level.', 403);
+      }
+      // Further eligibility checks for county groups could go here
+      return;
+    }
+
+    // For normal groups - check company backing if proposal is funded
+    const isCompany = group.industryFocus.toLowerCase() === 'company';
+
+    if (funded && isCompany) {
+      // Must have backing community group in same constituency
+      const backingGroup = await prisma.group.findFirst({
+        where: {
+          constituency: group.constituency,
+          industryFocus: { not: "company", mode: "insensitive" },
+        },
+      });
+      if (!backingGroup) {
+        throw new ApiError(
+          'Funded company proposals require backing community group in the same constituency.',
+          403
+        );
+      }
+    }
+
+    // Normal group eligibility passed
     return;
   }
 }

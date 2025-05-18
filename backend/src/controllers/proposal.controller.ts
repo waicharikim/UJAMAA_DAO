@@ -7,14 +7,25 @@ import logger from '../utils/logger.js';
 export async function createProposalHandler(req: Request, res: Response, next: NextFunction) {
   try {
     const input = createProposalSchema.parse(req.body);
-    if (!input.creatorUserId) {
+
+    // Use authenticated userId if no creatorUserId or creatorGroupId provided
+    if (!input.creatorUserId && !input.creatorGroupId) {
       input.creatorUserId = (req as any).user?.userId;
+      if (!input.creatorUserId) {
+        throw new ApiError('Authentication required if no creatorGroupId provided', 401);
+      }
     }
+
+    logger.info('createProposalHandler: Creating proposal', { input });
+
     const proposal = await ProposalService.createProposal(input);
 
     res.status(201).json(proposal);
+
+    logger.info('createProposalHandler: Proposal created', { proposalId: proposal.id });
   } catch (err) {
-    console.error('createProposalHandler error:', err);
+    logger.error('createProposalHandler error:', err);
+
     if (err instanceof ApiError) {
       return res.status(err.statusCode).json({ error: err.message });
     }
@@ -36,17 +47,15 @@ export async function updateProposalHandler(req: Request, res: Response, next: N
     res.json(updatedProposal);
 
     logger.info('updateProposalHandler: Proposal updated', { proposalId });
-  } catch (err: any) {
+  } catch (err) {
+    logger.error('updateProposalHandler error:', err);
+
     if (err instanceof ApiError) {
-      logger.warn('updateProposalHandler: ApiError', { message: err.message, statusCode: err.statusCode });
       return res.status(err.statusCode).json({ error: err.message });
     }
-    if (err?.name === 'ZodError') {
-      const errors = err.errors;
-      logger.warn('updateProposalHandler: Validation error', { errors });
-      return res.status(400).json({ errors });
+    if ((err as any)?.name === 'ZodError') {
+      return res.status(400).json({ errors: (err as any).errors });
     }
-    logger.error('updateProposalHandler: Unexpected error', { error: err });
     next(err);
   }
 }
@@ -54,17 +63,20 @@ export async function updateProposalHandler(req: Request, res: Response, next: N
 export async function getProposalHandler(req: Request, res: Response, next: NextFunction) {
   try {
     const proposalId = req.params.id;
+
     logger.info('getProposalHandler: Fetching proposal', { proposalId });
 
     const proposal = await ProposalService.getProposalById(proposalId);
-    if (!proposal) {
-      return res.status(404).json({ error: 'Proposal not found' });
-    }
+
     res.json(proposal);
 
     logger.info('getProposalHandler: Proposal retrieved', { proposalId });
   } catch (err) {
-    logger.error('getProposalHandler: Unexpected error', { error: err });
+    logger.error('getProposalHandler error:', err);
+
+    if (err instanceof ApiError) {
+      return res.status(err.statusCode).json({ error: err.message });
+    }
     next(err);
   }
 }
