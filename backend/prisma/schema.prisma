@@ -191,6 +191,21 @@ model Vote {
   @@index([proposalId])
 }
 
+model GroupMemberVote {
+  id          String   @id @default(uuid()) @db.Uuid
+  proposalId  String   @db.Uuid
+  groupId     String   @db.Uuid
+  userId      String   @db.Uuid
+  vote        Boolean
+  createdAt   DateTime @default(now())
+
+  proposal   Proposal  @relation(fields: [proposalId], references: [id])
+  group      Group     @relation(fields: [groupId], references: [id])
+  user       User      @relation(fields: [userId], references: [id])
+
+  @@unique([proposalId, groupId, userId]) // A member votes once per proposal per group
+}
+
 model ImpactPoint {
   id            String         @id @default(uuid()) @db.Uuid
   holderType    HolderType

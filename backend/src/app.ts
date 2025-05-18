@@ -18,7 +18,8 @@ import groupRoutes from './routes/group.routes.js';
 import impactRoutes from './routes/impactPoint.routes.js';
 import tokenRoutes from './routes/token.routes.js'; // <-- Import token routes if needed
 import proposalRoutes from './routes/proposal.routes.js'; // <-- Import proposal routes if needed 
-
+import voteRoutes from './routes/vote.routes.js'; // <-- Import vote routes if needed
+import { ApiError } from './utils/ApiError.js';
 
 import logger from './utils/logger.js';  // <-- Import your logger
 
@@ -51,10 +52,13 @@ app.use('/api/auth', authRoutes);
 app.use('/api', impactRoutes);
 
 // Mount token-related routes under /api/token
-app.use('/api', tokenRoutes); // <-- Mount token routes if needed
+app.use('/api', tokenRoutes); 
 
 // Mount proposal-related routes under /api/proposals 
-app.use('/api/proposals', proposalRoutes); // <-- Mount proposal routes if needed
+app.use('/api/proposals', proposalRoutes); 
+
+// Mount vote-related routes under /api/votes 
+app.use('/api/votes', voteRoutes); 
 
 // Basic health check endpoint
 app.get('/health', (_req: Request, res: Response) => {

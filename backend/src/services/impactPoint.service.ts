@@ -97,7 +97,9 @@ export async function addImpactPoints(data: ImpactPointUpdate) {
 export async function getImpactPoints(
   holderType: 'USER' | 'GROUP',
   holderId: string,
-  locationScope?: string | null
+  locationScope?: string | null,
+  constituency?: string | null,
+  county?: string | null
 ) {
   try {
     if (holderType === 'USER') {
@@ -106,10 +108,12 @@ export async function getImpactPoints(
           holderType,
           userId: holderId,
           locationScope: locationScope ?? undefined,
+          ...(constituency ? { constituency } : {}),
+          ...(county ? { county } : {}),
         },
       });
       const points = impactPoint?.points ?? 0;
-      logger.info('Retrieved impact points for user', { holderId, locationScope, points });
+      logger.info('Retrieved impact points for user', { holderId, locationScope, constituency, county, points });
       return points;
     } else if (holderType === 'GROUP') {
       const impactPoint = await prisma.impactPoint.findFirst({
@@ -117,10 +121,12 @@ export async function getImpactPoints(
           holderType,
           groupId: holderId,
           locationScope: locationScope ?? undefined,
+          ...(constituency ? { constituency } : {}),
+          ...(county ? { county } : {}),
         },
       });
       const points = impactPoint?.points ?? 0;
-      logger.info('Retrieved impact points for group', { holderId, locationScope, points });
+      logger.info('Retrieved impact points for group', { holderId, locationScope, constituency, county, points });
       return points;
     } else {
       logger.error('Invalid holderType in getImpactPoints', { holderType });
@@ -134,6 +140,8 @@ export async function getImpactPoints(
         holderType,
         holderId,
         locationScope,
+        constituency,
+        county,
       });
     } else {
       logger.error('Unknown error retrieving impact points', { error: err });
