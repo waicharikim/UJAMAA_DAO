@@ -16,12 +16,13 @@ import userRoutes from './routes/user.routes.js';
 import authRoutes from './routes/auth.routes.js';
 import groupRoutes from './routes/group.routes.js';
 import impactRoutes from './routes/impactPoint.routes.js';
-import tokenRoutes from './routes/token.routes.js'; // <-- Import token routes if needed
-import proposalRoutes from './routes/proposal.routes.js'; // <-- Import proposal routes if needed 
-import voteRoutes from './routes/vote.routes.js'; // <-- Import vote routes if needed
-import { ApiError } from './utils/ApiError.js';
+import tokenRoutes from './routes/token.routes.js'; 
+import proposalRoutes from './routes/proposal.routes.js'; 
+import voteRoutes from './routes/vote.routes.js'; 
+import projectRoutes from './routes/project.routes.js';  
+import milestoneRoutes from './routes/milestone.routes.js';
 
-import logger from './utils/logger.js';  // <-- Import your logger
+import logger from './utils/logger.js';  
 
 dotenv.config();
 
@@ -59,6 +60,12 @@ app.use('/api/proposals', proposalRoutes);
 
 // Mount vote-related routes under /api/votes 
 app.use('/api/votes', voteRoutes); 
+
+// Mount project-related routes under /api/projects
+app.use('/api/projects', projectRoutes);
+
+// Mount milestone-related routes under /api/milestones
+app.use('/api/milestones', milestoneRoutes);
 
 // Basic health check endpoint
 app.get('/health', (_req: Request, res: Response) => {

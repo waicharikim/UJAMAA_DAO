@@ -73,7 +73,7 @@ model User {
   walletAddress      String   @unique
   email              String   @unique
   name               String
-  phoneNumber        String? 
+  phoneNumber        String?
   constituencyOrigin String
   countyOrigin       String
   constituencyLive   String
@@ -81,13 +81,15 @@ model User {
   industry           String?
   goodsServices      String[]
 
-  nonce              String 
+  nonce String
 
   groups              GroupMember[]
   proposals           Proposal[]           @relation("UserProposals")
   impactPoints        ImpactPoint[]        @relation("UserImpactPoints")
   tokenBalances       TokenBalance[]       @relation("UserTokenBalances")
   projectParticipants ProjectParticipant[] @relation("UserProjectParticipants")
+
+  groupMemberVotes GroupMemberVote[] @relation("GroupMemberVote_User")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -109,6 +111,8 @@ model Group {
   proposals     Proposal[]     @relation("GroupProposals")
   impactPoints  ImpactPoint[]  @relation("GroupImpactPoints")
   tokenBalances TokenBalance[] @relation("GroupTokenBalances")
+
+  groupMemberVotes GroupMemberVote[] @relation("GroupMemberVote_Group")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -173,6 +177,8 @@ model Proposal {
 
   votes Vote[]
 
+  groupMemberVotes GroupMemberVote[] @relation("GroupMemberVote_Proposal")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -192,16 +198,16 @@ model Vote {
 }
 
 model GroupMemberVote {
-  id          String   @id @default(uuid()) @db.Uuid
-  proposalId  String   @db.Uuid
-  groupId     String   @db.Uuid
-  userId      String   @db.Uuid
-  vote        Boolean
-  createdAt   DateTime @default(now())
+  id         String   @id @default(uuid()) @db.Uuid
+  proposalId String   @db.Uuid
+  groupId    String   @db.Uuid
+  userId     String   @db.Uuid
+  vote       Boolean
+  createdAt  DateTime @default(now())
 
-  proposal   Proposal  @relation(fields: [proposalId], references: [id])
-  group      Group     @relation(fields: [groupId], references: [id])
-  user       User      @relation(fields: [userId], references: [id])
+  proposal Proposal @relation("GroupMemberVote_Proposal", fields: [proposalId], references: [id])
+  group    Group    @relation("GroupMemberVote_Group", fields: [groupId], references: [id])
+  user     User     @relation("GroupMemberVote_User", fields: [userId], references: [id])
 
   @@unique([proposalId, groupId, userId]) // A member votes once per proposal per group
 }
@@ -225,17 +231,17 @@ model ImpactPoint {
 }
 
 model TokenBalance {
-  id         String   @id @default(uuid())
+  id         String     @id @default(uuid())
   holderType HolderType
-  userId     String?  @db.Uuid
-  groupId    String?  @db.Uuid
-  balance    Int      @default(0)
-  updatedAt  DateTime @updatedAt
+  userId     String?    @db.Uuid
+  groupId    String?    @db.Uuid
+  balance    Int        @default(0)
+  updatedAt  DateTime   @updatedAt
 
   user  User?  @relation("UserTokenBalances", fields: [userId], references: [id])
   group Group? @relation("GroupTokenBalances", fields: [groupId], references: [id])
 
-  @@unique([holderType, userId], name: "holderType_userId")  // Unique for USERs
+  @@unique([holderType, userId], name: "holderType_userId") // Unique for USERs
   @@unique([holderType, groupId], name: "holderType_groupId") // Unique for GROUPs
 }
 
