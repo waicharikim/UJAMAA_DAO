@@ -11,6 +11,7 @@ import type { Request, Response, NextFunction } from 'express';
 import * as authService from '../services/auth.service.js';
 import { ApiError } from '../utils/ApiError.js';
 import logger from '../utils/logger.js';
+import { logUserActivity  } from '../services/userActivity.service.js';
 /**
  * Handler to get the current nonce for a wallet address
  * Used as a challenge for wallet signature authentication.
@@ -68,6 +69,13 @@ export async function verifySignatureHandler(
     const normalizedWallet = walletAddress.toLowerCase();
 
     const { token, user } = await authService.verifySignature(normalizedWallet, signature);
+
+    await logUserActivity({
+      userId: user.id,
+      eventType: 'LOGIN_SUCCESS',
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent']?.toString() ??'',
+    });
 
     res.json({ token, user });
     logger.info('verifySignatureHandler: Signature verified successfully', { walletAddress });
