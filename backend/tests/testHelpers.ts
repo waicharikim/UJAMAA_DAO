@@ -1,6 +1,8 @@
 import request from 'supertest';
-import app from '../src/app.js';
+import app from '../src/app.js'; // Adjust path as needed
 import { Wallet } from 'ethers';
+import crypto from 'crypto';
+import prisma from '../src/prismaClient.js';
 
 interface TestUser {
   id: string;
@@ -9,104 +11,91 @@ interface TestUser {
   jwtToken: string;
 }
 
-// Example test private key; replace if needed with your test key
 const TEST_PRIVATE_KEY = '0x59c6995e998f97a5a0044966f0945384df71b1f68d0e3fcb7e3c54e920f2f11c';
 const wallet = new Wallet(TEST_PRIVATE_KEY);
 
-/**
- * Create or retrieve a user by walletAddress and authenticate,
- * returning user info with a valid JWT token.
- */
-export async function createTestUser(
-  email = 'test@example.com',
-  name = 'Test User',
-  constituencyOrigin = 'TestConstituency',
-  countyOrigin = 'TestCounty',
-  constituencyLive = 'TestConstituency',
-  countyLive = 'TestCounty'
-): Promise<TestUser> {
-  // Normalize wallet address to lowercase everywhere!
-  const walletAddress = wallet.address.toLowerCase();
-  console.log('Starting createTestUser flow for wallet:', walletAddress);
+const UJAMAA_GROUP_ID = '00000000-0000-0000-0000-000000000001'; // Replace if different
 
-  // Try creating user first
-  const resCreate = await request(app).post('/api/users').send({
-    walletAddress,
-    email,
-    name,
-    constituencyOrigin,
-    countyOrigin,
-    constituencyLive,
-    countyLive,
-  });
+const DEFAULTS = {
+  walletAddress: wallet.address.toLowerCase(),
+  email: 'testuser@example.com',
+  name: 'Test User',
+  countyLive: 'b92b823d-6a73-421a-9ce1-8c8b1852b134',
+  constituencyLive: '2e48187f-5909-4403-9b07-6b0f951b1bc8',
+  countyOrigin: 'b92b823d-6a73-421a-9ce1-8c8b1852b134',
+  constituencyOrigin: '2e48187f-5909-4403-9b07-6b0f951b1bc8',
+  industryId: '68c72509-6ebf-413f-8fba-5706cdc9c389',
+  goodsServices: [
+    'cc97b229-4642-4e8b-9502-7a1d6e4c7637',
+    'c1f469fb-a22e-4726-8a9d-1dcd9488817e',
+  ],
+};
 
-  console.log('User creation response status:', resCreate.status);
+export async function createTestUser(): Promise<TestUser> {
+  const walletAddress = DEFAULTS.walletAddress;
+  const email = DEFAULTS.email;
 
-  let userId: string;
+  // Look for existing user by wallet
+  let user = await prisma.user.findUnique({ where: { walletAddress } });
 
-  if (resCreate.status === 201) {
-    // Created successfully
-    userId = resCreate.body.id;
-    console.log('User created with ID:', userId);
+  if (!user) {
+    user = await prisma.user.create({
+      data: {
+        walletAddress,
+        email,
+        name: DEFAULTS.name,
+        countyLive: DEFAULTS.countyLive,
+        constituencyLive: DEFAULTS.constituencyLive,
+        countyOrigin: DEFAULTS.countyOrigin,
+        constituencyOrigin: DEFAULTS.constituencyOrigin,
+        industryId: DEFAULTS.industryId,
+        goodsServices: { connect: DEFAULTS.goodsServices.map(id => ({ id })) },
+        nonce: crypto.randomUUID(),
+      },
+    });
 
-    // Add a small delay for DB eventual consistency before nonce fetch
-    await new Promise((resolve) => setTimeout(resolve, 150));
-    console.log('Waited 150ms after user creation for DB consistency');
-  } else if (resCreate.status === 409) {
-    // User already exists, so fetch user info by wallet (also normalize here)
-    console.log('User exists, fetching existing user by wallet address...');
+    // Assign default global role
+    await prisma.userRole.create({
+      data: {
+        userId: user.id,
+        role: 'GENERAL_USER',
+        scope: null,
+      },
+    });
 
-    const userResp = await request(app).get(`/api/users/wallet/${walletAddress}`);
-
-    console.log('Fetch user by wallet status:', userResp.status);
-
-    if (userResp.status !== 200) {
-      console.error('Failed to fetch existing user:', userResp.body);
-      throw new Error('Could not retrieve existing user ID');
-    }
-
-    userId = userResp.body.id;
-    console.log('Existing user ID retrieved:', userId);
-  } else {
-    console.error('Unexpected response from user creation:', resCreate.body);
-    throw new Error(`Unexpected response creating user: ${resCreate.status}`);
+    // Add user to Ujamaa Group
+    await prisma.groupMember.create({
+      data: {
+        userId: user.id,
+        groupId: UJAMAA_GROUP_ID,
+        role: 'MEMBER',
+        active: true,
+        joinedAt: new Date(),
+      },
+    });
   }
 
-  // Fetch nonce to initiate login challenge (walletAddress normalized)
+  // Fetch nonce for login flow
   const nonceRes = await request(app).get('/api/auth/nonce').query({ walletAddress });
-  console.log('Nonce fetch status:', nonceRes.status);
   if (nonceRes.status !== 200) {
-    console.error('Failed to get nonce:', nonceRes.body);
     throw new Error('Failed to get nonce from backend');
   }
   const nonce = nonceRes.body.nonce;
-  console.log('Received nonce:', nonce);
 
-  // Sign the nonce message with ethers Wallet
+  // Sign nonce with wallet private key
   const message = `Login nonce: ${nonce}`;
   const signature = await wallet.signMessage(message);
-  console.log('Signed nonce to produce signature:', signature);
 
-  // Send signature for verification and get JWT token (walletAddress normalized)
-  const verifyRes = await request(app).post('/api/auth/verify').send({
-    walletAddress,
-    signature,
-  });
-
-  console.log('Signature verify status:', verifyRes.status);
-
+  // Verify signature to obtain JWT
+  const verifyRes = await request(app).post('/api/auth/verify').send({ walletAddress, signature });
   if (verifyRes.status !== 200) {
-    console.error('Signature verification failed:', verifyRes.body);
-    throw new Error(`Signature verification failed: ${JSON.stringify(verifyRes.body)}`);
+    throw new Error('Signature verification failed during test user login');
   }
 
-  const { token, user } = verifyRes.body;
-  console.log('Received JWT token for user auth');
-
   return {
-    id: userId,
+    id: user.id,
     walletAddress,
     email,
-    jwtToken: `Bearer ${token}`, // Make sure to include Bearer prefix
+    jwtToken: `Bearer ${verifyRes.body.token}`,
   };
 }

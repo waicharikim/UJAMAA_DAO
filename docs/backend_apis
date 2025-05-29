@@ -1,0 +1,376 @@
+openapi: 3.0.3
+info:
+  title: UjamaaDAO Backend API
+  version: 1.0.0
+  description: API specification for user and authentication services in UjamaaDAO platform.
+
+servers:
+  - url: /api
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  
+  schemas:
+    # User Schemas
+    CreateUserInput:
+      type: object
+      required:
+        - walletAddress
+        - email
+        - name
+        - constituencyOrigin
+        - countyOrigin
+        - constituencyLive
+        - countyLive
+      properties:
+        walletAddress:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+          description: Ethereum wallet address (0x-prefixed)
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+          minLength: 2
+        phoneNumber:
+          type: string
+          nullable: true
+        constituencyOrigin:
+          type: string
+          format: uuid
+        countyOrigin:
+          type: string
+          format: uuid
+        constituencyLive:
+          type: string
+          format: uuid
+        countyLive:
+          type: string
+          format: uuid
+        industry:
+          type: string
+          nullable: true
+          description: Optional industry ID (UUID)
+        goodsServices:
+          type: array
+          items:
+            type: string
+            format: uuid
+        avatarUrl:
+          type: string
+          format: uri
+          nullable: true
+
+    UpdateUserInput:
+      type: object
+      properties:
+        walletAddress:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+          minLength: 2
+        phoneNumber:
+          type: string
+          nullable: true
+        constituencyOrigin:
+          type: string
+          format: uuid
+        countyOrigin:
+          type: string
+          format: uuid
+        constituencyLive:
+          type: string
+          format: uuid
+        countyLive:
+          type: string
+          format: uuid
+        industry:
+          type: string
+          nullable: true
+        goodsServices:
+          type: array
+          items:
+            type: string
+            format: uuid
+        avatarUrl:
+          type: string
+          format: uri
+          nullable: true
+
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        walletAddress:
+          type: string
+        email:
+          type: string
+        name:
+          type: string
+        phoneNumber:
+          type: string
+          nullable: true
+        constituencyOrigin:
+          type: string
+          format: uuid
+        countyOrigin:
+          type: string
+          format: uuid
+        constituencyLive:
+          type: string
+          format: uuid
+        countyLive:
+          type: string
+          format: uuid
+        avatarUrl:
+          type: string
+          format: uri
+          nullable: true
+        industry:
+          type: string
+          nullable: true
+        goodsServices:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              name:
+                type: string
+        emailVerified:
+          type: boolean
+
+    AuthRequest:
+      type: object
+      required:
+        - walletAddress
+        - signature
+      properties:
+        walletAddress:
+          type: string
+        signature:
+          type: string
+
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        user:
+          $ref: '#/components/schemas/UserResponse'
+
+    NonceResponse:
+      type: object
+      properties:
+        nonce:
+          type: string
+
+  responses:
+    UnauthorizedError:
+      description: Unauthorized - missing or invalid authentication token
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+
+    ValidationError:
+      description: Request validation error(s)
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              details:
+                type: array
+                items:
+                  type: object
+
+paths:
+  /users:
+    post:
+      summary: Register new user
+      description: Creates a new user with provided data.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserInput'
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          description: User with email or wallet address already exists
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+
+  /users/me:
+    get:
+      summary: Get current user profile
+      description: Retrieves profile of authenticated user.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The current user's profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+    patch:
+      summary: Update current user profile
+      description: Updates data of authenticated user.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserInput'
+      responses:
+        '200':
+          description: Updated user profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /users/me/avatar:
+    post:
+      summary: Upload avatar image
+      description: Uploads a new avatar for authenticated user.
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                avatar:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Avatar uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  avatarUrl:
+                    type: string
+
+  /users/wallet/{walletAddress}:
+    get:
+      summary: Get user profile by wallet address
+      description: Retrieves user profile for given wallet address.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: walletAddress
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Ethereum wallet address to search
+      responses:
+        '200':
+          description: User profile found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+
+  /auth/nonce:
+    get:
+      summary: Get nonce for wallet authentication
+      description: Returns the nonce string for a given wallet address.
+      parameters:
+        - name: walletAddress
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Wallet address to get nonce for.
+      responses:
+        '200':
+          description: Nonce fetched successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NonceResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+
+  /auth/verify:
+    post:
+      summary: Verify wallet signature and login
+      description: Verifies the signature to authenticate a user and issues a JWT token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthRequest'
+      responses:
+        '200':
+          description: Signature verified and JWT issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'

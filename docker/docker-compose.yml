@@ -23,6 +23,7 @@ services:
     environment:
       DATABASE_URL: postgresql://ujamaa_user:ujamaa_pass@postgres:5432/ujamaa_db
       NODE_ENV: development
+      JWT_SECRET_KEY: 6e603cfa9affb7677020ad6a930bd3f076867ff38d100586dc5d985bed845ad0
     ports:
       - "4000:4000"
     volumes:
