@@ -1,28 +1,41 @@
 /**
  * @file user.service.ts
- * 
+ *
  * @description
- * User service handles all business logic related to user management including
- * creation, updating, retrieval with privacy-aware serialization, and audit logging.
- * 
- * - Validates input references and location integrity.
- * - Normalizes data such as wallet addresses.
- * - Creates users with default system roles.
- * - Updates user info while auditing changes.
- * - Applies privacy filtering based on user settings and requester roles.
+ * Domain service for user management.
+ *
+ * Responsibilities:
+ * - Create, update, fetch users.
+ * - Validate references (industry, goods/services, location relationships).
+ * - Ensure DB operations are atomic and audit rows are created inside same transaction.
+ * - Convert DB uniqueness errors into friendly ApiError(409).
+ * - Emit domain events after successful transactions (EventBus).
+ *
+ * Integration notes:
+ * - Controllers call service methods and will perform serialization (serializeUser)
+ *   before sending responses to clients.
+ * - Background workers should subscribe to EventBus to perform long-running tasks
+ *   such as sending emails, granting tokens on-chain, or other async side-effects.
+ *
+ * Tests:
+ * - Service is written to be testable: it uses UserRepository and logUserAudit(tx)
+ *   and catches Prisma known request errors for assertions.
  */
 
-import { logUserAudit } from './userAudit.service.js';
+import { Prisma } from '@prisma/client';
 import prisma from '../prismaClient.js';
 import { ApiError } from '../utils/ApiError.js';
-import type { CreateUserInput, UpdateUserInput } from '../validation/user.validation.js';
-import crypto from 'crypto';
 import logger from '../utils/logger.js';
-import { serializeUser } from '../utils/userSerialization.js';
+import { logUserAudit } from '../utils/audit.util.js';
+import { UserRepository } from '../repositories/user.repository.js';
+import { EventBus } from '../events/eventBus.js';
+import type { CreateUserInput, UpdateUserInput } from '../validation/user.validation.js';
 
 /**
- * Validates that user location fields reference existing and related County and Constituency records.
- * Throws ApiError on invalid references.
+ * Validate location relations and consistency.
+ * Throws ApiError(400) on failure.
+ * (Keeps the validation logic in the service layer to avoid accidental DB
+ *  inconsistencies; the controller/validation layer should already do most checks.)
  */
 async function validateUserLocations(input: CreateUserInput | UpdateUserInput) {
   const { countyLive, constituencyLive, countyOrigin, constituencyOrigin } = input;
@@ -31,10 +44,12 @@ async function validateUserLocations(input: CreateUserInput | UpdateUserInput) {
     const liveCounty = await prisma.county.findUnique({ where: { id: countyLive } });
     if (!liveCounty) throw new ApiError(`Invalid countyLive: ${countyLive}`, 400);
   }
+
   if (countyOrigin) {
     const originCounty = await prisma.county.findUnique({ where: { id: countyOrigin } });
     if (!originCounty) throw new ApiError(`Invalid countyOrigin: ${countyOrigin}`, 400);
   }
+
   if (constituencyLive) {
     const liveConstituency = await prisma.constituency.findUnique({ where: { id: constituencyLive } });
     if (!liveConstituency) throw new ApiError(`Invalid constituencyLive: ${constituencyLive}`, 400);
@@ -42,6 +57,7 @@ async function validateUserLocations(input: CreateUserInput | UpdateUserInput) {
       throw new ApiError(`constituencyLive (${constituencyLive}) does not belong to countyLive (${countyLive})`, 400);
     }
   }
+
   if (constituencyOrigin) {
     const originConstituency = await prisma.constituency.findUnique({ where: { id: constituencyOrigin } });
     if (!originConstituency) throw new ApiError(`Invalid constituencyOrigin: ${constituencyOrigin}`, 400);
@@ -52,202 +68,212 @@ async function validateUserLocations(input: CreateUserInput | UpdateUserInput) {
 }
 
 /**
- * Validates references such as industry and goods/services IDs.
- * Throws ApiError if references are invalid.
+ * Validate references for industry and goodsServices; delegates location validation.
+ * Throws ApiError(400) on invalid references.
  */
 async function validateUserReferences(input: CreateUserInput | UpdateUserInput) {
   if (input.industryId) {
     const industry = await prisma.industry.findUnique({ where: { id: input.industryId } });
     if (!industry) throw new ApiError(`Invalid industryId: ${input.industryId}`, 400);
   }
+
   if (input.goodsServices && input.goodsServices.length > 0) {
-    const count = await prisma.goodsService.count({
-      where: { id: { in: input.goodsServices } },
-    });
+    const count = await prisma.goodsService.count({ where: { id: { in: input.goodsServices } } });
     if (count !== input.goodsServices.length) {
       throw new ApiError('One or more goodsServices IDs are invalid', 400);
     }
   }
+
   await validateUserLocations(input);
 }
 
 /**
- * Normalize wallet address to lowercase and trimmed format.
- */
-function normalizeWalletAddress(address: string): string {
-  return address.trim().toLowerCase();
-}
-
-/**
- * Creates a new user after validating references and uniqueness.
- * Assigns default GENERAL_USER system role.
+ * Create user - main entry point.
+ *
+ * Behavior:
+ * - Validates references.
+ * - Checks for existing user collisions (email/wallet) first (optimistic).
+ * - Performs Prisma transaction to create user, assign role, and write creation audit.
+ * - Catches unique-constraint (P2002) and returns ApiError(409).
+ * - Publishes 'user.created' event on EventBus after success.
+ *
+ * Returns: raw Prisma user object (with default includes if needed)
  */
 export async function createUser(input: CreateUserInput) {
-  input.walletAddress = normalizeWalletAddress(input.walletAddress);
-
-  logger.info('createUser: Checking for existing user', {
+  logger.info('user.service.createUser: validating references', {
     email: input.email,
     walletAddress: input.walletAddress,
   });
 
   await validateUserReferences(input);
 
-  const exists = await prisma.user.findFirst({
-    where: { OR: [{ email: input.email }, { walletAddress: input.walletAddress }] },
-  });
-
-  if (exists) {
+  // Quick existence check (not a replacement for DB unique constraints)
+  const existing = await UserRepository.findByEmailOrWallet(input.email, input.walletAddress);
+  if (existing) {
     throw new ApiError('User with this email or wallet already exists', 409);
   }
 
-  const goodsServicesInput = input.goodsServices && input.goodsServices.length > 0
-    ? { connect: input.goodsServices.map((id: string) => ({ id })) }
+  // Prepare goodsServices connection if provided
+  const goodsServicesConnect = input.goodsServices && input.goodsServices.length > 0
+    ? { connect: input.goodsServices.map(id => ({ id })) }
     : undefined;
 
-  const user = await prisma.user.create({
-    data: {
-      walletAddress: input.walletAddress,
-      email: input.email,
-      name: input.name,
-      phoneNumber: input.phoneNumber,
-      constituencyOrigin: input.constituencyOrigin,
-      countyOrigin: input.countyOrigin,
-      constituencyLive: input.constituencyLive,
-      countyLive: input.countyLive,
-      industryId: input.industryId,
-      goodsServices: goodsServicesInput,
-      nonce: crypto.randomUUID(),
-    },
-  });
+  // Run atomic creation + role assignment + audit inside transaction
+  try {
+    const created = await prisma.$transaction(async (tx) => {
+      // Use repository create via tx to keep consistency and testability
+      const user = await UserRepository.create({
+        walletAddress: input.walletAddress,
+        email: input.email,
+        name: input.name,
+        phoneNumber: input.phoneNumber,
+        constituencyOrigin: input.constituencyOrigin,
+        countyOrigin: input.countyOrigin,
+        constituencyLive: input.constituencyLive,
+        countyLive: input.countyLive,
+        industryId: input.industryId,
+        goodsServices: goodsServicesConnect,
+        nonce: (input as any).nonce ?? crypto.randomUUID(),
+        avatarUrl: input.avatarUrl,
+      }, tx);
 
-  // Assign default global role
-  await prisma.userRole.create({
-    data: { userId: user.id, role: 'GENERAL_USER', scope: null },
-  });
+      // Assign default role
+      await tx.userRole.create({
+        data: { userId: user.id, role: 'GENERAL_USER', scope: null },
+      });
 
-  logger.info('createUser: User created successfully', { userId: user.id });
+      // Write creation audit inside same transaction using tx
+      await logUserAudit({
+        userId: user.id,
+        field: 'created',
+        oldValue: null,
+        newValue: JSON.stringify({ email: user.email, name: user.name }),
+        changedBy: null,
+      }, tx);
+
+      return user;
+    });
+
+    // Publish domain event (non-blocking). Subscribers (workers) will handle heavy tasks.
+    try {
+      EventBus.publish('user.created', { userId: created.id, email: created.email });
+    } catch (evtErr) {
+      // Log publishing errors but do not rollback the main transaction
+      logger.error('user.service.createUser: EventBus.publish failed', { err: evtErr, userId: created.id });
+    }
+
+    return created;
+  } catch (err) {
+    // Convert Prisma unique constraint failures into user-friendly 409
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      logger.warn('user.service.createUser: unique constraint violation', { code: err.code, meta: err.meta });
+      throw new ApiError('User with this email or wallet already exists', 409);
+    }
+    // propagate other errors
+    throw err;
+  }
+}
+
+/**
+ * getUserById
+ * - Simple fetch wrapper that returns raw Prisma object with useful relations.
+ * - Controllers should call serializeUser(...) before returning to clients.
+ */
+export async function getUserById(id: string) {
+  const user = await UserRepository.findById(id);
+  if (!user) throw new ApiError('User not found', 404);
   return user;
 }
 
 /**
- * Fetches a user by ID and serializes output filtered by requester's roles 
- * respecting privacy settings.
- */
-export async function getUserById(id: string, requesterRoles: string[] = []) {
-  const user = await prisma.user.findUnique({
-    where: { id },
-    include: { privacySettings: true, goodsServices: true },
-  });
-  if (!user) throw new ApiError('User not found', 404);
-
-  return serializeUser(user, requesterRoles);
-}
-
-/**
- * Updates user properties with audit logging on changes.
- * @param changedById - ID of user performing the update (for audit)
+ * updateUser
+ * - Validates references and conflict checks.
+ * - Performs atomic update and writes field-level audits inside the same transaction.
+ * - Emits 'user.updated' event after success for background workers.
+ *
+ * Note: changedById is used to mark who performed the change.
  */
 export async function updateUser(id: string, input: UpdateUserInput, changedById?: string) {
-  const user = await prisma.user.findUnique({ where: { id } });
-  if (!user) {
-    logger.warn('updateUser: User not found', { userId: id });
-    throw new ApiError('User not found', 404);
-  }
+  // Fetch existing user (to compute diffs for audit)
+  const existing = await UserRepository.findById(id);
+  if (!existing) throw new ApiError('User not found', 404);
 
-  if (input.walletAddress) {
-    input.walletAddress = normalizeWalletAddress(input.walletAddress);
-  }
-
+  // Defensive normalization is handled in validation; still validate references
   await validateUserReferences(input);
 
-  const conflictUser = await prisma.user.findFirst({
-    where: {
-      AND: [
-        { id: { not: id } },
-        {
-          OR: [
-            input.walletAddress ? { walletAddress: input.walletAddress } : undefined,
-            input.email ? { email: input.email } : undefined,
-          ].filter(Boolean) as object[],
-        },
-      ],
-    },
-  });
-
-  if (conflictUser) {
-    if (conflictUser.walletAddress === input.walletAddress) {
-      throw new ApiError('Wallet address already registered.', 409);
-    }
-    if (conflictUser.email === input.email) {
-      throw new ApiError('Email already registered.', 409);
-    }
+  // Conflict detection (email/wallet used by other accounts)
+  const conflict = await UserRepository.findByEmailOrWallet(input.email, input.walletAddress);
+  if (conflict && conflict.id !== id) {
+    throw new ApiError('Email or wallet already registered to another account', 409);
   }
 
-  // Fields to audit on change
+  // Fields to audit
   const auditFields = [
-    'email',
-    'phoneNumber',
-    'walletAddress',
-    'constituencyLive',
-    'countyLive',
-    'constituencyOrigin',
-    'countyOrigin',
-    'name',
+    'email', 'phoneNumber', 'walletAddress',
+    'constituencyLive', 'countyLive', 'constituencyOrigin', 'countyOrigin', 'name',
   ];
 
-  // Capture old values for auditing
-  const oldValues: Record<string, any> = {};
-  for (const field of auditFields) {
-    // @ts-ignore TypeScript dynamic property
-    oldValues[field] = user[field] ?? null;
+  // Capture old values
+  const oldValues = {} as Record<string, any>;
+  for (const f of auditFields) {
+    // @ts-ignore
+    oldValues[f] = (existing as any)[f] ?? null;
   }
 
-  const goodsServicesInput = input.goodsServices && input.goodsServices.length > 0
-    ? { set: input.goodsServices.map((id: string) => ({ id })) }
-    : { set: [] }; // Clear association if empty
+  // Prepare relations update if goodsServices present
+  const dataToUpdate: any = { ...input };
+  if (input.goodsServices) {
+    dataToUpdate.goodsServices = { set: input.goodsServices.map((gid: string) => ({ id: gid })) };
+  }
 
-  const updated = await prisma.user.update({
-    where: { id },
-    data: {
-      ...input,
-      goodsServices: goodsServicesInput,
-    },
-  });
+  try {
+    const updated = await prisma.$transaction(async (tx) => {
+      const u = await UserRepository.update(id, dataToUpdate, tx);
 
-  logger.info('updateUser: User updated', { userId: id });
-
-  // Log changes asynchronously - no blocking
-  if (changedById) {
-    for (const field of auditFields) {
-      const newValue = updated[field] ?? null;
-      if (oldValues[field] !== newValue) {
-        logUserAudit({
-          userId: id,
-          field: `privacySettings.${field}`,
-          oldValue: oldValues[field] !== null ? JSON.stringify(oldValues[field]) : null,
-          newValue: newValue !== null ? JSON.stringify(newValue) : null,
-          changedBy: changedById,
-        }).catch((error) => {
-          logger.error('Audit log failed', { error, userId: id, field });
-        });
+      // Write audit rows inside same transaction so they commit/rollback together
+      if (changedById) {
+        for (const field of auditFields) {
+          // @ts-ignore
+          const newValue = (u as any)[field] ?? null;
+          const oldValue = oldValues[field];
+          if (oldValue !== newValue) {
+            await logUserAudit({
+              userId: id,
+              field,
+              oldValue: oldValue !== null ? JSON.stringify(oldValue) : null,
+              newValue: newValue !== null ? JSON.stringify(newValue) : null,
+              changedBy: changedById,
+            }, tx);
+          }
+        }
       }
-    }
-  }
 
-  return updated;
+      return u;
+    });
+
+    // Emit update event (non-blocking)
+    try {
+      EventBus.publish('user.updated', { userId: updated.id, changedBy: changedById ?? null });
+    } catch (evtErr) {
+      logger.error('user.service.updateUser: EventBus.publish failed', { err: evtErr, userId: id });
+    }
+
+    return updated;
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      throw new ApiError('Update conflicts with an existing record (email or wallet)', 409);
+    }
+    throw err;
+  }
 }
 
 /**
- * Retrieves a user by wallet address with privacy-aware serialization.
- * @param requesterRoles Roles of requesting user to enforce privacy filtering
+ * getUserByWallet
+ * - Normalize wallet address expected to be normalized earlier by validation.
+ * - Returns raw Prisma user object including privacy and goodsServices.
  */
-export async function getUserByWallet(walletAddress: string, requesterRoles: string[] = []) {
-  const normalized = normalizeWalletAddress(walletAddress);
-  const user = await prisma.user.findUnique({
-    where: { walletAddress: normalized },
-    include: { privacySettings: true, goodsServices: true },
-  });
+export async function getUserByWallet(walletAddress: string) {
+  const user = await UserRepository.findByWalletAddress(walletAddress);
   if (!user) throw new ApiError('User not found', 404);
-
-  return serializeUser(user, requesterRoles);
+  return user;
 }

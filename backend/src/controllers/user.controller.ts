@@ -2,125 +2,113 @@
  * @file user.controller.ts
  *
  * @description
- * Controller for handling user-related HTTP requests.
- * Includes handlers for:
- * - Creating new users
- * - Retrieving current user's profile
- * - Updating current user's profile
- * - Uploading avatar images
- * - Retrieving user by wallet address
+ * Thin HTTP controllers for User endpoints.
+ * Controllers:
+ *  - validate requests using validateRequest middleware (Zod)
+ *  - call domain services (user.service)
+ *  - serialize responses using serializeUser(...)
+ *  - return canonical envelope { data: ... }
+ *
+ * For owner-specific endpoints (/me), this controller passes isOwner=true so the
+ * serializer reveals private fields to the owner.
  */
 
-import type { Request, Response, NextFunction } from 'express';
-import * as userService from '../services/user.service.js';
+import type { Request, Response } from 'express';
+import { asyncHandler } from '../middlewares/asyncHandler.js';
+import { validateRequest } from '../middlewares/validateRequest.js';
 import { createUserSchema, updateUserSchema } from '../validation/user.validation.js';
-import { ZodError } from 'zod';
+import * as UserService from '../services/user.service.js';
+import { serializeUser } from '../utils/userSerialization.js';
 import { ApiError } from '../utils/ApiError.js';
-import { USER_ACCESS_ROLES } from '../constants/roles.js';
 
 /**
- * POST /api/users
- * Creates a new user after validating input.
+ * Normalize requesterRoles values into string array.
+ * Input may be array of strings or objects like { role, scope }.
  */
-export const createUserHandler = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const validated = createUserSchema.parse(req.body);
-    const user = await userService.createUser(validated);
-    res.status(201).json(user);
-  } catch (error) {
-    if (error instanceof ZodError) {
-      return res.status(400).json({ error: 'Invalid input', details: (error as ZodError).errors });
-    }
-    if (error instanceof ApiError) {
-      return res.status(error.statusCode).json({ error: error.message });
-    }
-    next(error);
-  }
-};
-
-/**
- * GET /api/users/me
- * Retrieves the authenticated user's profile.
- */
-export const getCurrentUserHandler = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    if (!req.user?.userId) return res.status(401).json({ error: 'Unauthorized' });
-
-    const roles = (req.userRoles ?? []).map((r: { role: string }) => r.role);
-    const user = await userService.getUserById(req.user.userId, roles);
-
-    res.json(user);
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * PATCH /api/users/me
- * Updates the authenticated user's profile.
- */
-export const updateUserHandler = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    if (!req.user?.userId) return res.status(401).json({ error: 'Unauthorized' });
-
-    const validated = updateUserSchema.parse(req.body);
-    const updated = await userService.updateUser(req.user.userId, validated, req.user.userId);
-
-    res.json(updated);
-  } catch (error) {
-    if (error instanceof ZodError) {
-      return res.status(400).json({ error: 'Invalid input', details: error.errors });
-    }
-    if (error instanceof ApiError) {
-      return res.status(error.statusCode).json({ error: error.message });
-    }
-    next(error);
-  }
-};
-
-/**
- * POST /api/users/me/avatar
- * Handles avatar image upload for the authenticated user.
- */
-export async function uploadAvatarHandler(req: Request, res: Response, next: NextFunction) {
-  try {
-    if (!req.user?.userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' });
-    }
-
-    const avatarUrl = `/uploads/avatars/${req.file.filename}`;
-
-    const updatedUser = await userService.updateUser(req.user.userId, { avatarUrl }, req.user.userId);
-
-    res.json({ message: 'Avatar uploaded successfully', avatarUrl: updatedUser.avatarUrl });
-  } catch (error) {
-    next(error);
-  }
+function extractRoles(rawRoles: any): string[] {
+  if (!rawRoles) return [];
+  return rawRoles.map((r: any) => (typeof r === 'string' ? r : r.role)).filter(Boolean);
 }
 
 /**
- * GET /api/users/wallet/:walletAddress
- * Retrieves user profile by their wallet address with privacy filtering.
+ * POST /api/users
+ * Create a new user and return canonical { data: user }.
  */
-export const getUserByWalletHandler = async (
-  req: Request<{ walletAddress: string }>,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const walletAddress = req.params.walletAddress;
-    const roles = (req.userRoles ?? []).map((r: { role: string }) => r.role);
+export const createUserHandler = [
+  validateRequest(createUserSchema, 'body'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const input = req.body;
+    const createdRaw = await UserService.createUser(input);
+    const serialized = serializeUser(createdRaw, []); // no requester on create
+    return res.status(201).json({ data: serialized });
+  }),
+];
 
-    const user = await userService.getUserByWallet(walletAddress, roles);
-    res.json(user);
-  } catch (error) {
-    if (error instanceof ApiError) {
-      return res.status(error.statusCode).json({ error: error.message });
-    }
-    next(error);
-  }
-};
+/**
+ * GET /api/users/me
+ * Return the current authenticated user's profile (owner view).
+ */
+export const getCurrentUserHandler = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user?.userId;
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+  const roles = extractRoles(req.userRoles);
+  const raw = await UserService.getUserById(userId);
+  const serialized = serializeUser(raw, roles, { isOwner: true });
+  return res.json({ data: serialized });
+});
+
+/**
+ * PATCH /api/users/me
+ * Update current user and return owner view.
+ */
+export const updateUserHandler = [
+  validateRequest(updateUserSchema, 'body'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const input = req.body;
+    const changedBy = userId;
+    const updatedRaw = await UserService.updateUser(userId, input, changedBy);
+    const roles = extractRoles(req.userRoles);
+
+    const serialized = serializeUser(updatedRaw, roles, { isOwner: true });
+    return res.json({ data: serialized });
+  }),
+];
+
+/**
+ * POST /api/users/me/avatar
+ * Upload avatar — expects multer upload middleware before this handler.
+ * Returns the canonical envelope with serialized user (owner view).
+ */
+export const uploadAvatarHandler = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user?.userId;
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+  const avatarUrl = `/uploads/avatars/${req.file.filename}`;
+
+  const changedBy = userId;
+  const updatedRaw = await UserService.updateUser(userId, { avatarUrl }, changedBy);
+  const roles = extractRoles(req.userRoles);
+  const serialized = serializeUser(updatedRaw, roles, { isOwner: true });
+
+  return res.json({ data: serialized });
+});
+
+/**
+ * GET /api/users/wallet/:walletAddress
+ * Public lookup by wallet address, returns canonical envelope with serialized user.
+ * isOwner=false by default (unless roles indicate ownership).
+ */
+export const getUserByWalletHandler = asyncHandler(async (req: Request, res: Response) => {
+  const wallet = req.params.walletAddress;
+  if (!wallet) return res.status(400).json({ error: 'walletAddress is required' });
+
+  const roles = extractRoles(req.userRoles);
+  const raw = await UserService.getUserByWallet(wallet);
+  const serialized = serializeUser(raw, roles, { isOwner: false });
+  return res.json({ data: serialized });
+});

@@ -8,7 +8,7 @@ const TEST_PRIVATE_KEY =
   '0x59c6995e998f97a5a0044966f0945384df71b1f68d0e3fcb7e3c54e920f2f11c';
 const wallet = new Wallet(TEST_PRIVATE_KEY);
 
-function signMessage(message: string) {
+function signMessage(message) {
   return wallet.signMessage(message);
 }
 
@@ -33,13 +33,13 @@ async function loginAndGetToken() {
   return `Bearer ${verifyRes.body.token}`;
 }
 
-describe('User Route Integration Tests', () => {
-  let authToken: string;
+describe('User Route Integration Tests (canonical API)', () => {
+  let authToken;
 
   beforeAll(async () => {
     // Obtain a valid JWT token by logging in as the test user
     authToken = await loginAndGetToken();
-  }, 30000); // Allow more time for login process
+  }, 30000);
 
   afterAll(async () => {
     await prisma.$disconnect();
@@ -59,13 +59,15 @@ describe('User Route Integration Tests', () => {
         'cc97b229-4642-4e8b-9502-7a1d6e4c7637',
         'c1f469fb-a22e-4726-8a9d-1dcd9488817e',
       ],
-      phoneNumber: '1234567890',
+      phoneNumber: '+254712345678', // canonical international format
     };
 
     const res = await request(app).post('/api/users').send(payload);
     expect(res.status).toBe(201);
-    expect(res.body).toHaveProperty('id');
-    expect(res.body.walletAddress.toLowerCase()).toBe(payload.walletAddress.toLowerCase());
+    expect(res.body).toHaveProperty('data');
+    const user = res.body.data;
+    expect(user).toHaveProperty('id');
+    expect(user.walletAddress.toLowerCase()).toBe(payload.walletAddress.toLowerCase());
   });
 
   it('should reject access to /me without auth token', async () => {
@@ -87,8 +89,10 @@ describe('User Route Integration Tests', () => {
       .get('/api/users/me')
       .set('Authorization', authToken);
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('walletAddress');
-    expect(res.body.walletAddress.toLowerCase()).toBe(wallet.address.toLowerCase());
+    expect(res.body).toHaveProperty('data');
+    const user = res.body.data;
+    expect(user).toHaveProperty('walletAddress');
+    expect(user.walletAddress.toLowerCase()).toBe(wallet.address.toLowerCase());
   });
 
   it('should allow authenticated user to update their profile', async () => {
@@ -98,7 +102,9 @@ describe('User Route Integration Tests', () => {
       .set('Authorization', authToken)
       .send({ name: newName });
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('name', newName);
+    expect(res.body).toHaveProperty('data');
+    const user = res.body.data;
+    expect(user).toHaveProperty('name', newName);
   });
 
   it('should return 400 on invalid update input', async () => {

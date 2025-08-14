@@ -1,116 +1,105 @@
-/**
- * @file user.integration.test.ts
- *
- * @description
- * Integration tests for user-related API endpoints.
- * Validates full stack including authentication, route correctness,
- * privacy filtering, and file upload.
- * Includes request logging middleware added to app for debugging.
- */
-
 import request from 'supertest';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import express from 'express';
-import path from 'path';
 import fs from 'fs';
+import path from 'path';
 import prisma from '../src/prismaClient.js';
+import app from '../src/app.js';
 import { generateTestToken } from './utils/testUtils.js';
-import app from '../src/app.js'; // Use actual app import
 
-// Add request logging middleware for debugging unmatched routes and requests
-// (Optional: Add in app.ts instead. You can remove this if not needed.)
-// app.use((req, res, next) => {
-//   console.log(`[TEST LOG] Incoming request: ${req.method} ${req.originalUrl}`);
-//   next();
-// });
-
-const seededCountyLive = '7378d182-26c6-45c1-864e-dee1ed8a3ffd';
-const seededConstituencyLive = '524de848-f940-406d-894d-df8c6bee6fa8';
-const seededCountyOrigin = '80ed8e1d-db92-409b-b004-2c3099ef094d';
-const seededConstituencyOrigin = 'c12317c3-cb0a-4a3b-ba8c-2f288b012858';
-const seededIndustryId = '20e7b855-4de8-46b3-8000-c01c8f28ac0c';
-const seededGoodsServices = [
-  '0168c1b6-8957-4fc7-b25f-0d2ea8bba623',
-  '7ebfa3cf-5459-454a-9765-67a44f7f85f9',
-];
-
-// Ensure upload directory exists before tests
 const uploadDir = path.join(process.cwd(), 'uploads', 'avatars');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
-describe('User API Integration Tests', () => {
-  let userId: string;
+describe('Canonical User API Integration Tests', () => {
+  let createdUserId: string;
   let jwtToken: string;
   const testWallet = '0xf1eae4a2011695ab127f73b7e910c45ca4b30e5a';
-  const testEmail = `integrationtest_${Date.now()}@example.com`;
+  const testEmail = `integration_${Date.now()}@example.com`;
+
+  // Replace these seeded IDs with whatever is appropriate in your test environment
+  const seededCountyLive = '7378d182-26c6-45c1-864e-dee1ed8a3ffd';
+  const seededConstituencyLive = '524de848-f940-406d-894d-df8c6bee6fa8';
+  const seededCountyOrigin = '80ed8e1d-db92-409b-b004-2c3099ef094d';
+  const seededConstituencyOrigin = 'c12317c3-cb0a-4a3b-ba8c-2f288b012858';
+  const seededIndustryId = '20e7b855-4de8-46b3-8000-c01c8f28ac0c';
+  const seededGoodsServices = [
+    '0168c1b6-8957-4fc7-b25f-0d2ea8bba623',
+    '7ebfa3cf-5459-454a-9765-67a44f7f85f9',
+  ];
 
   beforeAll(async () => {
-    // Assume prisma connection and seeding done in testSetup
-
-    // Create a user to test against via API
-    const res = await request(app)
-      .post('/api/users')
-      .send({
-        walletAddress: testWallet,
-        email: testEmail,
-        name: 'Integration Test User',
-        phoneNumber: '0712345678',
-        constituencyOrigin: seededConstituencyOrigin,
-        countyOrigin: seededCountyOrigin,
-        constituencyLive: seededConstituencyLive,
-        countyLive: seededCountyLive,
-        industry: seededIndustryId,
-        goodsServices: seededGoodsServices,
-        avatarUrl: 'https://example.com/avatar.png',
-      });
-
-    expect(res.status).toBe(201);
-    userId = res.body.id;
-
-    jwtToken = generateTestToken(userId, testWallet, ['system:general_user']);
+    // Ensure DB connection
+    await prisma.$connect();
   });
 
   afterAll(async () => {
-    // Disconnect handled in testSetup afterAll
+    await prisma.$disconnect();
   });
 
-  it('should retrieve the current user profile', async () => {
+  it('should create a user (POST /api/users) and return canonical shape', async () => {
+    const payload = {
+      walletAddress: testWallet,
+      email: testEmail,
+      name: 'Canonical Integration User',
+      phoneNumber: '+254712345678', // +254 format per canonical decision
+      constituencyOrigin: seededConstituencyOrigin,
+      countyOrigin: seededCountyOrigin,
+      constituencyLive: seededConstituencyLive,
+      countyLive: seededCountyLive,
+      industryId: seededIndustryId, // canonical field
+      goodsServices: seededGoodsServices,
+      avatarUrl: 'https://example.com/avatar.png',
+    };
+
+    const res = await request(app).post('/api/users').send(payload);
+    expect(res.status).toBe(201);
+    // canonical shape: { data: user }
+    expect(res.body).toHaveProperty('data');
+    const user = res.body.data;
+    expect(user).toHaveProperty('id');
+    expect(user).toHaveProperty('walletAddress', testWallet.toLowerCase());
+    expect(user).toHaveProperty('email', testEmail);
+    expect(user).toHaveProperty('phoneNumber'); // normalized phone present
+
+    createdUserId = user.id;
+
+    // generate token for this user for subsequent authenticated calls
+    jwtToken = generateTestToken(createdUserId, testWallet, ['system:general_user']);
+  });
+
+  it('should return current user profile at GET /api/users/me (canonical envelope)', async () => {
     const res = await request(app)
       .get('/api/users/me')
       .set('Authorization', `Bearer ${jwtToken}`);
 
-    console.log('Response body from /api/users/me:', res.body);
-
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('id', userId);
-    expect(res.body).toHaveProperty('name', 'Integration Test User');
-    //expect(res.body).toHaveProperty('email', testEmail);
-    
+    expect(res.body).toHaveProperty('data');
+    const user = res.body.data;
+    expect(user).toHaveProperty('id', createdUserId);
+    expect(user).toHaveProperty('name', 'Canonical Integration User');
+    // phone returned in canonical +254 format
+    expect(user.phoneNumber).toMatch(/^\+254[17]\d{7}$/);
   });
 
-  it('should update the current user profile', async () => {
-    const updatedPhone = '0700123456';
-
+  it('should update the current user profile (PATCH /api/users/me)', async () => {
+    const newPhone = '+254700123456';
     const res = await request(app)
       .patch('/api/users/me')
       .set('Authorization', `Bearer ${jwtToken}`)
-      .send({ phoneNumber: updatedPhone });
+      .send({ phoneNumber: newPhone });
 
     expect(res.status).toBe(200);
-    expect(res.body.phoneNumber).toBe(updatedPhone);
+    expect(res.body).toHaveProperty('data');
+    const user = res.body.data;
+    expect(user).toHaveProperty('phoneNumber', newPhone);
   });
 
-  it('should reject access without auth token', async () => {
+  it('should reject access without authorization', async () => {
     const res = await request(app).get('/api/users/me');
     expect(res.status).toBe(401);
   });
 
-  it('should upload avatar successfully', async () => {
+  it('should upload avatar (multipart) and return data.avatarUrl inside canonical envelope', async () => {
     const filePath = path.join(__dirname, 'test-files', 'avatar.png');
-
-    // Create dummy PNG if not present
     if (!fs.existsSync(filePath)) {
       fs.mkdirSync(path.dirname(filePath), { recursive: true });
       const pngBuffer = Buffer.from(
@@ -128,15 +117,22 @@ describe('User API Integration Tests', () => {
       .attach('avatar', filePath);
 
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('avatarUrl');
+    expect(res.body).toHaveProperty('data');
+    const user = res.body.data;
+    expect(user).toHaveProperty('avatarUrl');
+    // simple assertion that avatarUrl is a string and points under uploads (if your storage uses different, adapt)
+    expect(typeof user.avatarUrl).toBe('string');
   });
 
-  it('should fetch user by wallet address', async () => {
+  it('should fetch user by wallet address (GET /api/users/wallet/:wallet)', async () => {
     const res = await request(app)
       .get(`/api/users/wallet/${testWallet}`)
       .set('Authorization', `Bearer ${jwtToken}`);
 
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('id', userId);
+    expect(res.body).toHaveProperty('data');
+    const user = res.body.data;
+    expect(user).toHaveProperty('id', createdUserId);
+    expect(user).toHaveProperty('walletAddress', testWallet.toLowerCase());
   });
 });

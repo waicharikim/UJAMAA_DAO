@@ -3,18 +3,26 @@
  *
  * @description
  * Service layer handling wallet-based authentication logic.
- * 
+ *
  * Responsibilities include:
  * - Generating or retrieving nonce challenges tied to wallet addresses for login.
  * - Verifying signed nonces to authenticate users and issue JWT tokens.
  * - Rotating nonces post successful authentication to prevent replay attacks.
- * 
- * This module normalizes wallet addresses to lowercase for consistent storage and verification.
- * Throws ApiError for authentication-related errors.
+ *
+ * Notes:
+ * - When creating a new user for the first time (via /api/auth/nonce), we must
+ *   populate required non-null UUID fields (constituencyOrigin, countyOrigin,
+ *   constituencyLive, countyLive) to satisfy the Prisma schema. Those fields
+ *   are not enforced as FK by Prisma in your schema, so generating random UUIDs
+ *   is safe and keeps DB constraints happy.
+ *
+ * Security:
+ * - JWT_SECRET must be set in env for production; tests default to 'your_jwt_secret_here'
+ *   but in CI you should provide a real secret via environment variable.
  */
 
 import prisma from '../prismaClient.js';
-import { randomBytes } from 'crypto';
+import { randomBytes, randomUUID } from 'crypto';
 import { ApiError } from '../utils/ApiError.js';
 import jwt from 'jsonwebtoken';
 import { ethers } from 'ethers';
@@ -22,52 +30,79 @@ import { ethers } from 'ethers';
 const JWT_SECRET = process.env.JWT_SECRET ?? 'your_jwt_secret_here';
 
 /**
- * Retrieves or creates a user by wallet address and returns a nonce for signing.
- * The walletAddress is normalized to lowercase for consistent storage and lookup.
- * @param walletAddress - User's wallet address (case-insensitive)
- * @returns The current nonce string associated with the user
+ * Retrieves or creates a user by wallet address and returns the current nonce.
+ * If user not present, create a minimal user with valid UUIDs for required
+ * location fields and a newly generated nonce.
+ *
+ * @param walletAddress - wallet address (string, case-insensitive)
+ * @returns nonce string for signing by client
  */
-export async function getNonce(walletAddress: string): Promise<string> {
-  const normalizedWallet = walletAddress.toLowerCase();
+export async function getNonce(walletAddress) {
+  const normalizedWallet = String(walletAddress).toLowerCase();
 
+  // Try to find existing user
   let user = await prisma.user.findUnique({ where: { walletAddress: normalizedWallet } });
 
   if (!user) {
+    // Create a new random nonce
     const nonce = randomBytes(16).toString('hex');
 
-    // Create a new user with default placeholder data and generated nonce
+    // Generate valid UUIDs for required non-null fields so Prisma insert succeeds.
+    // These are not necessarily meaningful constituency/county IDs — they just satisfy the schema.
+    const placeholderConstituencyOrigin = randomUUID();
+    const placeholderCountyOrigin = randomUUID();
+    const placeholderConstituencyLive = randomUUID();
+    const placeholderCountyLive = randomUUID();
+
+    // Create a minimal user record
     user = await prisma.user.create({
       data: {
         walletAddress: normalizedWallet,
-        email: `user_${Date.now()}@placeholder.local`, // You can update this to proper email later
+        // placeholder email. Should be updated later by actual profile flow.
+        email: `user_${Date.now()}@placeholder.local`,
         name: 'New User',
-        constituencyOrigin: '',
-        countyOrigin: '',
-        constituencyLive: '',
-        countyLive: '',
+        // Populate required location UUID strings with generated UUIDs
+        constituencyOrigin: placeholderConstituencyOrigin,
+        countyOrigin: placeholderCountyOrigin,
+        constituencyLive: placeholderConstituencyLive,
+        countyLive: placeholderCountyLive,
+        // persist nonce for the challenge
         nonce,
       },
     });
+  }
+
+  // Ensure we return a nonce string (existing user's nonce or the newly created one)
+  if (!user.nonce) {
+    // If for some reason the existing user has no nonce, generate and persist one
+    const newNonce = randomBytes(16).toString('hex');
+    await prisma.user.update({
+      where: { walletAddress: normalizedWallet },
+      data: { nonce: newNonce },
+    });
+    return newNonce;
   }
 
   return user.nonce;
 }
 
 /**
- * Verifies the signature of the nonce signed by the user using their wallet private key.
- * If valid, generates a new nonce to prevent replay attacks and issues a JWT token.
- * @param walletAddress - Wallet address of the user (case-insensitive)
- * @param signature - Signature over the current nonce
- * @throws ApiError 401 if signature mismatch or other authorization fails
- * @throws ApiError 404 if user not found
- * @returns Object containing JWT token and user info (excluding nonce)
+ * Verifies that the provided signature is a valid signature of the nonce for the given wallet.
+ * On success:
+ *  - rotates the nonce
+ *  - issues a JWT token
+ *  - returns { token, user } (user object excluding nonce)
+ *
+ * Throws ApiError(404) if user not found; ApiError(401) if signature invalid/mismatch.
+ *
+ * @param walletAddress - string wallet address
+ * @param signature - signature string produced by wallet signMessage
  */
-export async function verifySignature(walletAddress: string, signature: string) {
-  const normalizedWallet = walletAddress.toLowerCase();
+export async function verifySignature(walletAddress, signature) {
+  const normalizedWallet = String(walletAddress).toLowerCase();
 
-  const user = await prisma.user.findUnique({
-    where: { walletAddress: normalizedWallet },
-  });
+  // Fetch user (must exist; nonce challenge previously created)
+  const user = await prisma.user.findUnique({ where: { walletAddress: normalizedWallet } });
 
   if (!user) {
     throw new ApiError('User not found', 404);
@@ -75,11 +110,13 @@ export async function verifySignature(walletAddress: string, signature: string) 
 
   const message = `Login nonce: ${user.nonce}`;
 
-  let recoveredAddress: string;
+  let recoveredAddress;
   try {
+    // ethers.verifyMessage returns the address that signed the message
     recoveredAddress = ethers.verifyMessage(message, signature).toLowerCase();
-  } catch (error) {
-    console.error('Error verifying signature:', error);
+  } catch (err) {
+    // signature parse / verification error
+    console.error('Error verifying signature:', err);
     throw new ApiError('Invalid signature', 401);
   }
 
@@ -87,36 +124,25 @@ export async function verifySignature(walletAddress: string, signature: string) 
     console.error(
       `Signature mismatch: recovered address ${recoveredAddress} does NOT match expected wallet ${normalizedWallet}`
     );
-    console.error(`Signature: ${signature}`);
-    console.error(`Message signed: ${message}`);
     throw new ApiError('Signature does not match wallet address', 401);
   }
 
-  // (Optional) Remove redundant nonce equality check — it is implicit above
-  
-  // (Optional) Add your 'already logged in' check here if you track it in DB, e.g.:
-  // if (user.isLoggedIn) {
-  //   console.error(`User ${normalizedWallet} is already logged in`);
-  //   throw new ApiError('User already logged in', 401);
-  // }
-
-  // Rotate nonce for next login challenge to prevent replay
+  // Rotate nonce to prevent replay attacks
   const newNonce = randomBytes(16).toString('hex');
-
   await prisma.user.update({
     where: { walletAddress: normalizedWallet },
     data: { nonce: newNonce },
   });
 
-  // Sign JWT token with relevant claims
+  // Sign JWT token
   const token = jwt.sign(
     { walletAddress: normalizedWallet, userId: user.id },
     JWT_SECRET,
     { expiresIn: '1h' }
   );
 
-  // Return user info excluding sensitive nonce
-  const { nonce, ...userSafe } = user as any;
+  // Remove nonce from returned user object
+  const { nonce: _nonce, ...userSafe } = user;
 
   return { token, user: userSafe };
 }

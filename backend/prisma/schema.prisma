@@ -85,6 +85,20 @@ enum SystemRole {
   GENERAL_USER
 }
 
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL
+  SPEND
+  REFUND
+  ADJUSTMENT
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
 /// -------- MODELS --------
 
 model User {
@@ -93,10 +107,10 @@ model User {
   email              String   @unique
   name               String
   phoneNumber        String?
-  constituencyOrigin String
-  countyOrigin       String
-  constituencyLive   String
-  countyLive         String
+  constituencyOrigin String @db.Uuid
+  countyOrigin       String @db.Uuid
+  constituencyLive   String @db.Uuid
+  countyLive         String @db.Uuid
   avatarUrl          String?  // URL or path of the profile image, optional
 
   industryId         String?  @db.Uuid
@@ -104,6 +118,10 @@ model User {
   nonce              String
 
   userRoles          UserRole[]           // Global/system roles
+
+  walletBalances WalletBalance[] @relation("UserWalletBalances")
+
+
 
   groups             GroupMember[]
 
@@ -151,6 +169,8 @@ model Group {
 
   groupType        GroupType   @default(COMMUNITY)
 
+  walletBalances WalletBalance[] @relation("GroupWalletBalances")
+
   members          GroupMember[]
   proposals        Proposal[]     @relation("GroupProposals")
   impactPoints     ImpactPoint[]  @relation("GroupImpactPoints")
@@ -174,6 +194,41 @@ model GroupMember {
 
   @@unique([userId, groupId])
   @@index([groupId, role])
+}
+
+model WalletBalance {
+  id         String    @id @default(uuid()) @db.Uuid
+  holderType HolderType
+  userId     String?   @db.Uuid
+  groupId    String?   @db.Uuid
+  balance    Decimal     @db.Decimal(20, 2)
+  currency   String    @default("KES")
+  updatedAt  DateTime  @updatedAt
+
+  user       User?     @relation("UserWalletBalances", fields: [userId], references: [id])
+  group      Group?    @relation("GroupWalletBalances" ,fields: [groupId], references: [id])
+
+  WalletTransactions  WalletTransaction[]
+
+  @@unique([holderType, userId], name: "holderType_userId_wallet")
+  @@unique([holderType, groupId], name: "holderType_groupId_wallet")
+}
+
+model WalletTransaction {
+  id             String       @id @default(uuid()) @db.Uuid
+  walletBalanceId String       @db.Uuid
+  type           String       // e.g., "deposit", "withdrawal", "spend", "refund"
+  amount         Decimal    @db.Decimal(20, 2)
+  mpesaReceipt   String?      // optional
+  description    String?      // optional notes
+  status         TransactionStatus       // e.g., "pending", "completed", "failed"
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  walletBalance  WalletBalance @relation(fields: [walletBalanceId], references: [id])
+
+  @@index([walletBalanceId])
+  @@index([mpesaReceipt])
 }
 
 model Project {

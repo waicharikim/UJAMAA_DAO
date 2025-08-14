@@ -28,6 +28,7 @@ import userAuditRoutes from './routes/userAudit.routes.js'; // Import user audit
 import notificationRoutes from './routes/notification.routes.js'; // Import notification routes
 import userConsentRoutes from './routes/userConsent.routes.js'; // Import user consent routes
 import userActivityRoutes from './routes/userActivity.routes.js'; // Import user activity routes
+import WalletRoutes from './routes/wallet.routes.js'; // Import wallet routes
 
 import logger from './utils/logger.js';  
 
@@ -55,6 +56,9 @@ app.use('/api/reference', referenceDataRoutes);
 
 // Mount user-related routes under /api/users
 app.use('/api/users', userRoutes);
+
+// Mount wallet-related routes under /api/wallet
+app.use('/api/wallet', WalletRoutes); // Add this line to mount wallet routes
 
 // Mount notification-related routes under /api/notifications
 app.use('/api/notifications', notificationRoutes); // Add this line to mount notification routes

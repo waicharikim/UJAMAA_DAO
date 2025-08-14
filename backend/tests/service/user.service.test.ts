@@ -2,125 +2,155 @@
  * @file user.service.test.ts
  *
  * @description
- * Unit tests for user.service.ts.
- * Utilizes partial database cleanup and single reference data seeding.
- * Tests user creation, updating with audit logging, and duplicate prevention.
+ * Integration-style tests for user.service.ts using seeded master data IDs.
+ * - Calls seedAll() and derives IDs dynamically from the returned mapping.
+ * - Cleans user-related tables between tests.
+ * - Verifies creation, update, duplicate prevention, and transactional audit logging.
  */
 
-import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import * as userService from '../../src/services/user.service.js';
-import * as userAuditService from '../../src/services/userAudit.service.js';
 import prisma from '../../src/prismaClient.js';
-import { seedAll } from '../../prisma/seedAll';
+import { seedAll } from '../../prisma/seedAll.js';
+import { createUserSchema } from '../../src/validation/user.validation.js';
 
-// Mock audit logging
-vi.mock('../../src/services/userAudit.service.js', () => ({
-  logUserAudit: vi.fn().mockResolvedValue(undefined),
-}));
+let seeded; // will hold the ids mapping returned by seedAll()
 
+beforeAll(async () => {
+  await prisma.$connect();
+  const result = await seedAll();
+  seeded = result.ids;
+});
 
+beforeEach(async () => {
+  // Clean user-related tables before each test
+  await prisma.$transaction([
+    prisma.groupMember.deleteMany(),
+    prisma.userRole.deleteMany(),
+    prisma.userAudit.deleteMany(),
+    prisma.userConsent.deleteMany(),
+    prisma.userActivityLog.deleteMany(),
+    prisma.userPrivacySettings.deleteMany(),
+    prisma.notificationPreference.deleteMany(),
+    prisma.tokenBalance.deleteMany(),
+    prisma.projectParticipant.deleteMany(),
+    prisma.groupMemberVote.deleteMany(),
+    prisma.vote.deleteMany(),
+    prisma.proposal.deleteMany(),
+    prisma.user.deleteMany(),
+  ]);
+});
 
-// Reference data IDs (adjust these as per your seed data)
-const seededCountyLive = '7378d182-26c6-45c1-864e-dee1ed8a3ffd';
-const seededConstituencyLive = '524de848-f940-406d-894d-df8c6bee6fa8';
-const seededCountyOrigin = '80ed8e1d-db92-409b-b004-2c3099ef094d';
-const seededConstituencyOrigin = 'c12317c3-cb0a-4a3b-ba8c-2f288b012858';
-const seededIndustryId = '20e7b855-4de8-46b3-8000-c01c8f28ac0c';
-const seededGoodsServices = [
-  '0168c1b6-8957-4fc7-b25f-0d2ea8bba623',
-  '7ebfa3cf-5459-454a-9765-67a44f7f85f9',
-];
+afterAll(async () => {
+  await prisma.$disconnect();
+});
 
-describe('User Service Unit Tests', () => {
-  beforeAll(async () => {
-    await prisma.$connect();
-    await seedAll(); // Seed reference data only once
-  });
+describe('User Service Integration Tests (with seeded IDs)', () => {
+  function pickFirstCountyAndConstituency() {
+    const countyNames = Object.keys(seeded.counties);
+    if (countyNames.length === 0) throw new Error('No seeded counties found');
+    const countyName = countyNames[0];
+    const countyObj = seeded.counties[countyName];
+    const constituencyNames = Object.keys(countyObj.constituencies);
+    if (constituencyNames.length === 0) throw new Error('No constituencies seeded for county ' + countyName);
+    const constituencyName = constituencyNames[0];
+    return {
+      countyId: countyObj.id,
+      constituencyId: countyObj.constituencies[constituencyName],
+    };
+  }
 
-  beforeEach(async () => {
-    // Clean only user-related tables before each test
-    await prisma.$transaction([
-      prisma.groupMember.deleteMany(),
-      prisma.userRole.deleteMany(),
-      prisma.userAudit.deleteMany(),
-      prisma.userConsent.deleteMany(),
-      prisma.userActivityLog.deleteMany(),
-      prisma.userPrivacySettings.deleteMany(),
-      prisma.notificationPreference.deleteMany(),
-      prisma.tokenBalance.deleteMany(),
-      prisma.projectParticipant.deleteMany(),
-      prisma.groupMemberVote.deleteMany(),
-      prisma.vote.deleteMany(),
-      prisma.proposal.deleteMany(),
-      prisma.user.deleteMany(),
-    ]);
-  });
+  function pickIndustryAndGoods() {
+    const industryIds = Object.values(seeded.industries);
+    if (industryIds.length === 0) throw new Error('No seeded industries found');
+    const industryId = industryIds[0];
 
-  afterAll(async () => {
-    await prisma.$disconnect();
-  });
+    const goodsValues = Object.values(seeded.goodsServices || {});
+    if (goodsValues.length < 1) throw new Error('No seeded goodsServices found');
+    const goodsServiceIds = goodsValues.slice(0, 2);
+    return { industryId, goodsServiceIds };
+  }
 
-  it('should create a new user successfully', async () => {
+  it('should create a new user successfully and write a creation audit', async () => {
+    const { countyId, constituencyId } = pickFirstCountyAndConstituency();
+    const { industryId, goodsServiceIds } = pickIndustryAndGoods();
+
     const input = {
       walletAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       email: `testuser_${Date.now()}@example.com`,
       name: 'Test User',
       phoneNumber: '0712345678',
-      constituencyOrigin: seededConstituencyOrigin,
-      countyOrigin: seededCountyOrigin,
-      constituencyLive: seededConstituencyLive,
-      countyLive: seededCountyLive,
-      industryId: seededIndustryId,
-      goodsServices: seededGoodsServices,
+      constituencyOrigin: constituencyId,
+      countyOrigin: countyId,
+      constituencyLive: constituencyId,
+      countyLive: countyId,
+      industryId,
+      goodsServices: goodsServiceIds,
       avatarUrl: 'https://example.com/avatar.png',
     };
 
-    const user = await userService.createUser(input);
+    // Apply validation transforms (normalization) as controllers would
+    const validated = createUserSchema.parse(input);
+
+    const user = await userService.createUser(validated);
 
     expect(user).toHaveProperty('id');
     expect(user.walletAddress).toBe(input.walletAddress.toLowerCase());
     expect(user.email).toBe(input.email);
+
+    // Assert creation audit row exists (transactional)
+    const audits = await prisma.userAudit.findMany({ where: { userId: user.id } });
+    expect(audits.length).toBeGreaterThan(0);
+    expect(audits.some(a => a.field === 'created')).toBeTruthy();
   });
 
-  it('should fetch user by ID and apply privacy filter', async () => {
-    // First create a user to fetch
+  it('should fetch user by ID and return raw user (service) that includes name', async () => {
+    const { countyId, constituencyId } = pickFirstCountyAndConstituency();
+    const { industryId, goodsServiceIds } = pickIndustryAndGoods();
+
     const input = {
       walletAddress: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
       email: `testuser2_${Date.now()}@example.com`,
       name: 'Second Test User',
       phoneNumber: '0712345679',
-      constituencyOrigin: seededConstituencyOrigin,
-      countyOrigin: seededCountyOrigin,
-      constituencyLive: seededConstituencyLive,
-      countyLive: seededCountyLive,
-      industryId: seededIndustryId,
-      goodsServices: seededGoodsServices,
+      constituencyOrigin: constituencyId,
+      countyOrigin: countyId,
+      constituencyLive: constituencyId,
+      countyLive: countyId,
+      industryId,
+      goodsServices: goodsServiceIds,
       avatarUrl: 'https://example.com/avatar2.png',
     };
-    const newUser = await userService.createUser(input);
 
-    const user = await userService.getUserById(newUser.id, ['system:general_user']);
+    const validated = createUserSchema.parse(input);
+    const newUser = await userService.createUser(validated);
+
+    const user = await userService.getUserById(newUser.id);
 
     expect(user).toHaveProperty('id', newUser.id);
-    expect(user).toHaveProperty('name');
+    expect(user).toHaveProperty('name', input.name);
   });
 
-  it('should update user and log audits for changed fields', async () => {
-    // Create user first
+  it('should update user and create audit rows for changed fields', async () => {
+    const { countyId, constituencyId } = pickFirstCountyAndConstituency();
+    const { industryId, goodsServiceIds } = pickIndustryAndGoods();
+
     const input = {
       walletAddress: '0xcccccccccccccccccccccccccccccccccccccccc',
       email: `testuser3_${Date.now()}@example.com`,
       name: 'Third Test User',
       phoneNumber: '0712345680',
-      constituencyOrigin: seededConstituencyOrigin,
-      countyOrigin: seededCountyOrigin,
-      constituencyLive: seededConstituencyLive,
-      countyLive: seededCountyLive,
-      industryId: seededIndustryId,
-      goodsServices: seededGoodsServices,
+      constituencyOrigin: constituencyId,
+      countyOrigin: countyId,
+      constituencyLive: constituencyId,
+      countyLive: countyId,
+      industryId,
+      goodsServices: goodsServiceIds,
       avatarUrl: 'https://example.com/avatar3.png',
     };
-    const newUser = await userService.createUser(input);
+
+    const validated = createUserSchema.parse(input);
+    const newUser = await userService.createUser(validated);
 
     const updatedPhone = '0700000001';
     const updateData = { phoneNumber: updatedPhone };
@@ -128,24 +158,35 @@ describe('User Service Unit Tests', () => {
     const updatedUser = await userService.updateUser(newUser.id, updateData, newUser.id);
 
     expect(updatedUser).toHaveProperty('phoneNumber', updatedPhone);
-    expect(userAuditService.logUserAudit).toHaveBeenCalled();
+
+    // Verify audit row was created for phoneNumber field
+    const audits = await prisma.userAudit.findMany({ where: { userId: newUser.id } });
+    expect(audits.length).toBeGreaterThan(0);
+    expect(audits.some(a => a.field === 'phoneNumber')).toBeTruthy();
   });
 
   it('should reject creating user with duplicate email or wallet', async () => {
+    const { countyId, constituencyId } = pickFirstCountyAndConstituency();
+    const { industryId, goodsServiceIds } = pickIndustryAndGoods();
+
     const input = {
       walletAddress: '0xdddddddddddddddddddddddddddddddddddddddd',
       email: `testuser4_${Date.now()}@example.com`,
       name: 'Duplicate User',
-      constituencyOrigin: seededConstituencyOrigin,
-      countyOrigin: seededCountyOrigin,
-      constituencyLive: seededConstituencyLive,
-      countyLive: seededCountyLive,
+      constituencyOrigin: constituencyId,
+      countyOrigin: countyId,
+      constituencyLive: constituencyId,
+      countyLive: countyId,
+      industryId,
+      goodsServices: goodsServiceIds,
     };
 
+    const validated = createUserSchema.parse(input);
+
     // Create user first time - success
-    await userService.createUser(input);
+    await userService.createUser(validated);
 
     // Second creation should throw an error
-    await expect(userService.createUser(input)).rejects.toThrow(/already exists/);
+    await expect(userService.createUser(validated)).rejects.toThrow(/already exists/);
   });
 });
