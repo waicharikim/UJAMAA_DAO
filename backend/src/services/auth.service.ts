@@ -40,50 +40,23 @@ const JWT_SECRET = process.env.JWT_SECRET ?? 'your_jwt_secret_here';
 export async function getNonce(walletAddress) {
   const normalizedWallet = String(walletAddress).toLowerCase();
 
-  // Try to find existing user
+  // **ENHANCED**: Always find existing user (created via /api/users)
   let user = await prisma.user.findUnique({ where: { walletAddress: normalizedWallet } });
 
   if (!user) {
-    // Create a new random nonce
-    const nonce = randomBytes(16).toString('hex');
-
-    // Generate valid UUIDs for required non-null fields so Prisma insert succeeds.
-    // These are not necessarily meaningful constituency/county IDs — they just satisfy the schema.
-    const placeholderConstituencyOrigin = randomUUID();
-    const placeholderCountyOrigin = randomUUID();
-    const placeholderConstituencyLive = randomUUID();
-    const placeholderCountyLive = randomUUID();
-
-    // Create a minimal user record
-    user = await prisma.user.create({
-      data: {
-        walletAddress: normalizedWallet,
-        // placeholder email. Should be updated later by actual profile flow.
-        email: `user_${Date.now()}@placeholder.local`,
-        name: 'New User',
-        // Populate required location UUID strings with generated UUIDs
-        constituencyOrigin: placeholderConstituencyOrigin,
-        countyOrigin: placeholderCountyOrigin,
-        constituencyLive: placeholderConstituencyLive,
-        countyLive: placeholderCountyLive,
-        // persist nonce for the challenge
-        nonce,
-      },
-    });
+    // **RARE CASE**: User exists in auth but not registration flow
+    throw new ApiError('Please complete registration first', 400);
   }
 
-  // Ensure we return a nonce string (existing user's nonce or the newly created one)
-  if (!user.nonce) {
-    // If for some reason the existing user has no nonce, generate and persist one
-    const newNonce = randomBytes(16).toString('hex');
-    await prisma.user.update({
-      where: { walletAddress: normalizedWallet },
-      data: { nonce: newNonce },
-    });
-    return newNonce;
-  }
+  // **ENHANCED**: Always generate fresh nonce (no placeholder user creation)
+  const nonce = randomBytes(16).toString('hex');
+  
+  await prisma.user.update({
+    where: { walletAddress: normalizedWallet },
+    data: { nonce }
+  });
 
-  return user.nonce;
+  return nonce;
 }
 
 /**

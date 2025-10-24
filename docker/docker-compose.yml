@@ -12,6 +12,12 @@ services:
       - ujamaa_pgdata:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ujamaa_user -d ujamaa_db"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+      start_period: 5s  
 
   backend:
     build:
@@ -29,7 +35,7 @@ services:
     volumes:
       - ../backend:/usr/src/app  # Mount backend code for live updates
       - /usr/src/app/node_modules # Preserve node_modules inside container
-    command: sh -c "npx prisma migrate deploy --schema ./prisma/schema.prisma && npx tsx watch src/index.ts" # Runs nodemon + ts-node
+    command: sh -c "./docker/start.sh" # Runs nodemon + ts-node
     restart: on-failure
 
   # Add frontend & blockchain-node services here as needed e.g.

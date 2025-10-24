@@ -1,22 +1,9 @@
-/**
- * @file src/constants/roles.js
- * @description
- * Canonical role names and helpers for the system.
- *
- * Roles are namespaced and lowercase:
- *  - group:<role>
- *  - project:<role>
- *  - system:<role>
- *  - wallet:<role>
- *  - payment:<role>
- *  - chain:<role>
- *
- * Exported items:
- *  - arrays (for route definitions/documentation)
- *  - Sets (for fast membership checks)
- *  - helper functions (normalizeRole, isValidRole, isGroupRole, etc.)
- */
+// src/constants/roles.ts
+import type { PrismaClient } from '@prisma/client';
 
+export type RoleScope = { role: string; scope?: string };
+
+/* Canonical lists (lowercase, namespaced) */
 export const GROUP_ROLES = [
   'group:member',
   'group:admin',
@@ -38,7 +25,6 @@ export const SYSTEM_ROLES = [
   'system:general_user',
 ];
 
-// Wallet and payment related roles (added)
 export const WALLET_ROLES = [
   'wallet:user',
   'wallet:group_admin',
@@ -46,7 +32,7 @@ export const WALLET_ROLES = [
 ];
 
 export const PAYMENT_ROLES = [
-  'payment:processor', // service role that can call payout endpoints
+  'payment:processor',
 ];
 
 export const CHAIN_ROLES = [
@@ -54,7 +40,14 @@ export const CHAIN_ROLES = [
   'chain:governor_admin',
 ];
 
-// Common role lists used in route guards
+/* NEW LOCATION ROLES */
+export const LOCATION_ROLES = [
+  'location:ward_member',
+  'location:constituency_member', 
+  'location:county_member',
+  'location:national_member',
+];
+
 export const USER_ACCESS_ROLES = [
   'group:member',
   'group:admin',
@@ -62,6 +55,7 @@ export const USER_ACCESS_ROLES = [
   'project:admin',
   'system:general_user',
   'system:super_admin',
+  ...LOCATION_ROLES, // ADD LOCATION ACCESS
 ];
 
 export const ADMIN_ACCESS_ROLES = [
@@ -70,7 +64,6 @@ export const ADMIN_ACCESS_ROLES = [
   'system:compliance_officer',
 ];
 
-// Combined lists
 export const ALL_ROLES = [
   ...GROUP_ROLES,
   ...PROJECT_ROLES,
@@ -78,68 +71,120 @@ export const ALL_ROLES = [
   ...WALLET_ROLES,
   ...PAYMENT_ROLES,
   ...CHAIN_ROLES,
+  ...LOCATION_ROLES, // ADD LOCATION ROLES
 ];
 
-// Sets for fast contains checks (lowercased keys)
-const allLower = ALL_ROLES.map(r => r.toLowerCase());
-export const ALL_ROLES_SET = new Set(allLower);
-export const GROUP_ROLES_SET = new Set(GROUP_ROLES.map(r => r.toLowerCase()));
-export const PROJECT_ROLES_SET = new Set(PROJECT_ROLES.map(r => r.toLowerCase()));
-export const SYSTEM_ROLES_SET = new Set(SYSTEM_ROLES.map(r => r.toLowerCase()));
-export const WALLET_ROLES_SET = new Set(WALLET_ROLES.map(r => r.toLowerCase()));
-export const PAYMENT_ROLES_SET = new Set(PAYMENT_ROLES.map(r => r.toLowerCase()));
-export const CHAIN_ROLES_SET = new Set(CHAIN_ROLES.map(r => r.toLowerCase()));
-export const USER_ACCESS_ROLES_SET = new Set(USER_ACCESS_ROLES.map(r => r.toLowerCase()));
-export const ADMIN_ACCESS_ROLES_SET = new Set(ADMIN_ACCESS_ROLES.map(r => r.toLowerCase()));
-
-/**
- * normalizeRole
- * Ensures a role string is trimmed and lowercased for deterministic comparison.
- */
-export function normalizeRole(role) {
+/* Normalization helpers */
+export function normalizeRole(role: unknown): string {
   return String(role ?? '').trim().toLowerCase();
 }
 
-/**
- * isValidRole
- * Returns true if role is one of the known roles.
- */
-export function isValidRole(role) {
-  return ALL_ROLES_SET.has(normalizeRole(role));
+/* Canonical static lookup sets (normalized) */
+const allLower = ALL_ROLES.map(normalizeRole);
+export const ALL_ROLES_SET = new Set(allLower);
+export const GROUP_ROLES_SET = new Set(GROUP_ROLES.map(normalizeRole));
+export const PROJECT_ROLES_SET = new Set(PROJECT_ROLES.map(normalizeRole));
+export const SYSTEM_ROLES_SET = new Set(SYSTEM_ROLES.map(normalizeRole));
+export const WALLET_ROLES_SET = new Set(WALLET_ROLES.map(normalizeRole));
+export const PAYMENT_ROLES_SET = new Set(PAYMENT_ROLES.map(normalizeRole));
+export const CHAIN_ROLES_SET = new Set(CHAIN_ROLES.map(normalizeRole));
+export const LOCATION_ROLES_SET = new Set(LOCATION_ROLES.map(normalizeRole));
+export const USER_ACCESS_ROLES_SET = new Set(USER_ACCESS_ROLES.map(normalizeRole));
+export const ADMIN_ACCESS_ROLES_SET = new Set(ADMIN_ACCESS_ROLES.map(normalizeRole));
+
+/* Dynamic allowlist: starts with canonical set, can be extended from DB or env */
+const dynamicAllowed = new Set<string>(allLower);
+
+/* Load dynamic roles from DB Role registry. Call during startup. */
+export async function loadDynamicRoles(prisma: PrismaClient) {
+  try {
+    const rows = await prisma.role.findMany({ select: { name: true } });
+    for (const r of rows) {
+      const n = normalizeRole(r.name);
+      if (n) dynamicAllowed.add(n);
+    }
+  } catch (err) {
+    // Do not throw in production startup if you want fallback, but log it.
+    throw err;
+  }
 }
 
-export function isGroupRole(role) {
+/* Helper to add extra roles (env or programmatic) */
+export function addExtraAllowedRoles(names: string[]) {
+  for (const n of names) {
+    const v = normalizeRole(n);
+    if (v) dynamicAllowed.add(v);
+  }
+}
+
+/* Test helper to reset dynamic list */
+export function resetDynamicAllowedForTests() {
+  dynamicAllowed.clear();
+  for (const s of allLower) dynamicAllowed.add(s);
+}
+
+/* parseRoleString and parseRoleInput */
+export function parseRoleString(input: unknown): RoleScope | null {
+  if (typeof input !== 'string') return null;
+  const s = input.trim();
+  if (!s) return null;
+  const parts = s.split(':').map(p => p.trim()).filter(Boolean);
+  if (parts.length === 0) return null;
+  if (parts.length === 1) return { role: normalizeRole(parts[0]) };
+  if (parts.length === 2) return { role: normalizeRole(parts.join(':')) };
+  const scope = parts[parts.length - 1];
+  const role = parts.slice(0, parts.length - 1).join(':');
+  return { role: normalizeRole(role), scope: scope || undefined };
+}
+
+export function parseRoleInput(input: unknown): RoleScope | null {
+  if (!input) return null;
+  if (typeof input === 'string') return parseRoleString(input);
+  if (typeof input === 'object') {
+    const anyObj = input as any;
+    const roleVal = anyObj.role;
+    const scopeVal = anyObj.scope;
+    const r = normalizeRole(roleVal ?? '');
+    if (!r) return null;
+    return { role: r, scope: scopeVal ?? undefined };
+  }
+  return null;
+}
+
+/* Validators */
+export function isValidRole(role: unknown): boolean {
+  return dynamicAllowed.has(normalizeRole(role));
+}
+
+export function isGroupRole(role: unknown): boolean {
   return GROUP_ROLES_SET.has(normalizeRole(role));
 }
 
-export function isProjectRole(role) {
+export function isProjectRole(role: unknown): boolean {
   return PROJECT_ROLES_SET.has(normalizeRole(role));
 }
 
-export function isSystemRole(role) {
+export function isSystemRole(role: unknown): boolean {
   return SYSTEM_ROLES_SET.has(normalizeRole(role));
 }
 
-export function isWalletRole(role) {
+export function isWalletRole(role: unknown): boolean {
   return WALLET_ROLES_SET.has(normalizeRole(role));
 }
 
-export function isPaymentRole(role) {
+export function isPaymentRole(role: unknown): boolean {
   return PAYMENT_ROLES_SET.has(normalizeRole(role));
 }
 
-export function isChainRole(role) {
+export function isChainRole(role: unknown): boolean {
   return CHAIN_ROLES_SET.has(normalizeRole(role));
 }
 
-// Export canonical arrays and sets for convenience
-export {
-  GROUP_ROLES,
-  PROJECT_ROLES,
-  SYSTEM_ROLES,
-  WALLET_ROLES,
-  PAYMENT_ROLES,
-  CHAIN_ROLES,
-  USER_ACCESS_ROLES,
-  ADMIN_ACCESS_ROLES,
-};
+/* NEW LOCATION VALIDATORS */
+export function isLocationRole(role: unknown): boolean {
+  return LOCATION_ROLES_SET.has(normalizeRole(role));
+}
+
+export function isLocationMemberRole(role: unknown): boolean {
+  return LOCATION_ROLES_SET.has(normalizeRole(role));
+}

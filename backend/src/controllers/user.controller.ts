@@ -3,6 +3,7 @@
  *
  * @description
  * Thin HTTP controllers for User endpoints.
+ * **ENHANCED**: Returns impact points, roles, and holdings in create response.
  * Controllers:
  *  - validate requests using validateRequest middleware (Zod)
  *  - call domain services (user.service)
@@ -32,28 +33,53 @@ function extractRoles(rawRoles: any): string[] {
 
 /**
  * POST /api/users
- * Create a new user and return canonical { data: user }.
+ * **ENHANCED**: Create a new user with location, roles, and impact points.
+ * Returns canonical { data: user, meta: { affiliations, welcomePoints, assignedRoles } }
  */
 export const createUserHandler = [
   validateRequest(createUserSchema, 'body'),
   asyncHandler(async (req: Request, res: Response) => {
     const input = req.body;
-    const createdRaw = await UserService.createUser(input);
-    const serialized = serializeUser(createdRaw, []); // no requester on create
-    return res.status(201).json({ data: serialized });
+    const { user, holdings, impactPoints, assignedRoles } = await UserService.createUser(input);
+    
+    // Serialize with assigned roles (for accurate role display)
+    const serialized = serializeUser(user, user.userRoles?.map(ur => ur.role.name) || []);
+    
+    return res.status(201).json({ 
+      data: serialized,
+      meta: {
+        affiliations: holdings,
+        welcomePoints: impactPoints,
+        assignedRoles
+      }
+    });
   }),
 ];
 
 /**
  * GET /api/users/me
  * Return the current authenticated user's profile (owner view).
+ * **ENHANCED**: Includes impact points, roles, and holdings.
  */
 export const getCurrentUserHandler = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user?.userId;
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
   const roles = extractRoles(req.userRoles);
-  const raw = await UserService.getUserById(userId);
+  
+  // **ENHANCED**: Fetch with relations for points, roles, holdings
+  const raw = await prisma.user.findUnique({
+    where: { id: userId },
+    include: {
+      userRoles: { include: { role: true } },
+      userHoldings: { include: { holding: true } },
+      privacySettings: true,
+      _count: { select: { impactPoints: true } }
+    }
+  });
+  
+  if (!raw) return res.status(404).json({ error: 'User not found' });
+  
   const serialized = serializeUser(raw, roles, { isOwner: true });
   return res.json({ data: serialized });
 });
@@ -109,6 +135,20 @@ export const getUserByWalletHandler = asyncHandler(async (req: Request, res: Res
 
   const roles = extractRoles(req.userRoles);
   const raw = await UserService.getUserByWallet(wallet);
-  const serialized = serializeUser(raw, roles, { isOwner: false });
+  
+  // **ENHANCED**: Ensure relations are included for public view
+  const rawWithRelations = await prisma.user.findUnique({
+    where: { walletAddress: wallet },
+    include: {
+      userRoles: { include: { role: true } },
+      userHoldings: { include: { holding: true } },
+      privacySettings: true,
+      _count: { select: { impactPoints: true } }
+    }
+  });
+  
+  if (!rawWithRelations) return res.status(404).json({ error: 'User not found' });
+  
+  const serialized = serializeUser(rawWithRelations, roles, { isOwner: false });
   return res.json({ data: serialized });
 });

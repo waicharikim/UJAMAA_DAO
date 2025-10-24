@@ -9,12 +9,31 @@ datasource db {
 
 /// -------- ENUMS --------
 
+enum AuthTokenType {
+  VERIFY_EMAIL
+  RESET_PASSWORD
+  MFA_CHALLENGE
+}
+
 enum GroupType {
-  COMMUNITY
-  COMPANY
-  COUNTY
-  HIGH_SCHOOL
-  CHURCH
+  // **LOCATION-BASED** (Primary)
+  WARD_COMMUNITY // Ward clean-up, youth groups
+  CONSTITUENCY_PROJECT // Constituency development
+  COUNTY_INITIATIVE // County-wide programs
+  NATIONAL_CAMPAIGN // National movements
+
+  // **SECTOR-BASED** (Secondary)
+  BUSINESS // Companies/SMEs
+  NON_PROFIT // NGOs, CBOs
+  EDUCATION // Schools, universities
+  RELIGIOUS // Churches, mosques
+  HEALTH // Clinics, hospitals
+  AGRICULTURE // Farmers co-ops
+  YOUTH // Youth groups
+  WOMEN // Women's groups
+
+  // **PROJECT-BASED** (Temporary)
+  PROJECT_GROUP // Time-bound projects
 }
 
 enum GroupRole {
@@ -46,7 +65,7 @@ enum ProposalStatus {
 }
 
 enum LocationScope {
-  LOCAL
+  WARD
   CONSTITUENCY
   COUNTY
   NATIONAL
@@ -78,11 +97,11 @@ enum GroupStatus {
 }
 
 enum SystemRole {
-  SUPER_ADMIN
-  AUDITOR
-  COMPLIANCE_OFFICER
-  SUPPORT_STAFF
-  GENERAL_USER
+  super_admin
+  auditor
+  compliance_officer
+  support_staff
+  general_user
 }
 
 enum TransactionType {
@@ -99,87 +118,94 @@ enum TransactionStatus {
   FAILED
   CANCELLED
 }
+
+enum ImpactPointType {
+  LOCATION_BASED // Ward/Constituency tasks
+  SYSTEM // National/global tasks
+}
+
 /// -------- MODELS --------
 
 model User {
-  id                 String   @id @default(uuid()) @db.Uuid
-  walletAddress      String   @unique
-  email              String   @unique
+  id                 String  @id @default(uuid()) @db.Uuid
+  walletAddress      String  @unique
+  email              String  @unique
+  passwordHash       String?
   name               String
   phoneNumber        String?
-  constituencyOrigin String @db.Uuid
-  countyOrigin       String @db.Uuid
-  constituencyLive   String @db.Uuid
-  countyLive         String @db.Uuid
-  avatarUrl          String?  // URL or path of the profile image, optional
-
-  industryId         String?  @db.Uuid
-
+  constituencyOrigin String  @db.Uuid
+  countyOrigin       String  @db.Uuid
+  constituencyLive   String  @db.Uuid
+  countyLive         String  @db.Uuid
+  avatarUrl          String? // URL or path of the profile image, optional
+  industryId         String? @db.Uuid
   nonce              String
+  emailVerified      Boolean @default(false)
 
-  userRoles          UserRole[]           // Global/system roles
+  isActive        Boolean   @default(true) // disable/suspend accounts when needed
+  tokenVersion    Int       @default(0) // increment to invalidate existing access tokens
+  duesDestination Int       @default(1) // 1=ward,2=const,3=county,4=nat
+  affiliations    Int       @default(2) // Auto 2 holdings
+  voteWeight      Decimal   @default(1.0) // 1x, 1.5x, 2x voting
+  mfaEnabled      Boolean   @default(false)
+  mfaSecret       String?
+  lastLoginAt     DateTime?
+  metadata        Json?
 
-  walletBalances WalletBalance[] @relation("UserWalletBalances")
+  authTokens    AuthToken[]
+  refreshTokens RefreshToken[]
 
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-
-  groups             GroupMember[]
-
-  emailVerified               Boolean   @default(false)
-  emailVerificationToken      String?   @db.Text
-  emailVerificationTokenExpires DateTime?
-
-  industry           Industry? @relation(fields: [industryId], references: [id])
-
-  goodsServices      GoodsService[] @relation("UserGoodsServices")
-
+  userRoles               UserRole[] // Global/system roles
+  walletBalances          WalletBalance[]          @relation("UserWalletBalances")
+  groups                  GroupMember[]
+  industry                Industry?                @relation(fields: [industryId], references: [id])
+  goodsServices           GoodsService[]           @relation("UserGoodsServices")
   notificationPreferences NotificationPreference[] @relation("UserNotificationPreferences")
-
-
-  proposals          Proposal[]           @relation("UserProposals")
-  impactPoints       ImpactPoint[]        @relation("UserImpactPoints")
-  tokenBalances      TokenBalance[]       @relation("UserTokenBalances")
-  projectParticipants ProjectParticipant[] @relation("UserProjectParticipants")
-
-  groupMemberVotes   GroupMemberVote[]    @relation("GroupMemberVote_User")
-
-  activityLogs UserActivityLog[] @relation("UserActivities")
-
-  privacySettings    UserPrivacySettings? @relation("UserPrivacy")
-  audits             UserAudit[]          @relation("UserAudits")
-  userConsents UserConsent[] @relation("UserConsents")
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  proposals               Proposal[]               @relation("UserProposals")
+  impactPoints            ImpactPoint[]            @relation("UserImpactPoints")
+  tokenBalances           TokenBalance[]           @relation("UserTokenBalances")
+  projectParticipants     ProjectParticipant[]     @relation("UserProjectParticipants")
+  groupMemberVotes        GroupMemberVote[]        @relation("GroupMemberVote_User")
+  activityLogs            UserActivityLog[]        @relation("UserActivities")
+  privacySettings         UserPrivacySettings?     @relation("UserPrivacy")
+  audits                  UserAudit[]              @relation("UserAudits")
+  userConsents            UserConsent[]            @relation("UserConsents")
+  userHoldings            UserHolding[]
+  duesPayments            DuesPayment[]
 }
 
 model Group {
-  id               String    @id @default(uuid()) @db.Uuid
-  name             String    @unique
-  description      String?
-  walletAddress    String    @unique
-  constituency     String
-  county           String
+  id            String  @id @default(uuid()) @db.Uuid
+  name          String  @unique
+  description   String?
+  metadata      Json?
+  walletAddress String  @unique
+  constituency  String
+  county        String
 
-  industryFocusId  String?   @db.Uuid
-  industryFocus    Industry? @relation(fields: [industryFocusId], references: [id])
+  industryFocusId String?   @db.Uuid
+  industryFocus   Industry? @relation(fields: [industryFocusId], references: [id])
 
   productsServices GoodsService[] @relation("GroupGoodsServices")
 
-  status           GroupStatus @default(PENDING)
+  status GroupStatus @default(PENDING)
 
-  groupType        GroupType   @default(COMMUNITY)
+  groupType GroupType @default(WARD_COMMUNITY)
 
   walletBalances WalletBalance[] @relation("GroupWalletBalances")
 
-  members          GroupMember[]
-  proposals        Proposal[]     @relation("GroupProposals")
-  impactPoints     ImpactPoint[]  @relation("GroupImpactPoints")
-  tokenBalances    TokenBalance[] @relation("GroupTokenBalances")
+  members       GroupMember[]
+  proposals     Proposal[]     @relation("GroupProposals")
+  impactPoints  ImpactPoint[]  @relation("GroupImpactPoints")
+  tokenBalances TokenBalance[] @relation("GroupTokenBalances")
 
   groupMemberVotes GroupMemberVote[] @relation("GroupMemberVote_Group")
 
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model GroupMember {
@@ -194,38 +220,39 @@ model GroupMember {
 
   @@unique([userId, groupId])
   @@index([groupId, role])
+  @@index([userId])
 }
 
 model WalletBalance {
-  id         String    @id @default(uuid()) @db.Uuid
+  id         String     @id @default(uuid()) @db.Uuid
   holderType HolderType
-  userId     String?   @db.Uuid
-  groupId    String?   @db.Uuid
-  balance    Decimal     @db.Decimal(20, 2)
-  currency   String    @default("KES")
-  updatedAt  DateTime  @updatedAt
+  userId     String?    @db.Uuid
+  groupId    String?    @db.Uuid
+  balance    Decimal    @db.Decimal(20, 2)
+  currency   String     @default("KES")
+  updatedAt  DateTime   @updatedAt
 
-  user       User?     @relation("UserWalletBalances", fields: [userId], references: [id])
-  group      Group?    @relation("GroupWalletBalances" ,fields: [groupId], references: [id])
+  user  User?  @relation("UserWalletBalances", fields: [userId], references: [id])
+  group Group? @relation("GroupWalletBalances", fields: [groupId], references: [id])
 
-  WalletTransactions  WalletTransaction[]
+  WalletTransactions WalletTransaction[]
 
   @@unique([holderType, userId], name: "holderType_userId_wallet")
   @@unique([holderType, groupId], name: "holderType_groupId_wallet")
 }
 
 model WalletTransaction {
-  id             String       @id @default(uuid()) @db.Uuid
-  walletBalanceId String       @db.Uuid
-  type           String       // e.g., "deposit", "withdrawal", "spend", "refund"
-  amount         Decimal    @db.Decimal(20, 2)
-  mpesaReceipt   String?      // optional
-  description    String?      // optional notes
-  status         TransactionStatus       // e.g., "pending", "completed", "failed"
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  id              String            @id @default(uuid()) @db.Uuid
+  walletBalanceId String            @db.Uuid
+  type            String // e.g., "deposit", "withdrawal", "spend", "refund"
+  amount          Decimal           @db.Decimal(20, 2)
+  mpesaReceipt    String? // optional
+  description     String? // optional notes
+  status          TransactionStatus // e.g., "pending", "completed", "failed"
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
 
-  walletBalance  WalletBalance @relation(fields: [walletBalanceId], references: [id])
+  walletBalance WalletBalance @relation(fields: [walletBalanceId], references: [id])
 
   @@index([walletBalanceId])
   @@index([mpesaReceipt])
@@ -236,6 +263,7 @@ model Project {
   proposalId    String        @unique @db.Uuid
   title         String
   description   String
+  metadata      Json?
   budget        Int?
   timeline      String?
   status        ProjectStatus @default(ACTIVE)
@@ -248,6 +276,47 @@ model Project {
   proposal     Proposal             @relation("ProposalToProject", fields: [proposalId], references: [id])
   participants ProjectParticipant[]
   milestones   ProjectMilestone[]
+}
+
+model RefreshToken {
+  id         Int       @id @default(autoincrement())
+  user       User      @relation(fields: [userId], references: [id])
+  userId     String    @db.Uuid
+  tokenHash  String
+  expiresAt  DateTime?
+  revoked    Boolean   @default(false)
+  revokedAt  DateTime?
+  replacedBy Int?
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+  ip         String?
+  userAgent  String?
+  deviceName String?
+  metadata   Json?
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@index([revoked])
+  @@index([expiresAt])
+}
+
+model AuthToken {
+  id        String        @id @default(uuid())
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String        @db.Uuid
+  tokenHash String
+  type      AuthTokenType // 'verify_email' | 'reset_password'
+  expiresAt DateTime
+  used      Boolean       @default(false)
+  usedAt    DateTime?
+  createdAt DateTime      @default(now())
+  ip        String?
+  userAgent String
+  metadata  Json?
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@index([type])
 }
 
 model ProjectParticipant {
@@ -263,29 +332,62 @@ model ProjectParticipant {
   @@index([projectId, role])
 }
 
-model UserRole {
-  id        String    @id @default(uuid()) @db.Uuid
-  user      User      @relation(fields: [userId], references: [id])
-  userId    String    @db.Uuid
-  role      SystemRole
-  scope     String?
-  createdAt DateTime  @default(now())
+model Role {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique // e.g. 'system:super_admin' or 'custom:read_only'
+  namespace String? // optional
+  builtin   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  @@index([userId, role, scope])
+  UserRole        UserRole[]
+  rolePermissions RolePermission[]
+}
+
+model UserRole {
+  id         String    @id @default(uuid()) @db.Uuid
+  user       User      @relation(fields: [userId], references: [id])
+  userId     String    @db.Uuid
+  roleId     Int
+  role       Role      @relation(fields: [roleId], references: [id])
+  scope      String?
+  active     Boolean   @default(true)
+  assignedBy String?   @db.Uuid // user id who assigned this role (optional)
+  assignedAt DateTime  @default(now())
+  expiresAt  DateTime? // optional expiry for time-bound assignments
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([userId, roleId, scope])
+  @@index([roleId, scope])
+  @@index([userId])
+  @@index([active])
+}
+
+model RolePermission {
+  id          String   @id @default(uuid()) @db.Uuid
+  roleId      Int
+  role        Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission  String // e.g., 'projects:read', 'users:manage'
+  description String?
+  createdAt   DateTime @default(now())
+
+  @@unique([roleId, permission])
+  @@index([permission])
 }
 
 model Industry {
-  id    String       @id @default(uuid()) @db.Uuid
-  name  String       @unique
-  users User[]
+  id     String  @id @default(uuid()) @db.Uuid
+  name   String  @unique
+  users  User[]
   groups Group[]
 }
 
 model GoodsService {
-  id    String       @id @default(uuid()) @db.Uuid
-  name  String       @unique
-  users User[]       @relation("UserGoodsServices")
-  groups Group[]     @relation("GroupGoodsServices")
+  id     String  @id @default(uuid()) @db.Uuid
+  name   String  @unique
+  users  User[]  @relation("UserGoodsServices")
+  groups Group[] @relation("GroupGoodsServices")
 }
 
 model County {
@@ -293,6 +395,8 @@ model County {
   code           String         @unique
   name           String         @unique
   constituencies Constituency[]
+
+  holdings Holding[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -303,6 +407,8 @@ model Constituency {
   name     String
   county   County @relation(fields: [countyId], references: [id])
   countyId String @db.Uuid
+
+  holdings Holding[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -371,18 +477,19 @@ model GroupMemberVote {
 }
 
 model ImpactPoint {
-  id            String         @id @default(uuid()) @db.Uuid
-  holderType    HolderType
-  userId        String?        @db.Uuid
-  groupId       String?        @db.Uuid
-  points        Int            @default(0)
-  locationScope LocationScope?
-  constituency  String?
-  county        String?
-  updatedAt     DateTime       @updatedAt
+  id                String         @id @default(uuid()) @db.Uuid
+  holderType        HolderType
+  userId            String?        @db.Uuid
+  groupId           String?        @db.Uuid
+  points            Int            @default(0)
+  locationScope     LocationScope? // WARD | CONSTITUENCY | COUNTY | NATIONAL
+  description       String // "Welcome bonus" | "Ward task completed"
+  locationHoldingId Int? // Link to specific Holding
+  createdAt         DateTime       @default(now())
 
-  user  User?  @relation(fields: [userId], references: [id], name: "UserImpactPoints")
-  group Group? @relation(fields: [groupId], references: [id], name: "GroupImpactPoints")
+  user            User?    @relation(fields: [userId], references: [id], name: "UserImpactPoints")
+  group           Group?   @relation(fields: [groupId], references: [id], name: "GroupImpactPoints")
+  locationHolding Holding? @relation(fields: [locationHoldingId], references: [id])
 
   @@unique([holderType, userId, locationScope], name: "holderType_userId_locationScope")
   @@unique([holderType, groupId, locationScope], name: "holderType_groupId_locationScope")
@@ -418,7 +525,7 @@ model ProjectMilestone {
 
 model UserPrivacySettings {
   id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @unique  @db.Uuid
+  userId    String   @unique @db.Uuid
   user      User     @relation("UserPrivacy", fields: [userId], references: [id])
   settings  Json
   updatedAt DateTime @updatedAt
@@ -428,19 +535,19 @@ model UserAudit {
   id        String   @id @default(uuid()) @db.Uuid
   user      User     @relation("UserAudits", fields: [userId], references: [id])
   userId    String   @db.Uuid
-  field     String   // Field changed or accessed (e.g. "email")
-  oldValue  String?  // Old value JSON serialized
-  newValue  String?  // New value JSON serialized
-  changedBy String?  // UserId of the user who made the change (nullable if self)
+  field     String // Field changed or accessed (e.g. "email")
+  oldValue  String? // Old value JSON serialized
+  newValue  String? // New value JSON serialized
+  changedBy String? // UserId of the user who made the change (nullable if self)
   timestamp DateTime @default(now())
 }
 
 model NotificationPreference {
   id        String   @id @default(uuid())
   userId    String   @db.Uuid
-  user      User @relation("UserNotificationPreferences", fields: [userId], references: [id])
-  channel   String   // e.g., "email", "sms", "in-app"
-  eventType String   // e.g., "email_verification", "proposal_update"
+  user      User     @relation("UserNotificationPreferences", fields: [userId], references: [id])
+  channel   String // e.g., "email", "sms", "in-app"
+  eventType String // e.g., "email_verification", "proposal_update"
   enabled   Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -449,25 +556,67 @@ model NotificationPreference {
 }
 
 model UserActivityLog {
-  id          String   @id @default(uuid()) @db.Uuid
-  userId      String   @db.Uuid
-  user        User     @relation(fields: [userId], references: [id], name: "UserActivities")
-  eventType   String
-  eventData   Json?    // Optional JSON for additional metadata
-  ipAddress   String?  // User IP address
-  userAgent   String?  // User agent string from request header
-  createdAt   DateTime @default(now())
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], name: "UserActivities")
+  eventType String
+  eventData Json? // Optional JSON for additional metadata
+  ipAddress String? // User IP address
+  userAgent String? // User agent string from request header
+  createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
 }
 
 model UserConsent {
-  id            String   @id @default(uuid())
-  userId        String   @db.Uuid
-  user          User     @relation(fields: [userId], references: [id], name: "UserConsents")
-  policyType    String   // e.g., "terms_of_service", "privacy_policy"
-  version       String   // Version of policy agreed to
-  consentedAt   DateTime // Timestamp of consent
-  ipAddress     String?  // Optional: IP address when consent was given
-  userAgent     String?  // Optional: User agent info
+  id          String   @id @default(uuid())
+  userId      String   @db.Uuid
+  user        User     @relation(fields: [userId], references: [id], name: "UserConsents")
+  policyType  String // e.g., "terms_of_service", "privacy_policy"
+  version     String // Version of policy agreed to
+  consentedAt DateTime // Timestamp of consent
+  ipAddress   String? // Optional: IP address when consent was given
+  userAgent   String? // Optional: User agent info
+}
+
+model UserHolding {
+  id        Int      @id @default(autoincrement())
+  userId    String   @db.Uuid
+  holdingId Int      @map("holding_id") // Ward/Const/County/Nat ID
+  joinedAt  DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id])
+  holding Holding @relation(fields: [holdingId], references: [id])
+
+  @@unique([userId, holdingId])
+}
+
+model DuesPayment {
+  id        Int      @id @default(autoincrement())
+  userId    String   @db.Uuid
+  holdingId Int      @map("holding_id")
+  month     Int
+  year      Int
+  paid      Boolean  @default(false)
+  amount    Decimal  @default(10.0)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, holdingId, month, year])
+}
+
+model Holding {
+  id          Int    @id
+  name        String
+  holdingType Int // 1=Ward, 2=Constituency, 3=County, 4=National
+
+  userHoldings UserHolding[]
+
+  createdAt      DateTime      @default(now())
+  County         County?       @relation(fields: [countyId], references: [id])
+  countyId       String?       @db.Uuid
+  Constituency   Constituency? @relation(fields: [constituencyId], references: [id])
+  constituencyId String?       @db.Uuid
+  ImpactPoint    ImpactPoint[]
 }

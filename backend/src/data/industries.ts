@@ -1,10 +1,12 @@
+// src/data/industries.ts - 50+ Real Kenyan Industries
 export const industries = [
-  { name: 'Eggs' },
-  { name: 'Teaching' },
-  { name: 'Software Development' },
-  { name: 'Consulting' },
-  { name: 'Health Services' },
-  { name: 'E-commerce' },
-  { name: 'Retail' },
-  { name: 'Manufacturing' }
-]
+  'Agriculture', 'Livestock', 'Fisheries', 'Forestry', 'Mining', 
+  'Construction', 'Manufacturing', 'Real Estate', 'Transport', 'Logistics',
+  'Wholesale', 'Retail', 'Hospitality', 'Tourism', 'Education',
+  'Healthcare', 'Finance', 'Insurance', 'ICT', 'Energy',
+  'Water Supply', 'Waste Management', 'Professional Services', 'Media', 'Arts',
+  'Security', 'Legal', 'Accounting', 'Engineering', 'Architecture',
+  'Textiles', 'Food Processing', 'Beverages', 'Pharmaceuticals', 'Automotive',
+  'Electronics', 'Furniture', 'Leather', 'Plastics', 'Chemicals',
+  'Telecommunications', 'E-commerce', 'Digital Marketing', 'Consulting', 'NGOs'
+];

@@ -17,20 +17,26 @@ import userRoutes from './routes/user.routes.js';
 import authRoutes from './routes/auth.routes.js';
 import groupRoutes from './routes/group.routes.js';
 import impactRoutes from './routes/impactPoint.routes.js';
-import tokenRoutes from './routes/token.routes.js'; 
-import proposalRoutes from './routes/proposal.routes.js'; 
-import voteRoutes from './routes/vote.routes.js'; 
-import projectRoutes from './routes/project.routes.js';  
+import tokenRoutes from './routes/token.routes.js';
+import proposalRoutes from './routes/proposal.routes.js';
+import voteRoutes from './routes/vote.routes.js';
+import projectRoutes from './routes/project.routes.js';
 import milestoneRoutes from './routes/milestone.routes.js';
 import referenceDataRoutes from './routes/referenceData.routes.js';
-import userPrivacyRoutes from './routes/userPrivacy.routes.js'; // Import user privacy routes
-import userAuditRoutes from './routes/userAudit.routes.js'; // Import user audit routes
-import notificationRoutes from './routes/notification.routes.js'; // Import notification routes
-import userConsentRoutes from './routes/userConsent.routes.js'; // Import user consent routes
-import userActivityRoutes from './routes/userActivity.routes.js'; // Import user activity routes
-import WalletRoutes from './routes/wallet.routes.js'; // Import wallet routes
+import userPrivacyRoutes from './routes/userPrivacy.routes.js';
+import userAuditRoutes from './routes/userAudit.routes.js';
+import notificationRoutes from './routes/notification.routes.js';
+import userConsentRoutes from './routes/userConsent.routes.js';
+import userActivityRoutes from './routes/userActivity.routes.js';
+import WalletRoutes from './routes/wallet.routes.js';
 
-import logger from './utils/logger.js';  
+import logger from './utils/logger.js';
+
+// New imports for role bootstrapping, metrics and admin routes
+// Note: we import routers/handlers only — we do NOT call DB from this module.
+import { loadDynamicRoles, addExtraAllowedRoles } from './constants/roles.js';
+import adminRolesRouter from './routes/adminRoles.js';
+import { metricsHandler } from './utils/metrics.js';
 
 dotenv.config();
 
@@ -58,16 +64,16 @@ app.use('/api/reference', referenceDataRoutes);
 app.use('/api/users', userRoutes);
 
 // Mount wallet-related routes under /api/wallet
-app.use('/api/wallet', WalletRoutes); // Add this line to mount wallet routes
+app.use('/api/wallet', WalletRoutes);
 
 // Mount notification-related routes under /api/notifications
-app.use('/api/notifications', notificationRoutes); // Add this line to mount notification routes
+app.use('/api/notifications', notificationRoutes);
 
 // Mount user consent-related routes under /api/user-consent
-app.use('/api/user-consent', userConsentRoutes); // Add this line to mount user consent routes
+app.use('/api/user-consent', userConsentRoutes);
 
 // Mount user activity-related routes under /api/user-activity
-app.use('/api/user-activity', userActivityRoutes); // Add this line to mount user activity routes
+app.use('/api/user-activity', userActivityRoutes);
 
 // Mount group-related routes under /api/groups
 app.use('/api/groups', groupRoutes);
@@ -75,17 +81,17 @@ app.use('/api/groups', groupRoutes);
 // Mount authentication routes under /api/auth
 app.use('/api/auth', authRoutes);
 
-// Mount impact-related routes under /api/impact
+// Mount impact-related routes under /api
 app.use('/api', impactRoutes);
 
-// Mount token-related routes under /api/token
-app.use('/api', tokenRoutes); 
+// Mount token-related routes under /api
+app.use('/api', tokenRoutes);
 
-// Mount proposal-related routes under /api/proposals 
-app.use('/api/proposals', proposalRoutes); 
+// Mount proposal-related routes under /api/proposals
+app.use('/api/proposals', proposalRoutes);
 
-// Mount vote-related routes under /api/votes 
-app.use('/api/votes', voteRoutes); 
+// Mount vote-related routes under /api/votes
+app.use('/api/votes', voteRoutes);
 
 // Mount project-related routes under /api/projects
 app.use('/api/projects', projectRoutes);
@@ -94,27 +100,29 @@ app.use('/api/projects', projectRoutes);
 app.use('/api/milestones', milestoneRoutes);
 
 // Mount user privacy-related routes under /api/user-privacy
-app.use('/api/user-privacy', userPrivacyRoutes); // Add this line to mount user privacy routes
+app.use('/api/user-privacy', userPrivacyRoutes);
 
 // Mount user audit-related routes under /api/user-audit
-app.use('/api/user-audit', userAuditRoutes); // Add this line to mount user audit routes
-
+app.use('/api/user-audit', userAuditRoutes);
 
 // Basic health check endpoint
 app.get('/health', (_req: Request, res: Response) => {
   res.json({ status: 'OK' });
 });
 
-// Optional: 404 Not Found handler for unmatched routes
+/**
+ * Metrics and admin routes:
+ * - We export initRoles() below which will mount /metrics and /admin/roles (if enabled)
+ * - We do NOT call loadDynamicRoles() automatically during import to keep tests and CI safe.
+ */
+
+// Optional: 404 Not Found handler for unmatched routes (kept)
 app.use((_req: Request, res: Response) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-
-
 // Global error handler middleware
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
-  // Use your structured logger here
   logger.error('Global error handler caught an error', {
     error: err,
   });
@@ -133,3 +141,31 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 export default app;
+
+/**
+ * initRoles
+ *
+ * Call this once during application startup (before app.listen).
+ * - Loads dynamic roles from DB into the allowlist.
+ * - Adds EXTRA_ALLOWED_ROLES from env.
+ * - Mounts /metrics and /admin/roles if configured.
+ *
+ * We accept a prisma client so tests can pass a mock if needed.
+ */
+export async function initRoles(prismaClient: any, expressApp = app) {
+  // Load roles from DB. Default: fail-fast (throw) so startup fails if DB unreachable.
+  // If you prefer fallback behavior at startup, catch and handle here.
+  await loadDynamicRoles(prismaClient);
+
+  // Add any extras from env
+  const extras = process.env.EXTRA_ALLOWED_ROLES?.split(',').map((s) => s.trim()).filter(Boolean) ?? [];
+  if (extras.length) addExtraAllowedRoles(extras);
+
+  // Mount /metrics endpoint (public)
+  expressApp.get('/metrics', metricsHandler);
+
+  // Mount admin roles reload endpoint (requires Auth + attachUserRoles to have run on the request)
+  if ((process.env.ROLE_ALLOWLIST_RELOAD_ENABLED ?? 'true') === 'true') {
+    expressApp.use('/admin/roles', adminRolesRouter);
+  }
+}
