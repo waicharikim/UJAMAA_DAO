@@ -29,6 +29,9 @@ import notificationRoutes from './routes/notification.routes.js';
 import userConsentRoutes from './routes/userConsent.routes.js';
 import userActivityRoutes from './routes/userActivity.routes.js';
 import WalletRoutes from './routes/wallet.routes.js';
+import geographicRoutes from './routes/geographic.routes.js';
+import economicRoutes from './routes/economic.routes.js';
+
 
 import logger from './utils/logger.js';
 
@@ -59,6 +62,14 @@ app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // Mount reference data-related routes under /api/reference
 app.use('/api/reference', referenceDataRoutes);
+
+
+// Mount economic-related routes under /api/economic
+app.use('/api/economic', economicRoutes);
+
+// Mount geographic-related routes under /api/geographic
+
+app.use('/geographic', geographicRoutes);
 
 // Mount user-related routes under /api/users
 app.use('/api/users', userRoutes);

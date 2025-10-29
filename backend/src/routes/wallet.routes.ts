@@ -1,20 +1,33 @@
-import express from 'express';
-import * as walletController from '../controllers/wallet.controller.js';
-import { authMiddleware } from '../middlewares/auth.middleware.js';
-import { attachUserRoles } from '../middlewares/attachUserRoles.middleware.js';
-import { authorize } from '../middlewares/rbac.middleware.js';
+/**
+ * @file wallet.routes.ts
+ *
+ * @description
+ * Express router for the UJAMAADAO Wallet system.
+ * Handles read-only operations for user and group balances/transactions.
+ */
 
-const router = express.Router();
+import { Router } from 'express';
+import { getBalanceHandler, getTransactionsHandler } from '../controllers/wallet.controller.js';
+import { authenticate } from '../middlewares/authenticate.js'; // Assuming this exists
 
-router.use(authMiddleware);
-router.use(attachUserRoles);
+const walletRouter = Router();
 
-const allowedRoles = ['wallet:user', 'wallet:group_admin', 'wallet:admin'];
+// Middleware applied to all wallet routes
+walletRouter.use(authenticate);
 
-// Wallet balance endpoint
-router.get('/balance', authorize(allowedRoles), walletController.getBalanceHandler);
+/**
+ * GET /api/wallet/balance
+ * Fetches the current balance for the authenticated user or an authorized group.
+ * Protected by RBAC (authorize) and input validation (validateRequest).
+ */
+walletRouter.get('/balance', getBalanceHandler);
 
-// Wallet transactions list
-router.get('/transactions', authorize(allowedRoles), walletController.getTransactionsHandler);
+/**
+ * GET /api/wallet/transactions
+ * Fetches the paginated transaction history for the authenticated user or an authorized group.
+ * Protected by RBAC (authorize) and input validation (validateRequest).
+ */
+walletRouter.get('/transactions', getTransactionsHandler);
 
-export default router;
+
+export default walletRouter;

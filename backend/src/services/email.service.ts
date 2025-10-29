@@ -1,25 +1,79 @@
 /**
- * @file email.service.ts
+ * @file notification.service.ts
  *
  * @description
- * Service responsible for sending verification emails.
- * Integrates with notification.service to dispatch email notifications.
- * Currently logs the email content as a placeholder.
+ * Service handling user notification preferences and delivery.
+ * - Retrieves and updates user preferences for various notification channels and events.
+ * - Dispatches notifications respecting user preferences.
+ * - Currently uses logging as placeholder for actual delivery mechanisms.
  */
 
-import { dispatchNotification } from './notification.service.js';
+import prisma from '../prismaClient.js';
+import logger from '../utils/logger.js';
 
 /**
- * Sends a verification email with a tokenized verification URL.
+ * Retrieves notification preferences for a given user.
  *
- * @param email - Recipient's email address
- * @param token - Email verification token
+ * @param userId - ID of the user
+ * @returns Array of NotificationPreference objects for the user
  */
-export async function sendVerificationEmail(email: string, token: string) {
-  const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
+export async function getUserNotificationPreferences(userId: string) {
+  const prefs = await prisma.notificationPreference.findMany({
+    where: { userId },
+  });
 
-  // TODO: Replace this with actual email provider integration (e.g., SendGrid, SES)
-  await dispatchNotification(email, 'email', 'verification', { email, token });
+  return prefs;
+}
 
-  console.log(`Sending verification email to ${email} with link: ${verificationUrl}`);  
+/**
+ * Updates or creates a notification preference for a user,
+ * specifying if a channel/eventType is enabled or disabled.
+ *
+ * @param userId - ID of the user
+ * @param channel - Notification channel (e.g., 'email', 'sms', 'in-app')
+ * @param eventType - Event type (e.g., 'email_verification', 'proposal_update')
+ * @param enabled - Whether the notification is enabled
+ * @returns The upserted NotificationPreference record
+ */
+export async function updateUserNotificationPreference(userId: string, channel: string, eventType: string, enabled: boolean) {
+  return prisma.notificationPreference.upsert({
+    where: {
+      userId_channel_eventType: { userId, channel, eventType },
+    },
+    create: {
+      userId,
+      channel,
+      eventType,
+      enabled,
+    },
+    update: {
+      enabled,
+    },
+  });
+}
+
+/**
+ * Dispatches a notification to a user, considering their preferences.
+ * Currently logs the notification attempt; actual sending logic would integrate with email/SMS/etc.
+ *
+ * @param userId - ID of the user
+ * @param channel - Notification channel
+ * @param eventType - Type of event triggering notification
+ * @param payload - Additional data/payload for notification
+ * @returns true if notification sent or expected to send; false if disabled by preferences
+ */
+export async function dispatchNotification(userId: string, channel: string, eventType: string, payload: any) {
+  const prefs = await prisma.notificationPreference.findUnique({
+    where: { userId_channel_eventType: { userId, channel, eventType } },
+  });
+
+  if (prefs && !prefs.enabled) {
+    logger.info(`Notification for ${userId} on channel ${channel} and event ${eventType} is disabled.`);
+    return false;
+  }
+
+  // TODO: Integrate with real delivery service (SendGrid, Twilio, etc.)
+  logger.info(`Sending ${eventType} notification to user ${userId} via ${channel}`, { payload });
+
+  return true;
 }

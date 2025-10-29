@@ -11,11 +11,15 @@ import { Prisma } from '@prisma/client';
 import prisma from '../prismaClient.js';
 import { ApiError } from '../utils/ApiError.js';
 import logger from '../utils/logger.js';
+import { logUserAudit } from './userAudit.service.js'; // Assuming a User Audit Service exists
 
 type HolderType = 'USER' | 'GROUP';
 type TxStatus = 'PENDING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
 type TxType = 'DEPOSIT' | 'WITHDRAWAL' | 'SPEND' | 'REFUND' | 'ADJUSTMENT';
 
+/**
+ * Retrieves the wallet balance for a holder, creating it if it doesn't exist.
+ */
 export async function getWalletBalance(holderType: HolderType, holderId: string) {
   const where = holderType === 'USER'
     ? { holderType_userId_wallet: { holderType, userId: holderId } }
@@ -23,7 +27,7 @@ export async function getWalletBalance(holderType: HolderType, holderId: string)
 
   let wallet = await prisma.walletBalance.findUnique({ where });
   if (!wallet) {
-    // Optionally create wallet record on demand
+    // Create wallet record on demand
     wallet = await prisma.walletBalance.create({
       data: {
         holderType,
@@ -37,99 +41,120 @@ export async function getWalletBalance(holderType: HolderType, holderId: string)
 }
 
 /**
- * updateWalletBalance
- * Atomically credit or debit a wallet and create a transaction record.
+ * Atomically updates a wallet balance and records a transaction.
  *
- * params.amount should be a string or number representing the decimal value (e.g., "100.50" or 100.5)
- *
- * Returns { wallet, transaction, newBalance }
+ * @param holderType 'USER' or 'GROUP'
+ * @param holderId ID of the user or group
+ * @param type Type of transaction (DEPOSIT, WITHDRAWAL, etc.)
+ * @param amount The amount to change the balance by (positive for deposit, negative for withdrawal)
+ * @param memo Transaction description
+ * @param actorId The user ID initiating the change (for audit)
+ * @returns The updated wallet and the created transaction record
  */
-export async function updateWalletBalance(params: {
-  holderType: HolderType;
-  holderId: string;
-  amount: string | number;
-  mpesaReceipt?: string;
-  description?: string;
-  status?: TxStatus;
-  type?: TxType;
-  actorId?: string; // for audit
-}) {
-  const {
-    holderType, holderId, amount, mpesaReceipt, description,
-    status = 'COMPLETED', type = (Number(amount) >= 0 ? 'DEPOSIT' : 'WITHDRAWAL'), actorId,
-  } = params;
+export async function updateWalletBalance(
+  holderType: HolderType,
+  holderId: string,
+  type: TxType,
+  amount: number,
+  memo: string,
+  actorId?: string
+) {
+  const decimalAmount = new Prisma.Decimal(amount);
 
-  // Normalize amount to Decimal
-  const decimalAmount = new Prisma.Decimal(amount.toString());
+  if (decimalAmount.isZero()) {
+    logger.warn('Wallet update skipped: zero amount transaction.', {
+      operationType: 'ECONOMIC',
+      // CRITICAL FIX: Moving ad-hoc data to metadata
+      metadata: {
+        holderId,
+        type,
+        memo,
+      }
+    });
+    // Return early if amount is zero
+    return;
+  }
 
-  return await prisma.$transaction(async (tx) => {
-    // find or create wallet (lock row via select for update not directly available, but tx ensures atomicity)
-    const where = holderType === 'USER'
-      ? { holderType_userId_wallet: { holderType, userId: holderId } }
-      : { holderType_groupId_wallet: { holderType, groupId: holderId } };
-
-    let wallet = await tx.walletBalance.findUnique({ where });
-
-    if (!wallet) {
-      wallet = await tx.walletBalance.create({
-        data: {
-          holderType,
-          ...(holderType === 'USER' ? { userId: holderId } : { groupId: holderId }),
-          balance: new Prisma.Decimal(0),
-          currency: 'KES',
-        },
-      });
-    }
-
-    // compute new balance
+  return prisma.$transaction(async (tx) => {
+    // 1. Get the current wallet balance (or create it)
+    const wallet = await getWalletBalance(holderType, holderId);
     const currentBalance = new Prisma.Decimal(wallet.balance as any);
-    const newBalance = currentBalance.plus(decimalAmount);
+    const newBalanceCheck = currentBalance.plus(decimalAmount);
 
-    // Prevent negative balance (overdraft)
-    if (newBalance.isNegative()) {
-      throw new ApiError('Insufficient funds', 400);
+    // 2. Check for overdraft protection (basic check)
+    if (newBalanceCheck.lessThan(0)) {
+      logger.error('Wallet update failed: Overdraft attempt', {
+        operationType: 'ECONOMIC',
+        securityEvent: {
+          type: 'ECONOMIC_FRAUD',
+          severity: 'HIGH',
+          details: 'Overdraft attempt detected during wallet update.'
+        },
+        // CRITICAL FIX: Moving ad-hoc data to metadata
+        metadata: {
+          holderId,
+          type,
+          amount: decimalAmount.toString(),
+          currentBalance: currentBalance.toString(),
+        }
+      });
+      throw new ApiError('Insufficient funds for this transaction.', 400, { code: 'INSUFFICIENT_FUNDS' });
     }
 
-    // Update balance
+    // 3. Update the wallet balance
     await tx.walletBalance.update({
       where: { id: wallet.id },
-      data: { balance: newBalance },
+      data: {
+        balance: newBalanceCheck,
+      },
     });
 
-    // Create transaction record
+    // 4. Record the transaction
     const txRecord = await tx.walletTransaction.create({
       data: {
         walletBalanceId: wallet.id,
         type,
         amount: decimalAmount,
-        mpesaReceipt,
-        description,
-        status,
+        memo,
+        status: 'COMPLETED',
+        // Denormalize holder for easier queries
+        userId: holderType === 'USER' ? holderId : undefined,
+        groupId: holderType === 'GROUP' ? holderId : undefined,
       },
     });
 
-    // Optionally log audit (non-blocking)
-    try {
-      // Implement your audit logging as needed; example:
-      if (actorId) {
-        await tx.userAudit.create({
-          data: {
-            userId: holderType === 'USER' ? holderId : undefined,
-            field: 'walletBalance',
-            oldValue: currentBalance.toString(),
-            newValue: newBalance.toString(),
-            changedBy: actorId,
-            timestamp: new Date(),
-          },
-        });
-      }
-    } catch (err) {
-      logger.error('Failed to write wallet audit entry', { err });
-      // do not fail the main tx; audits recorded in same tx above to be consistent; optionally handle differently
+    // 5. Audit the change (Audit must be ATOMIC with transaction)
+    const updatedWallet = await tx.walletBalance.findUnique({ where: { id: wallet.id } });
+    const newBalance = new Prisma.Decimal(updatedWallet?.balance as any);
+
+    if (actorId) {
+      // NOTE: Removed try/catch. If audit fails, the whole transaction must fail.
+      await tx.userAudit.create({
+        data: {
+          userId: holderType === 'USER' ? holderId : undefined,
+          field: 'walletBalance',
+          oldValue: currentBalance.toString(),
+          newValue: newBalance.toString(),
+          changedBy: actorId,
+          timestamp: new Date(),
+          metadata: { transactionId: txRecord.id }
+        },
+      });
     }
 
-    // Return fresh wallet and tx
-    const updatedWallet = await tx.walletBalance.findUnique({ where: { id: wallet.id } });
+    logger.info('Wallet balance updated successfully', {
+        operationType: 'ECONOMIC',
+        // CRITICAL FIX: Moving ad-hoc data to metadata
+        metadata: {
+          holderId,
+          type,
+          amount: decimalAmount.toString(),
+          newBalance: newBalance.toString(),
+          actor: actorId
+        }
+    });
+
+    // 6. Return fresh wallet and tx
     return {
       wallet: updatedWallet,
       transaction: txRecord,
@@ -138,13 +163,22 @@ export async function updateWalletBalance(params: {
   });
 }
 
+/**
+ * Retrieves paginated transaction history for a wallet.
+ */
 export async function getWalletTransactions(holderType: HolderType, holderId: string, limit = 50, offset = 0) {
   const wallet = await getWalletBalance(holderType, holderId);
   const transactions = await prisma.walletTransaction.findMany({
     where: { walletBalanceId: wallet.id },
     orderBy: { createdAt: 'desc' },
     skip: offset,
-    take: limit,
+    take: limit
   });
   return transactions;
 }
+
+export const walletService = {
+  getWalletBalance,
+  updateWalletBalance,
+  getWalletTransactions
+};

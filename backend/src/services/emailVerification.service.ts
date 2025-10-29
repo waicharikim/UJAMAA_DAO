@@ -1,73 +1,144 @@
 /**
- * @file emailVerification.service.ts
- * 
+ * @file emailVerification.service.js
+ *
  * @description
- * Service handling generation and verification of email verification tokens.
- * - Creates secure tokens with expiration used to confirm user emails.
- * - Updates user status upon successful verification.
+ * UJAMAADAO Email Verification Service (Progressive Verification Step 1)
+ *
+ * Manages the lifecycle of email verification tokens, ensuring:
+ * 1. Secure, time-bound token generation and storage.
+ * 2. Token validation and atomic updates to the user's 'emailVerified' status.
+ * 3. Integration with the core user service to trigger progressive verification level advancement and Impact Point awards.
+ * 4. Cache invalidation for immediate role/capability updates.
  */
 
-import prisma from '../prismaClient.js';
 import { randomBytes } from 'crypto';
-import { ApiError } from '../utils/ApiError.js';
+import prisma from '../prismaClient.js';
 import logger from '../utils/logger.js';
+import { ApiError } from '../utils/ApiError.js';
+import * as userService from './user.service.js';
+import { clearUserRolesCache } from '../middlewares/attachUserRoles.middleware.js'; 
 
-const VERIFICATION_TOKEN_SIZE = 32; // bytes
-const VERIFICATION_TOKEN_EXPIRY_HOURS = 24;
+const TOKEN_EXPIRY_HOURS = 24;
+const TOKEN_TYPE = 'EMAIL_VERIFICATION';
 
 /**
- * Generates a secure email verification token for the specified user.
- * Stores token and expiration time in the user record.
- * 
- * @param userId - ID of the user to generate token for
- * @returns The generated token string
+ * Generate Email Verification Token
+ *
+ * Creates a secure, time-bound token and stores it in the database.
+ *
+ * @param {string} userId - The ID of the user requesting verification.
+ * @returns {Promise<string>} The generated token string.
  */
 export async function generateEmailVerificationToken(userId: string): Promise<string> {
-  const token = randomBytes(VERIFICATION_TOKEN_SIZE).toString('hex');
-  const expiresAt = new Date(Date.now() + VERIFICATION_TOKEN_EXPIRY_HOURS * 3600 * 1000);
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) {
+    throw new ApiError('User not found.', 404, { code: 'USER_NOT_FOUND' });
+  }
+  if (user.emailVerified) {
+    throw new ApiError('Email is already verified.', 400, { code: 'EMAIL_ALREADY_VERIFIED' });
+  }
 
-  await prisma.user.update({
-    where: { id: userId },
-    data: {
-      emailVerificationToken: token,
-      emailVerificationTokenExpires: expiresAt,
-      emailVerified: false,
-    },
-  });
+  // Generate secure token (Base64 URL-safe)
+  const token = randomBytes(32).toString('base64url');
+  const expiresAt = new Date(Date.now() + TOKEN_EXPIRY_HOURS * 60 * 60 * 1000);
 
-  return token;
+  try {
+    // Use a transaction to ensure atomic invalidation and creation
+    await prisma.$transaction(async (tx) => {
+      // 1. Soft-invalidate any remaining active tokens for this user and type
+      await tx.verificationToken.updateMany({
+        where: {
+          userId: userId,
+          type: TOKEN_TYPE,
+          usedAt: null,
+          expiresAt: { gt: new Date() }
+        },
+        data: {
+          expiresAt: new Date(Date.now() - 1), // Set expiry to the past
+        },
+      });
+
+      // 2. Create the new token
+      await tx.verificationToken.create({
+        data: {
+          token,
+          userId,
+          type: TOKEN_TYPE,
+          expiresAt,
+        },
+      });
+    });
+
+    logger.info('UJAMAADAO Email Verification: Token generated', { userId, expiresAt });
+    return token;
+  } catch (error) {
+    logger.error('UJAMAADAO Email Verification: Token generation failed', { userId, error });
+    throw new ApiError('Failed to generate verification token.', 500);
+  }
 }
 
 /**
- * Verifies a user’s email using the provided token.
- * Validates token existence and expiration.
- * Updates user record to mark email as verified.
- * 
- * @param token - The verification token to validate
- * @throws ApiError if token is missing, invalid, or expired
+ * Verify Email With Token
+ *
+ * Validates the token, marks the email as verified, and updates the user's
+ * progressive verification level via the user service.
+ *
+ * @param {string} token - The verification token.
+ * @returns {Promise<void>}
  */
 export async function verifyEmailWithToken(token: string): Promise<void> {
-  if (!token) throw new ApiError('Verification token is required', 400);
-
-  const user = await prisma.user.findFirst({
+  const verificationRecord = await prisma.verificationToken.findFirst({
     where: {
-      emailVerificationToken: token,
-      emailVerificationTokenExpires: { gt: new Date() },
+      token,
+      type: TOKEN_TYPE,
+      usedAt: null,
+      expiresAt: { gt: new Date() },
+    },
+    include: {
+      user: true,
     },
   });
 
-  if (!user) {
-    throw new ApiError('Invalid or expired token', 400);
+  if (!verificationRecord || !verificationRecord.user) {
+    throw new ApiError('Invalid or expired verification token.', 400, {
+      code: 'INVALID_TOKEN',
+    });
   }
 
-  await prisma.user.update({
-    where: { id: user.id },
-    data: {
-      emailVerified: true,
-      emailVerificationToken: null,
-      emailVerificationTokenExpires: null,
-    },
-  });
+  const { user } = verificationRecord;
+  const { id: userId } = user;
 
-  logger.info(`Email verified for user ${user.id}`);
+  try {
+    // 1. Mark the token as used and update user status in a single transaction
+    await prisma.$transaction(async (tx) => {
+      // Mark token as used
+      await tx.verificationToken.update({
+        where: { id: verificationRecord.id },
+        data: { usedAt: new Date() },
+      });
+
+      // Update user's email status (if not already verified)
+      if (!user.emailVerified) {
+        // Delegate to user.service to handle progressive verification, IP awards, and level calculation
+        await userService.completeVerification(
+            userId,
+            'EMAIL', 
+            { token },
+            {
+                ipAddress: 'SYSTEM', 
+                userAgent: 'SYSTEM'
+            }
+        );
+      }
+    });
+
+    // 2. Clear user roles cache for immediate capability updates
+    clearUserRolesCache(userId);
+
+    logger.info('UJAMAADAO Email Verification: User email status updated', { userId });
+
+  } catch (error) {
+    logger.error('UJAMAADAO Email Verification: Failed to complete verification transaction', { userId, error });
+    throw error;
+  }
 }

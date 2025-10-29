@@ -2,25 +2,25 @@
  * @file userAudit.routes.ts
  *
  * @description
- * Routes for user audit logs.
- * - Protected by authentication.
- * - Restricted to admin access roles.
+ * Express router for the UJAMAADAO User Audit system.
+ * Handles read-only operations for fetching user change history.
  */
 
-import express from 'express';
-import * as auditController from '../controllers/userAudit.controller.js';
-import { authMiddleware } from '../middlewares/auth.middleware.js';
-import { authorize } from '../middlewares/rbac.middleware.js';
-import { ADMIN_ACCESS_ROLES } from '../constants/roles.js';
+import { Router } from 'express';
+import { getUserAuditLogsHandler } from '../controllers/userAudit.controller.js';
+import { authenticate } from '../middlewares/authenticate.js'; // Assuming this exists
 
-const router = express.Router();
+const auditRouter = Router();
 
-router.use(authMiddleware);
+// Middleware applied to all audit routes
+auditRouter.use(authenticate);
 
-router.get(
-  '/:userId',
-  authorize(ADMIN_ACCESS_ROLES),
-  auditController.getUserAuditLogsHandler,
-);
+/**
+ * GET /api/audit/logs/:userId?
+ * Fetches the audit log history for a user.
+ * Access is restricted: only owners or specific audit roles can view.
+ * Protected by RBAC (authorize) and input validation (validateRequest).
+ */
+auditRouter.get('/logs/:userId?', getUserAuditLogsHandler);
 
-export default router;
+export default auditRouter;

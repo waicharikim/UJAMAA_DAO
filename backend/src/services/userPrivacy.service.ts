@@ -4,7 +4,7 @@
  * @description
  * Service for managing user privacy settings including retrieval, update,
  * privacy-aware filtering of user data, audit logging of settings changes,
- * and notification dispatch on updates.
+ * and data anonymization for compliance.
  */
 
 import prisma from '../prismaClient.js';
@@ -12,10 +12,17 @@ import { logUserAudit } from './userAudit.service.js';
 import { dispatchNotification } from './notification.service.js';
 import type { UserPrivacySettings, User } from '@prisma/client';
 import logger from '../utils/logger.js';
+import { ApiError } from '../utils/ApiError.js';
+import { Prisma } from '@prisma/client';
+
+// The User model as it appears in the database (we need to know what fields to anonymize)
+interface UserWithAllFields extends User {
+    // Extend User type if Prisma.User doesn't include all necessary fields directly
+    // Assuming 'email', 'phoneNumber', 'walletAddress', 'countyLive', etc., are directly on Prisma.User
+}
 
 /**
  * Returns the default privacy settings applied when a user has no explicit settings saved.
- * All sensitive fields default to 'private' except 'countyLive' is 'public'.
  */
 export function getDefaultPrivacySettings(): Record<string, string> {
   return {
@@ -31,7 +38,6 @@ export function getDefaultPrivacySettings(): Record<string, string> {
 
 /**
  * Filters user object fields based on privacy settings and requester's roles.
- * Super admins have unrestricted access.
  *
  * @param user User object with optional embedded privacySettings.
  * @param requesterRoles Array of roles (strings) of the requesting user.
@@ -44,22 +50,27 @@ export function filterUserByPrivacy(
   const isSuperAdmin = requesterRoles.includes('system:super_admin');
   const privacy = user.privacySettings?.settings ?? getDefaultPrivacySettings();
 
-  // Start with non-sensitive public fields.
   const result: Partial<User> = {
     id: user.id,
     name: user.name,
     industryId: user.industryId,
     avatarUrl: user.avatarUrl,
+    // Add other non-sensitive fields here
   };
 
-  // Determine if a field is visible according to privacy setting and roles.
-  const canView = (field: string): boolean => {
+  // List of fields controlled by privacy settings
+  const sensitiveFields: Array<keyof User> = [
+    'email', 'phoneNumber', 'walletAddress', 'countyLive', 'constituencyLive', 'countyOrigin', 'constituencyOrigin'
+  ];
+
+  const canView = (field: keyof User): boolean => {
     if (isSuperAdmin) return true;
-    const setting = privacy[field] ?? 'private';
+    const setting = privacy[field as string] ?? 'private';
     switch (setting) {
       case 'public':
         return true;
       case 'group':
+        // Check if requester has any group-scoped role
         return requesterRoles.some(r => r.startsWith('group:'));
       case 'private':
       default:
@@ -67,13 +78,11 @@ export function filterUserByPrivacy(
     }
   };
 
-  if (canView('email')) result.email = user.email;
-  if (canView('phoneNumber')) result.phoneNumber = user.phoneNumber;
-  if (canView('walletAddress')) result.walletAddress = user.walletAddress;
-  if (canView('countyLive')) result.countyLive = user.countyLive;
-  if (canView('constituencyLive')) result.constituencyLive = user.constituencyLive;
-  if (canView('countyOrigin')) result.countyOrigin = user.countyOrigin;
-  if (canView('constituencyOrigin')) result.constituencyOrigin = user.constituencyOrigin;
+  for (const field of sensitiveFields) {
+      if (canView(field) && user[field] !== undefined) {
+          (result as any)[field] = user[field];
+      }
+  }
 
   return result;
 }
@@ -90,7 +99,7 @@ export async function getUserPrivacySettings(userId: string) {
     settings = await prisma.userPrivacySettings.create({
       data: {
         userId,
-        settings: getDefaultPrivacySettings(),
+        settings: getDefaultPrivacySettings() as Prisma.JsonValue,
       },
     });
   }
@@ -98,7 +107,8 @@ export async function getUserPrivacySettings(userId: string) {
 }
 
 /**
- * Updates user's privacy settings, logs changes for audit and dispatches notifications.
+ * Updates user's privacy settings, performs ATOMIC audit logging, and dispatches notifications.
+ * This operation is wrapped in a transaction to ensure audit logging success.
  *
  * @param userId User ID being updated.
  * @param newSettings New privacy settings to apply.
@@ -108,37 +118,130 @@ export async function getUserPrivacySettings(userId: string) {
 export async function updateUserPrivacySettings(
   userId: string,
   newSettings: Record<string, string>,
-  changedById?: string,
+  changedById: string,
 ) {
+  // 1. Fetch old settings before starting the transaction
   const oldSettings = await getUserPrivacySettings(userId);
+  const settingsKeys = Object.keys(newSettings);
 
-  const updated = await prisma.userPrivacySettings.upsert({
-    where: { userId },
-    create: { userId, settings: newSettings },
-    update: { settings: newSettings },
-  });
+  return await prisma.$transaction(async (tx) => {
+    // 2. Perform the update/upsert within the transaction
+    const updated = await tx.userPrivacySettings.upsert({
+      where: { userId },
+      create: { userId, settings: newSettings as Prisma.JsonValue },
+      update: { settings: newSettings as Prisma.JsonValue },
+    });
 
-  // Asynchronously audit each changed setting key
-  if (changedById) {
-    for (const key of Object.keys(newSettings)) {
+    // 3. ATOMICALLY audit each changed setting key
+    const auditPromises: Promise<any>[] = [];
+    for (const key of settingsKeys) {
       const oldVal = oldSettings.settings[key] ?? null;
       const newVal = newSettings[key];
+      
       if (oldVal !== newVal) {
-        logUserAudit({
+        // Use the transactional client (tx) for the audit log creation
+        const auditData = {
           userId,
           field: `privacySettings.${key}`,
-          oldValue: oldVal,
-          newValue: newVal,
+          oldValue: String(oldVal),
+          newValue: String(newVal),
           changedBy: changedById,
-        }).catch((error) => {
-          logger.error('Failed to log user privacy audit', { userId, field: key, error });
-        });
+        };
+        
+        // This MUST be awaited or included in the promise list so that a failure rolls back the whole transaction
+        auditPromises.push(tx.userAudit.create({ data: auditData }));
       }
     }
-  }
 
-  // Notify user (example via email) about privacy settings update
-  await dispatchNotification(userId, 'email', 'privacySettingsUpdated', { changedSettings: newSettings });
+    // Await all audit logs. If any fail, the transaction will automatically rollback.
+    await Promise.all(auditPromises);
+    
+    // 4. Dispatch notification (still non-blocking to the main transaction, but outside of the Promise.all)
+    // NOTE: This runs outside the main audit loop but inside the $transaction.
+    await dispatchNotification(userId, 'email', 'privacySettingsUpdated', { changedSettings: newSettings });
 
-  return updated;
+    return updated;
+  }).catch(error => {
+    // Log error and rethrow as ApiError
+    logger.error('Transaction failed during privacy settings update and audit.', { userId, error: error.message });
+    throw new ApiError('Failed to update privacy settings or record audit trail.', 500);
+  });
+}
+
+/**
+ * Anonymizes a user's sensitive PII data upon request (Right to Erasure).
+ * This operation is irreversible and restricted to Super Admins.
+ *
+ * @param userId The ID of the user whose data must be anonymized.
+ * @param actorId The ID of the user (Super Admin) performing the action.
+ */
+export async function anonymizeUserSensitiveData(userId: string, actorId: string): Promise<void> {
+    const ANONYMIZED_STRING = 'ANONYMIZED';
+    const ANONYMIZED_EMAIL = `${userId}@${ANONYMIZED_STRING}.co`;
+
+    // CRITICAL: Use a transaction for atomic update and audit logging
+    await prisma.$transaction(async (tx) => {
+        const user = await tx.user.findUnique({ where: { id: userId } });
+        if (!user) {
+            throw new ApiError('User not found for anonymization.', 404);
+        }
+        
+        // Fields to be set to a placeholder or NULL
+        const updates: Partial<User> = {
+            // Replace PII with ANONYMIZED placeholders
+            email: ANONYMIZED_EMAIL,
+            phoneNumber: ANONYMIZED_STRING,
+            name: `User ${userId.substring(0, 8)}`,
+            
+            // Critical: Clear wallet address linkage (if applicable)
+            walletAddress: null, 
+            
+            // Clear other PII fields
+            bio: null,
+            avatarUrl: null,
+            primaryWardId: null,
+            secondaryWardId: null,
+            countyLive: null,
+            constituencyLive: null,
+            countyOrigin: null,
+            constituencyOrigin: null,
+            
+            // Disable account (soft-delete indicator)
+            isActive: false, 
+            isDeleted: true,
+            
+            // Clear all verification flags
+            emailVerified: false,
+            phoneVerified: false,
+            communityVerified: false,
+            locationVerified: false,
+            expertVerified: false,
+        };
+
+        // 1. Perform the irreversible anonymization update
+        await tx.user.update({
+            where: { id: userId },
+            data: updates,
+        });
+
+        // 2. Log the critical audit event
+        await tx.userAudit.create({
+            data: {
+                userId: userId,
+                field: 'dataAnonymization',
+                oldValue: 'User PII present',
+                newValue: 'User PII anonymized and account disabled',
+                changedBy: actorId,
+                timestamp: new Date(),
+                metadata: { reason: 'Right to Erasure / Compliance' },
+            },
+        });
+
+        // 3. Clear/delete the user's privacy settings record (optional but recommended)
+        await tx.userPrivacySettings.delete({ where: { userId } }).catch(e => {
+            // Log if settings didn't exist, but don't fail the transaction
+            logger.warn('No privacy settings found to delete during anonymization', { userId });
+        });
+        
+    });
 }

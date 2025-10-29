@@ -1,52 +1,80 @@
 /**
  * @file userPrivacy.controller.ts
- *
- * @description
- * Controller for handling user privacy settings APIs.
- * - Provides routes to get and update a user's privacy settings.
- * - Ensures authentication and input validation.
+ * @description Controller for managing user privacy settings and compliance operations (anonymization).
+ * Enforces ownership and Super Admin roles for sensitive actions.
  */
 
-import type { Request, Response, NextFunction } from 'express';
-import { privacySettingsSchema } from '../validation/privacySettings.validation.js';
-import * as userPrivacyService from '../services/userPrivacy.service.js';
-import { ZodError } from 'zod';
+import type { Response, NextFunction } from 'express';
+import { ApiError } from '../utils/ApiError.js';
+import { AuthRequest } from '../types/ujamaadao.types.js';
+import { asyncHandler } from '../middlewares/asyncHandler.js';
+import * as privacyService from '../services/userPrivacy.service.js';
+import { resolveOwnerId } from '../utils/ownership.js'; // Assuming this utility exists
 
 /**
- * GET /api/user-privacy/me/privacy
- * Retrieves the authenticated user's current privacy settings.
+ * Get the authenticated user's own privacy settings.
  */
-export async function getPrivacySettingsHandler(req: Request, res: Response, next: NextFunction) {
-  try {
+export const getMyPrivacySettingsHandler = asyncHandler(async (req: AuthRequest, res: Response) => {
     const userId = req.user?.userId;
-    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    if (!userId) throw new ApiError('Authentication context missing.', 401);
 
-    const privacySettings = await userPrivacyService.getUserPrivacySettings(userId);
-    res.json(privacySettings);
-  } catch (error) {
-    next(error);
-  }
-}
+    const settings = await privacyService.getUserPrivacySettings(userId);
+    
+    // Return the raw settings object for the user to view/edit
+    res.json({ userId: userId, settings: settings.settings });
+});
 
 /**
- * PATCH /api/user-privacy/me/privacy
- * Updates the authenticated user's privacy settings.
- * Validates input against privacySettingsSchema.
+ * Update the authenticated user's own privacy settings.
  */
-export async function updatePrivacySettingsHandler(req: Request, res: Response, next: NextFunction) {
-  try {
+export const updateMyPrivacySettingsHandler = asyncHandler(async (req: AuthRequest, res: Response) => {
     const userId = req.user?.userId;
-    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    if (!userId) throw new ApiError('Authentication context missing.', 401);
+    
+    // Zod validation in middleware ensures req.body.settings is present
+    const newSettings = req.body.settings as Record<string, string>;
 
-    // Validate request body with Zod schema
-    const validatedSettings = privacySettingsSchema.parse(req.body);
+    const updatedSettings = await privacyService.updateUserPrivacySettings(
+        userId, 
+        newSettings, 
+        userId // The user is the actor/changedById
+    );
 
-    const updateSettings = await userPrivacyService.updateUserPrivacySettings(userId, validatedSettings, userId);
-    res.json(updateSettings);
-  } catch (error) {
-    if (error instanceof ZodError) {
-      return res.status(400).json({ error: 'Invalid input', details: (error as ZodError).errors });
-    }
-    next(error);
-  }
-}
+    res.json({ message: 'Privacy settings updated successfully.', settings: updatedSettings.settings });
+});
+
+
+/**
+ * Retrieves the privacy settings for a specific user.
+ * NOTE: Access to this endpoint is restricted by RBAC middleware in the router.
+ */
+export const getUserPrivacySettingsHandler = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const targetUserId = req.params.userId;
+    const actorId = req.user?.userId;
+
+    if (!actorId) throw new ApiError('Authentication context missing.', 401);
+
+    // This route is protected by RBAC in the router to only allow admins/auditors.
+    const settings = await privacyService.getUserPrivacySettings(targetUserId);
+    
+    res.json({ userId: targetUserId, settings: settings.settings });
+});
+
+
+/**
+ * Anonymizes a user's sensitive PII data (Right to Erasure).
+ * CRITICAL: Restricted to system:super_admin role via route middleware in the router.
+ */
+export const anonymizeUserSensitiveDataHandler = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const targetUserId = req.params.userId;
+    const actorId = req.user?.userId;
+    
+    if (!actorId) throw new ApiError('Authentication context missing.', 401);
+
+    // The RBAC middleware ensures the actorId has the required super_admin role.
+    await privacyService.anonymizeUserSensitiveData(targetUserId, actorId);
+
+    res.status(200).json({ 
+        message: `User ${targetUserId} sensitive data has been permanently anonymized and the account disabled.` 
+    });
+});
