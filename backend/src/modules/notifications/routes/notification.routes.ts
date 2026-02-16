@@ -1,0 +1,32 @@
+/**
+ * @file src/modules/notifications/routes/notification.routes.ts
+ * @description
+ * Notification Routes
+ * Version: 2.0 — December 2025
+ */
+
+import { Router } from "express";
+import { NotificationController } from "../controllers/notification.controller.js";
+import { authenticate } from "../../../core/middleware/auth.middleware.js";
+import { validateRequest } from "../../../core/middleware/ValidateRequests.js";
+import { z } from "zod";
+import { asyncHandler } from "../../../core/utils/response.js";
+
+const router = Router();
+
+router.use(authenticate);
+
+router.get("/", asyncHandler(NotificationController.getNotifications));
+
+router.post(
+  "/mark-read",
+  validateRequest({
+    schema: z.object({
+      notificationId: z.string().uuid(),
+    }),
+    target: "body",
+  }),
+  asyncHandler(NotificationController.markAsRead)
+);
+
+export default router;

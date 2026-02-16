@@ -4,84 +4,875 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
-/// -------- ENUMS --------
+// ============================================================================
+// GEOGRAPHIC MODELS
+// ============================================================================
 
-enum AuthTokenType {
-  VERIFY_EMAIL
-  RESET_PASSWORD
-  MFA_CHALLENGE
+model County {
+  id             String         @id @default(uuid()) @db.Uuid
+  code           String         @unique
+  name           String         @unique
+  constituencies Constituency[]
+  wards          Ward[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@map("counties")
 }
 
-enum GroupType {
-  // **LOCATION-BASED** (Primary)
-  WARD_COMMUNITY // Ward clean-up, youth groups
-  CONSTITUENCY_PROJECT // Constituency development
-  COUNTY_INITIATIVE // County-wide programs
-  NATIONAL_CAMPAIGN // National movements
+model Constituency {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  countyId  String   @db.Uuid
+  county    County   @relation(fields: [countyId], references: [id], onDelete: Cascade)
+  wards     Ward[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  // **SECTOR-BASED** (Secondary)
-  BUSINESS // Companies/SMEs
-  NON_PROFIT // NGOs, CBOs
-  EDUCATION // Schools, universities
-  RELIGIOUS // Churches, mosques
-  HEALTH // Clinics, hospitals
-  AGRICULTURE // Farmers co-ops
-  YOUTH // Youth groups
-  WOMEN // Women's groups
-
-  // **PROJECT-BASED** (Temporary)
-  PROJECT_GROUP // Time-bound projects
-
-  // **NEW: EXPERT & ADVISORY**
-  TECHNICAL_ADVISORY
-  QUALITY_ASSURANCE
-  PROFESSIONAL_NETWORK
-  EXPERT_PANEL
-
-  // **NEW: SPECIALIZED FUNCTIONAL**
-  EMERGENCY_RESPONSE
-  DISASTER_MANAGEMENT
-  ENVIRONMENTAL
-  CULTURAL
-  INFRASTRUCTURE
-  SAVINGS_CREDIT
-  SELF_HELP
+  @@unique([name, countyId])
+  @@index([countyId])
+  @@map("constituencies")
 }
 
-enum GroupRole {
-  MEMBER
-  LEADER
-  TREASURER
-  AUDITOR
-  FACILITATOR
-  MENTOR
+model Ward {
+  id             String       @id @default(uuid()) @db.Uuid
+  name           String
+  code           String?      @unique
+  constituencyId String       @db.Uuid
+  countyId       String       @db.Uuid
+  newWardRequests  ResidenceChangeRequest[] @relation("NewWardRequests")
+  oldWardRequests  ResidenceChangeRequest[] @relation("OldWardRequests")
+  constituency   Constituency @relation(fields: [constituencyId], references: [id], onDelete: Cascade)
+  county         County       @relation(fields: [countyId], references: [id], onDelete: Cascade)
+
+  // User relationships
+  usersPrimary   User[]       @relation("PrimaryWard")
+  usersSecondary User[]       @relation("SecondaryWard")
+  usersCurrent   User[]       @relation("CurrentWard")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([constituencyId])
+  @@index([countyId])
+  @@map("wards")
 }
 
-enum ParticipantRole {
-  MEMBER
-  ADMIN
-  MILESTONE_VERIFIER
-  QUALITY_CONTROLLER
+// ============================================================================
+// INDUSTRY MODELS
+// ============================================================================
+
+model Industry {
+  id               String            @id @default(uuid()) @db.Uuid
+  name             String            @unique
+  goodsServices    GoodsService[]
+  userIndustries   UserIndustry[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@map("industries")
 }
 
-enum ProposalType {
-  COMMUNITY_INITIATIVE
-  MAJOR_PROJECT
-  STRATEGIC_DECISION
-  EMERGENCY
+model GoodsService {
+  id                 String              @id @default(uuid()) @db.Uuid
+  name               String
+  description        String?
+  industryId         String              @db.Uuid
+  category           String?
+  active             Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  industry           Industry            @relation(fields: [industryId], references: [id], onDelete: Cascade)
+  userGoodsServices  UserGoodsService[]
+
+  @@unique([name, industryId])
+  @@index([industryId])
+  @@index([industryId, active])
+  @@map("goods_services")
 }
 
-enum ProposalStatus {
-  DRAFT
-  VOTING
-  APPROVED
-  REJECTED
-  EXECUTING
-  COMPLETED
+// ============================================================================
+// CORE USER MODEL
+// ============================================================================
+
+model User {
+  id                    String    @id @default(uuid()) @db.Uuid
+  email                 String?   @unique
+  name                  String?
+  phoneNumber           String?
+  walletAddress         String?   @unique
+  passwordHash          String?   @db.Text // For admin accounts only
+  avatarUrl                String?
+  
+  // Ward assignments
+  primaryWardId         String?   @db.Uuid
+  secondaryWardId       String?   @db.Uuid
+  currentLocationId     String?   @db.Uuid
+  currentLocationUntil  DateTime?
+  
+  primaryWard           Ward?     @relation("PrimaryWard", fields: [primaryWardId], references: [id], onDelete: SetNull)
+  secondaryWard         Ward?     @relation("SecondaryWard", fields: [secondaryWardId], references: [id], onDelete: SetNull)
+  currentWard           Ward?     @relation("CurrentWard", fields: [currentLocationId], references: [id], onDelete: SetNull)
+  
+  // Verification status
+  verificationLevel     String    @default("UNVERIFIED")
+  emailVerified         Boolean   @default(false)
+  phoneVerified         Boolean   @default(false)
+  communityVerified     Boolean   @default(false)
+  locationVerified      Boolean   @default(false)
+  
+  // Economy
+  participationRights   Int       @default(0)
+  utilityTokens         Int       @default(0)
+  globalImpactPoints    Int       @default(0)
+  
+  // Account status
+  status                String    @default("ACTIVE") // ACTIVE, SUSPENDED, BANNED
+  
+  // Roles
+  roles                 String[]  @default([]) // Simple array for now
+  
+  // Timestamps
+  onboardingCompletedAt DateTime?
+  lastResidenceChangeAt   DateTime?
+  lastLoginAt           DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  // Relations - Auth
+  sessions              Session[]
+  loginEvents           LoginEvent[]
+  verificationTokens    EmailVerificationToken[]
+  accounts              Account[]
+  recoveryRequests      RecoveryRequest[]
+  phoneVerifications    PhoneVerification[]
+  passwordResets        PasswordReset[]
+  twoFactorAuth         TwoFactorAuth?
+  webauthnCredentials   WebAuthnCredential[]
+  accountRecovery       AccountRecovery?
+  securityEvents        SecurityEvent[]
+
+  // Relations - User associations
+  userIndustries        UserIndustry[]
+  userGoodsServices     UserGoodsService[]
+  userRoles             UserRole[]
+
+  verificationRequests VerificationRequest[]
+  vouchedFor          CommunityVouch[] @relation("VouchedFor")
+  vouchesGiven        CommunityVouch[] @relation("VouchesGiven")
+
+  // Reverse relation for SystemConfiguration updates
+  updatedConfigs        SystemConfiguration[] @relation("ConfigUpdater")
+
+
+  privacySettings          UserPrivacySettings?
+  accessibility            UserAccessibility?
+  residenceChangeRequests  ResidenceChangeRequest[] @relation("UserResidenceRequests")
+  reviewedResidenceRequests ResidenceChangeRequest[] @relation("ResidenceRequestReviewer")
+  participationRightsLogs  ParticipationRightsLog[]
+  onboardingProgress       OnboardingProgress?
+  tutorialCompletions      UserTutorialCompletion[]
+  onboardingMilestones     OnboardingMilestone[]
+
+
+
+  @@index([email])
+  @@index([walletAddress])
+  @@index([phoneNumber])
+  @@index([primaryWardId])
+  @@index([verificationLevel])
+  @@index([status])
+  @@map("users")
 }
+
+// ============================================================================
+// USER ASSOCIATIONS
+// ============================================================================
+
+model UserIndustry {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  industryId String   @db.Uuid
+  createdAt  DateTime @default(now())
+  isPrimary  Boolean  @default(false)
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  industry   Industry @relation(fields: [industryId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, industryId])
+  @@index([userId])
+  @@index([industryId])
+  @@map("user_industries")
+}
+
+model UserGoodsService {
+  id             String       @id @default(uuid()) @db.Uuid
+  userId         String       @db.Uuid
+  goodsServiceId String       @db.Uuid
+  createdAt      DateTime     @default(now())
+  canProvide     Boolean      @default(false)
+  canRequest     Boolean      @default(false)
+
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goodsService   GoodsService @relation(fields: [goodsServiceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, goodsServiceId])
+  @@index([userId])
+  @@index([goodsServiceId])
+  @@map("user_goods_services")
+}
+
+// ============================================================================
+// ROLES SYSTEM
+// ============================================================================
+
+model Role {
+  id          String     @id @default(uuid()) @db.Uuid
+  name        String     @unique // ADMIN, SUPER_ADMIN, MODERATOR, etc.
+  description String?
+  permissions String[]   @default([])
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  userRoles   UserRole[]
+
+  @@map("roles")
+}
+
+model UserRole {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  roleId    String   @db.Uuid
+  active    Boolean  @default(true)
+  grantedAt DateTime @default(now())
+  grantedBy String?  @db.Uuid
+  revokedAt DateTime?
+  revokedBy String?  @db.Uuid
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@index([userId, active])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+// ============================================================================
+// AUTHENTICATION - SESSIONS
+// ============================================================================
+
+model Session {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @db.Uuid
+  token      String    @unique @db.Text
+  deviceName String?   @db.VarChar(100)
+  deviceInfo String?   @db.VarChar(500)
+  ipAddress  String?   @db.VarChar(45)
+  userAgent  String?   @db.Text
+  isTrusted  Boolean   @default(false)
+  lastActive DateTime  @default(now())
+  expiresAt  DateTime
+  revoked    Boolean   @default(false)
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, revoked])
+  @@index([token])
+  @@index([expiresAt])
+  @@index([lastActive])
+  @@map("sessions")
+}
+
+// ============================================================================
+// AUTHENTICATION - LOGIN TRACKING
+// ============================================================================
+
+model LoginEvent {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @db.Uuid
+  method        String    // MAGIC_LINK, WALLET, PHONE, PASSWORD, 2FA
+  successful    Boolean
+  failureReason String?
+  ipAddress     String?   @db.VarChar(45)
+  userAgent     String?   @db.Text
+  location      String?
+  createdAt     DateTime  @default(now())
+
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, createdAt])
+  @@index([successful])
+  @@index([createdAt])
+  @@index([ipAddress])
+  @@map("login_events")
+}
+
+// ============================================================================
+// AUTHENTICATION - EMAIL VERIFICATION
+// ============================================================================
+
+model EmailVerificationToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  token     String   @unique @db.Text
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+  @@map("email_verification_tokens")
+}
+
+// ============================================================================
+// AUTHENTICATION - MAGIC LINKS
+// ============================================================================
+
+model MagicLinkToken {
+  id        String   @id @default(cuid())
+  
+  email     String   @db.VarChar(255)
+  tokenHash String   @unique @db.Text
+  
+  type      String   @db.VarChar(20) // "verification" or "login"
+  
+  used      Boolean  @default(false)
+  usedAt    DateTime?
+  
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  
+  @@index([tokenHash, used, expiresAt])
+  @@index([email])
+  @@index([expiresAt])
+  @@map("magic_link_tokens")
+}
+
+// ============================================================================
+// AUTHENTICATION - SOCIAL ACCOUNTS
+// ============================================================================
+
+model Account {
+  id                String    @id @default(uuid()) @db.Uuid
+  userId            String    @db.Uuid
+  provider          String    // google, github, twitter, etc.
+  providerAccountId String
+  accessToken       String?   @db.Text
+  refreshToken      String?   @db.Text
+  expiresAt         DateTime?
+  tokenType         String?
+  scope             String?
+  idToken           String?   @db.Text
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+// ============================================================================
+// AUTHENTICATION - ACCOUNT RECOVERY
+// ============================================================================
+
+model RecoveryRequest {
+  id               String   @id @default(uuid()) @db.Uuid
+  userId           String   @db.Uuid
+  recoveryMethod   String   // EMAIL, PHONE, WALLET
+  verificationCode String   @unique
+  status           String   @default("PENDING") // PENDING, COMPLETED, EXPIRED
+  expiresAt        DateTime
+  completedAt      DateTime?
+  ipAddress        String?  @db.VarChar(45)
+  userAgent        String?  @db.Text
+  createdAt        DateTime @default(now())
+
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([verificationCode])
+  @@index([expiresAt])
+  @@map("recovery_requests")
+}
+
+// ============================================================================
+// AUTHENTICATION - PHONE VERIFICATION
+// ============================================================================
+
+model PhoneVerification {
+  id          String    @id @default(uuid()) @db.Uuid
+  phoneNumber String    @db.VarChar(15)
+  code        String    @db.VarChar(6)
+  userId      String?   @db.Uuid
+  verified    Boolean   @default(false)
+  verifiedAt  DateTime?
+  attempts    Int       @default(0)
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime
+
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([phoneNumber])
+  @@index([verified])
+  @@index([expiresAt])
+  @@index([userId])
+  @@map("phone_verifications")
+}
+
+// ============================================================================
+// AUTHENTICATION - PASSWORD RESET (Admin only)
+// ============================================================================
+
+model PasswordReset {
+  id        String   @id @default(cuid())
+  
+  userId    String   @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  tokenHash String   @db.Text
+  
+  used      Boolean  @default(false)
+  usedAt    DateTime?
+  
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  
+  @@index([tokenHash, used, expiresAt])
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("password_resets")
+}
+
+// ============================================================================
+// AUTHENTICATION - TOTP 2FA (Google Authenticator)
+// ============================================================================
+
+model TwoFactorAuth {
+  id                      String   @id @default(cuid())
+  
+  userId                  String   @unique @db.Uuid
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  secretEncrypted         String   @db.Text
+  backupCodesEncrypted    String[]
+  
+  enabled                 Boolean  @default(false)
+  enabledAt               DateTime?
+  disabledAt              DateTime?
+  
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  
+  @@index([userId, enabled])
+  @@map("two_factor_auth")
+}
+
+// ============================================================================
+// AUTHENTICATION - WEBAUTHN / PASSKEYS
+// ============================================================================
+
+model WebAuthnCredential {
+  id            String   @id @default(cuid())
+  
+  userId        String   @db.Uuid
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  credentialId  String   @unique
+  publicKey     String   @db.Text
+  counter       BigInt   @default(0)
+  
+  credentialName String?  @db.VarChar(100)
+  aaguid        String?  @db.VarChar(36)
+  
+  transports    String[]
+  
+  createdAt     DateTime @default(now())
+  lastUsedAt    DateTime @default(now())
+  
+  @@index([userId])
+  @@index([credentialId])
+  @@map("webauthn_credentials")
+}
+
+// ============================================================================
+// AUTHENTICATION - ACCOUNT RECOVERY
+// ============================================================================
+
+model AccountRecovery {
+  id                  String   @id @default(cuid())
+  
+  userId              String   @unique @db.Uuid
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  recoveryCodesEncrypted String[]
+  trustedContactEmails   String[]
+  
+  recoveryEmail       String?  @db.VarChar(255)
+  recoveryEmailVerified Boolean @default(false)
+  
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  
+  @@index([userId])
+  @@map("account_recovery")
+}
+
+// ============================================================================
+// SECURITY EVENTS (Audit log)
+// ============================================================================
+
+model SecurityEvent {
+  id          String    @id @default(cuid())
+  
+  userId      String?   @db.Uuid
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  eventType   String    @db.VarChar(50)
+  severity    String    @db.VarChar(20)
+  
+  ipAddress   String?   @db.VarChar(45)
+  userAgent   String?   @db.Text
+  location    String?   @db.VarChar(100)
+  
+  details     Json?
+  
+  resolved    Boolean   @default(false)
+  resolvedAt  DateTime?
+  resolvedBy  String?   @db.Uuid
+  
+  createdAt   DateTime  @default(now())
+  
+  @@index([userId, createdAt])
+  @@index([eventType, severity])
+  @@index([createdAt])
+  @@index([resolved])
+  @@map("security_events")
+}
+
+// ============================================================================
+// SYSTEM CONFIGURATION
+// ============================================================================
+
+model SystemConfiguration {
+  id          String   @id @default(uuid()) @db.Uuid
+  key         String   @unique
+  value       Json
+  category    String
+  description String?
+  dataType    String
+  isPublic    Boolean  @default(false)
+
+  updatedBy   String?  @db.Uuid
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  updater     User?    @relation("ConfigUpdater", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  @@index([category])
+  @@index([isPublic])
+  @@index([dataType])
+  @@map("system_configuration")
+}
+
+
+
+
+
+
+
+
+model ResidenceChangeRequest {
+  id               String   @id @default(uuid()) @db.Uuid
+  userId           String   @db.Uuid
+  oldWardId        String?  @db.Uuid
+  newPrimaryWardId String   @db.Uuid
+  reason           String?
+  proofUrl         String
+  status           String   @default("PENDING") // PENDING, APPROVED, REJECTED, EXPIRED
+  reviewedBy       String?  @db.Uuid
+  reviewedAt       DateTime?
+  rejectionReason  String?
+  expiresAt        DateTime // Auto-reject after 7 days
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user     User  @relation("UserResidenceRequests", fields: [userId], references: [id], onDelete: Cascade)
+  reviewer User? @relation("ResidenceRequestReviewer", fields: [reviewedBy], references: [id], onDelete: SetNull)
+  newWard  Ward  @relation("NewWardRequests", fields: [newPrimaryWardId], references: [id], onDelete: Cascade)
+  oldWard  Ward? @relation("OldWardRequests", fields: [oldWardId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status])
+  @@index([status, expiresAt])
+  @@map("residence_change_requests")
+}
+
+model UserPrivacySettings {
+  id                    String   @id @default(uuid()) @db.Uuid
+  userId                String   @unique @db.Uuid
+  profileVisibility     String   @default("PUBLIC") // PUBLIC, FRIENDS, PRIVATE
+  showEmail             Boolean  @default(false)
+  showPhone             Boolean  @default(false)
+  showWallet            Boolean  @default(false)
+  showImpactPoints      Boolean  @default(true)
+  allowDirectMessages   Boolean  @default(true)
+  allowMarketplace      Boolean  @default(true)
+  dataProcessingConsent Boolean  @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_privacy_settings")
+}
+
+model UserAccessibility {
+  id                  String   @id @default(uuid()) @db.Uuid
+  userId              String   @unique @db.Uuid
+  visualImpairment    Boolean  @default(false)
+  hearingImpairment   Boolean  @default(false)
+  motorImpairment     Boolean  @default(false)
+  cognitiveImpairment Boolean  @default(false)
+  preferredLanguage   String   @default("en")
+  screenReaderEnabled Boolean  @default(false)
+  highContrast        Boolean  @default(false)
+  fontSize            String   @default("MEDIUM") // SMALL, MEDIUM, LARGE, XLARGE
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_accessibility")
+}
+
+model ParticipationRightsLog {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @db.Uuid
+  amount            Int // Can be positive (earned) or negative (spent)
+  balance           Int // PR balance after this transaction
+  reason            String // "DUES_PAID", "VOTED", "CREATED_PROPOSAL", "MONTHLY_REGEN"
+  relatedEntityType String?
+  relatedEntityId   String?  @db.Uuid
+  metadata          Json?
+  createdAt         DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([reason])
+  @@map("participation_rights_logs")
+}
+
+model OnboardingProgress {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @unique @db.Uuid
+
+  // Account setup
+  emailVerified         Boolean @default(false)
+  profileCompleted      Boolean @default(false)
+  industriesSelected    Boolean @default(false)
+  goodsServicesSelected Boolean @default(false)
+  privacyConfigured     Boolean @default(false)
+
+  // Tutorials
+  platformIntroCompleted       Boolean @default(false)
+  governanceTutorialCompleted  Boolean @default(false)
+  marketplaceTutorialCompleted Boolean @default(false)
+  projectsTutorialCompleted    Boolean @default(false)
+  groupsTutorialCompleted      Boolean @default(false)
+
+  // First actions
+  joinedWardGroup      Boolean @default(false)
+  joinedVoluntaryGroup Boolean @default(false)
+  castFirstVote        Boolean @default(false)
+  completedFirstModule Boolean @default(false)
+  attendedFirstEvent   Boolean @default(false)
+  createdFirstListing  Boolean @default(false)
+
+  // Verification steps
+  phoneVerified     Boolean @default(false)
+  communityVerified Boolean @default(false)
+  locationVerified  Boolean @default(false)
+  walletConnected   Boolean @default(false)
+
+  // Financial
+  paidFirstDues Boolean @default(false)
+
+  // Metadata
+  currentStep    String  @default("EMAIL_VERIFICATION")
+  lastActiveStep String?
+  totalIPEarned  Int     @default(0)
+  totalPREarned  Int     @default(0)
+
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([currentStep])
+  @@map("onboarding_progress")
+}
+
+model OnboardingTutorial {
+  id               String   @id @default(uuid()) @db.Uuid
+  key              String   @unique // "platform_intro", "governance_basics"
+  title            String
+  description      String
+  content          Json // Tutorial steps, images, videos, quiz questions
+  category         String // "BASICS", "GOVERNANCE", "MARKETPLACE", "PROJECTS", "GROUPS"
+  order            Int // Display order within category
+  requiredFor      String? // "VOTING", "MARKETPLACE_SELLING", null
+  ipReward         Int      @default(0)
+  prReward         Int      @default(0)
+  isOptional       Boolean  @default(true)
+  active           Boolean  @default(true)
+  estimatedMinutes Int      @default(5)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  completions UserTutorialCompletion[]
+
+  @@index([category, order])
+  @@index([active])
+  @@map("onboarding_tutorials")
+}
+
+model UserTutorialCompletion {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  tutorialId String   @db.Uuid
+
+  completed Boolean @default(false)
+  progress  Int     @default(0) // Percentage (0-100)
+  skipped   Boolean @default(false)
+  ipEarned  Int     @default(0)
+  prEarned  Int     @default(0)
+  quizScore Int? // If tutorial has quiz
+
+  startedAt    DateTime  @default(now())
+  completedAt  DateTime?
+  lastViewedAt DateTime  @default(now())
+
+  user     User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tutorial OnboardingTutorial @relation(fields: [tutorialId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tutorialId])
+  @@index([userId, completed])
+  @@index([tutorialId, completed])
+  @@map("user_tutorial_completions")
+}
+
+model OnboardingMilestone {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @db.Uuid
+  milestoneKey String // "FIRST_VOTE", "FIRST_PROPOSAL", "FIRST_LISTING"
+
+  achieved   Boolean  @default(true)
+  ipEarned   Int
+  prEarned   Int      @default(0)
+  metadata   Json? // Extra context about the achievement
+  achievedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, milestoneKey])
+  @@index([userId, achievedAt])
+  @@index([milestoneKey])
+  @@map("onboarding_milestones")
+}
+
+model Group {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  
+  // Geographic system groups
+  isSystemGroup      Boolean       @default(false)
+  locationScope      LocationScope? // NATIONAL, COUNTY, CONSTITUENCY, WARD
+  locationScopeId    String?        // ID of the geographic entity
+  
+  // Voluntary groups
+  createdById String?
+  groupType   GroupType? // SAVINGS, PROJECT, COMMUNITY, etc.
+  
+  // Relationships
+  members     GroupMember[]
+  projects    Project[]
+  proposals   Proposal[]
+  budgets     Budget[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([locationScope, locationScopeId]) // Only one group per geographic level
+  @@index([isSystemGroup, locationScope])
+}
+
+enum LocationScope {
+  NATIONAL
+  COUNTY
+  CONSTITUENCY  
+  WARD
+}
+
+model GroupMember {
+  id       String @id @default(uuid())
+  userId   String
+  groupId  String
+  role     GroupRole
+  
+  // Term management (only for leadership roles)
+  roleAssignedAt      DateTime  @default(now())
+  roleExpiresAt       DateTime?
+  termNumber          Int       @default(1)
+  consecutiveTerms    Int       @default(0)
+  maxConsecutiveTerms Int       @default(2)
+  coolingOffUntil     DateTime?
+  
+  // Election tracking
+  assignmentMethod AssignmentMethod
+  electionId       String?
+  
+  user    User  @relation(fields: [userId], references: [id])
+  group   Group @relation(fields: [groupId], references: [id])
+  
+  @@unique([userId, groupId])
+  @@index([userId, role])
+}
+
+
+
+
+// ============================================================================
+// GROUP MODELS - Progressive Enhancement Design
+// ============================================================================
+// 
+// This schema is designed to:
+// 1. Work NOW for auth/user testing (system groups)
+// 2. Support incremental additions (uncomment as you build modules)
+// 3. Maintain clean separation of concerns
+// 4. Avoid circular dependencies
+//
+// Version: 1.0 — January 2026
+// ============================================================================
+
+// ============================================================================
+// ENUMS
+// ============================================================================
 
 enum LocationScope {
   WARD
@@ -90,1299 +881,395 @@ enum LocationScope {
   NATIONAL
 }
 
-enum HolderType {
-  USER
-  GROUP
-}
-
-enum ProjectStatus {
-  ACTIVE
-  COMPLETED
-  ON_HOLD
-  CANCELLED
-}
-
-enum MilestoneStatus {
-  PENDING
-  UNDER_REVIEW
-  APPROVED
-  REJECTED
+enum GroupType {
+  // System groups (auto-created)
+  WARD_COMMUNITY
+  CONSTITUENCY_COMMUNITY
+  COUNTY_COMMUNITY
+  NATIONAL_COMMUNITY
+  
+  // Voluntary groups (user-created)
+  SAVINGS_CREDIT
+  PROJECT_EXECUTION
+  BUSINESS_COLLECTIVE
+  YOUTH_ORGANIZATION
+  WOMENS_GROUP
+  FARMERS_COOPERATIVE
+  TECHNOLOGY_HUB
+  ARTS_CULTURE
+  SPORTS_RECREATION
+  RELIGIOUS
+  EDUCATION
+  HEALTH_WELLNESS
+  ENVIRONMENTAL
+  ADVOCACY
+  PROFESSIONAL_NETWORK
+  COMMUNITY_SERVICE
+  EMERGENCY_RESPONSE
+  OTHER
 }
 
 enum GroupStatus {
-  FORMING
-  ACTIVE
-  SUSPENDED
-  INACTIVE
-  DISSOLVED
-  MERGED
+  FORMING      // Initial creation, gathering members
+  ACTIVE       // Fully operational
+  SUSPENDED    // Temporarily inactive (violations, disputes)
+  INACTIVE     // No activity for extended period
+  DISSOLVED    // Permanently closed
+  MERGED       // Combined with another group
 }
 
-enum SystemRole {
-  super_admin
-  auditor
-  compliance_officer
-  support_staff
-  general_user
-  governor_admin
+enum GroupRole {
+  MEMBER       // Regular member
+  LEADER       // Group leader/chairperson
+  TREASURER    // Financial manager
+  SECRETARY    // Records keeper
+  AUDITOR      // Financial oversight
+  FACILITATOR  // Meeting coordinator
+  MENTOR       // Advisor role
+  MODERATOR    // Content/discussion moderator
 }
 
-enum TransactionType {
-  DEPOSIT
-  WITHDRAWAL
-  SPEND
-  REFUND
-  ADJUSTMENT
+enum AssignmentMethod {
+  AUTO_ENROLLED   // System groups (geographic)
+  USER_JOINED     // Voluntary membership
+  INVITED         // Invited by existing member
+  ELECTED         // Voted into role
+  APPOINTED       // Assigned by leader
+  FOUNDING_MEMBER // Original creator
 }
 
-enum TransactionStatus {
-  PENDING
-  COMPLETED
-  FAILED
-  CANCELLED
-}
-
-enum ImpactPointType {
-  LOCATION_BASED // Ward/Constituency tasks
-  SYSTEM // National/global tasks
-}
-
-enum IPTier {
-  TIER_1 // 0-100 IP
-  TIER_2 // 101-500 IP  
-  TIER_3 // 501+ IP
-}
-
-enum WorkType {
-  MANUAL_LABOR
-  SKILLED_WORK
-  COMMUNITY_SERVICE
-  SUPERVISION
-  TRAINING
-}
-
-enum WorkVerificationStatus {
-  PENDING
-  VERIFIED
-  DISPUTED
-  REJECTED
-}
-
-enum WorkVerificationMethod {
-  PEER
-  SUPERVISOR
-  COMMUNITY_WITNESS
-  DIGITAL_EVIDENCE
-}
-
-enum EducationalContentLevel {
-  BEGINNER
-  INTERMEDIATE
-  ADVANCED
-  EXPERT
-}
-
-enum ProgressStatus {
-  NOT_STARTED
-  IN_PROGRESS
-  COMPLETED
-  CERTIFIED
-}
-
-enum EmergencyType {
-  NATURAL_DISASTER
-  HEALTH_CRISIS
-  CONFLICT
-  INFRASTRUCTURE_FAILURE
-  ENVIRONMENTAL
-}
-
-enum EmergencySeverity {
-  LOW
-  MEDIUM
-  HIGH
-  CRITICAL
-}
-
-/// -------- MODELS --------
-
-model User {
-  id            String  @id @default(uuid()) @db.Uuid
-  walletAddress String  @unique
-  email         String  @unique
-  passwordHash  String?
-  name          String
-  phoneNumber   String  @unique
-
-  // UPDATED: Geographic affiliations - now with primary/secondary wards
-  primaryWardId   String  @db.Uuid
-  primaryWard     Ward    @relation("UserPrimaryWard", fields: [primaryWardId], references: [id])
-  secondaryWardId String? @db.Uuid
-  secondaryWard   Ward?   @relation("UserSecondaryWard", fields: [secondaryWardId], references: [id])
-
-  avatarUrl         String?
-  industryId        String? @db.Uuid
-  nonce             String
-  emailVerified     Boolean @default(false)
-  phoneVerified     Boolean @default(false)
-  communityVerified Boolean @default(false)
-  locationVerified  Boolean @default(false)
-
-  isActive     Boolean @default(true)
-  tokenVersion Int     @default(0)
-
-  // UPDATED: Three-tier economic system
-  globalImpactPoints  Int      @default(0) // Tier 1: Visible IP
-  utilityTokens       Int      @default(0) // Tier 2: Visible UT
-  participationRights Int      @default(10) // Tier 3: Hidden PR (monthly allowance)
-  lastPRReset         DateTime @default(now())
-
-  // NEW: Group limits enforcement
-  groupsCreatedCount Int @default(0)
-
-  // REMOVED: voteWeight (now calculated dynamically from IP)
-  // REMOVED: duesDestination, affiliations (handled by primaryWard)
-
-  mfaEnabled  Boolean   @default(false)
-  mfaSecret   String?
-  lastLoginAt DateTime?
-  metadata    Json?
-
-  authTokens    AuthToken[]
-  refreshTokens RefreshToken[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // UPDATED RELATIONS
-  userRoles               UserRole[]
-  walletBalances          WalletBalance[]          @relation("UserWalletBalances")
-  groups                  GroupMember[]
-  industry                Industry?                @relation(fields: [industryId], references: [id])
-  goodsServices           GoodsService[]           @relation("UserGoodsServices")
-  notificationPreferences NotificationPreference[] @relation("UserNotificationPreferences")
-  proposals               Proposal[]               @relation("UserProposals")
-
-  // UPDATED: Location-bound IP system
-  locationImpacts UserLocationImpact[]
-
-  tokenBalances       TokenBalance[]       @relation("UserTokenBalances")
-  projectParticipants ProjectParticipant[] @relation("UserProjectParticipants")
-  groupMemberVotes    GroupMemberVote[]    @relation("GroupMemberVote_User")
-  activityLogs        UserActivityLog[]    @relation("UserActivities")
-  privacySettings     UserPrivacySettings? @relation("UserPrivacy")
-  audits              UserAudit[]          @relation("UserAudits")
-  userConsents        UserConsent[]        @relation("UserConsents")
-  verificationTokens  VerificationToken[]
-  // NEW: Physical work tracking
-  physicalWorkLogs       PhysicalWorkLog[]
-  workVerificationsGiven WorkVerification[]
-
-  // NEW: Educational progress
-  educationalProgress UserEducationalProgress[]
-
-  // NEW: Emergency response
-  emergencyResponses EmergencyResponse[]
-
-  // NEW: Accessibility
-  accessibilityProfile UserAccessibility? @relation("UserAccessibility_Owner")
-
-  // MISSING: Work reputation metrics
-  totalHoursWorked     Decimal @default(0) @db.Decimal(10, 2)
-  averageQualityRating Decimal @default(0) @db.Decimal(3, 2)
-  workReliabilityScore Int     @default(100) // 0-100 scale
-
-  // MISSING: Expert status
-  isExpert       Boolean  @default(false)
-  expertVerified Boolean  @default(false)
-  expertAreas    String[] // Areas of expertise
-  expertTier     String? // LOCAL, REGIONAL, NATIONAL
-
-  // MISSING: Financial risk metrics
-  financialHealthScore Int? // 0-100 scale
-  riskAssessment       Json?
-
-  // MISSING: Youth status for development programs
-  birthDate DateTime?
-  isYouth   Boolean?  @default(false) // Calculated field: 16-35 years
-
-  // ✅ Conflict resolution relations (ONCE)
-  conflictCasesAsComplainant ConflictCase[] @relation("Complainant")
-  conflictCasesAsRespondent  ConflictCase[] @relation("Respondent")
-
-  // ✅ Marketplace relations (ONCE)
-  marketplaceListingsAsSeller MarketplaceListing[]     @relation("MarketplaceListing_SellerUser")
-  marketplaceTransactions     MarketplaceTransaction[] @relation("MarketplaceTransaction_Buyer")
-  marketplaceReviews          MarketplaceReview[]      @relation("MarketplaceReview_Reviewer")
-
-  // ✅ Community asset relations (ONCE)
-  ownedCommunityAssets CommunityAsset[] @relation("CommunityAsset_OwnerUser")
-  assetBookings        AssetBooking[]   @relation("AssetBooking_User")
-
-  // ✅ Platform feedback relations (ONCE)
-  platformFeedback    PlatformFeedback[]    @relation("PlatformFeedback_User")
-  feedbackComments    FeedbackComment[]     @relation("FeedbackComment_User")
-  EducationalModule   EducationalModule[]
-  EducationalReview   EducationalReview[]
-  EmergencyAlert      EmergencyAlert[]
-  UserAccessibility   UserAccessibility[]
-  SystemConfiguration SystemConfiguration[]
-
-  @@unique([primaryWardId, secondaryWardId])
-}
-
-// NEW: Location-bound IP tracking
-model UserLocationImpact {
-  id           String   @id @default(uuid()) @db.Uuid
-  userId       String   @db.Uuid
-  user         User     @relation(fields: [userId], references: [id])
-  wardId       String   @db.Uuid
-  ward         Ward     @relation(fields: [wardId], references: [id])
-  points       Int      @default(0)
-  tier         IPTier   @default(TIER_1)
-  lastActivity DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  @@unique([userId, wardId])
-  @@index([wardId, points])
-  @@index([userId, lastActivity])
-}
-
-// NEW: Ward model for geographic hierarchy
-model Ward {
-  id             String       @id @default(uuid()) @db.Uuid
-  name           String
-  code           String?      @unique
-  constituency   Constituency @relation(fields: [constituencyId], references: [id])
-  constituencyId String       @db.Uuid
-
-  // Relations
-  primaryUsers    User[]               @relation("UserPrimaryWard")
-  secondaryUsers  User[]               @relation("UserSecondaryWard")
-  locationImpacts UserLocationImpact[]
-  groups          Group[]
-
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime             @updatedAt
-  County             County?              @relation(fields: [countyId], references: [id])
-  countyId           String?              @db.Uuid
-  MarketplaceListing MarketplaceListing[]
-  CommunityAsset     CommunityAsset[]
-  CommunityDashboard CommunityDashboard[]
-}
+// ============================================================================
+// GROUP MODEL - Core with optional expansions
+// ============================================================================
 
 model Group {
-  id            String  @id @default(uuid()) @db.Uuid
-  name          String  @unique
-  description   String?
-  metadata      Json?
-  walletAddress String  @unique
-
-  // UPDATED: Geographic scope with explicit ward relationship
-  locationScope  LocationScope
-  wardId         String?       @db.Uuid
-  constituencyId String?       @db.Uuid
-  countyId       String?       @db.Uuid
-
-  ward         Ward?         @relation(fields: [wardId], references: [id])
-  constituency Constituency? @relation(fields: [constituencyId], references: [id])
-  county       County?       @relation(fields: [countyId], references: [id])
-
-  industryFocusId String?   @db.Uuid
-  industryFocus   Industry? @relation(fields: [industryFocusId], references: [id])
-
-  productsServices GoodsService[] @relation("GroupGoodsServices")
-
-  // UPDATED: Enhanced group status
-  status          GroupStatus @default(FORMING)
-  memberCount     Int         @default(0)
-  treasuryBalance Decimal     @default(0) @db.Decimal(20, 2)
-  lastActivity    DateTime    @default(now())
-
-  groupType GroupType @default(WARD_COMMUNITY)
-
-  walletBalances WalletBalance[] @relation("GroupWalletBalances")
-
-  members       GroupMember[]
-  proposals     Proposal[]     @relation("GroupProposals")
-  tokenBalances TokenBalance[] @relation("GroupTokenBalances")
-
-  // MISSING: Financial controls
-  multiSigThresholds Json? // {small: 1, medium: 2, large: 3}
-  spendingLimits     Json? // {daily: 50000, weekly: 200000, monthly: 500000}
-
-  // MISSING: Group constitution
-  constitution     Json? // Group governance rules
-  amendmentProcess Json? // How constitution can be changed
-
-  // MISSING: Performance metrics
-  successRate        Decimal @default(0) @db.Decimal(3, 2)
-  memberSatisfaction Decimal @default(0) @db.Decimal(3, 2)
-
-  groupMemberVotes GroupMemberVote[] @relation("GroupMemberVote_Group")
-
-  // NEW: Group financial controls
-  dissolutionWarningSent Boolean   @default(false)
-  dissolutionDate        DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // ✅ COMPLETE Relations with proper naming
-  emergencyAlerts EmergencyAlert[]
-
-  // Marketplace relations for groups as sellers
-  marketplaceListingsAsSeller MarketplaceListing[] @relation("MarketplaceListing_SellerGroup")
-
-  // Community asset relations for groups as owners  
-  communityAssets   CommunityAsset[]    @relation("CommunityAsset_OwnerGroup")
-  EducationalModule EducationalModule[]
+  id          String      @id @default(uuid()) @db.Uuid
+  name        String
+  description String?     @db.Text
+  avatarUrl   String?
+  bannerUrl   String?
+  
+  // -------------------------------------------------------------------------
+  // CATEGORIZATION (Always present)
+  // -------------------------------------------------------------------------
+  
+  isSystemGroup Boolean     @default(false)
+  groupType     GroupType   @default(WARD_COMMUNITY)
+  status        GroupStatus @default(FORMING)
+  
+  // -------------------------------------------------------------------------
+  // GEOGRAPHIC SCOPE (Critical - Required for system groups)
+  // -------------------------------------------------------------------------
+  
+  locationScope  LocationScope?
+  
+  // Direct relations to geographic entities (proper foreign keys)
+  wardId         String?        @db.Uuid
+  constituencyId String?        @db.Uuid
+  countyId       String?        @db.Uuid
+  
+  ward           Ward?          @relation("GroupWard", fields: [wardId], references: [id], onDelete: SetNull)
+  constituency   Constituency?  @relation("GroupConstituency", fields: [constituencyId], references: [id], onDelete: SetNull)
+  county         County?        @relation("GroupCounty", fields: [countyId], references: [id], onDelete: SetNull)
+  
+  // -------------------------------------------------------------------------
+  // MEMBERSHIP TRACKING (Always present)
+  // -------------------------------------------------------------------------
+  
+  memberCount    Int            @default(0)
+  maxMembers     Int?           // Optional capacity limit
+  isPublic       Boolean        @default(true)
+  requiresApproval Boolean      @default(false)
+  
+  // -------------------------------------------------------------------------
+  // CREATOR & TIMESTAMPS (Always present)
+  // -------------------------------------------------------------------------
+  
+  createdById    String?        @db.Uuid
+  creator        User?          @relation("GroupCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  lastActivity   DateTime       @default(now())
+  
+  // -------------------------------------------------------------------------
+  // INDUSTRY & PRODUCTS (Uncomment when implementing marketplace)
+  // -------------------------------------------------------------------------
+  
+  // industryFocusId String?        @db.Uuid
+  // industryFocus   Industry?      @relation("GroupIndustry", fields: [industryFocusId], references: [id], onDelete: SetNull)
+  // productsServices GoodsService[] @relation("GroupGoodsServices")
+  
+  // -------------------------------------------------------------------------
+  // FINANCIAL (Uncomment when implementing group treasury)
+  // -------------------------------------------------------------------------
+  
+  // walletAddress   String?        @unique
+  // treasuryBalance Decimal        @default(0) @db.Decimal(20,2)
+  // walletBalances  WalletBalance[] @relation("GroupWalletBalances")
+  // tokenBalances   TokenBalance[]  @relation("GroupTokenBalances")
+  
+  // -------------------------------------------------------------------------
+  // GOVERNANCE (Uncomment when implementing group governance)
+  // -------------------------------------------------------------------------
+  
+  // constitution       Json? // Group rules and bylaws
+  // amendmentProcess   Json? // How to change constitution
+  // multiSigThresholds Json? // {small: 1, medium: 2, large: 3}
+  // spendingLimits     Json? // {daily: 1000, monthly: 10000}
+  // votingThresholds   Json? // {simple: 50, supermajority: 66}
+  
+  // -------------------------------------------------------------------------
+  // PERFORMANCE METRICS (Uncomment when implementing analytics)
+  // -------------------------------------------------------------------------
+  
+  // successRate        Decimal        @default(0) @db.Decimal(3,2) // 0.00 to 1.00
+  // memberSatisfaction Decimal        @default(0) @db.Decimal(3,2) // 0.00 to 1.00
+  // activeProjects     Int            @default(0)
+  // completedProjects  Int            @default(0)
+  // totalFundsRaised   Decimal        @default(0) @db.Decimal(20,2)
+  
+  // -------------------------------------------------------------------------
+  // DISSOLUTION TRACKING (Uncomment when implementing lifecycle management)
+  // -------------------------------------------------------------------------
+  
+  // dissolutionWarningSent Boolean   @default(false)
+  // dissolutionWarningAt   DateTime?
+  // dissolutionDate        DateTime?
+  // dissolutionReason      String?
+  
+  // -------------------------------------------------------------------------
+  // METADATA & EXTENSIBILITY (Optional - for custom data)
+  // -------------------------------------------------------------------------
+  
+  // metadata Json? // Flexible storage for module-specific data
+  
+  // -------------------------------------------------------------------------
+  // RELATIONSHIPS - Core (Always present)
+  // -------------------------------------------------------------------------
+  
+  members    GroupMember[]
+  
+  // -------------------------------------------------------------------------
+  // RELATIONSHIPS - Governance Module (Uncomment when ready)
+  // -------------------------------------------------------------------------
+  
+  // proposals  Proposal[]         @relation("GroupProposals")
+  // votes      GroupMemberVote[]  @relation("GroupVotes")
+  
+  // -------------------------------------------------------------------------
+  // RELATIONSHIPS - Projects Module (Uncomment when ready)
+  // -------------------------------------------------------------------------
+  
+  // projects   Project[]          @relation("GroupProjects")
+  // budgets    Budget[]           @relation("GroupBudgets")
+  
+  // -------------------------------------------------------------------------
+  // RELATIONSHIPS - Marketplace Module (Uncomment when ready)
+  // -------------------------------------------------------------------------
+  
+  // marketplaceListings MarketplaceListing[] @relation("GroupMarketplaceListings")
+  
+  // -------------------------------------------------------------------------
+  // RELATIONSHIPS - Community Assets Module (Uncomment when ready)
+  // -------------------------------------------------------------------------
+  
+  // communityAssets CommunityAsset[] @relation("GroupCommunityAssets")
+  
+  // -------------------------------------------------------------------------
+  // RELATIONSHIPS - Education Module (Uncomment when ready)
+  // -------------------------------------------------------------------------
+  
+  // educationalModules EducationalModule[] @relation("GroupEducation")
+  
+  // -------------------------------------------------------------------------
+  // RELATIONSHIPS - Emergency Module (Uncomment when ready)
+  // -------------------------------------------------------------------------
+  
+  // emergencyAlerts EmergencyAlert[] @relation("GroupEmergencyAlerts")
+  
+  // -------------------------------------------------------------------------
+  // INDEXES
+  // -------------------------------------------------------------------------
+  
+  @@unique([locationScope, wardId, constituencyId, countyId], name: "unique_system_group")
+  @@index([isSystemGroup, locationScope])
+  @@index([wardId])
+  @@index([constituencyId])
+  @@index([countyId])
+  @@index([groupType, status])
+  @@index([status, lastActivity])
+  @@index([createdById])
+  // @@index([industryFocusId]) // Uncomment when adding industry
+  
+  @@map("groups")
 }
 
-model VerificationToken {
-  id        String   @id @default(uuid()) @db.Uuid
-  token     String   @unique
-  userId    String   @db.Uuid
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type      String   // 'EMAIL_VERIFICATION', 'PHONE_VERIFICATION', etc.
-  expiresAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime @default(now())
-
-  @@index([userId, type])
-  @@index([token])
-  @@index([expiresAt])
-}
-
+// ============================================================================
+// GROUP MEMBER MODEL - Core with optional expansions
+// ============================================================================
 
 model GroupMember {
-  id       String    @id @default(uuid()) @db.Uuid
-  user     User      @relation(fields: [userId], references: [id])
-  userId   String    @db.Uuid
-  group    Group     @relation(fields: [groupId], references: [id])
-  groupId  String    @db.Uuid
-  role     GroupRole @default(MEMBER)
-  joinedAt DateTime  @default(now())
-  active   Boolean   @default(true)
-
-  @@unique([userId, groupId])
-  @@index([groupId, role])
-  @@index([userId])
-}
-
-model WalletBalance {
-  id         String     @id @default(uuid()) @db.Uuid
-  holderType HolderType
-  userId     String?    @db.Uuid
-  groupId    String?    @db.Uuid
-  balance    Decimal    @db.Decimal(20, 2)
-  currency   String     @default("KES")
-  updatedAt  DateTime   @updatedAt
-
-  user  User?  @relation("UserWalletBalances", fields: [userId], references: [id])
-  group Group? @relation("GroupWalletBalances", fields: [groupId], references: [id])
-
-  WalletTransactions WalletTransaction[]
-
-  @@unique([holderType, userId], name: "holderType_userId_wallet")
-  @@unique([holderType, groupId], name: "holderType_groupId_wallet")
-}
-
-model WalletTransaction {
-  id              String            @id @default(uuid()) @db.Uuid
-  walletBalanceId String            @db.Uuid
-  type            TransactionType // e.g., "deposit", "withdrawal", "spend", "refund"
-  amount          Decimal           @db.Decimal(20, 2)
-  mpesaReceipt    String? // optional
-  description     String? // optional notes
-  status          TransactionStatus // e.g., "pending", "completed", "failed"
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-
-  walletBalance WalletBalance @relation(fields: [walletBalanceId], references: [id])
-
-  @@index([walletBalanceId])
-  @@index([mpesaReceipt])
-}
-
-model Project {
-  id            String        @id @default(uuid()) @db.Uuid
-  proposalId    String        @unique @db.Uuid
-  title         String
-  description   String
-  metadata      Json?
-  budget        Int?
-  timeline      String?
-  status        ProjectStatus @default(ACTIVE)
-  locationScope LocationScope
-  wardId        String?       @db.Uuid
-  constituency  String?
-  county        String?
-
-  // NEW: Project classification
-  projectType String? // INFRASTRUCTURE, ECONOMIC_DEVELOPMENT, SOCIAL_SERVICE, ENVIRONMENTAL
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  proposal     Proposal             @relation("ProposalToProject", fields: [proposalId], references: [id])
-  participants ProjectParticipant[]
-  milestones   ProjectMilestone[]
-
-  // NEW: Physical work tracking for projects
-  physicalWorkLogs PhysicalWorkLog[]
-
-  // NEW: Educational components
-  educationalModules EducationalModule[]
-
-  // MISSING: Enhanced classification
-  projectComplexity   String @default("SIMPLE") // SIMPLE, MODERATE, COMPLEX
-  riskLevel           String @default("LOW") // LOW, MEDIUM, HIGH
-  environmentalImpact Json? // Environmental impact assessment
-
-  // MISSING: Expert requirements
-  requiredExpertise String[] // Types of experts needed
-  assignedExperts   String[] @db.Uuid // User IDs of assigned experts
-
-  // MISSING: Learning and replication
-  isTemplate       Boolean @default(false)
-  templateFor      String? // Project type this can template for
-  replicationGuide Json? // Guide for replicating this project
-}
-
-// NEW: Physical Work Verification System
-model PhysicalWorkLog {
-  id        String  @id @default(uuid()) @db.Uuid
-  projectId String  @db.Uuid
-  project   Project @relation(fields: [projectId], references: [id])
-  userId    String  @db.Uuid
-  user      User    @relation(fields: [userId], references: [id])
-
-  // Work details
-  workDate    DateTime
-  hours       Decimal  @db.Decimal(4, 2)
-  workType    WorkType
-  description String
-  location    String?
-
-  // Verification status
-  status     WorkVerificationStatus @default(PENDING)
-  verifiedBy String?                @db.Uuid
-  verifiedAt DateTime?
-
-  // Evidence
-  photoUrls  String[]
-  witnessIds String[] @db.Uuid
-
-  // Quality assessment
-  qualityRating Int?
-  notes         String?
-
-  // IP calculation
-  baseIP            Int
-  qualityMultiplier Decimal @default(1.0) @db.Decimal(3, 2)
-  totalIPEarned     Int?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Verification relations
-  verifications WorkVerification[]
-
-  @@index([projectId, workDate])
-  @@index([userId, status])
-  @@index([workType, status])
-}
-
-model WorkVerification {
-  id         String          @id @default(uuid()) @db.Uuid
-  workLogId  String          @db.Uuid
-  workLog    PhysicalWorkLog @relation(fields: [workLogId], references: [id])
-  verifierId String          @db.Uuid
-  verifier   User            @relation(fields: [verifierId], references: [id])
-
-  method   WorkVerificationMethod
-  status   WorkVerificationStatus
-  comments String?
-  evidence String[]
-
-  createdAt DateTime @default(now())
-
-  @@unique([workLogId, verifierId])
-  @@index([verifierId, createdAt])
-}
-
-// NEW: Educational Content System
-model EducationalModule {
-  id          String                  @id @default(uuid()) @db.Uuid
-  title       String
-  description String
-  content     String
-  mediaUrls   String[]
-  duration    Int
-  difficulty  EducationalContentLevel
-  category    String
-
-  // Ownership
-  creatorId String  @db.Uuid
-  creator   User    @relation(fields: [creatorId], references: [id])
-  groupId   String? @db.Uuid
-  group     Group?  @relation(fields: [groupId], references: [id])
-
-  // Verification
-  verified       Boolean @default(false)
-  expertApproved Boolean @default(false)
-
-  // IP rewards
-  completionIP Int @default(0)
-
-  // Tracking
-  views         Int     @default(0)
-  averageRating Decimal @default(0) @db.Decimal(3, 2)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  progress    UserEducationalProgress[]
-  assessments EducationalAssessment[]
-  reviews     EducationalReview[]
-
-  // Project integration
-  projects Project[]
-}
-
-model UserEducationalProgress {
-  id       String            @id @default(uuid()) @db.Uuid
-  userId   String            @db.Uuid
-  user     User              @relation(fields: [userId], references: [id])
-  moduleId String            @db.Uuid
-  module   EducationalModule @relation(fields: [moduleId], references: [id])
-
-  status      ProgressStatus @default(IN_PROGRESS)
-  progress    Int            @default(0)
-  startedAt   DateTime       @default(now())
-  completedAt DateTime?
-  score       Int?
-
-  @@unique([userId, moduleId])
-}
-
-model EducationalAssessment {
-  id       String            @id @default(uuid()) @db.Uuid
-  moduleId String            @db.Uuid
-  module   EducationalModule @relation(fields: [moduleId], references: [id])
-
-  questions    Json
-  passingScore Int  @default(70)
-  maxAttempts  Int  @default(3)
-
-  createdAt DateTime @default(now())
-}
-
-model EducationalReview {
-  id       String            @id @default(uuid()) @db.Uuid
-  moduleId String            @db.Uuid
-  module   EducationalModule @relation(fields: [moduleId], references: [id])
-  userId   String            @db.Uuid
-  user     User              @relation(fields: [userId], references: [id])
-
-  rating  Int
-  comment String?
-  helpful Int     @default(0)
-
-  createdAt DateTime @default(now())
-
-  @@unique([userId, moduleId])
-}
-
-// NEW: Emergency Response System
-model EmergencyAlert {
-  id            String            @id @default(uuid()) @db.Uuid
-  title         String
-  description   String
-  emergencyType EmergencyType
-  severity      EmergencySeverity
-  location      String
-  reporterId    String            @db.Uuid
-  reporter      User              @relation(fields: [reporterId], references: [id])
-
-  // Response coordination
-  status          String  @default("ACTIVE")
-  assignedGroupId String? @db.Uuid
-  assignedGroup   Group?  @relation(fields: [assignedGroupId], references: [id])
-
-  // Resources
-  neededResources    Json
-  availableResources Json
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  responses EmergencyResponse[]
-}
-
-model EmergencyResponse {
-  id          String         @id @default(uuid()) @db.Uuid
-  emergencyId String         @db.Uuid
-  emergency   EmergencyAlert @relation(fields: [emergencyId], references: [id])
-  userId      String         @db.Uuid
-  user        User           @relation(fields: [userId], references: [id])
-
-  role     String
-  status   String   @default("AVAILABLE")
-  skills   String[]
-  location String?
-  notes    String?
-
-  @@unique([emergencyId, userId])
-}
-
-// NEW: Accessibility System
-model UserAccessibility {
-  id     String @id @default(uuid()) @db.Uuid
-  userId String @db.Uuid
-  user   User   @relation("UserAccessibility_Owner", fields: [userId], references: [id])
-
-  // Accessibility needs
-  literacyLevel     String  @default("LITERATE")
-  visualImpairment  Boolean @default(false)
-  hearingImpairment Boolean @default(false)
-  motorImpairment   Boolean @default(false)
-  preferredLanguage String  @default("sw")
-
-  // Interface adaptations
-  interfaceSize  String  @default("NORMAL")
-  audioInterface Boolean @default(false)
-  simpleMode     Boolean @default(false)
-
-  // Support network
-  helperUserId String? @db.Uuid
-  helper       User?   @relation(fields: [helperUserId], references: [id])
-
-  @@unique([userId])
-}
-
-model RefreshToken {
-  id         Int       @id @default(autoincrement())
-  user       User      @relation(fields: [userId], references: [id])
-  userId     String    @db.Uuid
-  tokenHash  String
-  expiresAt  DateTime?
-  revoked    Boolean   @default(false)
-  revokedAt  DateTime?
-  replacedBy Int?
-  createdAt  DateTime  @default(now())
-  lastUsedAt DateTime?
-  ip         String?
-  userAgent  String?
-  deviceName String?
-  metadata   Json?
-
-  @@index([userId])
-  @@index([tokenHash])
-  @@index([revoked])
-  @@index([expiresAt])
-}
-
-model AuthToken {
-  id        String        @id @default(uuid())
-  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId    String        @db.Uuid
-  tokenHash String
-  type      AuthTokenType // 'verify_email' | 'reset_password'
-  expiresAt DateTime
-  used      Boolean       @default(false)
-  usedAt    DateTime?
-  createdAt DateTime      @default(now())
-  ip        String?
-  userAgent String
-  metadata  Json?
-
-  @@index([userId])
-  @@index([tokenHash])
-  @@index([type])
-}
-
-model ProjectParticipant {
-  id          String          @id @default(uuid()) @db.Uuid
-  project     Project         @relation(fields: [projectId], references: [id])
-  projectId   String          @db.Uuid
-  participant User            @relation(fields: [userId], references: [id], name: "UserProjectParticipants")
-  userId      String          @db.Uuid
-  role        ParticipantRole @default(MEMBER)
-  joinedAt    DateTime        @default(now())
-
-  @@unique([projectId, userId])
-  @@index([projectId, role])
-}
-
-model Role {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique // e.g. 'system:super_admin' or 'custom:read_only'
-  namespace String? // optional
-  builtin   Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  UserRole        UserRole[]
-  rolePermissions RolePermission[]
-}
-
-model UserRole {
-  id         String    @id @default(uuid()) @db.Uuid
-  user       User      @relation(fields: [userId], references: [id])
-  userId     String    @db.Uuid
-  roleId     Int
-  role       Role      @relation(fields: [roleId], references: [id])
-  scope      String?
-  active     Boolean   @default(true)
-  assignedBy String?   @db.Uuid // user id who assigned this role (optional)
-  assignedAt DateTime  @default(now())
-  expiresAt  DateTime? // optional expiry for time-bound assignments
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-
-  @@unique([userId, roleId, scope])
-  @@index([roleId, scope])
-  @@index([userId])
-  @@index([active])
-}
-
-model RolePermission {
-  id          String   @id @default(uuid()) @db.Uuid
-  roleId      Int
-  role        Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  permission  String // e.g., 'projects:read', 'users:manage'
-  description String?
-  createdAt   DateTime @default(now())
-
-  @@unique([roleId, permission])
-  @@index([permission])
-}
-
-model Industry {
-  id     String  @id @default(uuid()) @db.Uuid
-  name   String  @unique
-  users  User[]
-  groups Group[]
-}
-
-model GoodsService {
-  id     String  @id @default(uuid()) @db.Uuid
-  name   String  @unique
-  users  User[]  @relation("UserGoodsServices")
-  groups Group[] @relation("GroupGoodsServices")
-}
-
-model County {
-  id             String         @id @default(uuid()) @db.Uuid
-  code           String         @unique
-  name           String         @unique
-  constituencies Constituency[]
-  wards          Ward[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  Group     Group[]
-}
-
-model Constituency {
-  id       String @id @default(uuid()) @db.Uuid
-  name     String
-  county   County @relation(fields: [countyId], references: [id])
-  countyId String @db.Uuid
-  wards    Ward[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  Group     Group[]
-
-  @@unique([name, countyId])
-}
-
-model Proposal {
-  id           String       @id @default(uuid()) @db.Uuid
-  title        String
-  description  String
-  proposalType ProposalType @default(COMMUNITY_INITIATIVE)
-
-  // UPDATED: Voting tier classification
-  votingTier String @default("COMMUNITY_INITIATIVE") // COMMUNITY_INITIATIVE, MAJOR_PROJECT, STRATEGIC_DECISION
-
-  funded         Boolean        @default(false)
-  budget         Int?
-  timeline       String?
-  locationScope  LocationScope
-  wardId         String?        @db.Uuid
-  constituency   String?
-  county         String?
-  isPrivate      Boolean        @default(false)
-  purposeDetails Json?
-  status         ProposalStatus @default(DRAFT)
-
-  creatorUserId  String? @db.Uuid
-  creatorGroupId String? @db.Uuid
-
-  creatorUser  User?  @relation("UserProposals", fields: [creatorUserId], references: [id])
-  creatorGroup Group? @relation("GroupProposals", fields: [creatorGroupId], references: [id])
-
-  project Project? @relation("ProposalToProject")
-
-  votes Vote[]
-
-  groupMemberVotes GroupMemberVote[] @relation("GroupMemberVote_Proposal")
-
-  // MISSING: Voting thresholds (calculated fields)
-  requiredQuorum   Decimal @db.Decimal(3, 2) // 0.4, 0.5, 0.6
-  requiredApproval Decimal @db.Decimal(3, 2) // 0.5, 0.6, 0.66
-
-  // MISSING: Internal approval for group proposals
-  internalApproved  Boolean @default(false)
-  internalVoteCount Json? // {for: 15, against: 3, abstain: 2}
-
-  // MISSING: Emergency classification
-  isEmergency            Boolean @default(false)
-  emergencyJustification String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Vote {
-  id          String   @id @default(uuid()) @db.Uuid
-  proposalId  String   @db.Uuid
-  voterId     String   @db.Uuid
-  isGroup     Boolean
-  vote        Boolean
-  tokensSpent Int
-  createdAt   DateTime @default(now())
-
-  proposal Proposal @relation(fields: [proposalId], references: [id])
-
-  @@index([proposalId])
-}
-
-model GroupMemberVote {
-  id         String   @id @default(uuid()) @db.Uuid
-  proposalId String   @db.Uuid
-  groupId    String   @db.Uuid
-  userId     String   @db.Uuid
-  vote       Boolean
-  createdAt  DateTime @default(now())
-
-  proposal Proposal @relation("GroupMemberVote_Proposal", fields: [proposalId], references: [id])
-  group    Group    @relation("GroupMemberVote_Group", fields: [groupId], references: [id])
-  user     User     @relation("GroupMemberVote_User", fields: [userId], references: [id])
-
-  @@unique([proposalId, groupId, userId])
-}
-
-model TokenBalance {
-  id         String     @id @default(uuid())
-  holderType HolderType
-  userId     String?    @db.Uuid
-  groupId    String?    @db.Uuid
-  balance    Int        @default(0)
-  updatedAt  DateTime   @updatedAt
-
-  user  User?  @relation("UserTokenBalances", fields: [userId], references: [id])
-  group Group? @relation("GroupTokenBalances", fields: [groupId], references: [id])
-
-  @@unique([holderType, userId], name: "holderType_userId")
-  @@unique([holderType, groupId], name: "holderType_groupId")
-}
-
-model ProjectMilestone {
-  id            String          @id @default(uuid()) @db.Uuid
-  project       Project         @relation(fields: [projectId], references: [id])
-  projectId     String          @db.Uuid
-  title         String
-  description   String
-  dueDate       DateTime?
-  status        MilestoneStatus @default(PENDING)
-  fundingAmount Int
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-}
-
-model UserPrivacySettings {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @unique @db.Uuid
-  user      User     @relation("UserPrivacy", fields: [userId], references: [id])
-  settings  Json
-  updatedAt DateTime @updatedAt
-}
-
-model UserAudit {
-  id        String   @id @default(uuid()) @db.Uuid
-  user      User     @relation("UserAudits", fields: [userId], references: [id])
-  userId    String   @db.Uuid
-  field     String // Field changed or accessed (e.g. "email")
-  oldValue  String? // Old value JSON serialized
-  newValue  String? // New value JSON serialized
-  changedBy String? // UserId of the user who made the change (nullable if self)
-  timestamp DateTime @default(now())
-}
-
-model NotificationPreference {
-  id        String   @id @default(uuid())
-  userId    String   @db.Uuid
-  user      User     @relation("UserNotificationPreferences", fields: [userId], references: [id])
-  channel   String // e.g., "email", "sms", "in-app"
-  eventType String // e.g., "email_verification", "proposal_update"
-  enabled   Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([userId, channel, eventType])
-}
-
-model UserActivityLog {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @db.Uuid
-  user      User     @relation(fields: [userId], references: [id], name: "UserActivities")
-  eventType String
-  eventData Json? // Optional JSON for additional metadata
-  ipAddress String? // User IP address
-  userAgent String? // User agent string from request header
-  createdAt DateTime @default(now())
-
-  @@index([userId, createdAt])
-}
-
-model UserConsent {
-  id          String   @id @default(uuid())
-  userId      String   @db.Uuid
-  user        User     @relation(fields: [userId], references: [id], name: "UserConsents")
-  policyType  String // e.g., "terms_of_service", "privacy_policy"
-  version     String // Version of policy agreed to
-  consentedAt DateTime // Timestamp of consent
-  ipAddress   String? // Optional: IP address when consent was given
-  userAgent   String? // Optional: User agent info
-}
-
-// MISSING: Conflict resolution models
-model ConflictCase {
-  id          String @id @default(uuid()) @db.Uuid
-  title       String
-  description String
-  caseType    String // FINANCIAL, PROJECT, GOVERNANCE, INTERPERSONAL
-
-  // Parties involved
-  complainantId String @db.Uuid
-  complainant   User   @relation("Complainant", fields: [complainantId], references: [id])
-  respondentId  String @db.Uuid
-  respondent    User   @relation("Respondent", fields: [respondentId], references: [id])
-
-  // Case details
-  severity String // LOW, MEDIUM, HIGH, CRITICAL
-  status   String @default("DIRECT_MEDIATION") // DIRECT_MEDIATION, COMMUNITY_PANEL, EXPERT_ARBITRATION, SUPREME_COURT
-  evidence Json // Submitted evidence
-
-  // Resolution tracking
-  currentLevel Int       @default(1)
-  resolution   String?
-  resolvedAt   DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  mediationSessions MediationSession[]
-  rulings           ConflictRuling[]
-}
-
-model MediationSession {
-  id         String       @id @default(uuid()) @db.Uuid
-  conflictId String       @db.Uuid
-  conflict   ConflictCase @relation(fields: [conflictId], references: [id])
-
-  // Session details
-  level       Int       @default(1)
-  mediators   String[]  @db.Uuid // User IDs of mediators
-  scheduledAt DateTime
-  completedAt DateTime?
-  outcome     String?
-
-  // Session notes
-  notes      String?
-  agreements Json?
-
-  createdAt DateTime @default(now())
-}
-
-model ConflictRuling {
-  id         String       @id @default(uuid()) @db.Uuid
-  conflictId String       @db.Uuid
-  conflict   ConflictCase @relation(fields: [conflictId], references: [id])
-
-  // Ruling details
-  rulingBody String // "COMMUNITY_PANEL", "EXPERT_ARBITRATION", "SUPREME_COURT"
-  rulingText String
-  binding    Boolean @default(false)
-
-  // Enforcement
-  enforcementActions Json
-  complianceDeadline DateTime?
-
-  // FIX: Added the ruling authority ID and relation
-  ruledBy String @db.Uuid
-  ruler   User   @relation("ConflictRuling_Ruler", fields: [ruledBy], references: [id])
-
-  createdAt DateTime @default(now())
-}
-
-// MISSING: Enhanced marketplace models
-model MarketplaceListing {
-  id          String  @id @default(uuid()) @db.Uuid
-  title       String
-  description String
-  price       Decimal @db.Decimal(20, 2)
-  quantity    Int     @default(1)
-
-  // Listing type and scope
-  listingType String // GOODS, SERVICE, PROCUREMENT
-  marketTier  String  @default("LOCAL") // LOCAL, REGIONAL, NATIONAL
-  wardId      String? @db.Uuid
-  ward        Ward?   @relation(fields: [wardId], references: [id])
-
-  // Seller information
-  sellerType    HolderType
-  sellerUserId  String?    @db.Uuid
-  sellerUser    User?      @relation("MarketplaceListing_SellerUser", fields: [sellerUserId], references: [id])
-  sellerGroupId String?    @db.Uuid
-  sellerGroup   Group?     @relation("MarketplaceListing_SellerGroup", fields: [sellerGroupId], references: [id])
-
-  // Status and verification
-  status        String  @default("ACTIVE")
-  verified      Boolean @default(false)
-  qualityRating Decimal @default(0) @db.Decimal(3, 2)
-
-  // Transaction tracking
-  views      Int @default(0)
-  salesCount Int @default(0)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  transactions MarketplaceTransaction[]
-  reviews      MarketplaceReview[]
-}
-
-model MarketplaceTransaction {
-  id        String             @id @default(uuid()) @db.Uuid
-  listingId String             @db.Uuid
-  listing   MarketplaceListing @relation(fields: [listingId], references: [id])
-
-  // Parties
-  buyerId    String     @db.Uuid
-  buyer      User       @relation("MarketplaceTransaction_Buyer", fields: [buyerId], references: [id])
-  sellerId   String     @db.Uuid // Could be user or group
-  sellerType HolderType
-
-  // Transaction details
-  quantity      Int
-  totalPrice    Decimal @db.Decimal(20, 2)
-  status        String  @default("PENDING") // PENDING, CONFIRMED, COMPLETED, DISPUTED
-  escrowRelease Boolean @default(false)
-
-  // Delivery and completion
-  deliveryDetails Json?
-  completedAt     DateTime?
-
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  id      String    @id @default(uuid()) @db.Uuid
+  userId  String    @db.Uuid
+  groupId String    @db.Uuid
   
-  // FIX: Relationship renamed and cardinality corrected
-  review            MarketplaceReview? 
+  // -------------------------------------------------------------------------
+  // MEMBERSHIP BASICS (Always present)
+  // -------------------------------------------------------------------------
+  
+  role           GroupRole        @default(MEMBER)
+  active         Boolean          @default(true)
+  joinedAt       DateTime         @default(now())
+  leftAt         DateTime?
+  
+  // How they joined
+  assignmentMethod AssignmentMethod @default(USER_JOINED)
+  invitedBy        String?          @db.Uuid
+  
+  // -------------------------------------------------------------------------
+  // ROLE MANAGEMENT (Always present)
+  // -------------------------------------------------------------------------
+  
+  roleAssignedAt      DateTime  @default(now())
+  roleExpiresAt       DateTime?
+  
+  // Term limits (for leadership roles)
+  termNumber          Int       @default(1)
+  consecutiveTerms    Int       @default(0)
+  maxConsecutiveTerms Int       @default(2)
+  coolingOffUntil     DateTime?
+  
+  // -------------------------------------------------------------------------
+  // ELECTION TRACKING (Uncomment when implementing elections)
+  // -------------------------------------------------------------------------
+  
+  // electionId String? @db.Uuid
+  // election   Election? @relation(fields: [electionId], references: [id], onDelete: SetNull)
+  
+  // -------------------------------------------------------------------------
+  // PARTICIPATION METRICS (Uncomment when implementing analytics)
+  // -------------------------------------------------------------------------
+  
+  // meetingsAttended   Int       @default(0)
+  // proposalsCreated   Int       @default(0)
+  // votesParticipated  Int       @default(0)
+  // contributionAmount Decimal   @default(0) @db.Decimal(20,2)
+  // lastActiveAt       DateTime  @default(now())
+  
+  // -------------------------------------------------------------------------
+  // METADATA (Optional)
+  // -------------------------------------------------------------------------
+  
+  // metadata Json? // Custom member-specific data
+  
+  // -------------------------------------------------------------------------
+  // RELATIONSHIPS
+  // -------------------------------------------------------------------------
+  
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  
+  inviter User? @relation("GroupMemberInviter", fields: [invitedBy], references: [id], onDelete: SetNull)
+  
+  // -------------------------------------------------------------------------
+  // CONSTRAINTS & INDEXES
+  // -------------------------------------------------------------------------
+  
+  @@unique([userId, groupId], name: "unique_member_per_group")
+  @@index([userId])
+  @@index([groupId])
+  @@index([groupId, role])
+  @@index([groupId, active])
+  @@index([assignmentMethod])
+  
+  @@map("group_members")
 }
 
-model MarketplaceReview {
-  id            String                 @id @default(uuid()) @db.Uuid
-  transactionId String                 @unique @db.Uuid // Ensure one review per transaction
-  transaction   MarketplaceTransaction @relation(fields: [transactionId], references: [id])
+// ============================================================================
+// SUPPORTING MODELS - Add to existing Ward/Constituency/County
+// ============================================================================
 
-  reviewerId   String     @db.Uuid
-  reviewer     User       @relation("MarketplaceReview_Reviewer", fields: [reviewerId], references: [id])
-  reviewedId   String     @db.Uuid // ID of the entity reviewed (User or Group ID)
-  reviewedType HolderType
+// Add these relations to your existing geographic models:
 
-  rating           Int // 1-5
-  comment          String?
-  verifiedPurchase Boolean @default(true)
+// model Ward {
+//   // ... existing fields
+//   
+//   groups Group[] @relation("GroupWard")
+// }
 
-  createdAt DateTime @default(now())
+// model Constituency {
+//   // ... existing fields
+//   
+//   groups Group[] @relation("GroupConstituency")
+// }
 
-  // REMOVED: marketplaceListingId field and its relation
+// model County {
+//   // ... existing fields
+//   
+//   groups Group[] @relation("GroupCounty")
+// }
 
-  @@index([reviewedId, reviewedType])
+// model User {
+//   // ... existing fields
+//   
+//   createdGroups    Group[]        @relation("GroupCreator")
+//   groupMemberships GroupMember[]
+//   invitedMembers   GroupMember[]  @relation("GroupMemberInviter")
+// }
+
+// Verification requests (tracks vouching/payment progress)
+model VerificationRequest {
+  id            String   @id @default(uuid())
+  userId        String
+  type          String   // "COMMUNITY"
+  status        String   // "PENDING", "VOUCHING", "PAYMENT_PENDING", "APPROVED", "REJECTED", "EXPIRED"
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  expiresAt     DateTime?
+  rejectionReason String?
+  reviewedBy    String?  // Admin user ID
+  reviewedAt    DateTime?
+
+  user          User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, type])
 }
 
-// MISSING: Community asset sharing
-model CommunityAsset {
-  id          String @id @default(uuid()) @db.Uuid
-  name        String
-  description String
-  assetType   String // TOOL, EQUIPMENT, VEHICLE, FACILITY
+// Vouch tracking
+model CommunityVouch {
+  id            String   @id @default(uuid())
+  userId        String   // New user being vouched for
+  voucherId     String   // Existing user vouching
+  wardId        String   // Ward where vouching happens (must match)
+  createdAt     DateTime @default(now())
 
-  // Ownership
-  ownerType    HolderType
-  ownerUserId  String?    @db.Uuid
-  ownerUser    User?      @relation("CommunityAsset_OwnerUser", fields: [ownerUserId], references: [id])
-  ownerGroupId String?    @db.Uuid
-  ownerGroup   Group?     @relation("CommunityAsset_OwnerGroup", fields: [ownerGroupId], references: [id])
+  user          User     @relation("VouchedFor", fields: [userId], references: [id])
+  voucher       User     @relation("VouchesGiven", fields: [voucherId], references: [id])
+  ward          Ward     @relation(fields: [wardId], references: [id])
 
-  // Location and availability
-  wardId   String  @db.Uuid
-  ward     Ward    @relation(fields: [wardId], references: [id])
-  location String?
-  status   String  @default("AVAILABLE") // AVAILABLE, IN_USE, MAINTENANCE
-
-  // Usage economics
-  rentalCostUT Int? // Cost per hour in UT
-  depositUT    Int? // Security deposit
-
-  // Maintenance tracking
-  maintenanceSchedule Json
-  lastMaintenance     DateTime?
-  nextMaintenance     DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  bookings        AssetBooking[]
-  maintenanceLogs AssetMaintenanceLog[]
+  @@unique([userId, voucherId])  // Prevent duplicate vouches
 }
 
-model AssetBooking {
-  id      String         @id @default(uuid()) @db.Uuid
-  assetId String         @db.Uuid
-  asset   CommunityAsset @relation(fields: [assetId], references: [id])
-  userId  String         @db.Uuid
-  user    User           @relation("AssetBooking_User", fields: [userId], references: [id])
+model Commitment {
+  id              String   @id @default(uuid())
+  userId          String
+  type            String   // "DUES", "PROJECT_CONTRIBUTION", "GROUP_ROLE", "EVENT_ATTENDANCE"
+  targetId        String?  // Group ID, Project ID, etc.
+  amountKes       Int?     // For monetary commitments
+  amountPR        Int?     // For PR commitments
+  frequency       String?  // "MONTHLY", "ONE_TIME", "WEEKLY"
+  startDate       DateTime
+  endDate         DateTime?
+  status          String   // "ACTIVE", "BREACHED", "COMPLETED", "CANCELLED"
+  missedCount     Int      @default(0)
+  totalPaidKes    Int      @default(0)
+  totalPaidPR     Int      @default(0)
+  breachReason    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  // Booking period
-  startTime DateTime
-  endTime   DateTime
-  status    String   @default("CONFIRMED") // PENDING, CONFIRMED, ACTIVE, COMPLETED, CANCELLED
+  user            User     @relation(fields: [userId], references: [id])
 
-  // Payment and deposits
-  totalCostUT     Int?
-  depositPaid     Boolean @default(false)
-  depositRefunded Boolean @default(false)
-
-  // Usage tracking
-  purpose         String?
-  conditionBefore Json?
-  conditionAfter  Json?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  @@index([userId, type, status])
 }
-
-model AssetMaintenanceLog {
-  id      String         @id @default(uuid()) @db.Uuid
-  assetId String         @db.Uuid
-  asset   CommunityAsset @relation(fields: [assetId], references: [id])
-
-  maintenanceType String // ROUTINE, REPAIR, INSPECTION, UPGRADE
-  description     String
-  costUT          Int?
-  performedBy     String   @db.Uuid // User ID
-  performedAt     DateTime @default(now())
-
-  // Maintenance details
-  notes              String?
-  nextMaintenanceDue DateTime?
-
-  createdAt DateTime @default(now())
-
-  @@index([assetId, performedAt])
-}
-
-// MISSING: Platform feedback and analytics
-model PlatformFeedback {
-  id     String @id @default(uuid()) @db.Uuid
-  userId String @db.Uuid
-  user   User   @relation("PlatformFeedback_User", fields: [userId], references: [id])
-
-  category    String // BUG, FEATURE_REQUEST, UX_ISSUE, GENERAL
-  title       String
-  description String
-  urgency     String @default("MEDIUM") // LOW, MEDIUM, HIGH, CRITICAL
-
-  // Status tracking
-  status     String  @default("SUBMITTED") // SUBMITTED, REVIEWING, PLANNED, IN_PROGRESS, COMPLETED
-  assignedTo String? @db.Uuid // Platform team member
-  resolution String?
-
-  // Community engagement
-  upvotes  Int               @default(0)
-  comments FeedbackComment[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model FeedbackComment {
-  id         String           @id @default(uuid()) @db.Uuid
-  feedbackId String           @db.Uuid
-  feedback   PlatformFeedback @relation(fields: [feedbackId], references: [id])
-
-  commenterId String @db.Uuid
-  commenter   User   @relation("FeedbackComment_User", fields: [commenterId], references: [id])
-
-  comment    String
-  isInternal Boolean @default(false) // Platform team internal notes
-
-  createdAt DateTime @default(now())
-
-  @@index([feedbackId, createdAt])
-}
-
-model CommunityDashboard {
-  id     String @id @default(uuid()) @db.Uuid
-  wardId String @db.Uuid
-  ward   Ward   @relation(fields: [wardId], references: [id])
-
-  // Key metrics
-  metrics     Json // {activeUsers: 150, projectsCompleted: 12, economicActivity: 50000}
-  trends      Json // Month-over-month changes
-  comparisons Json // Comparison with similar communities
-
-  // Customizable metrics
-  customMetrics Json // Community-specific metrics they care about
-
-  updatedAt DateTime @updatedAt
-}
-
-// MISSING: System-wide configuration
-model SystemConfiguration {
-  id          String   @id @default(uuid()) @db.Uuid
-  configKey   String   @unique
-  configValue Json
-  description String?
-  updatedBy   String   @db.Uuid
-  updatedAt   DateTime @updatedAt
-
-  // Relations
-  updatedByUser User @relation(fields: [updatedBy], references: [id])
-}
-
-model EducationalModuleProject {
-  moduleId String @db.Uuid
-  projectId String @db.Uuid
-
-  module EducationalModule @relation(fields: [moduleId], references: [id])
-  project Project @relation(fields: [projectId], references: [id])
-
-  @@id([moduleId, projectId])
-}
-// Example configurations:
-// - IP_EARNING_RATES: {manual_labor: 10, skilled_work: 15, ...}
-// - VOTING_THRESHOLDS: {community_initiative: {quorum: 0.4, approval: 0.5}, ...}
-// - GROUP_LIMITS: {max_groups_per_user: 10, max_created_groups: 5, ...}
-// - FINANCIAL_CONTROLS: {transaction_limits: {small: 10000, medium: 50000, ...}}

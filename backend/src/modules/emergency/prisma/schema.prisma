@@ -1,0 +1,61 @@
+// ============================================================================
+// EMERGENCY MODULE - Alerts, Response Coordination
+// ============================================================================
+
+enum EmergencyType {
+  NATURAL_DISASTER
+  HEALTH_CRISIS
+  CONFLICT
+  INFRASTRUCTURE_FAILURE
+  ENVIRONMENTAL
+}
+
+enum EmergencySeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model EmergencyAlert {
+  id                 String            @id @default(uuid()) @db.Uuid
+  title              String
+  description        String
+  emergencyType      EmergencyType
+  severity           EmergencySeverity
+  location           String
+  reporterId         String            @db.Uuid
+  status             String            @default("ACTIVE")
+  assignedGroupId    String?           @db.Uuid
+  neededResources    Json
+  availableResources Json
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  reporter  User               @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  group     Group?             @relation(fields: [assignedGroupId], references: [id], onDelete: SetNull)
+  responses EmergencyResponse[]
+
+  @@index([reporterId])
+  @@index([assignedGroupId])
+  @@index([severity, status])
+}
+
+model EmergencyResponse {
+  id          String   @id @default(uuid()) @db.Uuid
+  emergencyId String   @db.Uuid
+  userId      String   @db.Uuid
+  role        String
+  status      String   @default("AVAILABLE")
+  skills      String[]
+  location    String?
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  emergency EmergencyAlert @relation(fields: [emergencyId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([emergencyId, userId])
+  @@index([userId])
+  @@index([emergencyId, status])
+}

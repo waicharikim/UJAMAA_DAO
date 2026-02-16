@@ -1,0 +1,32 @@
+/**
+ * @file src/modules/reputation/types.ts
+ * @description
+ * Impact Points Types & Constants
+ * Version: 2.0 — December 2025
+ */
+
+export enum ImpactPointReason {
+  EMAIL_VERIFIED = "EMAIL_VERIFIED",
+  PHONE_VERIFIED = "PHONE_VERIFIED",
+  COMMUNITY_VERIFIED = "COMMUNITY_VERIFIED",
+  LOCATION_VERIFIED = "LOCATION_VERIFIED",
+  TEMPORARY_CHECKIN = "TEMPORARY_CHECKIN",
+  EDUCATION_MODULE_COMPLETED = "EDUCATION_MODULE_COMPLETED",
+  PHYSICAL_WORK_VERIFIED = "PHYSICAL_WORK_VERIFIED",
+  MILESTONE_ACHIEVED = "MILESTONE_ACHIEVED",
+  MANUAL_ADJUSTMENT = "MANUAL_ADJUSTMENT",
+}
+
+export const IP_CONFIG = {
+  DECAY_MONTHLY_RATE: 0.10,        // 10% decay
+  DECAY_ACTIVE_USER_RATE: 0.05,    // 5% if active
+  DECAY_GRACE_MONTHS: 3,           // No decay first 3 months
+  ACTIVE_DAYS_THRESHOLD: 30,
+} as const;
+
+export const LOCATION_TIER_THRESHOLDS = {
+  BRONZE: 100,
+  SILVER: 500,
+  GOLD: 2000,
+  PLATINUM: 5000,
+} as const;

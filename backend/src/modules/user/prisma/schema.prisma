@@ -1,0 +1,239 @@
+// ============================================================================
+// USER MODULE - Profile, Industries, Privacy, Accessibility
+// ============================================================================
+
+model ResidenceChangeRequest {
+  id               String                 @id @default(uuid()) @db.Uuid
+  userId           String                 @db.Uuid
+  oldWardId        String?                @db.Uuid
+  newPrimaryWardId String                 @db.Uuid
+  reason           String?                 
+  proofUrl         String
+  status           ResidenceChangeStatus  @default(PENDING)
+  reviewedBy       String?                @db.Uuid
+  reviewedAt       DateTime?
+  rejectionReason  String?
+  expiresAt        DateTime // Auto-reject after 7 days
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  user     User  @relation("UserResidenceRequests", fields: [userId], references: [id], onDelete: Cascade)
+  reviewer User? @relation("ResidenceRequestReviewer", fields: [reviewedBy], references: [id], onDelete: SetNull)
+  newWard  Ward  @relation("NewWardRequests", fields: [newPrimaryWardId], references: [id], onDelete: Cascade)
+  oldWard  Ward? @relation("OldWardRequests", fields: [oldWardId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status])
+  @@index([status, expiresAt])
+}
+
+enum ResidenceChangeStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+model UserIndustry {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  industryId String   @db.Uuid
+  isPrimary  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  industry Industry @relation(fields: [industryId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, industryId])
+  @@index([userId])
+  @@index([industryId])
+}
+
+model UserGoodsService {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @db.Uuid
+  goodsServiceId String   @db.Uuid
+  canProvide     Boolean  @default(false)
+  canRequest     Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goodsService GoodsService @relation(fields: [goodsServiceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, goodsServiceId])
+  @@index([userId])
+  @@index([goodsServiceId])
+}
+
+model UserPrivacySettings {
+  id                    String   @id @default(uuid()) @db.Uuid
+  userId                String   @unique @db.Uuid
+  profileVisibility     String   @default("PUBLIC") // PUBLIC, FRIENDS, PRIVATE
+  showEmail             Boolean  @default(false)
+  showPhone             Boolean  @default(false)
+  showWallet            Boolean  @default(false)
+  showImpactPoints      Boolean  @default(true)
+  allowDirectMessages   Boolean  @default(true)
+  allowMarketplace      Boolean  @default(true)
+  dataProcessingConsent Boolean  @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserAccessibility {
+  id                  String   @id @default(uuid()) @db.Uuid
+  userId              String   @unique @db.Uuid
+  visualImpairment    Boolean  @default(false)
+  hearingImpairment   Boolean  @default(false)
+  motorImpairment     Boolean  @default(false)
+  cognitiveImpairment Boolean  @default(false)
+  preferredLanguage   String   @default("en")
+  screenReaderEnabled Boolean  @default(false)
+  highContrast        Boolean  @default(false)
+  fontSize            String   @default("MEDIUM") // SMALL, MEDIUM, LARGE, XLARGE
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ============================================================================
+// PARTICIPATION RIGHTS
+// ============================================================================
+
+model ParticipationRightsLog {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @db.Uuid
+  amount            Int // Can be positive (earned) or negative (spent)
+  balance           Int // PR balance after this transaction
+  reason            String // "DUES_PAID", "VOTED", "CREATED_PROPOSAL", "MONTHLY_REGEN"
+  relatedEntityType String?
+  relatedEntityId   String?  @db.Uuid
+  metadata          Json?
+  createdAt         DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([reason])
+}
+
+// ============================================================================
+// ONBOARDING
+// ============================================================================
+
+model OnboardingProgress {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @unique @db.Uuid
+
+  // Account setup
+  emailVerified         Boolean @default(false)
+  profileCompleted      Boolean @default(false)
+  industriesSelected    Boolean @default(false)
+  goodsServicesSelected Boolean @default(false)
+  privacyConfigured     Boolean @default(false)
+
+  // Tutorials
+  platformIntroCompleted       Boolean @default(false)
+  governanceTutorialCompleted  Boolean @default(false)
+  marketplaceTutorialCompleted Boolean @default(false)
+  projectsTutorialCompleted    Boolean @default(false)
+  groupsTutorialCompleted      Boolean @default(false)
+
+  // First actions
+  joinedWardGroup      Boolean @default(false)
+  joinedVoluntaryGroup Boolean @default(false)
+  castFirstVote        Boolean @default(false)
+  completedFirstModule Boolean @default(false)
+  attendedFirstEvent   Boolean @default(false)
+  createdFirstListing  Boolean @default(false)
+
+  // Verification steps
+  phoneVerified     Boolean @default(false)
+  communityVerified Boolean @default(false)
+  locationVerified  Boolean @default(false)
+  walletConnected   Boolean @default(false)
+
+  // Financial
+  paidFirstDues Boolean @default(false)
+
+  // Metadata
+  currentStep    String  @default("EMAIL_VERIFICATION")
+  lastActiveStep String?
+  totalIPEarned  Int     @default(0)
+  totalPREarned  Int     @default(0)
+
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([currentStep])
+}
+
+model OnboardingTutorial {
+  id               String   @id @default(uuid()) @db.Uuid
+  key              String   @unique // "platform_intro", "governance_basics"
+  title            String
+  description      String
+  content          Json // Tutorial steps, images, videos, quiz questions
+  category         String // "BASICS", "GOVERNANCE", "MARKETPLACE", "PROJECTS", "GROUPS"
+  order            Int // Display order within category
+  requiredFor      String? // "VOTING", "MARKETPLACE_SELLING", null
+  ipReward         Int      @default(0)
+  prReward         Int      @default(0)
+  isOptional       Boolean  @default(true)
+  active           Boolean  @default(true)
+  estimatedMinutes Int      @default(5)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  completions UserTutorialCompletion[]
+
+  @@index([category, order])
+  @@index([active])
+}
+
+model UserTutorialCompletion {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  tutorialId String   @db.Uuid
+
+  completed Boolean @default(false)
+  progress  Int     @default(0) // Percentage (0-100)
+  skipped   Boolean @default(false)
+  ipEarned  Int     @default(0)
+  prEarned  Int     @default(0)
+  quizScore Int? // If tutorial has quiz
+
+  startedAt    DateTime  @default(now())
+  completedAt  DateTime?
+  lastViewedAt DateTime  @default(now())
+
+  user     User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tutorial OnboardingTutorial @relation(fields: [tutorialId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tutorialId])
+  @@index([userId, completed])
+  @@index([tutorialId, completed])
+}
+
+model OnboardingMilestone {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @db.Uuid
+  milestoneKey String // "FIRST_VOTE", "FIRST_PROPOSAL", "FIRST_LISTING"
+
+  achieved   Boolean  @default(true)
+  ipEarned   Int
+  prEarned   Int      @default(0)
+  metadata   Json? // Extra context about the achievement
+  achievedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, milestoneKey])
+  @@index([userId, achievedAt])
+  @@index([milestoneKey])
+}

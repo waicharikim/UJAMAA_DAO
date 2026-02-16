@@ -1,2 +1,0 @@
--- AlterEnum
-ALTER TYPE "SystemRole" ADD VALUE 'GENERAL_USER';

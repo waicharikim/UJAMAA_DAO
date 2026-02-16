@@ -1,0 +1,95 @@
+// ============================================================================
+// MARKETPLACE MODULE - Listings, Transactions, Reviews
+// ============================================================================
+
+enum ListingStatus {
+  ACTIVE
+  INACTIVE
+  REMOVED
+  SUSPENDED
+}
+
+enum MarketplaceTransactionStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+model MarketplaceListing {
+  id            String        @id @default(uuid()) @db.Uuid
+  title         String
+  description   String
+  price         Decimal       @db.Decimal(20, 2)
+  quantity      Int           @default(1)
+  listingType   String
+  marketTier    String        @default("LOCAL")
+  wardId        String?       @db.Uuid
+  sellerType    HolderType
+  sellerUserId  String?       @db.Uuid
+  sellerGroupId String?       @db.Uuid
+  status        ListingStatus @default(ACTIVE)
+  verified      Boolean       @default(false)
+  qualityRating Decimal       @default(0) @db.Decimal(3, 2)
+  views         Int           @default(0)
+  salesCount    Int           @default(0)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  ward        Ward?                    @relation(fields: [wardId], references: [id], onDelete: SetNull)
+  sellerUser  User?                    @relation("UserListings", fields: [sellerUserId], references: [id], onDelete: SetNull)
+  sellerGroup Group?                   @relation("GroupListings", fields: [sellerGroupId], references: [id], onDelete: SetNull)
+  transactions MarketplaceTransaction[]
+  reviews     MarketplaceReview[]
+
+  @@index([wardId, status])
+  @@index([sellerUserId])
+  @@index([sellerGroupId])
+  @@index([status])
+}
+
+model MarketplaceTransaction {
+  id              String                       @id @default(uuid()) @db.Uuid
+  listingId       String                       @db.Uuid
+  buyerId         String                       @db.Uuid
+  sellerId        String                       @db.Uuid
+  sellerType      HolderType
+  quantity        Int
+  totalPrice      Decimal                      @db.Decimal(20, 2)
+  status          MarketplaceTransactionStatus @default(PENDING)
+  escrowRelease   Boolean                      @default(false)
+  deliveryDetails Json?
+  completedAt     DateTime?
+  createdAt       DateTime                     @default(now())
+  updatedAt       DateTime                     @updatedAt
+
+  listing    MarketplaceListing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  buyer      User                @relation("Buyer", fields: [buyerId], references: [id], onDelete: Cascade)
+  sellerUser User?               @relation("Seller", fields: [sellerId], references: [id], onDelete: SetNull)
+  review     MarketplaceReview?
+
+  @@index([buyerId])
+  @@index([listingId])
+  @@index([status])
+}
+
+model MarketplaceReview {
+  id               String                 @id @default(uuid()) @db.Uuid
+  transactionId    String                 @unique @db.Uuid
+  listingId        String                 @db.Uuid
+  reviewerId       String                 @db.Uuid
+  reviewedId       String                 @db.Uuid
+  reviewedType     HolderType
+  rating           Int
+  comment          String?
+  verifiedPurchase Boolean                @default(true)
+  createdAt        DateTime               @default(now())
+
+  transaction MarketplaceTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  listing     MarketplaceListing     @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  reviewer    User                   @relation("Reviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
+
+  @@index([reviewedId, reviewedType])
+  @@index([reviewerId])
+  @@index([listingId])
+}

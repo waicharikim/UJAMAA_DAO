@@ -1,0 +1,147 @@
+// ============================================================================
+// GOVERNANCE MODULE - Proposals, Voting, Projects
+// ============================================================================
+
+enum ProposalType {
+  COMMUNITY_INITIATIVE
+  MAJOR_PROJECT
+  STRATEGIC_DECISION
+  EMERGENCY
+}
+
+enum ProposalStatus {
+  DRAFT
+  VOTING
+  APPROVED
+  REJECTED
+  EXECUTING
+  COMPLETED
+  CANCELLED
+}
+
+
+// ============================================================================
+// UPDATED PROPOSAL MODEL - With Lean Canvas & Milestones
+// ============================================================================
+
+model Proposal {
+  id                String         @id @default(uuid()) @db.Uuid
+  title             String
+  description       String         @db.Text
+  proposalType      ProposalType
+  status            ProposalStatus @default(DRAFT)
+  groupId           String?        @db.Uuid
+  creatorId         String         @db.Uuid
+  
+  // FINANCIAL
+  budget            Decimal?       @db.Decimal(20, 2)
+  fundingSource     String?        // GROUP_TREASURY, EXTERNAL_GRANT, MEMBER_CONTRIBUTIONS
+  
+  // LEAN CANVAS (All optional but recommended)
+  problem           String?        @db.Text
+  solution          String?        @db.Text
+  keyMetrics        Json?          // [{ name, target, unit }]
+  uniqueValue       String?        @db.Text
+  unfairAdvantage   String?        @db.Text
+  customerSegments  Json?          // [{ segment, size, description }]
+  channels          Json?          // [{ name, description, reach }]
+  costStructure     Json?          // [{ category, item, amount, description }]
+  revenueStreams    Json?          // [{ source, amount, frequency, description }]
+  
+  // EXECUTION PLAN
+  timeline          Json?          // Overall timeline with phases
+  team              Json?          // [{ userId, role, commitment }]
+  dependencies      Json?          // [{ name, description, status }]
+  risks             Json?          // [{ risk, impact, mitigation }]
+  
+  // VOTING
+  votesFor          Int            @default(0)
+  votesAgainst      Int            @default(0)
+  quorum            Int            @default(0)
+  approvalThreshold Int            @default(0)
+  votingStartsAt    DateTime?
+  votingEndsAt      DateTime?
+  
+  // ATTACHMENTS
+  documents         String[]       // URLs to supporting docs
+  images            String[]       // Proposal images
+  
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  // RELATIONS
+  group              Group?              @relation("GroupProposals", fields: [groupId], references: [id], onDelete: SetNull)
+  creator            User                @relation("UserProposals", fields: [creatorId], references: [id], onDelete: Cascade)
+  votes              GroupMemberVote[]   @relation("ProposalVotes")
+  walletTransactions WalletTransaction[] @relation("ProposalTransactions")
+  escrows            Escrow[]            @relation("ProposalEscrows")
+  milestones         ProposalMilestone[] // NEW
+  project            Project?            @relation("ProposalToProject") // NEW
+  comments           Comment[]           @relation("ProposalComments") // NEW
+
+  @@index([groupId, status])
+  @@index([creatorId])
+  @@index([status, votingEndsAt])
+  @@index([proposalType])
+}
+
+// ============================================================================
+// NEW: PROPOSAL MILESTONES
+// ============================================================================
+
+model ProposalMilestone {
+  id             String   @id @default(uuid()) @db.Uuid
+  proposalId     String   @db.Uuid
+  title          String
+  description    String   @db.Text
+  
+  // Deliverables
+  deliverables   Json     // [{ description, quantity, unit }]
+  
+  // Resources needed
+  budgetAmount   Decimal  @db.Decimal(20, 2)
+  laborHours     Int?
+  materials      Json?    // [{ item, quantity, cost, unit }]
+  
+  // Timeline
+  startOffset    Int      // Days from project start
+  duration       Int      // Days to complete
+  dependencies   String[] @db.Uuid  // IDs of previous milestones in this proposal
+  
+  // Verification requirements
+  verificationMethod   String  // PEER, SUPERVISOR, COMMUNITY_WITNESS, PHOTO_EVIDENCE
+  verifiersNeeded      Int     @default(1)
+  verificationCriteria Json    // [{ criterion, description, required }]
+  
+  // Order
+  orderIndex     Int      @default(0)
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  // RELATIONS
+  proposal         Proposal   @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  projectMilestone Milestone? @relation("ProposalToProjectMilestone")
+  
+  @@index([proposalId])
+  @@index([orderIndex])
+}
+
+
+model GroupMemberVote {
+ id         String   @id @default(uuid()) @db.Uuid
+ groupId    String   @db.Uuid
+ memberId   String   @db.Uuid
+ proposalId String   @db.Uuid
+ vote       Boolean
+ voteWeight Int      @default(1)
+ comment    String?
+ createdAt  DateTime @default(now())
+ group    Group    @relation("GroupVotes", fields: [groupId], references: [id], onDelete: Cascade)
+ member   User     @relation("UserVotes", fields: [memberId], references: [id], onDelete: Cascade)
+ proposal Proposal @relation("ProposalVotes", fields: [proposalId], references: [id], onDelete: Cascade)
+ @@unique([groupId, memberId, proposalId])
+ @@index([proposalId])
+ @@index([memberId])
+}
+

@@ -1,0 +1,29 @@
+global:
+  checkNewVersion: true
+  sendAnonymousUsage: false
+
+log:
+  level: INFO
+
+api:
+  dashboard: true
+  insecure: true  # change to false in prod + use basic auth
+
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+
+providers:
+  docker:
+    exposedByDefault: false
+    network: backend
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: waicharikimani@gmail.com   # ← change to your real email
+      storage: /letsencrypt/acme.json
+      httpChallenge:
+        entryPoint: web

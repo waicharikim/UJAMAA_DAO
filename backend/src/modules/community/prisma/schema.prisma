@@ -1,0 +1,308 @@
+// ============================================================================
+// COMMUNITY MODULE - Groups, Assets, Conflicts
+// ============================================================================
+
+enum SystemGroupType {
+  WARD
+  CONSTITUENCY
+  COUNTY
+  NATIONAL
+}
+
+enum VoluntaryGroupType {
+  // ECONOMIC
+  BUSINESS_COLLECTIVE
+  SAVINGS_CREDIT
+  AGRICULTURE_COOPERATIVE
+  TRADE_ASSOCIATION
+
+  // PROJECT
+  PROJECT_EXECUTION
+  INFRASTRUCTURE_COMMITTEE
+  CONSTRUCTION_TEAM
+
+  // WELFARE
+  NON_PROFIT
+  COMMUNITY_WELFARE
+  POVERTY_ALLEVIATION
+
+  // PROFESSIONAL
+  PROFESSIONAL_NETWORK
+  EXPERT_PANEL
+  QUALITY_ASSURANCE
+  ACADEMIC_RESEARCH
+
+  // EMERGENCY
+  EMERGENCY_RESPONSE
+  FIRST_RESPONDERS
+  SECURITY_WATCH
+  CRISIS_MANAGEMENT
+
+  // DEMOGRAPHIC
+  YOUTH_ORGANIZATION
+  WOMEN_EMPOWERMENT
+  ELDERLY_SUPPORT
+  DISABILITY_ADVOCACY
+
+  // SECTOR
+  HEALTH_INITIATIVE
+  EDUCATION_INITIATIVE
+  ENVIRONMENTAL_GROUP
+  TECHNOLOGY_HUB
+  ARTS_CULTURE
+  SPORTS_RECREATION
+
+  // FAITH & CULTURE
+  RELIGIOUS_ORGANIZATION
+  CULTURAL_PRESERVATION
+  INTERFAITH_DIALOGUE
+
+  // ADVOCACY
+  ADVOCACY_GROUP
+  CIVIC_EDUCATION
+  POLICY_RESEARCH
+  TRANSPARENCY_WATCHDOG
+
+  // GENERAL
+  SPECIAL_INTEREST
+  SOCIAL_CLUB
+  ALUMNI_NETWORK
+  NEIGHBORHOOD_ASSOCIATION
+}
+
+// ============================================================================
+// UPDATED GROUP MODEL - Add proposal/project relations
+// ============================================================================
+
+model Group {
+  id            String  @id @default(uuid()) @db.Uuid
+  name          String  @unique
+  description   String?
+  metadata      Json?
+  walletAddress String? @unique
+
+  isSystemGroup Boolean             @default(false)
+  systemType    SystemGroupType?
+  voluntaryType VoluntaryGroupType?
+
+  canBeDeleted Boolean @default(true)
+  canBeRenamed Boolean @default(true)
+
+  locationScope   LocationScope
+  wardId          String?       @db.Uuid
+  constituencyId  String?       @db.Uuid
+  countyId        String?       @db.Uuid
+  industryFocusId String?       @db.Uuid
+
+  status          GroupStatus @default(FORMING)
+  memberCount     Int         @default(0)
+  treasuryBalance Decimal     @default(0) @db.Decimal(20, 2)
+  lastActivity    DateTime    @default(now())
+  
+  contributesToNational    Boolean @default(false)
+  nationalContributionRate Decimal @default(0.01) @db.Decimal(3, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ward         Ward?         @relation("GroupWard", fields: [wardId], references: [id], onDelete: SetNull)
+  constituency Constituency? @relation(fields: [constituencyId], references: [id], onDelete: SetNull)
+  county       County?       @relation("CountyGroups", fields: [countyId], references: [id], onDelete: SetNull)
+
+  members             GroupMember[]
+  proposals           Proposal[]              @relation("GroupProposals")
+  votes               GroupMemberVote[]       @relation("GroupVotes")
+  emergencyAlerts     EmergencyAlert[]
+  marketplaceListings MarketplaceListing[]    @relation("GroupListings")
+  communityAssets     CommunityAsset[]        @relation("GroupAssets")
+  duesAllocations     DuesAllocation[]
+  events              Event[]
+  treasury            GroupTreasury[]
+  treasuryPolicies    TreasuryPolicy[]
+  ownedProjects       Project[]               @relation("GroupProjects") // UPDATED relation name
+  elections           Election[]
+  nationalContributions NationalContribution[]
+
+  @@index([isSystemGroup, systemType])
+  @@index([isSystemGroup, voluntaryType])
+  @@index([locationScope, wardId])
+  @@index([status])
+  @@index([contributesToNational])
+}
+
+model GroupMember {
+  id   String    @id @default(uuid()) @db.Uuid
+  userId   String    @db.Uuid
+  groupId  String    @db.Uuid
+  role     GroupRole @default(MEMBER)
+
+  // System membership tracking
+  autoEnrolled Boolean @default(false)
+  canLeave     Boolean @default(true)
+
+  joinedAt DateTime @default(now())
+  active   Boolean  @default(true)
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, groupId])
+  @@index([groupId, role])
+  @@index([userId, active])
+  @@index([autoEnrolled])
+}
+
+model CommunityAsset {
+  id           String     @id @default(uuid()) @db.Uuid
+  name         String
+  description  String
+  assetType    String
+  ownerType    HolderType
+  ownerUserId  String?    @db.Uuid
+  ownerGroupId String?    @db.Uuid
+  wardId       String     @db.Uuid
+  location     String?
+  status       String     @default("AVAILABLE")
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  ward  Ward   @relation(fields: [wardId], references: [id], onDelete: Cascade)
+  group Group? @relation("GroupAssets", fields: [ownerGroupId], references: [id], onDelete: SetNull)
+
+  @@index([wardId])
+  @@index([ownerGroupId])
+  @@index([status])
+}
+
+model ConflictCase {
+  id            String    @id @default(uuid()) @db.Uuid
+  complainantId String    @db.Uuid
+  respondentId  String    @db.Uuid
+  description   String
+  evidence      String[]
+  status        String    @default("OPEN")
+  mediatorId    String?   @db.Uuid
+  resolution    String?
+  resolvedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  complainant User @relation("Complainant", fields: [complainantId], references: [id], onDelete: Cascade)
+  respondent  User @relation("Respondent", fields: [respondentId], references: [id], onDelete: Cascade)
+
+  @@index([complainantId])
+  @@index([respondentId])
+  @@index([status])
+}
+
+// ============================================================================
+// ENGAGEMENT & ACTIVITY
+// ============================================================================
+
+model Activity {
+  id          String         @id @default(uuid()) @db.Uuid
+  actorId     String         @db.Uuid
+  actorType   HolderType
+  actionType  String
+  entityType  String?
+  entityId    String?        @db.Uuid
+  scope       LocationScope?
+  locationId  String?        @db.Uuid
+  description String
+  metadata    Json?
+  isPublic    Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([scope, locationId, createdAt])
+  @@index([entityType, entityId])
+}
+
+model Comment {
+  id         String   @id @default(uuid()) @db.Uuid
+  authorId   String   @db.Uuid
+  entityType String   // "PROPOSAL", "PROJECT", "MILESTONE", "LISTING", etc.
+  entityId   String   @db.Uuid
+  content    String   @db.Text
+  parentId   String?  @db.Uuid
+  upvotes    Int      @default(0)
+  downvotes  Int      @default(0)
+  flagged    Boolean  @default(false)
+  deleted    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // RELATIONS
+  author     User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parent     Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies    Comment[] @relation("CommentReplies")
+  
+  // NEW: Polymorphic relations (use entityType to determine which)
+  proposal   Proposal? @relation("ProposalComments", fields: [entityId], references: [id], onDelete: Cascade, map: "comment_proposal_fk")
+  project    Project?  @relation("ProjectComments", fields: [entityId], references: [id], onDelete: Cascade, map: "comment_project_fk")
+  milestone  Milestone? @relation("MilestoneComments", fields: [entityId], references: [id], onDelete: Cascade, map: "comment_milestone_fk")
+
+  @@index([entityType, entityId, createdAt])
+  @@index([authorId])
+  @@index([parentId])
+}
+
+model Event {
+  id          String        @id @default(uuid()) @db.Uuid
+  title       String
+  description String
+  eventType   String
+  organizerId String        @db.Uuid
+  groupId     String?       @db.Uuid
+  scope       LocationScope
+  locationId  String        @db.Uuid
+  venue       String?
+  virtualUrl  String?
+  startTime   DateTime
+  endTime     DateTime
+  capacity    Int?
+  attendeeCount Int         @default(0)
+  status      String        @default("SCHEDULED")
+  metadata    Json?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  organizer User   @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  group     Group? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  attendees EventAttendee[]
+
+  @@index([scope, locationId, startTime])
+  @@index([status, startTime])
+  @@index([organizerId])
+}
+
+model EventAttendee {
+  id           String    @id @default(uuid()) @db.Uuid
+  eventId      String    @db.Uuid
+  userId       String    @db.Uuid
+  status       String    @default("REGISTERED")
+  checkedInAt  DateTime?
+  registeredAt DateTime  @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([userId])
+  @@index([eventId, status])
+}
+
+model UserEngagementMetric {
+  id               String   @id @default(uuid()) @db.Uuid
+  userId           String   @db.Uuid
+  date             DateTime @db.Date
+  proposalsVoted   Int      @default(0)
+  eventsAttended   Int      @default(0)
+  commentsPosted   Int      @default(0)
+  timeSpentMinutes Int      @default(0)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([date])
+}

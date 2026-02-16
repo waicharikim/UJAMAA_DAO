@@ -1,8 +1,196 @@
-import app from './app.js';
-import logger from './utils/logger.js'; // Adjust path if needed
+/**
+ * @file src/index.ts
+ * @description
+ * UJAMAADAO Server Entry Point - 2026 ETERNAL
+ * Starts the REST API server and coordinates async initialization
+ * 
+ * IMPORTANT: All scheduled/background jobs now run in a separate worker process.
+ * This file only starts the HTTP server.
+ * 
+ * Version: 2.3 — February 2026
+ * Updated: Docker compatibility improvements
+ * Security Hardened: February 2026
+ */
 
-const PORT = parseInt(process.env.PORT || '4000', 10);
+import app, { servicesReady } from "./app.js";
+import { logger } from "./core/logger/logger.js";
+import { prisma } from "./core/database/client.js";
+import { verifyEmailConfig } from "./core/utils/email.service.js";
 
-app.listen(PORT, '0.0.0.0', () => {
-  logger.info(`Server is running on http://localhost:${PORT}`);
-});
+// Environment & config
+const PORT = Number(process.env.PORT) || 4000;  // ← Changed from 8000 to match Docker
+const NODE_ENV = process.env.NODE_ENV || "development";
+
+/**
+ * Connect to database with retry logic
+ * Helpful in Docker environments where Postgres might take a moment
+ */
+async function connectDatabase(maxRetries = 5, delay = 2000): Promise<void> {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      await prisma.$connect();
+      await prisma.$queryRaw`SELECT 1`;
+      logger.info({ operationType: "STARTUP" }, "Database connected successfully");
+      return;
+    } catch (error) {
+      if (i === maxRetries - 1) {
+        // Last attempt failed
+        throw error;
+      }
+      logger.warn(
+        { 
+          operationType: "STARTUP", 
+          attempt: i + 1, 
+          maxRetries,
+          retryInMs: delay 
+        },
+        `Database connection failed, retrying...`
+      );
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+}
+
+async function startServer() {
+  try {
+    // ==========================================================================
+    // 1. WAIT FOR ALL ASYNC SERVICES TO BE READY
+    //    (Redis, event listeners, token blacklist, etc.)
+    // ==========================================================================
+
+    logger.info({ operationType: "STARTUP" }, "Waiting for async services...");
+    await servicesReady;
+    logger.info({ operationType: "STARTUP" }, "All async services ready");
+
+    // ==========================================================================
+    // 2. VERIFY DATABASE CONNECTION (with retry)
+    // ==========================================================================
+
+    logger.info({ operationType: "STARTUP" }, "Connecting to database...");
+    await connectDatabase();  // ← Now with retry logic
+
+    // ==========================================================================
+    // 3. VERIFY EMAIL CONFIG (non-blocking)
+    // ==========================================================================
+
+    verifyEmailConfig()
+      .then((isConfigured) => {
+        if (isConfigured) {
+          logger.info({ operationType: "STARTUP" }, "Email service configured");
+        } else {
+          logger.warn(
+            { operationType: "STARTUP" },
+            "Email service NOT configured — magic links will not work"
+          );
+        }
+      })
+      .catch((err) => {
+        logger.warn(
+          { operationType: "STARTUP", error: err.message },
+          "Email config check failed (non-critical)"
+        );
+      });
+
+    // ==========================================================================
+    // 4. START HTTP SERVER
+    // ==========================================================================
+
+    const server = app.listen(PORT, () => {
+      logger.info(
+        {
+          operationType: "SERVER",
+          metadata: {
+            port: PORT,
+            environment: NODE_ENV,
+            nodeVersion: process.version,
+            pid: process.pid,  // ← Added for debugging
+          },
+        },
+        `🚀 UjamaaDAO REST API running on http://localhost:${PORT}`
+      );
+
+      logger.info(
+        { operationType: "SERVER" },
+        `📚 API Documentation: http://localhost:${PORT}/api/v1/docs`
+      );
+      
+      // Signal readiness for process managers (PM2, systemd)
+      if (process.send) {
+        process.send('ready');
+      }
+    });
+
+    // ==========================================================================
+    // 5. GRACEFUL SHUTDOWN LOGIC
+    // ==========================================================================
+
+    const gracefulShutdown = async (signal: string) => {
+      logger.info(
+        { operationType: "SHUTDOWN", signal },
+        `${signal} received — initiating graceful shutdown`
+      );
+
+      // Stop accepting new connections
+      server.close(() => {
+        logger.info({ operationType: "SHUTDOWN" }, "HTTP server closed");
+      });
+
+      // Close Redis connections (rate limiter, token blacklist, BullMQ)
+      try {
+        const { shutdownRateLimiter } = await import("./core/middleware/rateLimiter.js");
+        await shutdownRateLimiter();
+
+        const { tokenBlacklistService } = await import("./core/services/token-blacklist.service.js");
+        await tokenBlacklistService.shutdown();
+
+        logger.info({ operationType: "SHUTDOWN" }, "Redis connections closed");
+      } catch (err) {
+        logger.warn(
+          { operationType: "SHUTDOWN", error: String(err) },
+          "Error closing Redis (may not be configured)"
+        );
+      }
+
+      // Disconnect Prisma
+      try {
+        await prisma.$disconnect();
+        logger.info({ operationType: "SHUTDOWN" }, "Database disconnected");
+      } catch (err) {
+        logger.error(
+          { operationType: "SHUTDOWN", error: String(err) },
+          "Error disconnecting Prisma"
+        );
+      }
+
+      logger.info({ operationType: "SHUTDOWN" }, "Graceful shutdown complete");
+      process.exit(0);
+    };
+
+    // Register shutdown handlers
+    process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+    process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+
+    // Force exit after 15 seconds if shutdown hangs
+    const forceExitTimeout = setTimeout(() => {
+      logger.error({ operationType: "SHUTDOWN" }, "Shutdown timeout — forcing exit");
+      process.exit(1);
+    }, 15000);
+
+    // Clear timeout on successful shutdown
+    process.on("exit", () => clearTimeout(forceExitTimeout));
+
+  } catch (error) {
+    logger.error(
+      {
+        operationType: "STARTUP_FAILURE",
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      "Fatal startup error — exiting"
+    );
+    process.exit(1);
+  }
+}
+
+// Start everything
+startServer();
