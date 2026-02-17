@@ -1,46 +1,440 @@
+version: '3.9'
+
+# ═══════════════════════════════════════════════════════════════════════════
+# UJAMAA DAO - DOCKER COMPOSE
+# ═══════════════════════════════════════════════════════════════════════════
+# This file is located in: /docker/docker-compose.yml
+# Backend code is in: /backend/
+# 
+# ✅ ACTIVE (Version A - Pragmatic):
+#    - Simple web + worker + Traefik setup
+#    - Fast startup, easy debugging
+#    - Perfect for current development
+#
+# 💤 COMMENTED (Version B - Ambitious):
+#    - Envoy sidecars for service mesh
+#    - Fluent-bit for centralized logging
+#    - Prometheus + Grafana for metrics
+#    - Full observability stack
+#
+# To enable Version B features:
+#   1. Uncomment the sections marked "VERSION B"
+#   2. Comment out corresponding "VERSION A" sections
+#   3. Run: docker-compose up -d --build
+# ═══════════════════════════════════════════════════════════════════════════
 
 services:
+  # ─────────────────────────────────────────────────────────────────────────
+  # TRAEFIK (Reverse Proxy + Let's Encrypt)
+  # ─────────────────────────────────────────────────────────────────────────
+  traefik:
+    image: traefik:v2.11
+    container_name: ujamaa_traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"       # HTTP
+      - "443:443"     # HTTPS
+      - "8080:8080"   # Traefik dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ../traefik/acme.json:/letsencrypt/acme.json
+      - ../traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+    environment:
+      - TZ=UTC
+    networks:
+      - backend
+      # - mesh  # VERSION B: Uncomment for service mesh
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.localhost`)"
+      - "traefik.http.routers.traefik-dashboard.service=api@internal"
+      - "traefik.http.routers.traefik-dashboard.entrypoints=web"
+
+  # ═════════════════════════════════════════════════════════════════════════
+  # WEB SERVER (API) - VERSION A (ACTIVE)
+  # ═════════════════════════════════════════════════════════════════════════
+  web:
+    build:
+      context: ../backend           # ← Path from docker/ to backend/
+      dockerfile: Dockerfile        # ← Dockerfile is in backend/
+      target: dev
+    container_name: ujamaa_web
+    restart: unless-stopped
+    expose:
+      - "4000"
+    ports:
+      - "4000:4000"  # Exposed for direct access during dev
+    environment:
+      - NODE_ENV=development
+      - PORT=4000
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-ujamaa_user}:${POSTGRES_PASSWORD:-ujamaa_pass}@postgres:5432/${POSTGRES_DB:-ujamaa_db}
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET:-dev_jwt_secret_change_me}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
+      - DASHBOARD_PASSWORD=${DASHBOARD_PASSWORD:-admin123}
+      # VERSION B: Uncomment for metrics
+      # - STATSD_HOST=web-metrics
+      # - STATSD_PORT=8125
+    volumes:
+      - ../backend:/usr/src/app                # ← Mount backend directory
+      - /usr/src/app/node_modules
+      - /usr/src/app/node_modules/.prisma
+    networks:
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: ["./docker/start-web.sh"]         # ← Use startup script
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.web.rule=Host(`localhost`) || Host(`ujamaa.localhost`)"
+      - "traefik.http.routers.web.entrypoints=web"
+      - "traefik.http.services.web.loadbalancer.server.port=4000"
+
+  # ═════════════════════════════════════════════════════════════════════════
+  # VERSION B: WEB API POD WITH SIDECARS (COMMENTED OUT)
+  # ═════════════════════════════════════════════════════════════════════════
+  # Uncomment this entire section when ready for full observability
+  
+  # # ─── API Envoy Sidecar (Service Mesh) ───
+  # web-envoy:
+  #   image: envoyproxy/envoy:v1.28-latest
+  #   container_name: ujamaa_web_envoy
+  #   restart: unless-stopped
+  #   volumes:
+  #     - ../envoy/web-envoy.yaml:/etc/envoy/envoy.yaml:ro
+  #   networks:
+  #     - backend
+  #     - mesh
+  #   depends_on:
+  #     - web
+  #   ports:
+  #     - "9901:9901"  # Envoy admin interface
+  #   command: ["-c", "/etc/envoy/envoy.yaml"]
+
+  # # ─── API Logging Sidecar (Fluent Bit) ───
+  # web-fluent-bit:
+  #   image: fluent/fluent-bit:2.2
+  #   container_name: ujamaa_web_fluent_bit
+  #   restart: unless-stopped
+  #   volumes:
+  #     - ../fluent-bit/web-fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+  #     - /var/lib/docker/containers:/var/lib/docker/containers:ro
+  #   networks:
+  #     - backend
+  #   depends_on:
+  #     - web
+  #     - loki
+
+  # # ─── API Metrics Sidecar (StatsD Exporter) ───
+  # web-metrics:
+  #   image: prom/statsd-exporter:v0.26.0
+  #   container_name: ujamaa_web_metrics
+  #   restart: unless-stopped
+  #   ports:
+  #     - "9102:9102"  # Prometheus metrics endpoint
+  #     - "8125:8125/udp"  # StatsD receiver
+  #   networks:
+  #     - backend
+  #   command:
+  #     - '--statsd.mapping-config=/etc/statsd/statsd-mapping.yml'
+  #   volumes:
+  #     - ../statsd/web-statsd-mapping.yml:/etc/statsd/statsd-mapping.yml:ro
+
+  # ═════════════════════════════════════════════════════════════════════════
+  # WORKER - VERSION A (ACTIVE)
+  # ═════════════════════════════════════════════════════════════════════════
+  worker:
+    build:
+      context: ../backend           # ← Path from docker/ to backend/
+      dockerfile: Dockerfile
+      target: dev
+    container_name: ujamaa_worker
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-ujamaa_user}:${POSTGRES_PASSWORD:-ujamaa_pass}@postgres:5432/${POSTGRES_DB:-ujamaa_db}
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET:-dev_jwt_secret_change_me}
+      # VERSION B: Uncomment for metrics
+      # - STATSD_HOST=worker-metrics
+      # - STATSD_PORT=8125
+    volumes:
+      - ../backend:/usr/src/app                # ← Mount backend directory
+      - /usr/src/app/node_modules
+      - /usr/src/app/node_modules/.prisma
+    networks:
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_started
+    command: ["./docker/start-worker.sh"]      # ← Use startup script
+
+  # ═════════════════════════════════════════════════════════════════════════
+  # VERSION B: WORKER POD WITH SIDECARS (COMMENTED OUT)
+  # ═════════════════════════════════════════════════════════════════════════
+
+  # # ─── Worker Logging Sidecar (Fluent Bit) ───
+  # worker-fluent-bit:
+  #   image: fluent/fluent-bit:2.2
+  #   container_name: ujamaa_worker_fluent_bit
+  #   restart: unless-stopped
+  #   volumes:
+  #     - ../fluent-bit/worker-fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+  #     - /var/lib/docker/containers:/var/lib/docker/containers:ro
+  #   networks:
+  #     - backend
+  #   depends_on:
+  #     - worker
+  #     - loki
+
+  # # ─── Worker Metrics Sidecar (StatsD Exporter) ───
+  # worker-metrics:
+  #   image: prom/statsd-exporter:v0.26.0
+  #   container_name: ujamaa_worker_metrics
+  #   restart: unless-stopped
+  #   ports:
+  #     - "9103:9102"  # Prometheus metrics endpoint
+  #     - "8126:8125/udp"  # StatsD receiver
+  #   networks:
+  #     - backend
+  #   command:
+  #     - '--statsd.mapping-config=/etc/statsd/statsd-mapping.yml'
+  #   volumes:
+  #     - ../statsd/worker-statsd-mapping.yml:/etc/statsd/statsd-mapping.yml:ro
+
+  # ═════════════════════════════════════════════════════════════════════════
+  # DATABASE & CACHE (SAME FOR BOTH VERSIONS)
+  # ═════════════════════════════════════════════════════════════════════════
+
   postgres:
     image: postgres:15-alpine
     container_name: ujamaa_postgres
-    restart: always
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: ujamaa_user
-      POSTGRES_PASSWORD: ujamaa_pass
-      POSTGRES_DB: ujamaa_db
+      POSTGRES_USER: ${POSTGRES_USER:-ujamaa_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ujamaa_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-ujamaa_db}
+      PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
-      - ujamaa_pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "5432:5432"  # Exposed for direct DB access during dev
+    networks:
+      - backend
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ujamaa_user -d ujamaa_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ujamaa_user} -d ${POSTGRES_DB:-ujamaa_db}"]
       interval: 5s
       timeout: 2s
       retries: 10
-      start_period: 5s  
+      start_period: 10s
 
-  backend:
-    build:
-      context: ../backend
-      dockerfile: Dockerfile
-    container_name: ujamaa_backend
-    depends_on:
-      - postgres
+  postgres_test:
+    image: postgres:15-alpine
+    container_name: ujamaa_postgres_test
+    restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://ujamaa_user:ujamaa_pass@postgres:5432/ujamaa_db
-      NODE_ENV: development
-      JWT_SECRET_KEY: 6e603cfa9affb7677020ad6a930bd3f076867ff38d100586dc5d985bed845ad0
-    ports:
-      - "4000:4000"
+      POSTGRES_USER: ${POSTGRES_USER:-ujamaa_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ujamaa_pass}
+      POSTGRES_DB: ujamaa_test_db
+      PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
-      - ../backend:/usr/src/app  # Mount backend code for live updates
-      - /usr/src/app/node_modules # Preserve node_modules inside container
-    command: sh -c "./docker/start.sh" # Runs nodemon + ts-node
-    restart: on-failure
+      - pgdata_test:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"  # Different host port for test DB
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ujamaa_user} -d ujamaa_test_db"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+      start_period: 10s
 
-  # Add frontend & blockchain-node services here as needed e.g.
-  # frontend:
-  #   ...
+  redis:
+    image: redis:7-alpine
+    container_name: ujamaa_redis
+    restart: unless-stopped
+    command: redis-server --save 60 1 --loglevel warning --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"  # Exposed for direct Redis access during dev
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
 
+  # ═════════════════════════════════════════════════════════════════════════
+  # VERSION B: OBSERVABILITY STACK (COMMENTED OUT)
+  # ═════════════════════════════════════════════════════════════════════════
+  # Uncomment this entire section when you need full monitoring
+
+  # # ─────────────────────────────────────────────
+  # # PROMETHEUS (Metrics Collection)
+  # # ─────────────────────────────────────────────
+  # prometheus:
+  #   image: prom/prometheus:v2.48.0
+  #   container_name: ujamaa_prometheus
+  #   restart: unless-stopped
+  #   ports:
+  #     - "9090:9090"
+  #   volumes:
+  #     - ../prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+  #     - prometheus_data:/prometheus
+  #   networks:
+  #     - backend
+  #   command:
+  #     - '--config.file=/etc/prometheus/prometheus.yml'
+  #     - '--storage.tsdb.path=/prometheus'
+  #     - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+  #     - '--web.console.templates=/usr/share/prometheus/consoles'
+  #     - '--storage.tsdb.retention.time=30d'
+
+  # # ─────────────────────────────────────────────
+  # # GRAFANA (Metrics Visualization)
+  # # ─────────────────────────────────────────────
+  # grafana:
+  #   image: grafana/grafana:10.2.2
+  #   container_name: ujamaa_grafana
+  #   restart: unless-stopped
+  #   ports:
+  #     - "3001:3000"  # Port 3001 to avoid conflict with frontend
+  #   environment:
+  #     - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+  #     - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+  #     - GF_USERS_ALLOW_SIGN_UP=false
+  #   volumes:
+  #     - grafana_data:/var/lib/grafana
+  #     - ../grafana/provisioning:/etc/grafana/provisioning:ro
+  #     - ../grafana/dashboards:/var/lib/grafana/dashboards:ro
+  #   networks:
+  #     - backend
+  #   depends_on:
+  #     - prometheus
+  #     - loki
+
+  # # ─────────────────────────────────────────────
+  # # LOKI (Log Aggregation)
+  # # ─────────────────────────────────────────────
+  # loki:
+  #   image: grafana/loki:2.9.3
+  #   container_name: ujamaa_loki
+  #   restart: unless-stopped
+  #   ports:
+  #     - "3100:3100"
+  #   volumes:
+  #     - ../loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+  #     - loki_data:/loki
+  #   networks:
+  #     - backend
+  #   command: -config.file=/etc/loki/loki-config.yml
+
+  # # ─────────────────────────────────────────────
+  # # JAEGER (Distributed Tracing) - OPTIONAL
+  # # ─────────────────────────────────────────────
+  # jaeger:
+  #   image: jaegertracing/all-in-one:1.52
+  #   container_name: ujamaa_jaeger
+  #   restart: unless-stopped
+  #   ports:
+  #     - "5775:5775/udp"  # Zipkin compact thrift
+  #     - "6831:6831/udp"  # Jaeger compact thrift
+  #     - "6832:6832/udp"  # Jaeger binary thrift
+  #     - "5778:5778"      # Config endpoint
+  #     - "16686:16686"    # UI
+  #     - "14268:14268"    # Collector HTTP
+  #     - "14250:14250"    # gRPC
+  #     - "9411:9411"      # Zipkin
+  #   environment:
+  #     - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+  #     - COLLECTOR_OTLP_ENABLED=true
+  #   networks:
+  #     - backend
+
+  # # ─────────────────────────────────────────────
+  # # NODE EXPORTER (Host Metrics) - OPTIONAL
+  # # ─────────────────────────────────────────────
+  # node-exporter:
+  #   image: prom/node-exporter:v1.7.0
+  #   container_name: ujamaa_node_exporter
+  #   restart: unless-stopped
+  #   ports:
+  #     - "9100:9100"
+  #   networks:
+  #     - backend
+  #   command:
+  #     - '--path.rootfs=/host'
+  #   volumes:
+  #     - /:/host:ro,rslave
+
+  # # ─────────────────────────────────────────────
+  # # POSTGRES EXPORTER (DB Metrics) - OPTIONAL
+  # # ─────────────────────────────────────────────
+  # postgres-exporter:
+  #   image: prometheuscommunity/postgres-exporter:v0.15.0
+  #   container_name: ujamaa_postgres_exporter
+  #   restart: unless-stopped
+  #   ports:
+  #     - "9187:9187"
+  #   environment:
+  #     - DATA_SOURCE_NAME=postgresql://${POSTGRES_USER:-ujamaa_user}:${POSTGRES_PASSWORD:-ujamaa_pass}@postgres:5432/${POSTGRES_DB:-ujamaa_db}?sslmode=disable
+  #   networks:
+  #     - backend
+  #   depends_on:
+  #     - postgres
+
+  # # ─────────────────────────────────────────────
+  # # REDIS EXPORTER (Cache Metrics) - OPTIONAL
+  # # ─────────────────────────────────────────────
+  # redis-exporter:
+  #   image: oliver006/redis_exporter:v1.55.0
+  #   container_name: ujamaa_redis_exporter
+  #   restart: unless-stopped
+  #   ports:
+  #     - "9121:9121"
+  #   environment:
+  #     - REDIS_ADDR=redis://redis:6379
+  #   networks:
+  #     - backend
+  #   depends_on:
+  #     - redis
+
+# ═══════════════════════════════════════════════════════════════════════════
+# NETWORKS
+# ═══════════════════════════════════════════════════════════════════════════
+networks:
+  backend:
+    driver: bridge
+  # mesh:  # VERSION B: Uncomment for service mesh
+  #   driver: bridge
+
+# ═══════════════════════════════════════════════════════════════════════════
+# VOLUMES
+# ═══════════════════════════════════════════════════════════════════════════
 volumes:
-  ujamaa_pgdata:
+  # Active volumes (Version A)
+  pgdata:
+    driver: local
+  pgdata_test:
+    driver: local
+  redis_data:
+    driver: local
+  
+  # VERSION B: Uncomment when enabling observability stack
+  # prometheus_data:
+  #   driver: local
+  # grafana_data:
+  #   driver: local
+  # loki_data:
+  #   driver: local
