@@ -2,41 +2,46 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { authService } from '../../src/modules/auth/services/auth.service.js';
 import { prisma } from '../../src/core/database/client.js';
-import { participationRightsService } from '../../src/modules/economy/services/participationRights.service.js';
-import { groupMembershipService } from '../../src/modules/community/services/groupMembership.service.js';
 import { sendVerificationEmail, sendLoginEmail } from '../../src/core/utils/email.service.js';
 
 vi.mock('../../src/core/utils/email.service.js');
 vi.mock('../../src/modules/economy/services/participationRights.service.js');
 vi.mock('../../src/modules/community/services/groupMembership.service.js');
 
+// Fixed UUIDs for location hierarchy (seeded fresh before each test)
+const TEST_COUNTY_ID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+const TEST_CONST_ID = 'b2c3d4e5-f6a7-8901-bcde-f12345678901';
+const TEST_WARD_ID = 'c3d4e5f6-a7b8-9012-cdef-123456789012';
+
 describe('Auth Service - Magic Link Flow', () => {
   beforeEach(async () => {
-    await prisma.$transaction([
-      prisma.user.deleteMany(),
-      prisma.ward.deleteMany(),
-      prisma.emailVerificationToken.deleteMany(),
-    ]);
+    // testSetup.ts already TRUNCATEs all tables before each test via global beforeEach.
+    // Here we seed the location hierarchy required by authService.sendMagicLink.
+    await prisma.county.create({
+      data: { id: TEST_COUNTY_ID, name: 'Test County', code: 'TC-TEST-01' },
+    });
+    await prisma.constituency.create({
+      data: { id: TEST_CONST_ID, name: 'Test Constituency', countyId: TEST_COUNTY_ID },
+    });
+    await prisma.ward.create({
+      data: {
+        id: TEST_WARD_ID,
+        name: 'Test Ward',
+        constituencyId: TEST_CONST_ID,
+        countyId: TEST_COUNTY_ID,
+      },
+    });
   });
 
   it('should create new user and send verification email on first request', async () => {
-    const ward = await prisma.ward.create({
-      data: {
-        id: 'ward-test-1',
-        name: 'Test Ward',
-        constituencyId: 'const-1',
-        countyId: 'county-1',
-      },
-    });
-
     const dto = {
       email: 'newuser@ujamaa.test',
       name: 'New User',
       phoneNumber: '+254700000000',
-      primaryWardId: ward.id,
-      secondaryWardId: ward.id,
-      industryIds: [],
-      goodsServiceIds: [],
+      primaryWardId: TEST_WARD_ID,
+      secondaryWardId: TEST_WARD_ID,
+      industryIds: [] as string[],
+      goodsServiceIds: [] as string[],
     };
 
     const result = await authService.sendMagicLink(dto);
@@ -63,10 +68,10 @@ describe('Auth Service - Magic Link Flow', () => {
       email: 'existing@ujamaa.test',
       name: 'Existing',
       phoneNumber: '+254700000001',
-      primaryWardId: 'dummy',
-      secondaryWardId: 'dummy',
-      industryIds: [],
-      goodsServiceIds: [],
+      primaryWardId: TEST_WARD_ID,
+      secondaryWardId: TEST_WARD_ID,
+      industryIds: [] as string[],
+      goodsServiceIds: [] as string[],
     };
 
     const result = await authService.sendMagicLink(dto);
