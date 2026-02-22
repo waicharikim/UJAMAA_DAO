@@ -9,9 +9,9 @@
  * Version: 2.0 — December 2025
  */
 
-import { prisma } from "../../../prisma/client.js";
+import { prisma } from "../../../core/database/client.js";
 import { participationRightsService } from "../../economy/services/participationRights.service.js";
-import { globalImpactPointService } from "../../reputation/services/impactPoint.service.js";
+import { globalImpactPointService } from "../../reputation/service/impactPoint.service.js";
 import { roleService } from "../../../core/services/role.service.js";
 import { ApiError } from "../../../core/errors/ApiError.js";
 import { logger } from "../../../core/logger/logger.js";

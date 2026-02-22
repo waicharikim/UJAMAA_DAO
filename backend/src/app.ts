@@ -49,6 +49,14 @@ import authRoutes from "./modules/auth/routes/auth.routes.js";
 import userRoutes from "./modules/user/routes/user.routes.js";
 import adminRoutes from "./modules/admin/routes/admin.routes.js";
 import economyRoutes from "./modules/economy/routes/economy.routes.js";
+import communityRoutes from "./modules/community/routes/group.routes.js";
+import governanceRoutes from "./modules/governance/routes/proposal.routes.js";
+import projectRoutes from "./modules/projects/routes/project.routes.js";
+import marketplaceRoutes from "./modules/marketplace/routes/marketplace.routes.js";
+import notificationRoutes from "./modules/notifications/routes/notification.routes.js";
+import emergencyRoutes from "./modules/emergency/routes/emergency.routes.js";
+import auditRoutes from "./modules/audit/routes/audit.routes.js";
+import onboardingRoutes from "./modules/onboarding/routes/onboarding.routes.js";
 
 // Bull Board dashboard
 import { ExpressAdapter } from '@bull-board/express';
@@ -220,6 +228,14 @@ app.get("/api/v1/docs", (_req, res) => {
       users: "/api/v1/users",
       admin: "/api/v1/admin",
       economy: "/api/v1/economy",
+      community: "/api/v1/community",
+      governance: "/api/v1/governance",
+      projects: "/api/v1/projects",
+      marketplace: "/api/v1/marketplace",
+      notifications: "/api/v1/notifications",
+      emergency: "/api/v1/emergency",
+      audit: "/api/v1/audit",
+      onboarding: "/api/v1/onboarding",
       health: "/health",
       ready: "/ready",
     },
@@ -234,6 +250,14 @@ app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/users", userRoutes);
 app.use("/api/v1/admin", adminRoutes);
 app.use("/api/v1/economy", economyRoutes);
+app.use("/api/v1/community", communityRoutes);
+app.use("/api/v1/governance", governanceRoutes);
+app.use("/api/v1/projects", projectRoutes);
+app.use("/api/v1/marketplace", marketplaceRoutes);
+app.use("/api/v1/notifications", notificationRoutes);
+app.use("/api/v1/emergency", emergencyRoutes);
+app.use("/api/v1/audit", auditRoutes);
+app.use("/api/v1/onboarding", onboardingRoutes);
 
 
 // ─────────────────────────────────────────────
