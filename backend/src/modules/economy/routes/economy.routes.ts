@@ -14,7 +14,7 @@
 
 import { Router } from "express";
 import { asyncHandler } from "../../../core/utils/response.js";
-import { validateRequest } from "../../../core/middleware/ValidateRequests.js";
+import { validateRequest } from "../../../core/middleware/validateRequest.js";
 import { authenticate } from "../../../core/middleware/auth.middleware.js";
 import { authorize } from "../../../core/middleware/authorize.js";
 import { buildRateLimiter } from "../../../core/middleware/rateLimiter.js";

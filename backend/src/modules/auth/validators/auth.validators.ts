@@ -40,7 +40,7 @@ const phoneNumberSchema = z
   )
   .transform((val) => val.trim());
 
-const uuidSchema = z.string().uuid("Invalid UUID format").trim();
+export const uuidSchema = z.string().uuid("Invalid UUID format").trim();
 
 const ethereumAddressSchema = z
   .string()

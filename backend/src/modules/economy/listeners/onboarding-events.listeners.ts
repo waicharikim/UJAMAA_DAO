@@ -12,7 +12,7 @@
 import { eventBus } from "../../../core/utils/eventBus.js";
 import { logger } from "../../../core/logger/logger.js";
 import { participationRightsService } from "../services/participationRights.service.js";
-import { ParticipationRightsReason, PR_CONFIG } from "../../onboarding/types.js";
+import { ParticipationRightsReason, PR_CONFIG } from "../types.js";
 
 /**
  * Register all onboarding-related event listeners

@@ -13,6 +13,7 @@
  */
 
 import { Router } from "express";
+import { z } from "zod";
 import { asyncHandler } from "../../../core/utils/response.js";
 import { validateRequest } from "../../../core/middleware/validateRequest.js";
 import { authenticate } from "../../../core/middleware/auth.middleware.js";

@@ -21,15 +21,15 @@ const reasonSchema = z
   .optional()
   .transform((val) => (val ? val.trim() : undefined));
 
-const userIdParamSchema = z.object({
+export const userIdParamSchema = z.object({
   userId: uuidSchema,
 });
 
-const requestIdParamSchema = z.object({
+export const requestIdParamSchema = z.object({
   requestId: uuidSchema,
 });
 
-const eventIdParamSchema = z.object({
+export const eventIdParamSchema = z.object({
   eventId: uuidSchema,
 });
 
