@@ -109,7 +109,8 @@ export function signJwtToken(
     algorithm: JWT_ALGORITHM,
     issuer: JWT_ISSUER,
     audience: JWT_AUDIENCE,
-    jwtid: jti,
+    // jti is already in the payload — do NOT also pass jwtid here,
+    // jsonwebtoken throws "jwtid payload claim cannot be overridden"
   };
 
   // Only add expiresIn if explicitly provided (not undefined)
