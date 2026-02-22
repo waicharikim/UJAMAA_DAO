@@ -13,7 +13,7 @@ import { validateRequest } from "../../../core/middleware/validateRequest.js";
 import { z } from "zod";
 import { asyncHandler } from "../../../core/utils/response.js";
 import { roleService } from "../../../core/services/role.service.js";
-import { prisma } from "../../../prisma/client.js";
+import { prisma } from "../../../core/database/client.js";
 
 const router = Router();
 

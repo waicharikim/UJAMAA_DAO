@@ -9,7 +9,7 @@
  * Version: 2.0 — December 2025
  */
 
-import { prisma } from "../../../prisma/client.js";
+import { prisma } from "../../../core/database/client.js";
 import { ApiError } from "../../../core/errors/ApiError.js";
 import { logger } from "../../../core/logger/logger.js";
 import { AuditAction } from "../types.js";
