@@ -134,3 +134,34 @@ model TreasuryAudit {
   @@index([transactionId])
   @@index([escrowId])
 }
+
+// ============================================================================
+// WALLET TRANSACTIONS
+// The on-ledger record of every credit/debit to a GroupTreasury.
+// Referenced by governance (Proposal), projects (Project), and treasury itself.
+// ============================================================================
+
+model WalletTransaction {
+  id              String        @id @default(uuid()) @db.Uuid
+  treasuryId      String        @db.Uuid
+  amount          Decimal       @db.Decimal(20, 2)
+  currency        String        @default("KES")
+  transactionType String        // "CREDIT", "DEBIT"
+  description     String?
+  referenceType   String?       // "PROPOSAL", "PROJECT", "DUES", "ESCROW", "MANUAL"
+  proposalId      String?       @db.Uuid
+  projectId       String?       @db.Uuid
+  initiatedById   String?       @db.Uuid
+  metadata        Json?
+  createdAt       DateTime      @default(now())
+
+  treasury GroupTreasury @relation("GroupTreasuryTransactions", fields: [treasuryId], references: [id], onDelete: Cascade)
+  proposal Proposal?     @relation("ProposalTransactions", fields: [proposalId], references: [id], onDelete: SetNull)
+  project  Project?      @relation("ProjectTransactions", fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([treasuryId, createdAt])
+  @@index([proposalId])
+  @@index([projectId])
+  @@index([createdAt])
+  @@map("wallet_transactions")
+}

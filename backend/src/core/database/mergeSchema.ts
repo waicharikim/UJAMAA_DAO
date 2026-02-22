@@ -25,24 +25,27 @@ const ROOT = process.cwd();
 
 // Paths
 const BASE_SCHEMA_PATH = path.join(ROOT, "src/core/database/base.prisma");
-const MODULE_SCHEMA_GLOB = path.join(ROOT, "src/modules/*/prisma/chema.prisma");
+const MODULE_SCHEMA_GLOB = path.join(ROOT, "src/modules/*/prisma/schema.prisma");
 const OUTPUT_DIR = path.join(ROOT, "prisma");
 const OUTPUT_SCHEMA_PATH = path.join(OUTPUT_DIR, "schema.prisma");
 
-// UPDATED: Complete module order from business doc
+// Module merge order — base.prisma always comes first (handled separately).
+// Order matters: modules earlier in the list can be referenced by later ones.
+// Rule: if module A references a model from module B, B must come before A.
+// Note: only list modules that have a prisma/schema.prisma file.
 const MODULE_ORDER = [
-  "auth",
-  "user",
-  "economy",
-  "onboarding",
-  "community",
-  "governance",
-  "marketplace",
-  "education",
-  "emergency",
-  "audit",
-  "wallet",
-  "notifications"
+  "auth",         // no cross-module dependencies
+  "user",         // depends on auth (back-relations only); includes onboarding models
+  "economy",      // depends on user (dues, work logs)
+  "community",    // depends on user, economy (GroupTreasury via DuesAllocation)
+  "governance",   // depends on community (Group), treasury (Escrow, WalletTransaction)
+  "projects",     // depends on governance (Proposal), economy (PhysicalWorkLog)
+  "treasury",     // depends on governance (Proposal), projects (Project), community (Group)
+  "marketplace",  // depends on community (Group)
+  "education",    // standalone
+  "emergency",    // depends on community (Group)
+  "notifications",// depends on user; includes audit/consent/log models
+  "admin",        // depends on all — admin views across all modules (no schema yet)
 ];
 
 async function fileExists(p: string) {

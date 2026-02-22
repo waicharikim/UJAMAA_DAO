@@ -120,7 +120,7 @@ model Group {
   treasury            GroupTreasury[]
   treasuryPolicies    TreasuryPolicy[]
   ownedProjects       Project[]               @relation("GroupProjects") // UPDATED relation name
-  elections           Election[]
+  // elections Election[] // TODO: define Election model when governance elections are implemented
   nationalContributions NationalContribution[]
 
   @@index([isSystemGroup, systemType])
@@ -305,4 +305,47 @@ model UserEngagementMetric {
 
   @@unique([userId, date])
   @@index([date])
+}
+
+// ============================================================================
+// VERIFICATION & VOUCHING (moved from base.prisma)
+// ============================================================================
+
+// Tracks the multi-step community verification process for a user
+model VerificationRequest {
+  id              String    @id @default(uuid()) @db.Uuid
+  userId          String    @db.Uuid
+  type            String    // "COMMUNITY"
+  status          String    // "PENDING", "VOUCHING", "PAYMENT_PENDING", "APPROVED", "REJECTED", "EXPIRED"
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  expiresAt       DateTime?
+  rejectionReason String?
+  reviewedBy      String?   @db.Uuid // Admin user ID
+  reviewedAt      DateTime?
+
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type])
+  @@index([userId, status])
+  @@map("verification_requests")
+}
+
+// Tracks vouches given by existing community members to new members
+model CommunityVouch {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid // New user being vouched for
+  voucherId String   @db.Uuid // Existing user vouching
+  wardId    String   @db.Uuid // Ward where vouching happens (must match both users' ward)
+  createdAt DateTime @default(now())
+
+  user    User @relation("VouchedFor", fields: [userId], references: [id], onDelete: Cascade)
+  voucher User @relation("VouchesGiven", fields: [voucherId], references: [id], onDelete: Cascade)
+  ward    Ward @relation(fields: [wardId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, voucherId]) // Prevent duplicate vouches
+  @@index([userId])
+  @@index([voucherId])
+  @@index([wardId])
+  @@map("community_vouches")
 }

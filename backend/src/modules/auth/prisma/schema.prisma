@@ -131,8 +131,8 @@ model PhoneVerification {
 
 model PasswordReset {
   id        String   @id @default(cuid())
-  
-  userId    String
+
+  userId    String   @db.Uuid
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   tokenHash String   @db.Text  // Hashed token (never store plaintext)
@@ -156,9 +156,9 @@ model PasswordReset {
 model TwoFactorAuth {
   id                      String   @id @default(cuid())
   
-  userId                  String   @unique
+  userId                  String   @unique @db.Uuid
   user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   // TOTP secret (encrypted)
   secretEncrypted         String   @db.Text
   
@@ -183,9 +183,9 @@ model TwoFactorAuth {
 model WebAuthnCredential {
   id            String   @id @default(cuid())
   
-  userId        String
+  userId        String   @db.Uuid
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   // WebAuthn credential data
   credentialId  String   @unique  // Base64url encoded credential ID
   publicKey     String   @db.Text // Base64url encoded public key
@@ -238,9 +238,9 @@ model MagicLinkToken {
 model AccountRecovery {
   id                  String   @id @default(cuid())
   
-  userId              String   @unique
+  userId              String   @unique @db.Uuid
   user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   // Recovery codes (encrypted, like 2FA backup codes but more)
   recoveryCodesEncrypted String[] // 20 codes for account recovery
   
@@ -265,7 +265,7 @@ model AccountRecovery {
 model SecurityEvent {
   id          String   @id @default(cuid())
   
-  userId      String?  // Nullable for failed login attempts
+  userId      String?  @db.Uuid // Nullable for failed login attempts
   user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   
   eventType   String   @db.VarChar(50) // "login_failed", "password_reset", "2fa_disabled", etc.
@@ -279,7 +279,7 @@ model SecurityEvent {
   
   resolved    Boolean  @default(false)
   resolvedAt  DateTime?
-  resolvedBy  String?  // Admin user ID
+  resolvedBy  String?  @db.Uuid // Admin user ID
   
   createdAt   DateTime @default(now())
   
