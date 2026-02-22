@@ -28,6 +28,8 @@ import {
   walletNonceSchema,
   walletVerifySchema,
   walletLinkSchema,
+  sendPhoneCodeSchema,
+  verifyPhoneCodeSchema,
   sessionIdSchema,
   refreshTokenSchema,
   twoFactorCodeSchema,
@@ -67,6 +69,10 @@ import {
   refreshToken,
   revokeAllRefreshTokens,
 } from '../handlers/refresh-token.handlers.js';
+import {
+  sendVerificationCode,
+  verifyCode,
+} from '../handlers/phone-verification.handlers.js';
 import {
   enable2FA,
   verify2FA,
@@ -340,6 +346,28 @@ router.patch(
   validateRequest({ schema: securityEventIdSchema, target: 'params' }),
   validateRequest({ schema: resolveSecurityEventSchema, target: 'body' }),
   asyncHandler(resolveEvent)
+);
+
+// ============================================================================
+// PHONE VERIFICATION — Protected (must be authenticated)
+// ============================================================================
+
+router.post(
+  '/phone/send-code',
+  authenticate,
+  authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
+  buildRateLimiter({ windowMs: 60 * 1000, max: 3 }),
+  validateRequest({ schema: sendPhoneCodeSchema, target: 'body' }),
+  asyncHandler(sendVerificationCode)
+);
+
+router.post(
+  '/phone/verify-code',
+  authenticate,
+  authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
+  buildRateLimiter({ windowMs: 5 * 60 * 1000, max: 10 }),
+  validateRequest({ schema: verifyPhoneCodeSchema, target: 'body' }),
+  asyncHandler(verifyCode)
 );
 
 export default router;
