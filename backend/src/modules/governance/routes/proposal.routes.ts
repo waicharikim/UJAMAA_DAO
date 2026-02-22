@@ -5,19 +5,19 @@
  * Version: 2.0 — December 2025
  */
 
-import { Router } from "express";
-import { ProposalController } from "../controllers/proposal.controller.js";
-import { authenticate } from "../../../core/middleware/auth.middleware.js";
-import { validateRequest } from "../../../core/middleware/validateRequest.js";
-import { z } from "zod";
-import { asyncHandler } from "../../../core/utils/response.js";
+import { Router } from 'express';
+import { ProposalController } from '../controllers/proposal.controller.js';
+import { authenticate } from '../../../core/middleware/auth.middleware.js';
+import { validateRequest } from '../../../core/middleware/validateRequest.js';
+import { z } from 'zod';
+import { asyncHandler } from '../../../core/utils/response.js';
 
 const router = Router();
 
 router.use(authenticate);
 
 router.post(
-  "/create",
+  '/create',
   validateRequest({
     schema: z.object({
       groupId: z.string().uuid(),
@@ -26,37 +26,34 @@ router.post(
       fundingAmountKes: z.number().optional(),
       isEmergency: z.boolean().optional(),
     }),
-    target: "body",
+    target: 'body',
   }),
   asyncHandler(ProposalController.createProposal)
 );
 
 router.post(
-  "/start-voting",
+  '/start-voting',
   validateRequest({
     schema: z.object({
       proposalId: z.string().uuid(),
     }),
-    target: "body",
+    target: 'body',
   }),
   asyncHandler(ProposalController.startVoting)
 );
 
 router.post(
-  "/vote",
+  '/vote',
   validateRequest({
     schema: z.object({
       proposalId: z.string().uuid(),
-      option: z.enum(["YES", "NO", "ABSTAIN"]),
+      option: z.enum(['YES', 'NO', 'ABSTAIN']),
     }),
-    target: "body",
+    target: 'body',
   }),
   asyncHandler(ProposalController.castVote)
 );
 
-router.post(
-  "/:proposalId/tally",
-  asyncHandler(ProposalController.tallyVotes)
-);
+router.post('/:proposalId/tally', asyncHandler(ProposalController.tallyVotes));
 
 export default router;

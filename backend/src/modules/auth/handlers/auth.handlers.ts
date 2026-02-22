@@ -2,15 +2,15 @@
  * @file src/modules/auth/handlers/auth.handlers.ts
  * @description
  * Request handlers for magic link authentication
- * 
+ *
  * Version: 2.1 — January 2026
  */
 
-import { Response } from "express";
-import { AuthRequest } from "../../../core/types/Ujamaadao.types.js";
-import { authService } from "../services/auth.service.js";
-import { sendSuccess } from "../../../core/utils/response.js";
-import { SendMagicLinkDto } from "../types.js";
+import { Response } from 'express';
+import { AuthRequest } from '../../../core/types/Ujamaadao.types.js';
+import { authService } from '../services/auth.service.js';
+import { sendSuccess } from '../../../core/utils/response.js';
+import { SendMagicLinkDto } from '../types.js';
 
 /**
  * POST /auth/magic-link/send
@@ -24,9 +24,9 @@ export async function sendMagicLink(req: AuthRequest, res: Response) {
   sendSuccess(
     res,
     result,
-    result.newUser 
-      ? "Verification email sent. Please check your inbox." 
-      : "Login link sent. Please check your inbox.",
+    result.newUser
+      ? 'Verification email sent. Please check your inbox.'
+      : 'Login link sent. Please check your inbox.',
     200
   );
 }
@@ -40,7 +40,7 @@ export async function verifyEmail(req: AuthRequest, res: Response) {
 
   const context = {
     ipAddress: req.ip,
-    userAgent: req.headers["user-agent"],
+    userAgent: req.headers['user-agent'],
   };
 
   const result = await authService.verifyEmailToken(token, context);
@@ -48,7 +48,7 @@ export async function verifyEmail(req: AuthRequest, res: Response) {
   sendSuccess(
     res,
     result,
-    "Email verified successfully. Welcome to UjamaaDAO!",
+    'Email verified successfully. Welcome to UjamaaDAO!',
     200
   );
 }
@@ -62,15 +62,10 @@ export async function verifyMagicLink(req: AuthRequest, res: Response) {
 
   const context = {
     ipAddress: req.ip,
-    userAgent: req.headers["user-agent"],
+    userAgent: req.headers['user-agent'],
   };
 
   const result = await authService.verifyMagicLink(token, context);
 
-  sendSuccess(
-    res,
-    result,
-    "Login successful. Welcome back!",
-    200
-  );
+  sendSuccess(res, result, 'Login successful. Welcome back!', 200);
 }

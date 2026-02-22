@@ -2,7 +2,7 @@
  * @file src/modules/auth/services/totp-2fa.service.ts
  * @description
  * TOTP-based 2FA Service (Google Authenticator, Authy, etc.)
- * 
+ *
  * Features:
  * - Generate TOTP secret
  * - Generate QR code for easy setup
@@ -10,21 +10,27 @@
  * - Backup codes generation (cryptographically secure)
  * - Failed attempt tracking and account protection
  * - Security event logging
- * 
+ *
  * Uses: speakeasy for TOTP, qrcode for QR generation
- * 
+ *
  * Version: 2.0 — January 2026 (Security Hardened)
  */
 
-import { prisma } from "../../../core/database/client.js";
-import { ApiError } from "../../../core/errors/ApiError.js";
-import { logger, logSecurityEvent } from "../../../core/logger/logger.js";
-import { encrypt, decrypt, generateRandomHex } from "../../../core/utils/crypto.js";
-import { sendEmail } from "../../../core/utils/email.service.js";
-import speakeasy from "speakeasy";
-import QRCode from "qrcode";
+import { prisma } from '../../../core/database/client.js';
+import { Prisma } from '@prisma/client';
+import { ApiError } from '../../../core/errors/ApiError.js';
+import { logger, logSecurityEvent } from '../../../core/logger/logger.js';
+import {
+  encrypt,
+  decrypt,
+  generateRandomHex,
+} from '../../../core/utils/crypto.js';
+import { sendEmail } from '../../../core/utils/email.service.js';
+import speakeasy from 'speakeasy';
+import QRCode from 'qrcode';
 
-const ENCRYPTION_KEY = process.env.TOTP_ENCRYPTION_KEY || process.env.ENCRYPTION_KEY;
+const ENCRYPTION_KEY =
+  process.env.TOTP_ENCRYPTION_KEY || process.env.ENCRYPTION_KEY;
 if (!ENCRYPTION_KEY) {
   console.warn('[2FA] TOTP_ENCRYPTION_KEY not set - 2FA will not work');
 }
@@ -73,7 +79,7 @@ class Totp2FAService {
 
       // Encrypt secret and backup codes before storing
       const encryptedSecret = encrypt(secret.base32, ENCRYPTION_KEY!);
-      const encryptedBackupCodes = backupCodes.map(code => 
+      const encryptedBackupCodes = backupCodes.map((code) =>
         encrypt(code, ENCRYPTION_KEY!)
       );
 
@@ -99,25 +105,32 @@ class Totp2FAService {
       // Generate QR code
       const qrCodeUrl = await QRCode.toDataURL(secret.otpauth_url!);
 
-      logger.info({
-        operationType: 'SECURITY',
-        userId,
-      }, '2FA setup initiated');
+      logger.info(
+        {
+          operationType: 'SECURITY',
+          userId,
+        },
+        '2FA setup initiated'
+      );
 
       return {
         secret: secret.base32,
         qrCodeUrl,
         backupCodes,
       };
-
     } catch (error) {
       if (error instanceof ApiError) throw error;
 
-      logger.error({
-        operationType: 'GENERAL',
-        userId,
-        metadata: { error: error instanceof Error ? error.message : String(error) },
-      }, 'Failed to enable 2FA');
+      logger.error(
+        {
+          operationType: 'GENERAL',
+          userId,
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        },
+        'Failed to enable 2FA'
+      );
 
       throw ApiError.systemError('Failed to enable 2FA');
     }
@@ -126,7 +139,11 @@ class Totp2FAService {
   /**
    * Verify TOTP code and enable 2FA
    */
-  async verify(userId: string, code: string, context?: VerificationContext): Promise<boolean> {
+  async verify(
+    userId: string,
+    code: string,
+    context?: VerificationContext
+  ): Promise<boolean> {
     try {
       // Get 2FA record
       const twoFactor = await prisma.twoFactorAuth.findUnique({
@@ -139,7 +156,7 @@ class Totp2FAService {
 
       // Check if locked out
       if (await this.isLockedOut(twoFactor)) {
-        throw ApiError.tooManyRequests('Too many failed attempts. Please try again later.');
+        throw ApiError.tooManyRequests(15 * 60);
       }
 
       // Decrypt secret
@@ -155,12 +172,15 @@ class Totp2FAService {
 
       if (!isValid) {
         await this.trackFailedAttempt(userId, context);
-        
-        logger.warn({
-          operationType: 'SECURITY',
-          userId,
-          metadata: { ipAddress: context?.ipAddress },
-        }, 'Invalid 2FA code attempt during setup');
+
+        logger.warn(
+          {
+            operationType: 'SECURITY',
+            userId,
+            metadata: { ipAddress: context?.ipAddress },
+          },
+          'Invalid 2FA code attempt during setup'
+        );
 
         throw ApiError.badRequest('Invalid verification code');
       }
@@ -168,7 +188,7 @@ class Totp2FAService {
       // Enable 2FA and reset failed attempts
       await prisma.twoFactorAuth.update({
         where: { userId },
-        data: { 
+        data: {
           enabled: true,
           enabledAt: new Date(),
           failedAttempts: 0,
@@ -176,10 +196,13 @@ class Totp2FAService {
         },
       });
 
-      logger.info({
-        operationType: 'SECURITY',
-        userId,
-      }, '2FA enabled successfully');
+      logger.info(
+        {
+          operationType: 'SECURITY',
+          userId,
+        },
+        '2FA enabled successfully'
+      );
 
       logSecurityEvent(
         '2FA enabled',
@@ -194,15 +217,19 @@ class Totp2FAService {
       );
 
       return true;
-
     } catch (error) {
       if (error instanceof ApiError) throw error;
 
-      logger.error({
-        operationType: 'GENERAL',
-        userId,
-        metadata: { error: error instanceof Error ? error.message : String(error) },
-      }, 'Failed to verify 2FA code');
+      logger.error(
+        {
+          operationType: 'GENERAL',
+          userId,
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        },
+        'Failed to verify 2FA code'
+      );
 
       throw ApiError.systemError('Failed to verify 2FA');
     }
@@ -211,7 +238,11 @@ class Totp2FAService {
   /**
    * Verify 2FA code during login with security tracking
    */
-  async verifyLogin(userId: string, code: string, context?: VerificationContext): Promise<boolean> {
+  async verifyLogin(
+    userId: string,
+    code: string,
+    context?: VerificationContext
+  ): Promise<boolean> {
     try {
       const twoFactor = await prisma.twoFactorAuth.findUnique({
         where: { userId, enabled: true },
@@ -237,10 +268,8 @@ class Totp2FAService {
             },
           }
         );
-        
-        throw ApiError.tooManyRequests(
-          'Account temporarily locked due to multiple failed 2FA attempts. Please try again in 15 minutes.'
-        );
+
+        throw ApiError.tooManyRequests(15 * 60);
       }
 
       // Try TOTP code first
@@ -256,54 +285,67 @@ class Totp2FAService {
         // Reset failed attempts on success
         await prisma.twoFactorAuth.update({
           where: { userId },
-          data: { 
+          data: {
             failedAttempts: 0,
             lastFailedAttempt: null,
           },
         });
 
-        logger.info({
-          operationType: 'AUTH',
-          userId,
-          metadata: { ipAddress: context?.ipAddress },
-        }, '2FA verification successful (TOTP)');
-        
+        logger.info(
+          {
+            operationType: 'AUTH',
+            userId,
+            metadata: { ipAddress: context?.ipAddress },
+          },
+          '2FA verification successful (TOTP)'
+        );
+
         return true;
       }
 
       // Try backup codes
-      const isValidBackup = await this.verifyBackupCode(userId, code, twoFactor);
-      
+      const isValidBackup = await this.verifyBackupCode(
+        userId,
+        code,
+        twoFactor
+      );
+
       if (isValidBackup) {
         // Reset failed attempts on success
         await prisma.twoFactorAuth.update({
           where: { userId },
-          data: { 
+          data: {
             failedAttempts: 0,
             lastFailedAttempt: null,
           },
         });
 
-        logger.info({
-          operationType: 'AUTH',
-          userId,
-          metadata: { ipAddress: context?.ipAddress },
-        }, '2FA verification successful (backup code)');
-        
+        logger.info(
+          {
+            operationType: 'AUTH',
+            userId,
+            metadata: { ipAddress: context?.ipAddress },
+          },
+          '2FA verification successful (backup code)'
+        );
+
         return true;
       }
 
       // Both methods failed - track attempt
       await this.trackFailedAttempt(userId, context);
 
-      logger.warn({
-        operationType: 'SECURITY',
-        userId,
-        metadata: { 
-          ipAddress: context?.ipAddress,
-          failedAttempts: twoFactor.failedAttempts + 1,
+      logger.warn(
+        {
+          operationType: 'SECURITY',
+          userId,
+          metadata: {
+            ipAddress: context?.ipAddress,
+            failedAttempts: twoFactor.failedAttempts + 1,
+          },
         },
-      }, '2FA verification failed');
+        '2FA verification failed'
+      );
 
       logSecurityEvent(
         '2FA verification failed',
@@ -321,15 +363,19 @@ class Totp2FAService {
       );
 
       return false;
-
     } catch (error) {
       if (error instanceof ApiError) throw error;
 
-      logger.error({
-        operationType: 'GENERAL',
-        userId,
-        metadata: { error: error instanceof Error ? error.message : String(error) },
-      }, 'Error verifying 2FA during login');
+      logger.error(
+        {
+          operationType: 'GENERAL',
+          userId,
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        },
+        'Error verifying 2FA during login'
+      );
 
       return false;
     }
@@ -347,14 +393,16 @@ class Totp2FAService {
       return false;
     }
 
-    const lockoutEnd = new Date(twoFactor.lastFailedAttempt.getTime() + LOCKOUT_DURATION_MS);
+    const lockoutEnd = new Date(
+      twoFactor.lastFailedAttempt.getTime() + LOCKOUT_DURATION_MS
+    );
     const isStillLockedOut = new Date() < lockoutEnd;
 
     // If lockout expired, reset counter
     if (!isStillLockedOut) {
       await prisma.twoFactorAuth.update({
         where: { userId: twoFactor.userId },
-        data: { 
+        data: {
           failedAttempts: 0,
           lastFailedAttempt: null,
         },
@@ -367,7 +415,10 @@ class Totp2FAService {
   /**
    * Track failed 2FA attempt
    */
-  private async trackFailedAttempt(userId: string, context?: VerificationContext): Promise<void> {
+  private async trackFailedAttempt(
+    userId: string,
+    context?: VerificationContext
+  ): Promise<void> {
     const twoFactor = await prisma.twoFactorAuth.update({
       where: { userId },
       data: {
@@ -401,13 +452,13 @@ class Totp2FAService {
    * Verify backup code (atomic operation)
    */
   private async verifyBackupCode(
-    userId: string, 
+    userId: string,
     code: string,
     twoFactor: any
   ): Promise<boolean> {
     // Decrypt all backup codes
-    const backupCodes = twoFactor.backupCodesEncrypted.map((encrypted: string) =>
-      decrypt(encrypted, ENCRYPTION_KEY!)
+    const backupCodes = twoFactor.backupCodesEncrypted.map(
+      (encrypted: string) => decrypt(encrypted, ENCRYPTION_KEY!)
     );
 
     // Check if code matches any backup code
@@ -415,7 +466,7 @@ class Totp2FAService {
     if (index === -1) return false;
 
     // Remove used backup code (atomic transaction)
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const updatedCodes = twoFactor.backupCodesEncrypted.filter(
         (_: any, i: number) => i !== index
       );
@@ -441,12 +492,15 @@ class Totp2FAService {
 
       // Warn user if running low on backup codes
       if (updatedCodes.length <= BACKUP_CODES_LOW_THRESHOLD) {
-        logger.warn({
-          operationType: 'SECURITY',
-          userId,
-          metadata: { remainingCodes: updatedCodes.length },
-        }, 'User running low on backup codes');
-        
+        logger.warn(
+          {
+            operationType: 'SECURITY',
+            userId,
+            metadata: { remainingCodes: updatedCodes.length },
+          },
+          'User running low on backup codes'
+        );
+
         // Send email warning
         await this.sendBackupCodesWarning(userId, updatedCodes.length);
       }
@@ -458,7 +512,10 @@ class Totp2FAService {
   /**
    * Send warning email about low backup codes
    */
-  private async sendBackupCodesWarning(userId: string, remaining: number): Promise<void> {
+  private async sendBackupCodesWarning(
+    userId: string,
+    remaining: number
+  ): Promise<void> {
     try {
       const user = await prisma.user.findUnique({
         where: { id: userId },
@@ -479,21 +536,30 @@ class Totp2FAService {
         `,
       });
     } catch (error) {
-      logger.error({
-        operationType: 'EMAIL',
-        userId,
-        metadata: { error: error instanceof Error ? error.message : String(error) },
-      }, 'Failed to send backup codes warning email');
+      logger.error(
+        {
+          operationType: 'EMAIL',
+          userId,
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        },
+        'Failed to send backup codes warning email'
+      );
     }
   }
 
   /**
    * Disable 2FA (requires verification)
    */
-  async disable(userId: string, code: string, context?: VerificationContext): Promise<void> {
+  async disable(
+    userId: string,
+    code: string,
+    context?: VerificationContext
+  ): Promise<void> {
     // Verify code before disabling
     const isValid = await this.verifyLogin(userId, code, context);
-    
+
     if (!isValid) {
       throw ApiError.badRequest('Invalid verification code');
     }
@@ -501,7 +567,7 @@ class Totp2FAService {
     try {
       await prisma.twoFactorAuth.update({
         where: { userId },
-        data: { 
+        data: {
           enabled: false,
           disabledAt: new Date(),
           failedAttempts: 0,
@@ -509,10 +575,13 @@ class Totp2FAService {
         },
       });
 
-      logger.info({
-        operationType: 'SECURITY',
-        userId,
-      }, '2FA disabled');
+      logger.info(
+        {
+          operationType: 'SECURITY',
+          userId,
+        },
+        '2FA disabled'
+      );
 
       logSecurityEvent(
         '2FA disabled',
@@ -525,13 +594,17 @@ class Totp2FAService {
           metadata: { method: 'totp' },
         }
       );
-
     } catch (error) {
-      logger.error({
-        operationType: 'DATABASE',
-        userId,
-        metadata: { error: error instanceof Error ? error.message : String(error) },
-      }, 'Failed to disable 2FA');
+      logger.error(
+        {
+          operationType: 'DATABASE',
+          userId,
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        },
+        'Failed to disable 2FA'
+      );
 
       throw ApiError.systemError('Failed to disable 2FA');
     }
@@ -540,27 +613,36 @@ class Totp2FAService {
   /**
    * Regenerate backup codes
    */
-  async regenerateBackupCodes(userId: string, code: string, context?: VerificationContext): Promise<string[]> {
+  async regenerateBackupCodes(
+    userId: string,
+    code: string,
+    context?: VerificationContext
+  ): Promise<string[]> {
     // Verify current code
     const isValid = await this.verifyLogin(userId, code, context);
-    
+
     if (!isValid) {
       throw ApiError.badRequest('Invalid verification code');
     }
 
     try {
       const newBackupCodes = this.generateBackupCodes();
-      const encrypted = newBackupCodes.map(code => encrypt(code, ENCRYPTION_KEY!));
+      const encrypted = newBackupCodes.map((code) =>
+        encrypt(code, ENCRYPTION_KEY!)
+      );
 
       await prisma.twoFactorAuth.update({
         where: { userId },
         data: { backupCodesEncrypted: encrypted },
       });
 
-      logger.info({
-        operationType: 'SECURITY',
-        userId,
-      }, 'Backup codes regenerated');
+      logger.info(
+        {
+          operationType: 'SECURITY',
+          userId,
+        },
+        'Backup codes regenerated'
+      );
 
       logSecurityEvent(
         'Backup codes regenerated',
@@ -574,13 +656,17 @@ class Totp2FAService {
       );
 
       return newBackupCodes;
-
     } catch (error) {
-      logger.error({
-        operationType: 'DATABASE',
-        userId,
-        metadata: { error: error instanceof Error ? error.message : String(error) },
-      }, 'Failed to regenerate backup codes');
+      logger.error(
+        {
+          operationType: 'DATABASE',
+          userId,
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        },
+        'Failed to regenerate backup codes'
+      );
 
       throw ApiError.systemError('Failed to regenerate backup codes');
     }
@@ -592,7 +678,7 @@ class Totp2FAService {
    */
   private generateBackupCodes(): string[] {
     const codes: string[] = [];
-    
+
     for (let i = 0; i < BACKUP_CODES_COUNT; i++) {
       // Generate 8 random bytes = 64 bits of entropy
       const randomBytes = generateRandomHex(8);
@@ -601,11 +687,17 @@ class Totp2FAService {
         .toUpperCase()
         .replace(/[0O1IL]/g, (c) => {
           // Replace confusing characters
-          const replacements: Record<string, string> = { '0': '8', 'O': '9', '1': '7', 'I': '6', 'L': '5' };
+          const replacements: Record<string, string> = {
+            '0': '8',
+            O: '9',
+            '1': '7',
+            I: '6',
+            L: '5',
+          };
           return replacements[c] || c;
         })
         .slice(0, 8);
-      
+
       // Format as XXXX-XXXX for readability
       const formatted = `${code.slice(0, 4)}-${code.slice(4)}`;
       codes.push(formatted);
@@ -640,8 +732,8 @@ class Totp2FAService {
     });
 
     if (!twoFactor) {
-      return { 
-        enabled: false, 
+      return {
+        enabled: false,
         backupCodesRemaining: 0,
         isLockedOut: false,
       };

@@ -2,26 +2,26 @@
  * @file src/core/events/listener-registry.ts
  * @description
  * Event Listener Registry - Central place to register all event listeners
- * 
+ *
  * Call `registerAllListeners()` once during app startup (in index.ts or app.ts).
  * All heavy event handling should be moved to the worker process later.
- * 
+ *
  * Version: 1.1 — February 2026
  * Updated: Added real listeners for existing events, removed unused imports
  */
 
-import { eventBus } from "../utils/eventBus.js";
-import { logger } from "../logger/logger.js";
+import { eventBus } from '../utils/eventBus.js';
+import { logger } from '../logger/logger.js';
 
 // ─────────────────────────────────────────────
 // Import listener registration functions
 // ─────────────────────────────────────────────
 
 // Economy / PR related
-import { registerOnboardingListeners as registerEconomyListeners } from "../../modules/economy/listeners/onboarding-events.listeners.js";
+import { registerOnboardingListeners as registerEconomyListeners } from '../../modules/economy/listeners/onboarding-events.listeners.js';
 
 // Auth / User related (verification, profile, etc.)
-import { registerAuthListeners } from "../../modules/auth/listeners/auth-events.listener.js";
+import { registerAuthListeners } from '../../modules/auth/listeners/auth-events.listener.js';
 
 // Add future modules here when ready:
 // import { registerCommunityListeners } from "../../modules/community/listeners/community-events.listener.js";
@@ -29,10 +29,10 @@ import { registerAuthListeners } from "../../modules/auth/listeners/auth-events.
 
 /**
  * Register all event listeners across the application.
- * 
+ *
  * This should be called once during startup — preferably in the worker process
  * for heavy listeners, or in the web server for lightweight ones.
- * 
+ *
  * @example
  * // In index.ts or worker.ts
  * await registerAllListeners();
@@ -40,8 +40,8 @@ import { registerAuthListeners } from "../../modules/auth/listeners/auth-events.
 export async function registerAllListeners(): Promise<void> {
   try {
     logger.info(
-      { operationType: "EVENT_REGISTRY" },
-      "Starting event listener registration..."
+      { operationType: 'EVENT_REGISTRY' },
+      'Starting event listener registration...'
     );
 
     // Register listeners from each module
@@ -55,26 +55,34 @@ export async function registerAllListeners(): Promise<void> {
 
     // Log summary
     const stats = eventBus.getStats?.() || []; // fallback if getStats doesn't exist yet
-    const totalListeners = stats.reduce((sum: number, s: any) => sum + (s.listeners || 0), 0);
+    const totalListeners = stats.reduce(
+      (sum: number, s: any) => sum + (s.listeners || 0),
+      0
+    );
 
     logger.info(
-      { 
-        operationType: "EVENT_REGISTRY",
-        metadata: { 
+      {
+        operationType: 'EVENT_REGISTRY',
+        metadata: {
           registeredEvents: stats.length,
           totalListeners,
-          events: stats.map((s: any) => ({ event: s.event, count: s.listeners || 0 }))
-        }
+          events: stats.map((s: any) => ({
+            event: s.event,
+            count: s.listeners || 0,
+          })),
+        },
       },
       `Event listeners registered successfully (${stats.length} events, ${totalListeners} listeners)`
     );
   } catch (error) {
     logger.error(
       {
-        operationType: "EVENT_REGISTRY_ERROR",
-        metadata: { error: error instanceof Error ? error.message : String(error) },
+        operationType: 'EVENT_REGISTRY_ERROR',
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
       },
-      "Failed to register event listeners"
+      'Failed to register event listeners'
     );
     throw error;
   }
@@ -86,7 +94,7 @@ export async function registerAllListeners(): Promise<void> {
 export function unregisterAllListeners(): void {
   eventBus.removeAllListeners();
   logger.info(
-    { operationType: "EVENT_REGISTRY" },
-    "All event listeners unregistered"
+    { operationType: 'EVENT_REGISTRY' },
+    'All event listeners unregistered'
   );
 }

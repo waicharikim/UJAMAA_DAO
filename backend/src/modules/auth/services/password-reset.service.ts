@@ -2,10 +2,10 @@
  * @file src/modules/auth/services/password-reset.service.ts
  * @description
  * Password Reset Service - For admin accounts only
- * 
+ *
  * UjamaaDAO uses passwordless auth for regular users, but admins
  * may need password-based access for emergency situations.
- * 
+ *
  * Features:
  * - Request password reset (email with token)
  * - Verify reset token
@@ -13,17 +13,18 @@
  * - Password strength validation
  * - Rate limiting and brute force protection
  * - Security event logging
- * 
+ *
  * Version: 2.0 — January 2026
  * Security Hardened: Added brute force protection and comprehensive logging
  */
 
-import { prisma } from "../../../core/database/client.js";
-import { ApiError } from "../../../core/errors/ApiError.js";
-import { logger, logSecurityEvent } from "../../../core/logger/logger.js";
-import { hashPassword } from "../../../core/utils/crypto.js";
-import { generateRandomHex } from "../../../core/utils/crypto.js";
-import { sendEmail } from "../../../core/utils/email.service.js";
+import { prisma } from '../../../core/database/client.js';
+import { Prisma } from '@prisma/client';
+import { ApiError } from '../../../core/errors/ApiError.js';
+import { logger, logSecurityEvent } from '../../../core/logger/logger.js';
+import { hashPassword } from '../../../core/utils/crypto.js';
+import { generateRandomHex } from '../../../core/utils/crypto.js';
+import { sendEmail } from '../../../core/utils/email.service.js';
 
 const RESET_TOKEN_EXPIRY = 60 * 60 * 1000; // 1 hour
 const MAX_RESET_ATTEMPTS = 5;
@@ -48,7 +49,11 @@ class PasswordResetService {
    * Request password reset (send email with reset link)
    * Only works for admin accounts with passwords
    */
-  async requestReset(email: string, context?: ResetContext, correlationId?: string): Promise<void> {
+  async requestReset(
+    email: string,
+    context?: ResetContext,
+    correlationId?: string
+  ): Promise<void> {
     try {
       // Find user by email
       const user = await prisma.user.findUnique({
@@ -59,7 +64,7 @@ class PasswordResetService {
           name: true,
           userRoles: {
             where: { active: true },
-            include: { role: { select: { name: true } } }
+            include: { role: { select: { name: true } } },
           },
           passwordHash: true,
         },
@@ -67,22 +72,25 @@ class PasswordResetService {
 
       // Always return success to prevent email enumeration
       if (!user) {
-        logger.info({
-          operationType: 'AUTH',
-          metadata: { 
-            email: email.slice(0, 3) + '***', // Partial redaction for logs
-            reason: 'User not found',
-            ipAddress: context?.ipAddress,
-            correlationId,
+        logger.info(
+          {
+            operationType: 'AUTH',
+            metadata: {
+              email: email.slice(0, 3) + '***', // Partial redaction for logs
+              reason: 'User not found',
+              ipAddress: context?.ipAddress,
+              correlationId,
+            },
           },
-        }, 'Password reset requested for non-existent email');
+          'Password reset requested for non-existent email'
+        );
         return;
       }
 
       // Check if user is admin (only admins can have passwords)
-      const roles = user.userRoles.map(ur => ur.role.name);
+      const roles = user.userRoles.map((ur) => ur.role.name);
       const isAdmin = roles.includes('ADMIN') || roles.includes('SUPER_ADMIN');
-      
+
       if (!isAdmin) {
         logSecurityEvent(
           'Password reset requested for non-admin',
@@ -92,7 +100,7 @@ class PasswordResetService {
           {
             userId: user.id,
             ipAddress: context?.ipAddress,
-            metadata: { 
+            metadata: {
               roles,
               correlationId,
             },
@@ -103,11 +111,14 @@ class PasswordResetService {
 
       // Check if user has a password (some admins might use wallet-only)
       if (!user.passwordHash) {
-        logger.info({
-          operationType: 'AUTH',
-          userId: user.id,
-          metadata: { correlationId },
-        }, 'Password reset requested for passwordless admin account');
+        logger.info(
+          {
+            operationType: 'AUTH',
+            userId: user.id,
+            metadata: { correlationId },
+          },
+          'Password reset requested for passwordless admin account'
+        );
         return; // Silent fail
       }
 
@@ -128,7 +139,7 @@ class PasswordResetService {
             },
           }
         );
-        
+
         // Still return success to prevent enumeration
         return;
       }
@@ -150,7 +161,7 @@ class PasswordResetService {
 
       // Send reset email
       const resetLink = `${process.env.FRONTEND_URL}/auth/reset-password?token=${token}`;
-      
+
       await sendEmail({
         to: user.email!,
         subject: 'Password Reset Request - UjamaaDAO Admin',
@@ -179,16 +190,18 @@ class PasswordResetService {
           },
         }
       );
-
     } catch (error) {
-      logger.error({
-        operationType: 'GENERAL',
-        metadata: { 
-          error: error instanceof Error ? error.message : String(error),
-          correlationId,
+      logger.error(
+        {
+          operationType: 'GENERAL',
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+            correlationId,
+          },
         },
-      }, 'Failed to process password reset request');
-      
+        'Failed to process password reset request'
+      );
+
       // Don't throw - silent fail to prevent enumeration
     }
   }
@@ -199,22 +212,27 @@ class PasswordResetService {
   private async checkResetAttempts(userId: string): Promise<number> {
     try {
       const windowStart = new Date(Date.now() - RESET_ATTEMPT_WINDOW);
-      
+
       const count = await prisma.passwordReset.count({
         where: {
           userId,
           createdAt: { gte: windowStart },
         },
       });
-      
+
       return count;
     } catch (error) {
-      logger.error({
-        operationType: 'DATABASE',
-        userId,
-        metadata: { error: error instanceof Error ? error.message : String(error) },
-      }, 'Failed to check reset attempts');
-      
+      logger.error(
+        {
+          operationType: 'DATABASE',
+          userId,
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        },
+        'Failed to check reset attempts'
+      );
+
       return 0; // Allow on error (fail open for availability)
     }
   }
@@ -222,9 +240,16 @@ class PasswordResetService {
   /**
    * Verify reset token and return user ID
    */
-  async verifyResetToken(token: string, correlationId?: string): Promise<string> {
+  async verifyResetToken(
+    token: string,
+    correlationId?: string
+  ): Promise<string> {
     if (!token || token.length !== 64) {
-      throw ApiError.badRequest('Invalid reset token format', undefined, correlationId);
+      throw ApiError.badRequest(
+        'Invalid reset token format',
+        undefined,
+        correlationId
+      );
     }
 
     try {
@@ -244,7 +269,7 @@ class PasswordResetService {
               email: true,
               userRoles: {
                 where: { active: true },
-                include: { role: { select: { name: true } } }
+                include: { role: { select: { name: true } } },
               },
             },
           },
@@ -258,20 +283,24 @@ class PasswordResetService {
           'MEDIUM',
           'User attempted to use invalid or expired reset token',
           {
-            metadata: { 
+            metadata: {
               tokenLength: token.length,
               correlationId,
             },
           }
         );
-        
-        throw ApiError.badRequest('Invalid or expired reset token', undefined, correlationId);
+
+        throw ApiError.badRequest(
+          'Invalid or expired reset token',
+          undefined,
+          correlationId
+        );
       }
 
       // Check if user is still admin
-      const roles = reset.user.userRoles.map(ur => ur.role.name);
+      const roles = reset.user.userRoles.map((ur) => ur.role.name);
       const isAdmin = roles.includes('ADMIN') || roles.includes('SUPER_ADMIN');
-      
+
       if (!isAdmin) {
         logSecurityEvent(
           'Reset token used by non-admin',
@@ -286,24 +315,34 @@ class PasswordResetService {
             },
           }
         );
-        
-        throw ApiError.forbidden('User is no longer an admin', undefined, correlationId);
+
+        throw ApiError.forbidden(
+          'User is no longer an admin',
+          undefined,
+          correlationId
+        );
       }
 
       return reset.user.id;
-
     } catch (error) {
       if (error instanceof ApiError) throw error;
 
-      logger.error({
-        operationType: 'GENERAL',
-        metadata: { 
-          error: error instanceof Error ? error.message : String(error),
-          correlationId,
+      logger.error(
+        {
+          operationType: 'GENERAL',
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+            correlationId,
+          },
         },
-      }, 'Error verifying reset token');
+        'Error verifying reset token'
+      );
 
-      throw ApiError.systemError('Failed to verify reset token', undefined, correlationId);
+      throw ApiError.systemError(
+        'Failed to verify reset token',
+        undefined,
+        correlationId
+      );
     }
   }
 
@@ -311,8 +350,8 @@ class PasswordResetService {
    * Reset password with token
    */
   async resetPassword(
-    token: string, 
-    newPassword: string, 
+    token: string,
+    newPassword: string,
     context?: ResetContext,
     correlationId?: string
   ): Promise<void> {
@@ -329,7 +368,7 @@ class PasswordResetService {
       const passwordHash = await hashPassword(newPassword);
 
       // Update password and mark token as used (atomic transaction)
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         // Update user password
         await tx.user.update({
           where: { id: userId },
@@ -339,7 +378,7 @@ class PasswordResetService {
         // Mark reset token as used
         await tx.passwordReset.updateMany({
           where: { tokenHash },
-          data: { 
+          data: {
             used: true,
             usedAt: new Date(),
           },
@@ -376,18 +415,24 @@ class PasswordResetService {
       if (user?.email) {
         await this.sendPasswordChangedEmail(user.email, user.name || 'Admin');
       }
-
     } catch (error) {
-      logger.error({
-        operationType: 'DATABASE',
-        userId,
-        metadata: { 
-          error: error instanceof Error ? error.message : String(error),
-          correlationId,
+      logger.error(
+        {
+          operationType: 'DATABASE',
+          userId,
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+            correlationId,
+          },
         },
-      }, 'Failed to reset password');
+        'Failed to reset password'
+      );
 
-      throw ApiError.systemError('Failed to reset password', undefined, correlationId);
+      throw ApiError.systemError(
+        'Failed to reset password',
+        undefined,
+        correlationId
+      );
     }
   }
 
@@ -398,7 +443,9 @@ class PasswordResetService {
     const errors: string[] = [];
 
     if (password.length < PASSWORD_MIN_LENGTH) {
-      errors.push(`Password must be at least ${PASSWORD_MIN_LENGTH} characters`);
+      errors.push(
+        `Password must be at least ${PASSWORD_MIN_LENGTH} characters`
+      );
     }
 
     if (!PASSWORD_REQUIREMENTS.uppercase.test(password)) {
@@ -419,18 +466,27 @@ class PasswordResetService {
 
     // Check for common weak passwords
     const commonPasswords = [
-      'password123', 'admin123456', 'letmein123', 
-      'welcome123', 'password1234', '123456789012',
-      'administrator', 'passw0rd!123',
+      'password123',
+      'admin123456',
+      'letmein123',
+      'welcome123',
+      'password1234',
+      '123456789012',
+      'administrator',
+      'passw0rd!123',
     ];
-    
+
     const lowerPassword = password.toLowerCase();
-    if (commonPasswords.some(weak => lowerPassword.includes(weak))) {
+    if (commonPasswords.some((weak) => lowerPassword.includes(weak))) {
       errors.push('Password is too common');
     }
 
     // Check for sequential characters
-    if (/(?:abc|bcd|cde|def|efg|fgh|ghi|hij|ijk|jkl|klm|lmn|mno|nop|opq|pqr|qrs|rst|stu|tuv|uvw|vwx|wxy|xyz|012|123|234|345|456|567|678|789)/i.test(password)) {
+    if (
+      /(?:abc|bcd|cde|def|efg|fgh|ghi|hij|ijk|jkl|klm|lmn|mno|nop|opq|pqr|qrs|rst|stu|tuv|uvw|vwx|wxy|xyz|012|123|234|345|456|567|678|789)/i.test(
+        password
+      )
+    ) {
       errors.push('Password contains sequential characters');
     }
 
@@ -442,7 +498,10 @@ class PasswordResetService {
   /**
    * Send password changed confirmation email
    */
-  private async sendPasswordChangedEmail(email: string, name: string): Promise<void> {
+  private async sendPasswordChangedEmail(
+    email: string,
+    name: string
+  ): Promise<void> {
     try {
       await sendEmail({
         to: email,
@@ -491,13 +550,16 @@ class PasswordResetService {
         `,
       });
     } catch (error) {
-      logger.error({
-        operationType: 'EMAIL',
-        metadata: { 
-          error: error instanceof Error ? error.message : String(error),
-          recipient: email,
+      logger.error(
+        {
+          operationType: 'EMAIL',
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+            recipient: email,
+          },
         },
-      }, 'Failed to send password changed confirmation email');
+        'Failed to send password changed confirmation email'
+      );
     }
   }
 
@@ -554,27 +616,35 @@ class PasswordResetService {
         where: {
           OR: [
             { expiresAt: { lt: new Date() } },
-            { 
+            {
               used: true,
-              usedAt: { lt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } // 7 days old
+              usedAt: { lt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }, // 7 days old
             },
           ],
         },
       });
 
       if (result.count > 0) {
-        logger.info({
-          operationType: 'GENERAL',
-          metadata: { deletedCount: result.count },
-        }, 'Expired password reset tokens cleaned up');
+        logger.info(
+          {
+            operationType: 'GENERAL',
+            metadata: { deletedCount: result.count },
+          },
+          'Expired password reset tokens cleaned up'
+        );
       }
 
       return result.count;
     } catch (error) {
-      logger.error({
-        operationType: 'DATABASE',
-        metadata: { error: error instanceof Error ? error.message : String(error) },
-      }, 'Failed to cleanup expired reset tokens');
+      logger.error(
+        {
+          operationType: 'DATABASE',
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        },
+        'Failed to cleanup expired reset tokens'
+      );
       return 0;
     }
   }

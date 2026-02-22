@@ -2,20 +2,20 @@
  * @file src/core/utils/response.ts
  * @description
  * Unified API response utilities for UjamaaDAO
- * 
+ *
  * Security Features:
  * - PII redaction in error details
  * - Stack trace protection
  * - Input validation
  * - Correlation ID support
- * 
+ *
  * Version: 2.0 — December 2025
  * Security Hardened: December 2025
  */
 
-import type { Response, RequestHandler, NextFunction, Request } from "express";
-import { autoRedactObject, containsPII } from "../logger/log-sanitizer.js";
-import { AuthRequest } from "../types/Ujamaadao.types.js";
+import type { Response, RequestHandler, NextFunction, Request } from 'express';
+import { autoRedactObject, containsPII } from '../logger/log-sanitizer.js';
+import { AuthRequest } from '../types/Ujamaadao.types.js';
 
 /**
  * Unified API response shape for all endpoints.
@@ -43,16 +43,25 @@ export interface ApiResponse<T = unknown> {
 /**
  * Sanitize error details (remove PII, stack traces, internal paths)
  */
-function sanitizeErrorDetails(details?: Record<string, any>): Record<string, any> | undefined {
+function sanitizeErrorDetails(
+  details?: Record<string, any>
+): Record<string, any> | undefined {
   if (!details) return undefined;
 
   // Check for PII and redact
-  const sanitized = containsPII(details) 
+  const sanitized = containsPII(details)
     ? autoRedactObject(details)
     : { ...details };
 
   // Remove sensitive keys
-  const sensitiveKeys = ['password', 'token', 'secret', 'apiKey', 'stack', 'stackTrace'];
+  const sensitiveKeys = [
+    'password',
+    'token',
+    'secret',
+    'apiKey',
+    'stack',
+    'stackTrace',
+  ];
   for (const key of sensitiveKeys) {
     if (key in sanitized) {
       delete sanitized[key];
@@ -78,7 +87,7 @@ export const buildResponse = <T>(
   correlationId?: string
 ): ApiResponse<T> => {
   // Sanitize error details if present
-  const sanitizedError = payload.error 
+  const sanitizedError = payload.error
     ? {
         ...payload.error,
         details: sanitizeErrorDetails(payload.error.details),
@@ -104,9 +113,9 @@ export const buildResponse = <T>(
 export const sendSuccess = <T>(
   res: Response,
   data?: T,
-  message = "Success",
+  message = 'Success',
   status = 200,
-  meta?: ApiResponse<T>["meta"]
+  meta?: ApiResponse<T>['meta']
 ): Response<ApiResponse<T>> => {
   // Get correlation ID from request if available
   const req = res.req as AuthRequest;
@@ -114,16 +123,22 @@ export const sendSuccess = <T>(
 
   // Validate status code
   if (status < 200 || status >= 300) {
-    console.warn(`[Response] Invalid success status code: ${status}, using 200`);
+    console.warn(
+      `[Response] Invalid success status code: ${status}, using 200`
+    );
     status = 200;
   }
 
   return res.status(status).json(
-    buildResponse(true, {
-      message,
-      data,
-      meta,
-    }, correlationId)
+    buildResponse(
+      true,
+      {
+        message,
+        data,
+        meta,
+      },
+      correlationId
+    )
   );
 };
 
@@ -140,7 +155,7 @@ export const sendError = (
         details?: Record<string, any>;
       },
   status = 400,
-  message = "Request failed"
+  message = 'Request failed'
 ): Response<ApiResponse> => {
   // Get correlation ID from request if available
   const req = res.req as AuthRequest;
@@ -153,13 +168,14 @@ export const sendError = (
   }
 
   // Build error object
-  const errObj = typeof error === "string"
-    ? { message: error }
-    : { 
-        message: error.message || message, 
-        code: error.code, 
-        details: error.details 
-      };
+  const errObj =
+    typeof error === 'string'
+      ? { message: error }
+      : {
+          message: error.message || message,
+          code: error.code,
+          details: error.details,
+        };
 
   // In production, don't expose internal error details
   if (process.env.NODE_ENV === 'production' && status >= 500) {
@@ -167,10 +183,14 @@ export const sendError = (
   }
 
   return res.status(status).json(
-    buildResponse(false, {
-      message,
-      error: errObj,
-    }, correlationId)
+    buildResponse(
+      false,
+      {
+        message,
+        error: errObj,
+      },
+      correlationId
+    )
   );
 };
 
@@ -181,7 +201,7 @@ export const sendPaginated = <T>(
   res: Response,
   data: T[],
   meta: { page: number; limit: number; total: number },
-  message = "Fetched successfully"
+  message = 'Fetched successfully'
 ): Response<ApiResponse<T[]>> => {
   // Get correlation ID from request if available
   const req = res.req as AuthRequest;
@@ -198,11 +218,15 @@ export const sendPaginated = <T>(
   };
 
   return res.status(200).json(
-    buildResponse(true, {
-      message,
-      data,
-      meta: safeMeta,
-    }, correlationId)
+    buildResponse(
+      true,
+      {
+        message,
+        data,
+        meta: safeMeta,
+      },
+      correlationId
+    )
   );
 };
 
@@ -217,16 +241,16 @@ export const formatError = (error: unknown): string => {
     }
     return error.message;
   }
-  
-  if (typeof error === "string") {
+
+  if (typeof error === 'string') {
     return error.slice(0, 500); // Truncate long error strings
   }
-  
+
   if (error && typeof error === 'object') {
     return JSON.stringify(error).slice(0, 500);
   }
-  
-  return "An unknown error occurred";
+
+  return 'An unknown error occurred';
 };
 
 /**
@@ -254,7 +278,7 @@ export const sendCreated = <T>(
   res: Response,
   data: T,
   location?: string,
-  message = "Resource created"
+  message = 'Resource created'
 ): Response<ApiResponse<T>> => {
   if (location) {
     res.setHeader('Location', location);
@@ -268,7 +292,7 @@ export const sendCreated = <T>(
 export const sendAccepted = <T>(
   res: Response,
   data?: T,
-  message = "Request accepted for processing"
+  message = 'Request accepted for processing'
 ): Response<ApiResponse<T>> => {
   return sendSuccess(res, data, message, 202);
 };

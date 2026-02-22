@@ -2,14 +2,14 @@
  * @file src/modules/admin/validators/admin.validators.ts
  * @description
  * Zod validation schemas for admin endpoints
- * 
+ *
  * All admin requests (body, params, query) should be validated with these schemas.
- * 
+ *
  * Version: 1.0 — February 2026
  */
 
-import { z } from "zod";
-import { uuidSchema } from "../../auth/validators/auth.validators.js"; // Reuse common UUID
+import { z } from 'zod';
+import { uuidSchema } from '../../auth/validators/auth.validators.js'; // Reuse common UUID
 
 // ============================================================================
 // REUSABLE ADMIN SCHEMAS
@@ -17,7 +17,7 @@ import { uuidSchema } from "../../auth/validators/auth.validators.js"; // Reuse 
 
 const reasonSchema = z
   .string()
-  .max(500, "Reason/feedback too long (max 500 characters)")
+  .max(500, 'Reason/feedback too long (max 500 characters)')
   .optional()
   .transform((val) => (val ? val.trim() : undefined));
 
@@ -57,7 +57,9 @@ export const communityVerificationReviewSchema = z.object({
 export const pendingVerificationsQuerySchema = z.object({
   page: z.coerce.number().min(1).default(1),
   pageSize: z.coerce.number().min(10).max(100).default(20),
-  status: z.enum(["PENDING", "VOUCHING", "PAYMENT_PENDING", "ADMIN_REVIEW"]).optional(),
+  status: z
+    .enum(['PENDING', 'VOUCHING', 'PAYMENT_PENDING', 'ADMIN_REVIEW'])
+    .optional(),
   wardId: uuidSchema.optional(),
   search: z.string().optional(), // e.g. phone or name partial match
 });
@@ -80,10 +82,11 @@ export const residenceChangeReviewSchema = z.object({
  * GET /admin/residence/pending
  * Query params for filtering pending residence changes
  */
-export const pendingResidenceChangesQuerySchema = pendingVerificationsQuerySchema.extend({
-  // Can reuse most fields, add residence-specific ones if needed
-  targetWardId: uuidSchema.optional(),
-});
+export const pendingResidenceChangesQuerySchema =
+  pendingVerificationsQuerySchema.extend({
+    // Can reuse most fields, add residence-specific ones if needed
+    targetWardId: uuidSchema.optional(),
+  });
 
 // ============================================================================
 // PARTICIPATION RIGHTS (PR) MANUAL ADJUSTMENT
@@ -95,9 +98,9 @@ export const pendingResidenceChangesQuerySchema = pendingVerificationsQuerySchem
  */
 export const prAdjustSchema = z.object({
   userId: uuidSchema,
-  amount: z.number().int("Amount must be integer"),
-  type: z.enum(["ADD", "DEDUCT"]),
-  reason: z.string().min(1, "Reason required").max(500),
+  amount: z.number().int('Amount must be integer'),
+  type: z.enum(['ADD', 'DEDUCT']),
+  reason: z.string().min(1, 'Reason required').max(500),
 });
 
 // ============================================================================
@@ -111,7 +114,7 @@ export const prAdjustSchema = z.object({
 export const banUserSchema = z.object({
   userId: uuidSchema,
   banned: z.boolean(),
-  reason: z.string().min(1, "Reason required").max(500),
+  reason: z.string().min(1, 'Reason required').max(500),
   durationDays: z.number().int().min(1).max(365).optional(), // temp ban
 });
 
@@ -140,7 +143,7 @@ export const resolveSecurityEventAdminSchema = z.object({
  */
 export const addAdminRoleSchema = z.object({
   userId: uuidSchema,
-  role: z.enum(["ADMIN", "COMPLIANCE_OFFICER"]),
+  role: z.enum(['ADMIN', 'COMPLIANCE_OFFICER']),
   scope: z.string().optional(), // e.g. ward/constituency ID
 });
 
@@ -159,7 +162,7 @@ export const removeAdminRoleSchema = z.object({
 export const listAdminsQuerySchema = z.object({
   page: z.coerce.number().min(1).default(1),
   pageSize: z.coerce.number().min(10).max(100).default(20),
-  role: z.enum(["ADMIN", "COMPLIANCE_OFFICER"]).optional(),
+  role: z.enum(['ADMIN', 'COMPLIANCE_OFFICER']).optional(),
 });
 
 export default {

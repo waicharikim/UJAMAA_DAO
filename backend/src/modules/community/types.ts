@@ -6,10 +6,10 @@
  */
 
 export enum SystemGroupLevel {
-  WARD = "WARD",
-  CONSTITUENCY = "CONSTITUENCY",
-  COUNTY = "COUNTY",
-  NATIONAL = "NATIONAL",
+  WARD = 'WARD',
+  CONSTITUENCY = 'CONSTITUENCY',
+  COUNTY = 'COUNTY',
+  NATIONAL = 'NATIONAL',
 }
 
 export interface CreateVoluntaryGroupDto {

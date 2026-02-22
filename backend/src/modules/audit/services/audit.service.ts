@@ -9,10 +9,9 @@
  * Version: 2.0 — December 2025
  */
 
-import { prisma } from "../../../core/database/client.js";
-import { ApiError } from "../../../core/errors/ApiError.js";
-import { logger } from "../../../core/logger/logger.js";
-import { AuditAction } from "../types.js";
+import { prisma } from '../../../core/database/client.js';
+import { logger } from '../../../core/logger/logger.js';
+import { AuditAction, AuditSearchDto } from '../types.js';
 
 class AuditService {
   /**
@@ -37,7 +36,7 @@ class AuditService {
 
     logger.info(
       { userId, action, entityType, entityId, metadata },
-      "[AUDIT] Action logged"
+      '[AUDIT] Action logged'
     );
   }
 
@@ -67,7 +66,7 @@ class AuditService {
         include: {
           user: { select: { id: true, name: true, email: true } },
         },
-        orderBy: { createdAt: "desc" },
+        orderBy: { createdAt: 'desc' },
         skip,
         take: dto.limit || 50,
       }),

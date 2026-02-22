@@ -2,27 +2,25 @@
  * @file src/modules/economy/routes/economy.routes.ts
  * @description
  * Economy Module Routes - Participation Rights, Dues & Commitments
- * 
+ *
  * Endpoints:
  * - PR balance & history
  * - Dues payment history
  * - Commitments list
  * - Opt-in to monthly dues commitment
- * 
+ *
  * Version: 1.0 — January 2026
  */
 
-import { Router } from "express";
-import { asyncHandler } from "../../../core/utils/response.js";
-import { validateRequest } from "../../../core/middleware/validateRequest.js";
-import { authenticate } from "../../../core/middleware/auth.middleware.js";
-import { authorize } from "../../../core/middleware/authorize.js";
-import { buildRateLimiter } from "../../../core/middleware/rateLimiter.js";
+import { Router } from 'express';
+import { asyncHandler } from '../../../core/utils/response.js';
+import { validateRequest } from '../../../core/middleware/validateRequest.js';
+import { authenticate } from '../../../core/middleware/auth.middleware.js';
+import { authorize } from '../../../core/middleware/authorize.js';
+import { buildRateLimiter } from '../../../core/middleware/rateLimiter.js';
 
 // Validators
-import {
-  createCommitmentSchema,
-} from "../validators/economy.validators.js";
+import { createCommitmentSchema } from '../validators/economy.validators.js';
 
 // Handlers
 import {
@@ -30,7 +28,7 @@ import {
   getDuesHistory,
   getCommitments,
   optInDuesCommitment,
-} from "../handlers/economy.handlers.js"
+} from '../handlers/economy.handlers.js';
 
 const router = Router();
 
@@ -47,7 +45,7 @@ router.use(authenticate);
  * Requires: COMMUNITY_VERIFIED
  */
 router.get(
-  "/pr",
+  '/pr',
   authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
   asyncHandler(getPRBalance)
 );
@@ -62,7 +60,7 @@ router.get(
  * Requires: COMMUNITY_VERIFIED
  */
 router.get(
-  "/dues/history",
+  '/dues/history',
   authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
   asyncHandler(getDuesHistory)
 );
@@ -77,7 +75,7 @@ router.get(
  * Requires: COMMUNITY_VERIFIED
  */
 router.get(
-  "/commitments",
+  '/commitments',
   authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
   asyncHandler(getCommitments)
 );
@@ -89,7 +87,7 @@ router.get(
  * Rate limited: 1 per month
  */
 router.post(
-  "/commitments/dues",
+  '/commitments/dues',
   authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
   buildRateLimiter({ windowMs: 30 * 24 * 60 * 60 * 1000, max: 1 }), // 1 per month
   validateRequest({ schema: createCommitmentSchema, target: 'body' }),

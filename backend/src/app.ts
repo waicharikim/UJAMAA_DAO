@@ -2,10 +2,10 @@
  * @file src/app.ts
  * @description
  * UJAMAADAO Express Application - Production Ready
- * 
+ *
  * Main Express app setup with strict middleware order.
  * Exports the app instance and a servicesReady promise for index.ts to await.
- * 
+ *
  * Middleware order (CRITICAL):
  * 1. Trust proxy
  * 2. Security (helmet, CORS)
@@ -17,52 +17,62 @@
  * 8. Cleanup
  * 9. 404 handler
  * 10. Error handler
- * 
+ *
  * Version: 2.5 — February 2026
  * Updated: Removed cron registrations (moved to separate worker + BullMQ)
  * Security Hardened: February 2026
  */
 
-import express, { RequestHandler } from "express";
-import cors from "cors";
-import helmet from "helmet";
-import { logger } from "./core/logger/logger.js";
+import express, { RequestHandler } from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import { logger } from './core/logger/logger.js';
 
 // Database & services
-import { prisma } from "./core/database/client.js";
-import { redisInitialized } from "./core/middleware/rateLimiter.js";
+import { prisma } from './core/database/client.js';
+import { redisInitialized } from './core/middleware/rateLimiter.js';
 
 // Event listeners
-import { registerAllListeners } from "./core/events/listener-registry.js";
+import { registerAllListeners } from './core/events/listener-registry.js';
 
 // Middleware
-import { 
-  contextMiddleware, 
+import {
+  contextMiddleware,
   requestCleanupMiddleware,
-} from "./core/middleware/context.middleware.js";
-import { errorHandler, notFoundHandler } from "./core/middleware/errorHandler.js";
-import { attachLogger, requestLogger } from "./core/middleware/logging.middleware.js";
-import { globalRateLimit } from "./core/middleware/rateLimiter.js";
+} from './core/middleware/context.middleware.js';
+import {
+  errorHandler,
+  notFoundHandler,
+} from './core/middleware/errorHandler.js';
+import {
+  attachLogger,
+  requestLogger,
+} from './core/middleware/logging.middleware.js';
+import { globalRateLimit } from './core/middleware/rateLimiter.js';
 
 // Routes
-import authRoutes from "./modules/auth/routes/auth.routes.js";
-import userRoutes from "./modules/user/routes/user.routes.js";
-import adminRoutes from "./modules/admin/routes/admin.routes.js";
-import economyRoutes from "./modules/economy/routes/economy.routes.js";
-import communityRoutes from "./modules/community/routes/group.routes.js";
-import governanceRoutes from "./modules/governance/routes/proposal.routes.js";
-import projectRoutes from "./modules/projects/routes/project.routes.js";
-import marketplaceRoutes from "./modules/marketplace/routes/marketplace.routes.js";
-import notificationRoutes from "./modules/notifications/routes/notification.routes.js";
-import emergencyRoutes from "./modules/emergency/routes/emergency.routes.js";
-import auditRoutes from "./modules/audit/routes/audit.routes.js";
-import onboardingRoutes from "./modules/onboarding/routes/onboarding.routes.js";
+import authRoutes from './modules/auth/routes/auth.routes.js';
+import userRoutes from './modules/user/routes/user.routes.js';
+import adminRoutes from './modules/admin/routes/admin.routes.js';
+import economyRoutes from './modules/economy/routes/economy.routes.js';
+import communityRoutes from './modules/community/routes/group.routes.js';
+import governanceRoutes from './modules/governance/routes/proposal.routes.js';
+import projectRoutes from './modules/projects/routes/project.routes.js';
+import marketplaceRoutes from './modules/marketplace/routes/marketplace.routes.js';
+import notificationRoutes from './modules/notifications/routes/notification.routes.js';
+import emergencyRoutes from './modules/emergency/routes/emergency.routes.js';
+import auditRoutes from './modules/audit/routes/audit.routes.js';
+import onboardingRoutes from './modules/onboarding/routes/onboarding.routes.js';
 
 // Bull Board dashboard
 import { ExpressAdapter } from '@bull-board/express';
 import { createBullBoard } from '@bull-board/api';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
-import { economyQueue, userCleanupQueue, deadLetterQueue } from "@core/queue/index.js";
+import {
+  economyQueue,
+  userCleanupQueue,
+  deadLetterQueue,
+} from '@core/queue/index.js';
 
 const app = express();
 
@@ -86,12 +96,17 @@ async function initializeServices(): Promise<void> {
     registerAllListeners();
     logger.debug({ operationType: 'STARTUP' }, 'Event listeners registered');
 
-    logger.info({ operationType: 'STARTUP' }, '✅ All async services initialized');
+    logger.info(
+      { operationType: 'STARTUP' },
+      '✅ All async services initialized'
+    );
   } catch (error) {
     logger.error(
       {
         operationType: 'STARTUP_FAILURE',
-        metadata: { error: error instanceof Error ? error.message : String(error) },
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
       },
       '❌ Failed to initialize services'
     );
@@ -105,29 +120,30 @@ export const servicesReady = initializeServices();
 // 1. TRUST PROXY & SECURITY
 // ============================================================================
 
-app.set("trust proxy", 1); // Required for correct IP behind reverse proxy/load balancer
+app.set('trust proxy', 1); // Required for correct IP behind reverse proxy/load balancer
 
 app.use(
   helmet({
-    contentSecurityPolicy: process.env.NODE_ENV === "production",
-    crossOriginEmbedderPolicy: process.env.NODE_ENV === "production",
-    hsts: process.env.NODE_ENV === "production",
+    contentSecurityPolicy: process.env.NODE_ENV === 'production',
+    crossOriginEmbedderPolicy: process.env.NODE_ENV === 'production',
+    hsts: process.env.NODE_ENV === 'production',
   })
 );
 
-const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",").map(o => o.trim()) || [
-  "http://localhost:3000",
-  "http://localhost:3001",
-];
+const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',').map((o) =>
+  o.trim()
+) || ['http://localhost:3000', 'http://localhost:3001'];
 
 app.use(
   cors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true); // Allow non-browser (Postman, curl, etc.)
-      
-      const isAllowed = 
-        allowedOrigins.includes("*") ||
-        allowedOrigins.some(allowed => origin === allowed || origin.endsWith(`.${allowed}`));
+
+      const isAllowed =
+        allowedOrigins.includes('*') ||
+        allowedOrigins.some(
+          (allowed) => origin === allowed || origin.endsWith(`.${allowed}`)
+        );
 
       if (isAllowed) {
         callback(null, true);
@@ -136,13 +152,13 @@ app.use(
           { operationType: 'CORS_BLOCKED', origin },
           'CORS request blocked - origin not allowed'
         );
-        callback(new Error("Not allowed by CORS"));
+        callback(new Error('Not allowed by CORS'));
       }
     },
     credentials: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Correlation-ID"],
-    exposedHeaders: ["X-Correlation-ID"],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Correlation-ID'],
+    exposedHeaders: ['X-Correlation-ID'],
     maxAge: 86400,
   })
 );
@@ -151,10 +167,10 @@ app.use(
 // 2. BODY PARSING
 // ============================================================================
 
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-app.disable("x-powered-by"); // Security: hide Express version
+app.disable('x-powered-by'); // Security: hide Express version
 
 // ============================================================================
 // 3. CONTEXT & LOGGING
@@ -174,25 +190,25 @@ app.use(globalRateLimit());
 // 5. HEALTH & ROOT ENDPOINTS (public)
 // ============================================================================
 
-app.get("/health", (_req, res) => {
+app.get('/health', (_req, res) => {
   res.status(200).json({
     success: true,
-    status: "ok",
-    service: "ujamaadao-backend",
-    version: "2.5",
+    status: 'ok',
+    service: 'ujamaadao-backend',
+    version: '2.5',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || "development",
+    environment: process.env.NODE_ENV || 'development',
     uptime: process.uptime(),
   });
 });
 
-app.get("/ready", async (_req, res) => {
+app.get('/ready', async (_req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
     res.status(200).json({
       success: true,
-      status: "ready",
-      checks: { database: "connected" },
+      status: 'ready',
+      checks: { database: 'connected' },
     });
   } catch (error) {
     logger.error(
@@ -201,43 +217,43 @@ app.get("/ready", async (_req, res) => {
     );
     res.status(503).json({
       success: false,
-      status: "not ready",
-      checks: { database: "disconnected" },
+      status: 'not ready',
+      checks: { database: 'disconnected' },
     });
   }
 });
 
-app.get("/", (_req, res) => {
+app.get('/', (_req, res) => {
   res.status(200).json({
     success: true,
-    message: "Welcome to UjamaaDAO API",
-    version: "2.5",
-    documentation: "/api/v1/docs",
-    status: "operational",
+    message: 'Welcome to UjamaaDAO API',
+    version: '2.5',
+    documentation: '/api/v1/docs',
+    status: 'operational',
   });
 });
 
 // Placeholder API docs (replace with OpenAPI/Swagger later)
-app.get("/api/v1/docs", (_req, res) => {
+app.get('/api/v1/docs', (_req, res) => {
   res.status(200).json({
     success: true,
-    message: "API Documentation",
-    version: "2.5",
+    message: 'API Documentation',
+    version: '2.5',
     endpoints: {
-      auth: "/api/v1/auth",
-      users: "/api/v1/users",
-      admin: "/api/v1/admin",
-      economy: "/api/v1/economy",
-      community: "/api/v1/community",
-      governance: "/api/v1/governance",
-      projects: "/api/v1/projects",
-      marketplace: "/api/v1/marketplace",
-      notifications: "/api/v1/notifications",
-      emergency: "/api/v1/emergency",
-      audit: "/api/v1/audit",
-      onboarding: "/api/v1/onboarding",
-      health: "/health",
-      ready: "/ready",
+      auth: '/api/v1/auth',
+      users: '/api/v1/users',
+      admin: '/api/v1/admin',
+      economy: '/api/v1/economy',
+      community: '/api/v1/community',
+      governance: '/api/v1/governance',
+      projects: '/api/v1/projects',
+      marketplace: '/api/v1/marketplace',
+      notifications: '/api/v1/notifications',
+      emergency: '/api/v1/emergency',
+      audit: '/api/v1/audit',
+      onboarding: '/api/v1/onboarding',
+      health: '/health',
+      ready: '/ready',
     },
   });
 });
@@ -246,19 +262,18 @@ app.get("/api/v1/docs", (_req, res) => {
 // 6. API ROUTES (v1 namespace)
 // ============================================================================
 
-app.use("/api/v1/auth", authRoutes);
-app.use("/api/v1/users", userRoutes);
-app.use("/api/v1/admin", adminRoutes);
-app.use("/api/v1/economy", economyRoutes);
-app.use("/api/v1/community", communityRoutes);
-app.use("/api/v1/governance", governanceRoutes);
-app.use("/api/v1/projects", projectRoutes);
-app.use("/api/v1/marketplace", marketplaceRoutes);
-app.use("/api/v1/notifications", notificationRoutes);
-app.use("/api/v1/emergency", emergencyRoutes);
-app.use("/api/v1/audit", auditRoutes);
-app.use("/api/v1/onboarding", onboardingRoutes);
-
+app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/users', userRoutes);
+app.use('/api/v1/admin', adminRoutes);
+app.use('/api/v1/economy', economyRoutes);
+app.use('/api/v1/community', communityRoutes);
+app.use('/api/v1/governance', governanceRoutes);
+app.use('/api/v1/projects', projectRoutes);
+app.use('/api/v1/marketplace', marketplaceRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
+app.use('/api/v1/emergency', emergencyRoutes);
+app.use('/api/v1/audit', auditRoutes);
+app.use('/api/v1/onboarding', onboardingRoutes);
 
 // ─────────────────────────────────────────────
 // BULL BOARD DASHBOARD — Visual queue monitoring
@@ -267,13 +282,16 @@ app.use("/api/v1/onboarding", onboardingRoutes);
 // Install required packages first:
 // npm install @bull-board/api @bull-board/express bull-board
 
-
-
 // Simple basic auth middleware (change password in production!)
 const requireDashboardAuth = (req: any, res: any, next: any) => {
-  const auth = { login: 'admin', password: process.env.DASHBOARD_PASSWORD || 'YourVeryStrongPassword123!' };
+  const auth = {
+    login: 'admin',
+    password: process.env.DASHBOARD_PASSWORD || 'YourVeryStrongPassword123!',
+  };
   const b64auth = (req.headers.authorization || '').split(' ')[1] || '';
-  const [login, password] = Buffer.from(b64auth, 'base64').toString().split(':');
+  const [login, password] = Buffer.from(b64auth, 'base64')
+    .toString()
+    .split(':');
 
   if (login === auth.login && password === auth.password) {
     return next();
@@ -300,8 +318,8 @@ createBullBoard({
 app.use('/admin/queues', requireDashboardAuth, serverAdapter.getRouter());
 
 logger.info(
-  { operationType: "DASHBOARD" },
-  "Bull Board dashboard enabled at /admin/queues (basic auth required)"
+  { operationType: 'DASHBOARD' },
+  'Bull Board dashboard enabled at /admin/queues (basic auth required)'
 );
 
 // ============================================================================

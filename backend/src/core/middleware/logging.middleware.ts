@@ -2,16 +2,16 @@
  * @file src/core/middleware/logging.middleware.ts
  * @description
  * Request-scoped logger middleware
- * 
+ *
  * Attaches a logger instance to each request with automatic context binding.
  * The base logger already has PII-safe serializers, so we don't need redundant
  * sanitization here.
- * 
+ *
  * Version: 2.1 — January 2026
  */
 
-import { Request, Response, NextFunction } from "express";
-import { logger } from "../logger/logger.js";
+import { Request, Response, NextFunction } from 'express';
+import { logger } from '../logger/logger.js';
 
 // Extend Express Request type to include log property
 declare global {
@@ -29,15 +29,19 @@ declare global {
 
 /**
  * Attach scoped logger to request with correlation ID and user context
- * 
+ *
  * The base logger (from logger.ts) already has serializers that:
  * - Redact PII (emails, wallets, IPs)
  * - Sanitize log messages
  * - Format structured data
- * 
+ *
  * So we don't need to duplicate that logic here.
  */
-export const attachLogger = (req: Request, res: Response, next: NextFunction) => {
+export const attachLogger = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   const correlationId = (req as any).correlationId;
   const userId = (req as any).user?.userId;
 
@@ -52,15 +56,15 @@ export const attachLogger = (req: Request, res: Response, next: NextFunction) =>
     info: (message: string, meta?: any) => {
       childLogger.info({ ...meta }, message);
     },
-    
+
     error: (message: string, meta?: any) => {
       childLogger.error({ ...meta }, message);
     },
-    
+
     warn: (message: string, meta?: any) => {
       childLogger.warn({ ...meta }, message);
     },
-    
+
     debug: (message: string, meta?: any) => {
       childLogger.debug({ ...meta }, message);
     },
@@ -71,13 +75,17 @@ export const attachLogger = (req: Request, res: Response, next: NextFunction) =>
 
 /**
  * Request/Response logger - logs all incoming requests and their outcomes
- * 
+ *
  * Useful for:
  * - API monitoring
  * - Performance tracking
  * - Debugging
  */
-export const requestLogger = (req: Request, res: Response, next: NextFunction) => {
+export const requestLogger = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   const startTime = Date.now();
 
   // Log incoming request
@@ -90,10 +98,10 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction) =
   // Log response when finished
   res.on('finish', () => {
     const duration = Date.now() - startTime;
-    
+
     // Use warn level for 4xx/5xx errors, info for success
     const level = res.statusCode >= 400 ? 'warn' : 'info';
-    
+
     req.log[level]('Request completed', {
       statusCode: res.statusCode,
       durationMs: duration,

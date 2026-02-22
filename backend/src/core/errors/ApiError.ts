@@ -3,14 +3,18 @@
  * @description
  * Public-facing API error class with domain context
  * PII-safe, type-safe, production-ready
- * 
+ *
  * Version: 2.1 — January 2026
  * Updated: Fixed type compatibility with BaseError
  */
 
-import { BaseError, BaseErrorOptions } from "./BaseError.js";
-import { UJAMAADAO_ERROR_CODES, UjamaadaoErrorCode, isValidErrorCode } from "./codes.js";
-import { autoRedactObject, containsPII } from "../logger/log-sanitizer.js";
+import { BaseError, BaseErrorOptions } from './BaseError.js';
+import {
+  UJAMAADAO_ERROR_CODES,
+  UjamaadaoErrorCode,
+  isValidErrorCode,
+} from './codes.js';
+import { autoRedactObject, containsPII } from '../logger/log-sanitizer.js';
 
 export interface ApiErrorOptions extends BaseErrorOptions {
   code?: UjamaadaoErrorCode;
@@ -24,12 +28,12 @@ export interface ApiErrorOptions extends BaseErrorOptions {
  */
 function sanitizeContext(context: any): any {
   if (!context) return undefined;
-  
+
   // Check for PII and redact
   if (containsPII(context)) {
     return autoRedactObject(context);
   }
-  
+
   // For geographic context, only return scope (not exact location)
   if (context.primaryWardId || context.secondaryWardId) {
     return {
@@ -37,15 +41,19 @@ function sanitizeContext(context: any): any {
       hasLocation: true,
     };
   }
-  
+
   // For economic context, return tier (not exact amounts)
-  if (typeof context.participationRights === 'number' || typeof context.globalImpactPoints === 'number') {
+  if (
+    typeof context.participationRights === 'number' ||
+    typeof context.globalImpactPoints === 'number'
+  ) {
     const pr = context.participationRights || 0;
     return {
-      economicTier: pr === 0 ? 'none' : pr < 100 ? 'low' : pr < 1000 ? 'medium' : 'high',
+      economicTier:
+        pr === 0 ? 'none' : pr < 100 ? 'low' : pr < 1000 ? 'medium' : 'high',
     };
   }
-  
+
   return context;
 }
 
@@ -53,22 +61,18 @@ export class ApiError extends BaseError {
   // Override code with proper type
   public readonly code?: UjamaadaoErrorCode;
 
-  constructor(
-    message: string,
-    statusCode = 400,
-    options?: ApiErrorOptions
-  ) {
+  constructor(message: string, statusCode = 400, options?: ApiErrorOptions) {
     // Sanitize all context data
     const sanitizedDetails = {
       ...options?.details,
-      ...(options?.geographicContext && { 
-        geographicContext: sanitizeContext(options.geographicContext) 
+      ...(options?.geographicContext && {
+        geographicContext: sanitizeContext(options.geographicContext),
       }),
-      ...(options?.verificationContext && { 
-        verificationContext: sanitizeContext(options.verificationContext) 
+      ...(options?.verificationContext && {
+        verificationContext: sanitizeContext(options.verificationContext),
       }),
-      ...(options?.economicContext && { 
-        economicContext: sanitizeContext(options.economicContext) 
+      ...(options?.economicContext && {
+        economicContext: sanitizeContext(options.economicContext),
       }),
     };
 
@@ -91,7 +95,7 @@ export class ApiError extends BaseError {
     correlationId?: string
   ): ApiError {
     // Sanitize validation details (might contain user input)
-    const safeDetails = validationDetails 
+    const safeDetails = validationDetails
       ? autoRedactObject({ validation: validationDetails })
       : undefined;
 
@@ -102,7 +106,11 @@ export class ApiError extends BaseError {
     });
   }
 
-  static badRequest(message: string, details?: any, correlationId?: string): ApiError {
+  static badRequest(
+    message: string,
+    details?: any,
+    correlationId?: string
+  ): ApiError {
     return new ApiError(message, 400, {
       code: UJAMAADAO_ERROR_CODES.INVALID_INPUT,
       details: details ? sanitizeContext(details) : undefined,
@@ -137,7 +145,10 @@ export class ApiError extends BaseError {
     });
   }
 
-  static tokenExpired(message = 'Token has expired', correlationId?: string): ApiError {
+  static tokenExpired(
+    message = 'Token has expired',
+    correlationId?: string
+  ): ApiError {
     return new ApiError(message, 401, {
       code: UJAMAADAO_ERROR_CODES.TOKEN_EXPIRED,
       details: { type: 'TOKEN_EXPIRED' },
@@ -145,7 +156,10 @@ export class ApiError extends BaseError {
     });
   }
 
-  static tokenInvalid(message = 'Invalid token', correlationId?: string): ApiError {
+  static tokenInvalid(
+    message = 'Invalid token',
+    correlationId?: string
+  ): ApiError {
     return new ApiError(message, 401, {
       code: UJAMAADAO_ERROR_CODES.TOKEN_INVALID,
       details: { type: 'TOKEN_INVALID' },
@@ -157,7 +171,11 @@ export class ApiError extends BaseError {
   // FACTORY METHODS - AUTHORIZATION
   // ==========================================================================
 
-  static forbidden(message = 'Access denied', details?: any, correlationId?: string): ApiError {
+  static forbidden(
+    message = 'Access denied',
+    details?: any,
+    correlationId?: string
+  ): ApiError {
     return new ApiError(message, 403, {
       code: UJAMAADAO_ERROR_CODES.AUTHORIZATION_ERROR,
       details: { type: 'ACCESS_DENIED', ...sanitizeContext(details) },
@@ -183,9 +201,10 @@ export class ApiError extends BaseError {
     correlationId?: string
   ): ApiError {
     // Don't expose all required permissions (information leakage)
-    const safePermissions = requiredPermissions && requiredPermissions.length > 0
-      ? { hasRequirements: true, count: requiredPermissions.length }
-      : undefined;
+    const safePermissions =
+      requiredPermissions && requiredPermissions.length > 0
+        ? { hasRequirements: true, count: requiredPermissions.length }
+        : undefined;
 
     return new ApiError(message, 403, {
       code: UJAMAADAO_ERROR_CODES.INSUFFICIENT_PERMISSIONS,
@@ -303,9 +322,10 @@ export class ApiError extends BaseError {
     details?: any,
     correlationId?: string
   ): ApiError {
-    const safeDetails = process.env.NODE_ENV === 'production'
-      ? { type: 'TRANSACTION_FAILED' }
-      : sanitizeContext(details);
+    const safeDetails =
+      process.env.NODE_ENV === 'production'
+        ? { type: 'TRANSACTION_FAILED' }
+        : sanitizeContext(details);
 
     return new ApiError(message, 500, {
       code: UJAMAADAO_ERROR_CODES.TRANSACTION_FAILED,
@@ -314,10 +334,15 @@ export class ApiError extends BaseError {
     });
   }
 
-  static walletError(message = 'Wallet error', details?: any, correlationId?: string): ApiError {
-    const safeDetails = process.env.NODE_ENV === 'production'
-      ? { type: 'WALLET_ERROR' }
-      : sanitizeContext(details);
+  static walletError(
+    message = 'Wallet error',
+    details?: any,
+    correlationId?: string
+  ): ApiError {
+    const safeDetails =
+      process.env.NODE_ENV === 'production'
+        ? { type: 'WALLET_ERROR' }
+        : sanitizeContext(details);
 
     return new ApiError(message, 500, {
       code: UJAMAADAO_ERROR_CODES.WALLET_ERROR,
@@ -330,9 +355,13 @@ export class ApiError extends BaseError {
   // FACTORY METHODS - RESOURCE
   // ==========================================================================
 
-  static notFound(resource = 'Resource', identifier?: string, correlationId?: string): ApiError {
+  static notFound(
+    resource = 'Resource',
+    identifier?: string,
+    correlationId?: string
+  ): ApiError {
     const message = `${resource} not found`;
-    
+
     return new ApiError(message, 404, {
       code: UJAMAADAO_ERROR_CODES.NOT_FOUND,
       details: { resource },
@@ -340,7 +369,11 @@ export class ApiError extends BaseError {
     });
   }
 
-  static conflict(message = 'Resource conflict', conflictDetails?: any, correlationId?: string): ApiError {
+  static conflict(
+    message = 'Resource conflict',
+    conflictDetails?: any,
+    correlationId?: string
+  ): ApiError {
     return new ApiError(message, 409, {
       code: UJAMAADAO_ERROR_CODES.CONFLICT,
       details: sanitizeContext(conflictDetails),
@@ -377,17 +410,25 @@ export class ApiError extends BaseError {
     });
   }
 
-  static tooManyRequests(retryAfter?: number, correlationId?: string): ApiError {
+  static tooManyRequests(
+    retryAfter?: number,
+    correlationId?: string
+  ): ApiError {
     const message = retryAfter
       ? `Too many requests. Please retry after ${Math.ceil(retryAfter)} seconds`
       : 'Too many requests. Please try again later';
     return ApiError.rateLimitError(message, retryAfter, correlationId);
   }
 
-  static systemError(message = 'Internal system error', systemDetails?: any, correlationId?: string): ApiError {
-    const safeDetails = process.env.NODE_ENV === 'production'
-      ? undefined
-      : sanitizeContext(systemDetails);
+  static systemError(
+    message = 'Internal system error',
+    systemDetails?: any,
+    correlationId?: string
+  ): ApiError {
+    const safeDetails =
+      process.env.NODE_ENV === 'production'
+        ? undefined
+        : sanitizeContext(systemDetails);
 
     return new ApiError(message, 500, {
       code: UJAMAADAO_ERROR_CODES.SYSTEM_ERROR,
@@ -396,10 +437,15 @@ export class ApiError extends BaseError {
     });
   }
 
-  static databaseError(message = 'Database error', details?: any, correlationId?: string): ApiError {
-    const safeDetails = process.env.NODE_ENV === 'production'
-      ? undefined
-      : sanitizeContext(details);
+  static databaseError(
+    message = 'Database error',
+    details?: any,
+    correlationId?: string
+  ): ApiError {
+    const safeDetails =
+      process.env.NODE_ENV === 'production'
+        ? undefined
+        : sanitizeContext(details);
 
     return new ApiError(message, 500, {
       code: UJAMAADAO_ERROR_CODES.DATABASE_ERROR,
@@ -424,14 +470,18 @@ export class ApiError extends BaseError {
   // UTILITY METHODS
   // ==========================================================================
 
-  static fromError(err: unknown, overrides?: Partial<ApiErrorOptions>): ApiError {
+  static fromError(
+    err: unknown,
+    overrides?: Partial<ApiErrorOptions>
+  ): ApiError {
     if (err instanceof ApiError) return err;
-    
+
     if (err instanceof BaseError) {
       // Type-safe conversion from BaseError
-      const code = err.code && isValidErrorCode(err.code) 
-        ? err.code as UjamaadaoErrorCode
-        : UJAMAADAO_ERROR_CODES.SYSTEM_ERROR;
+      const code =
+        err.code && isValidErrorCode(err.code)
+          ? (err.code as UjamaadaoErrorCode)
+          : UJAMAADAO_ERROR_CODES.SYSTEM_ERROR;
 
       return new ApiError(err.message, err.statusCode, {
         code,
@@ -446,16 +496,18 @@ export class ApiError extends BaseError {
     if (err instanceof Error) {
       const safeMessage = err.message.slice(0, 200);
       return ApiError.systemError(
-        safeMessage, 
-        process.env.NODE_ENV === 'production' ? undefined : { original: err.message },
+        safeMessage,
+        process.env.NODE_ENV === 'production'
+          ? undefined
+          : { original: err.message },
         overrides?.correlationId
       );
     }
 
     // Unknown error type
     return ApiError.systemError(
-      'Unexpected error', 
-      undefined, 
+      'Unexpected error',
+      undefined,
       overrides?.correlationId
     );
   }
@@ -476,11 +528,17 @@ export class ApiError extends BaseError {
   }
 
   static isValidationError(err: unknown): boolean {
-    return err instanceof ApiError && err.code === UJAMAADAO_ERROR_CODES.VALIDATION_ERROR;
+    return (
+      err instanceof ApiError &&
+      err.code === UJAMAADAO_ERROR_CODES.VALIDATION_ERROR
+    );
   }
 
   static isRateLimitError(err: unknown): boolean {
-    return err instanceof ApiError && err.code === UJAMAADAO_ERROR_CODES.RATE_LIMIT_EXCEEDED;
+    return (
+      err instanceof ApiError &&
+      err.code === UJAMAADAO_ERROR_CODES.RATE_LIMIT_EXCEEDED
+    );
   }
 
   static isServerError(err: unknown): boolean {

@@ -16,14 +16,15 @@
  * Security Hardened: January 2026
  */
 
-import type { Response, NextFunction } from "express";
-import { randomUUID } from "crypto";
-import type { AuthRequest } from "../types/Ujamaadao.types.js";
-import { logger } from "../logger/logger.js";
-import { sanitizeLogMessage } from "../logger/log-sanitizer.js";
+import type { Response, NextFunction } from 'express';
+import { randomUUID } from 'crypto';
+import type { AuthRequest } from '../types/Ujamaadao.types.js';
+import { logger } from '../logger/logger.js';
+import { sanitizeLogMessage } from '../logger/log-sanitizer.js';
 
 // Valid UUID v4 pattern for correlation ID validation
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 // Custom correlation ID pattern (corr-timestamp-uuid)
 const CUSTOM_CORRELATION_PATTERN = /^corr-\d{13}-[0-9a-f]{8,}$/i;
@@ -33,7 +34,7 @@ const MAX_CORRELATION_ID_LENGTH = 64;
 
 /**
  * Validate and sanitize correlation ID from client
- * 
+ *
  * Security: Only accept properly formatted UUIDs or our custom format
  * to prevent header injection attacks
  */
@@ -68,7 +69,7 @@ function generateCorrelationId(): string {
 
 /**
  * Context initialization middleware
- * 
+ *
  * Sets up all request-scoped context that other middleware depends on.
  * This MUST run first in the middleware chain (after body parsers).
  */
@@ -78,24 +79,27 @@ export const contextMiddleware = (
   next: NextFunction
 ): void => {
   // 1. Correlation ID - validate from header or generate new
-  const headerCorrelationId = req.headers["x-correlation-id"] as string;
+  const headerCorrelationId = req.headers['x-correlation-id'] as string;
   const validatedId = validateCorrelationId(headerCorrelationId);
-  
+
   // Only accept valid correlation IDs, otherwise generate new one
   const correlationId = validatedId || generateCorrelationId();
   req.correlationId = correlationId;
 
   // Log security warning if client sent invalid correlation ID
   if (headerCorrelationId && !validatedId) {
-    logger.warn({
-      operationType: "SECURITY",
-      metadata: {
-        invalidCorrelationId: sanitizeLogMessage(headerCorrelationId),
-        ipAddress: req.ip,
-        path: req.path,
-        userAgent: req.headers["user-agent"],
-      }
-    }, "Invalid correlation ID format rejected - possible header injection attempt");
+    logger.warn(
+      {
+        operationType: 'SECURITY',
+        metadata: {
+          invalidCorrelationId: sanitizeLogMessage(headerCorrelationId),
+          ipAddress: req.ip,
+          path: req.path,
+          userAgent: req.headers['user-agent'],
+        },
+      },
+      'Invalid correlation ID format rejected - possible header injection attempt'
+    );
   }
 
   // 2. Initialize authentication context with safe defaults
@@ -127,21 +131,21 @@ export const contextMiddleware = (
   req.sessionId = req.sessionId || undefined;
 
   // 9. Propagate correlation ID to client (always send our generated/validated ID)
-  res.setHeader("X-Correlation-ID", correlationId);
+  res.setHeader('X-Correlation-ID', correlationId);
 
   // 10. Set security headers (if not already set by helmet)
   if (!res.headersSent) {
     // Prevent MIME sniffing
-    res.setHeader("X-Content-Type-Options", "nosniff");
-    
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+
     // Prevent clickjacking
-    res.setHeader("X-Frame-Options", "DENY");
-    
+    res.setHeader('X-Frame-Options', 'DENY');
+
     // XSS protection (legacy but good defense-in-depth)
-    res.setHeader("X-XSS-Protection", "1; mode=block");
-    
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+
     // Referrer policy (privacy)
-    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   }
 
   next();
@@ -149,7 +153,7 @@ export const contextMiddleware = (
 
 /**
  * Request cleanup middleware — logs duration, warns on slow requests
- * 
+ *
  * Should be added early in middleware chain (after context) so it can
  * track the total request duration including all middleware/handlers.
  */
@@ -175,7 +179,7 @@ export const requestCleanupMiddleware = (
 
     // Log context with appropriate detail level
     const logContext = {
-      operationType: "PERFORMANCE" as const,
+      operationType: 'PERFORMANCE' as const,
       userId: req.user?.userId,
       metadata: {
         method: req.method,
@@ -201,22 +205,16 @@ export const requestCleanupMiddleware = (
         `Very slow request detected (${duration}ms) - potential performance issue`
       );
     } else if (isSlow) {
-      logger.warn(
-        logContext,
-        `Slow request detected (${duration}ms)`
-      );
+      logger.warn(logContext, `Slow request detected (${duration}ms)`);
     } else if (process.env.LOG_LEVEL === 'debug') {
-      logger.debug(
-        logContext,
-        `Request completed in ${duration}ms`
-      );
+      logger.debug(logContext, `Request completed in ${duration}ms`);
     }
 
     // Log successful requests in info (for monitoring)
     if (res.statusCode < 400 && duration < 1000) {
       logger.info(
         {
-          operationType: "GENERAL" as const,
+          operationType: 'GENERAL' as const,
           metadata: {
             method: req.method,
             path: req.path,
@@ -225,7 +223,7 @@ export const requestCleanupMiddleware = (
             correlationId: req.correlationId,
           },
         },
-        "Request completed successfully"
+        'Request completed successfully'
       );
     }
   };
@@ -233,41 +231,44 @@ export const requestCleanupMiddleware = (
   // Attach to both events:
   // - finish: successful response sent
   // - close: connection closed (may not have sent full response)
-  res.on("finish", cleanup);
-  res.on("close", cleanup);
+  res.on('finish', cleanup);
+  res.on('close', cleanup);
 
   next();
 };
 
 /**
  * Request size validator - prevent DoS via large payloads
- * 
+ *
  * This is a secondary check in addition to body-parser limits.
  * Use this to enforce stricter limits on specific routes.
- * 
+ *
  * @example
  * router.post('/upload', validateRequestSize(1024 * 1024), handler) // 1MB
  */
 export const validateRequestSize = (maxBytes: number) => {
   return (req: AuthRequest, res: Response, next: NextFunction): void => {
     const contentLength = parseInt(req.headers['content-length'] || '0', 10);
-    
+
     if (contentLength > maxBytes) {
-      logger.warn({
-        operationType: "SECURITY",
-        userId: req.user?.userId,
-        metadata: {
-          contentLength,
-          maxAllowed: maxBytes,
-          path: req.path,
-          correlationId: req.correlationId,
+      logger.warn(
+        {
+          operationType: 'SECURITY',
+          userId: req.user?.userId,
+          metadata: {
+            contentLength,
+            maxAllowed: maxBytes,
+            path: req.path,
+            correlationId: req.correlationId,
+          },
         },
-      }, "Request rejected - payload too large");
+        'Request rejected - payload too large'
+      );
 
       res.status(413).json({
         success: false,
-        message: "Request payload too large",
-        code: "PAYLOAD_TOO_LARGE",
+        message: 'Request payload too large',
+        code: 'PAYLOAD_TOO_LARGE',
         meta: {
           maxSizeBytes: maxBytes,
           correlationId: req.correlationId,
@@ -282,24 +283,27 @@ export const validateRequestSize = (maxBytes: number) => {
 
 /**
  * Trusted proxy header validator
- * 
+ *
  * Validates X-Forwarded-* headers to prevent IP spoofing.
  * Only use if you trust your proxy/load balancer.
  */
 export const validateProxyHeaders = (trustedProxies: string[]) => {
   return (req: AuthRequest, res: Response, next: NextFunction): void => {
     const forwardedFor = req.headers['x-forwarded-for'] as string;
-    
+
     if (forwardedFor && !trustedProxies.includes(req.ip || '')) {
-      logger.warn({
-        operationType: "SECURITY",
-        metadata: {
-          forwardedFor,
-          actualIp: req.ip,
-          path: req.path,
-          correlationId: req.correlationId,
+      logger.warn(
+        {
+          operationType: 'SECURITY',
+          metadata: {
+            forwardedFor,
+            actualIp: req.ip,
+            path: req.path,
+            correlationId: req.correlationId,
+          },
         },
-      }, "X-Forwarded-For header from untrusted proxy - potential IP spoofing");
+        'X-Forwarded-For header from untrusted proxy - potential IP spoofing'
+      );
     }
 
     next();

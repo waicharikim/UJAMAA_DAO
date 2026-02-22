@@ -5,6 +5,9 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./tests/testSetup.ts'],
     environment: 'node',
+    // Run test files sequentially to avoid concurrent DB mutations between files
+    // (both auth test files use the same UUID constants + shared postgres_test DB).
+    fileParallelism: false,
     // These are set BEFORE any module is loaded — the correct place for env vars.
     // testSetup.ts process.env assignments run after ESM imports are hoisted,
     // so they never reach env.ts validation. Keep all required vars here.

@@ -6,8 +6,8 @@
  */
 
 export enum ListingType {
-  OFFER = "OFFER",   // I can provide this
-  REQUEST = "REQUEST", // I need this
+  OFFER = 'OFFER', // I can provide this
+  REQUEST = 'REQUEST', // I need this
 }
 
 export interface CreateListingDto {

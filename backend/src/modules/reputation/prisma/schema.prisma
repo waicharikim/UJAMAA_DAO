@@ -1,0 +1,40 @@
+// ============================================================================
+// REPUTATION MODULE - Impact Points (Global + Location-Based)
+// ============================================================================
+
+model ImpactPointLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  amount    Int
+  reason    String   @db.VarChar(100)
+  scope     String   @db.VarChar(50)  // "GLOBAL" | "WARD" | "CONSTITUENCY" | "COUNTY"
+  scopedId  String?  @db.Uuid         // Ward/Constituency/County ID when scope != GLOBAL
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  user User @relation("UserImpactPointLogs", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, scope])
+  @@index([createdAt])
+  @@map("impact_point_logs")
+}
+
+model UserLocationImpact {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @db.Uuid
+  wardId       String   @db.Uuid
+  impactPoints Int      @default(0)
+  tier         String   @default("NONE")  // NONE | BRONZE | SILVER | GOLD | PLATINUM
+  type         String   @default("LOCATION_BASED")
+  lastActivity DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation("UserLocationImpacts", fields: [userId], references: [id], onDelete: Cascade)
+  ward Ward @relation("WardLocationImpacts", fields: [wardId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, wardId])
+  @@index([userId])
+  @@index([wardId])
+  @@map("user_location_impacts")
+}

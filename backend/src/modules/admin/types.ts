@@ -2,11 +2,11 @@
  * @file src/modules/admin/types/admin.types.ts
  * @description
  * Admin Module Type Definitions and DTOs
- * 
+ *
  * Version: 1.0 — January 2026
  */
 
-import { z } from "zod";
+import { z } from 'zod';
 
 // ============================================================================
 // ZOD VALIDATION SCHEMAS
@@ -42,7 +42,9 @@ export const UpdateSystemConfigSchema = z.object({
 // TYPESCRIPT TYPES (inferred from Zod)
 // ============================================================================
 
-export type ApproveResidenceChangeDto = z.infer<typeof ApproveResidenceChangeSchema>;
+export type ApproveResidenceChangeDto = z.infer<
+  typeof ApproveResidenceChangeSchema
+>;
 export type VerifyMilestoneDto = z.infer<typeof VerifyMilestoneSchema>;
 export type UpdateSystemConfigDto = z.infer<typeof UpdateSystemConfigSchema>;
 

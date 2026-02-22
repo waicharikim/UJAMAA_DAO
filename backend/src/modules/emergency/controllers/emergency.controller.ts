@@ -5,23 +5,28 @@
  * Version: 2.0 — December 2025
  */
 
-import { Request, Response } from "express";
-import { sendSuccess } from "../../../core/utils/response.js";
-import { emergencyService } from "../services/emergency.service.js";
+import { Response } from 'express';
+import { AuthRequest } from '../../../core/types/Ujamaadao.types.js';
+import { sendSuccess } from '../../../core/utils/response.js';
+import { emergencyService } from '../services/emergency.service.js';
 
 export class EmergencyController {
-  static async reportEmergency(req: Request, res: Response) {
+  static async reportEmergency(req: AuthRequest, res: Response) {
     const userId = req.user!.userId;
     const dto = req.body;
     const alert = await emergencyService.reportEmergency(userId, dto);
-    sendSuccess(res, alert, "Emergency reported — help is being coordinated");
+    sendSuccess(res, alert, 'Emergency reported — help is being coordinated');
   }
 
-  static async respondToEmergency(req: Request, res: Response) {
+  static async respondToEmergency(req: AuthRequest, res: Response) {
     const userId = req.user!.userId;
     const { alertId } = req.params;
     const { message } = req.body;
-    const response = await emergencyService.respondToEmergency(userId, alertId, message);
-    sendSuccess(res, response, "Response recorded");
+    const response = await emergencyService.respondToEmergency(
+      userId,
+      alertId,
+      message
+    );
+    sendSuccess(res, response, 'Response recorded');
   }
 }

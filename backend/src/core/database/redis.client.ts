@@ -2,15 +2,15 @@
  * @file src/core/database/redis.client.ts
  * @description
  * Redis Client for UjamaaDAO
- * 
+ *
  * Used for:
  * - Session caching (fast validation)
  * - Nonce storage (wallet auth)
  * - Rate limiting (distributed)
  * - Token blacklist (revocation)
- * 
+ *
  * Gracefully falls back to in-memory storage if Redis unavailable.
- * 
+ *
  * Version: 2.1 — January 2026
  */
 
@@ -83,7 +83,9 @@ async function initializeRedis(): Promise<void> {
     logger.error(
       {
         operationType: 'GENERAL',
-        metadata: { error: error instanceof Error ? error.message : String(error) },
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
       },
       'Failed to initialize Redis - falling back to in-memory storage'
     );
@@ -113,7 +115,10 @@ export async function closeRedis(): Promise<void> {
   if (redisClient) {
     try {
       await redisClient.quit();
-      logger.info({ operationType: 'GENERAL' }, 'Redis connection closed gracefully');
+      logger.info(
+        { operationType: 'GENERAL' },
+        'Redis connection closed gracefully'
+      );
     } catch (error) {
       logger.error(
         { operationType: 'GENERAL', metadata: { error } },

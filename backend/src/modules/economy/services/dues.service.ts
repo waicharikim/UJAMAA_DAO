@@ -12,11 +12,19 @@
  * Updated: Made penalties commitment-based only (dues optional), integrated Commitment model
  */
 
-import { prisma } from "../../../core/database/client.js";
-import { participationRightsService } from "./participationRights.service.js";
-import { DuesTier, DUES_CONFIG, CommitmentStatus, COMMITMENT_CONFIG } from "../types.js";
-import { ApiError } from "../../../core/errors/ApiError.js";
-import { logger } from "../../../core/logger/logger.js";
+import { prisma } from '../../../core/database/client.js';
+import { Prisma } from '@prisma/client';
+import { participationRightsService } from './participationRights.service.js';
+import {
+  DuesTier,
+  DUES_CONFIG,
+  CommitmentStatus,
+  COMMITMENT_CONFIG,
+  CommitmentType,
+  ParticipationRightsReason,
+} from '../types.js';
+import { ApiError } from '../../../core/errors/ApiError.js';
+import { logger } from '../../../core/logger/logger.js';
 
 class DuesService {
   /**
@@ -31,19 +39,20 @@ class DuesService {
   ) {
     const tierConfig = DUES_CONFIG.TIERS[tier];
     if (!tierConfig || amountKes !== tierConfig.amountKes) {
-      throw ApiError.badRequest("Invalid tier or amount");
+      throw ApiError.badRequest('Invalid tier or amount');
     }
 
-    return prisma.$transaction(async (tx) => {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Record payment
       const payment = await tx.duesPayment.create({
         data: {
           userId,
           tier,
-          amountKes,
+          totalAmount: amountKes,
           period,
           mpesaReceipt,
-          status: "COMPLETED",
+          paymentMethod: 'MPESA',
+          status: 'COMPLETED',
           paidAt: new Date(),
         },
       });
@@ -52,7 +61,9 @@ class DuesService {
       await participationRightsService.award(
         userId,
         tierConfig.prReward,
-        `DUES_${tier}`,
+        ParticipationRightsReason[
+          `DUES_${tier}` as keyof typeof ParticipationRightsReason
+        ],
         { period, tier, amountKes }
       );
 
@@ -66,7 +77,7 @@ class DuesService {
       await tx.commitment.updateMany({
         where: {
           userId,
-          type: "DUES",
+          type: 'DUES',
           status: CommitmentStatus.ACTIVE,
         },
         data: {
@@ -77,7 +88,7 @@ class DuesService {
 
       logger.info(
         { userId, tier, amountKes, period, prReward: tierConfig.prReward },
-        "[DUES] Payment recorded — UT + PR awarded"
+        '[DUES] Payment recorded — UT + PR awarded'
       );
 
       return payment;
@@ -94,7 +105,7 @@ class DuesService {
     durationMonths?: number // optional end date
   ) {
     const tierConfig = DUES_CONFIG.TIERS[tier];
-    if (!tierConfig) throw ApiError.badRequest("Invalid tier");
+    if (!tierConfig) throw ApiError.badRequest('Invalid tier');
 
     const endDate = durationMonths
       ? new Date(new Date().setMonth(new Date().getMonth() + durationMonths))
@@ -105,7 +116,7 @@ class DuesService {
         userId,
         type: CommitmentType.DUES,
         amountKes: tierConfig.amountKes,
-        frequency: "MONTHLY",
+        frequency: 'MONTHLY',
         startDate: new Date(),
         endDate,
         status: CommitmentStatus.ACTIVE,
@@ -114,7 +125,7 @@ class DuesService {
 
     logger.info(
       { userId, tier, commitmentId: commitment.id },
-      "[COMMITMENT] Dues commitment created"
+      '[COMMITMENT] Dues commitment created'
     );
 
     return commitment;
@@ -143,26 +154,36 @@ class DuesService {
         where: {
           userId,
           period: currentPeriod,
-          status: "COMPLETED",
+          status: 'COMPLETED',
         },
       });
 
       if (!recentPayment) {
         commitment.missedCount += 1;
 
-        if (commitment.missedCount >= COMMITMENT_CONFIG.MAX_MISSED_BEFORE_BREACH) {
+        if (
+          commitment.missedCount >= COMMITMENT_CONFIG.MAX_MISSED_BEFORE_BREACH
+        ) {
           // Breach
-          const reduction = COMMITMENT_CONFIG.PENALTY_ON_BREACH[commitment.missedCount - 1] || 100;
+          const reduction =
+            COMMITMENT_CONFIG.PENALTY_ON_BREACH[commitment.missedCount - 1] ||
+            100;
 
-          if (reduction === "ROLE_SUSPENSION") {
+          if (reduction === 'ROLE_SUSPENSION') {
             // Future: suspend role/group membership
-            logger.warn({ userId, commitmentId: commitment.id }, "[BREACH] Role suspension triggered");
+            logger.warn(
+              { userId, commitmentId: commitment.id },
+              '[BREACH] Role suspension triggered'
+            );
           } else {
             await participationRightsService.spend(
               userId,
               reduction,
               ParticipationRightsReason.DUES_PENALTY,
-              { commitmentId: commitment.id, missedCount: commitment.missedCount }
+              {
+                commitmentId: commitment.id,
+                missedCount: commitment.missedCount,
+              }
             );
           }
 
@@ -176,8 +197,12 @@ class DuesService {
 
           breachedCount++;
           logger.info(
-            { userId, commitmentId: commitment.id, missed: commitment.missedCount },
-            "[COMMITMENT] Dues commitment breached — penalty applied"
+            {
+              userId,
+              commitmentId: commitment.id,
+              missed: commitment.missedCount,
+            },
+            '[COMMITMENT] Dues commitment breached — penalty applied'
           );
         } else {
           await prisma.commitment.update({
@@ -194,7 +219,10 @@ class DuesService {
       }
     }
 
-    logger.info({ breachedCount, totalChecked: activeCommitments.length }, "[COMMITMENT] Monthly penalties applied");
+    logger.info(
+      { breachedCount, totalChecked: activeCommitments.length },
+      '[COMMITMENT] Monthly penalties applied'
+    );
   }
 
   /**
@@ -203,10 +231,10 @@ class DuesService {
   async getUserCommitments(userId: string) {
     const commitments = await prisma.commitment.findMany({
       where: { userId },
-      orderBy: { startDate: "desc" },
+      orderBy: { startDate: 'desc' },
     });
 
-    return commitments.map(c => ({
+    return commitments.map((c) => ({
       id: c.id,
       type: c.type,
       status: c.status,

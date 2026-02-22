@@ -6,18 +6,18 @@
  */
 
 export enum ProjectStatus {
-  PLANNING = "PLANNING",
-  IN_PROGRESS = "IN_PROGRESS",
-  COMPLETED = "COMPLETED",
-  FAILED = "FAILED",
+  PLANNING = 'PLANNING',
+  IN_PROGRESS = 'IN_PROGRESS',
+  COMPLETED = 'COMPLETED',
+  FAILED = 'FAILED',
 }
 
 export enum MilestoneStatus {
-  PENDING = "PENDING",
-  IN_PROGRESS = "IN_PROGRESS",
-  SUBMITTED = "SUBMITTED",
-  VERIFIED = "VERIFIED",
-  REJECTED = "REJECTED",
+  PENDING = 'PENDING',
+  IN_PROGRESS = 'IN_PROGRESS',
+  SUBMITTED = 'SUBMITTED',
+  VERIFIED = 'VERIFIED',
+  REJECTED = 'REJECTED',
 }
 
 export interface CreateProjectFromProposalDto {

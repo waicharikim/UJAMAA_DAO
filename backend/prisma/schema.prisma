@@ -109,6 +109,9 @@ model Ward {
   // Marketplace module
   marketplaceListings MarketplaceListing[]
 
+  // Reputation module
+  locationImpacts UserLocationImpact[] @relation("WardLocationImpacts")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -273,6 +276,7 @@ model User {
   notifications             Notification[]
   notificationPreferences   NotificationPreference[]
   auditLogs                 UserAudit[]
+  auditLogEntries           AuditLog[]                 @relation("UserAuditLog")
   consents                  UserConsent[]
   feedback                  PlatformFeedback[]
 
@@ -284,6 +288,10 @@ model User {
   // ---- Emergency module ----
   emergencyAlerts           EmergencyAlert[]
   emergencyResponses        EmergencyResponse[]
+
+  // ---- Reputation module ----
+  impactPointLogs           ImpactPointLog[]       @relation("UserImpactPointLogs")
+  locationImpacts           UserLocationImpact[]   @relation("UserLocationImpacts")
 
   // ---- System ----
   updatedConfigs            SystemConfiguration[]  @relation("ConfigUpdater")
@@ -502,10 +510,13 @@ model PasswordReset {
   
   used      Boolean  @default(false)
   usedAt    DateTime?
-  
+
+  ipAddress String?  @db.VarChar(45)
+  userAgent String?  @db.Text
+
   expiresAt DateTime
   createdAt DateTime @default(now())
-  
+
   @@index([tokenHash, used, expiresAt])
   @@index([userId])
   @@index([expiresAt]) // For cleanup
@@ -531,10 +542,13 @@ model TwoFactorAuth {
   enabled                 Boolean  @default(false)
   enabledAt               DateTime?
   disabledAt              DateTime?
-  
+
+  failedAttempts          Int      @default(0)
+  lastFailedAttempt       DateTime?
+
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
-  
+
   @@index([userId, enabled])
   @@map("two_factor_auth")
 }
@@ -631,20 +645,22 @@ model SecurityEvent {
   userId      String?  @db.Uuid // Nullable for failed login attempts
   user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   
-  eventType   String   @db.VarChar(50) // "login_failed", "password_reset", "2fa_disabled", etc.
-  severity    String   @db.VarChar(20) // "low", "medium", "high", "critical"
-  
-  ipAddress   String?  @db.VarChar(45)
-  userAgent   String?  @db.Text
-  location    String?  @db.VarChar(100) // City, Country
-  
-  details     Json?    // Additional context
-  
-  resolved    Boolean  @default(false)
-  resolvedAt  DateTime?
-  resolvedBy  String?  @db.Uuid // Admin user ID
-  
-  createdAt   DateTime @default(now())
+  eventType       String   @db.VarChar(50) // "login_failed", "password_reset", "2fa_disabled", etc.
+  severity        String   @db.VarChar(20) // "low", "medium", "high", "critical"
+  description     String?  @db.Text
+
+  ipAddress       String?  @db.VarChar(45)
+  userAgent       String?  @db.Text
+  location        String?  @db.VarChar(100) // City, Country
+
+  metadata        Json?    // Additional context
+
+  resolved        Boolean  @default(false)
+  resolvedAt      DateTime?
+  resolvedBy      String?  @db.Uuid // Admin user ID
+  resolutionNotes String?  @db.Text
+
+  createdAt       DateTime @default(now())
   
   @@index([userId, createdAt])
   @@index([eventType, severity])
@@ -2196,6 +2212,52 @@ model EmergencyResponse {
 
 
 // ============================================================================
+// MODULE: REPUTATION
+// ============================================================================
+// ============================================================================
+// REPUTATION MODULE - Impact Points (Global + Location-Based)
+// ============================================================================
+
+model ImpactPointLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  amount    Int
+  reason    String   @db.VarChar(100)
+  scope     String   @db.VarChar(50)  // "GLOBAL" | "WARD" | "CONSTITUENCY" | "COUNTY"
+  scopedId  String?  @db.Uuid         // Ward/Constituency/County ID when scope != GLOBAL
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  user User @relation("UserImpactPointLogs", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, scope])
+  @@index([createdAt])
+  @@map("impact_point_logs")
+}
+
+model UserLocationImpact {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @db.Uuid
+  wardId       String   @db.Uuid
+  impactPoints Int      @default(0)
+  tier         String   @default("NONE")  // NONE | BRONZE | SILVER | GOLD | PLATINUM
+  type         String   @default("LOCATION_BASED")
+  lastActivity DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation("UserLocationImpacts", fields: [userId], references: [id], onDelete: Cascade)
+  ward Ward @relation("WardLocationImpacts", fields: [wardId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, wardId])
+  @@index([userId])
+  @@index([wardId])
+  @@map("user_location_impacts")
+}
+
+
+
+// ============================================================================
 // MODULE: NOTIFICATIONS
 // ============================================================================
 // ============================================================================
@@ -2308,4 +2370,33 @@ model SystemLog {
   createdAt DateTime @default(now())
 
   @@index([level, createdAt])
+}
+
+
+
+// ============================================================================
+// MODULE: AUDIT
+// ============================================================================
+// ============================================================================
+// MODULE: AUDIT
+// Immutable action log — viewable by scoped admins
+// ============================================================================
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String?  @db.Uuid
+  action     String   @db.VarChar(100)
+  entityType String   @db.VarChar(100)
+  entityId   String?  @db.Uuid
+  metadata   Json?
+
+  createdAt  DateTime @default(now())
+
+  user User? @relation("UserAuditLog", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
 }

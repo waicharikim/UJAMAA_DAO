@@ -1,7 +1,7 @@
 /**
  * @file src/core/types/Ujamaadao.types.ts
  * Centralized Type Definitions for the UJAMAADAO Platform
- * 
+ *
  * Version: 2.1 — January 2026
  * Updated: Uses centralized SecurityEventType from security-event-types.ts
  * Security Hardened: January 2026
@@ -45,13 +45,13 @@ export interface RoleScope {
  */
 export interface GeographicContext {
   primaryWardId?: string;
-  secondaryWardId?: string;           // Permanent origin ward (set once at onboarding)
-  currentLocationId?: string;         // Temporary travel check-in
-  currentLocationUntil?: string;      // ISO date string when temporary location expires
+  secondaryWardId?: string; // Permanent origin ward (set once at onboarding)
+  currentLocationId?: string; // Temporary travel check-in
+  currentLocationUntil?: string; // ISO date string when temporary location expires
   constituencyId?: string;
   countyId?: string;
   locationScope?: LocationScope;
-  broaderScopes?: LocationScope[];     // Array for cleaner multi-scope handling
+  broaderScopes?: LocationScope[]; // Array for cleaner multi-scope handling
   latitude?: number;
   longitude?: number;
 }
@@ -92,7 +92,7 @@ export interface AuthUser {
 
 /**
  * Extended Express Request with UjamaaDAO context
- * 
+ *
  * SECURITY NOTE: PII fields (email, phoneNumber, walletAddress) should be
  * redacted before logging. Use log-sanitizer utilities.
  */
@@ -104,7 +104,7 @@ export interface AuthRequest extends Request {
   ip: string | undefined;
   path: string;
   headers: IncomingHttpHeaders;
-  
+
   // UjamaaDAO-specific context
   user?: AuthUser;
   walletAddress?: string;
@@ -113,12 +113,12 @@ export interface AuthRequest extends Request {
   userRoles?: RoleScope[];
   geographicContext?: GeographicContext;
   economicContext?: EconomicContext;
-  
+
   // Request tracking
   correlationId?: string;
   sessionId?: string;
   requestStartTime?: number;
-  
+
   // Rate limit info (from rate limiter)
   rateLimit?: {
     limit: number;
@@ -226,53 +226,63 @@ export type SecurityEventSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
 /**
  * Logging context for UjamaaDAO operations
- * 
+ *
  * SECURITY: Fields marked with PII should be redacted before logging:
  * - email, phoneNumber, walletAddress, ipAddress
  */
 export interface UjamaadaoLogContext {
-  operationType?: 'AUTH' | 'GEOGRAPHIC' | 'ECONOMIC' | 'GOVERNANCE' | 'SECURITY' | 'PERFORMANCE' | 'GENERAL' | 'PARTICIPATION_RIGHTS' | 'VALIDATION' | 'DATABASE';
+  operationType?:
+    | 'AUTH'
+    | 'GEOGRAPHIC'
+    | 'ECONOMIC'
+    | 'GOVERNANCE'
+    | 'SECURITY'
+    | 'PERFORMANCE'
+    | 'GENERAL'
+    | 'PARTICIPATION_RIGHTS'
+    | 'VALIDATION'
+    | 'DATABASE';
   verificationLevel?: VerificationLevel;
   geographicContext?: GeographicContext;
   economicContext?: EconomicContext;
-  economicTier?: string;  // Preferred over full economic context (privacy)
-  
+  economicTier?: string; // Preferred over full economic context (privacy)
+
   securityEvent?: {
     type: import('./security-event.types.js').SecurityEventType; // Use imported type
     severity: SecurityEventSeverity;
     details: string;
     resource?: string;
   };
-  
+
   operation?: string;
   duration?: number;
-  
+
   // User identifiers (userId safe to log, others should be redacted)
   userId?: string;
-  email?: string;           // ⚠️ PII - Must be redacted
-  phoneNumber?: string;     // ⚠️ PII - Must be redacted
-  walletAddress?: string;   // ⚠️ PII - Must be redacted
+  email?: string; // ⚠️ PII - Must be redacted
+  phoneNumber?: string; // ⚠️ PII - Must be redacted
+  walletAddress?: string; // ⚠️ PII - Must be redacted
   recoveredAddress?: string; // ⚠️ PII - Must be redacted
   correlationId?: string;
-  
+
   roleScopes?: RoleScope[];
   roles?: string[];
-  
+
   // Network/session (should be redacted/hashed)
-  ipAddress?: string;       // ⚠️ PII - Must be redacted
+  ipAddress?: string; // ⚠️ PII - Must be redacted
   deviceFingerprint?: string;
-  sessionId?: string;       // Should be hashed
-  
+  sessionId?: string; // Should be hashed
+
   // Flow tracking
-  flowId?: string;          // for onboarding flows
-  step?: string;            // for onboarding steps
-  
+  flowId?: string; // for onboarding flows
+  step?: string; // for onboarding steps
+
   // Additional metadata
   metadata?: Record<string, any>;
-  
+
   // Log retention
   logRetentionDays?: number;
-  
+
   // Error context
   error?: any;
 }
@@ -296,21 +306,23 @@ export interface UjamaadaoValidationOptions {
 
 /**
  * Authorization middleware options
- * 
+ *
  * SECURITY: scopeCheck and resourceOwnerCheck now support async operations
  */
 export interface UjamaadaoAuthorizeOptions {
   allowedRoles?: string[];
   verificationLevel?: VerificationLevel;
   minImpactPoints?: number;
-  minParticipationRights?: number;   // Enforce PR threshold
-  
+  minParticipationRights?: number; // Enforce PR threshold
+
   // Async support for database lookups
   scopeCheck?: boolean | ((req: AuthRequest) => boolean | Promise<boolean>);
-  resourceOwnerCheck?: boolean | ((req: AuthRequest) => boolean | Promise<boolean>);
-  
+  resourceOwnerCheck?:
+    | boolean
+    | ((req: AuthRequest) => boolean | Promise<boolean>);
+
   requiresWalletAuth?: boolean;
-  skipAdmin?: boolean;  // Allow admins to bypass (use carefully)
+  skipAdmin?: boolean; // Allow admins to bypass (use carefully)
 }
 
 /**

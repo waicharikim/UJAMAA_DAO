@@ -5,21 +5,19 @@
  * Version: 2.0 — December 2025
  */
 
-import { Router } from "express";
-import { GroupController } from "../controllers/group.controller.js";
-import { authenticate } from "../../../core/middleware/auth.middleware.js";
-import { authorize } from "../../../core/middleware/authorize.js";
-import { validateRequest } from "../../../core/middleware/validateRequest.js";
-import { z } from "zod";
-import { asyncHandler } from "../../../core/utils/response.js";
-import { roleService } from "../../../core/services/role.service.js";
+import { Router } from 'express';
+import { GroupController } from '../controllers/group.controller.js';
+import { authenticate } from '../../../core/middleware/auth.middleware.js';
+import { validateRequest } from '../../../core/middleware/validateRequest.js';
+import { z } from 'zod';
+import { asyncHandler } from '../../../core/utils/response.js';
 
 const router = Router();
 
 router.use(authenticate);
 
 router.post(
-  "/voluntary/create",
+  '/voluntary/create',
   validateRequest({
     schema: z.object({
       name: z.string().min(3),
@@ -27,29 +25,29 @@ router.post(
       description: z.string().optional(),
       avatarUrl: z.string().url().optional(),
     }),
-    target: "body",
+    target: 'body',
   }),
   asyncHandler(GroupController.createVoluntaryGroup)
 );
 
 router.post(
-  "/join",
+  '/join',
   validateRequest({
     schema: z.object({
       groupId: z.string().uuid(),
     }),
-    target: "body",
+    target: 'body',
   }),
   asyncHandler(GroupController.joinGroup)
 );
 
 router.post(
-  "/leave",
+  '/leave',
   validateRequest({
     schema: z.object({
       groupId: z.string().uuid(),
     }),
-    target: "body",
+    target: 'body',
   }),
   asyncHandler(GroupController.leaveGroup)
 );

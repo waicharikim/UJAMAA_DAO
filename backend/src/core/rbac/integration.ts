@@ -2,25 +2,25 @@
  * @file src/core/rbac/integration.ts
  * @description
  * Integration helpers - bridge RBAC checks with RoleService database queries
- * 
+ *
  * These helpers enable database-backed permission checks in the authorize() middleware.
  * Use these when you need to check resource ownership or complex role relationships.
- * 
+ *
  * Performance: Results are cached by roleService (1-minute TTL)
- * 
+ *
  * Version: 2.0 — January 2026
  */
 
-import { AuthRequest } from "../types/Ujamaadao.types.js";
-import { roleService } from "../services/role.service.js";
-import { logger } from "../logger/logger.js";
+import { AuthRequest } from '../types/Ujamaadao.types.js';
+import { roleService } from '../services/role.service.js';
+import { logger } from '../logger/logger.js';
 
 /**
  * Check if user is the owner of a project
- * 
+ *
  * @param projectIdParam - Name of route param containing project ID (default: 'projectId')
  * @returns Async function for use in authorize middleware
- * 
+ *
  * @example
  * authorize({
  *   resourceOwnerCheck: isProjectOwner()
@@ -30,7 +30,7 @@ export const isProjectOwner = (projectIdParam: string = 'projectId') => {
   return async (req: AuthRequest): Promise<boolean> => {
     const projectId = req.params[projectIdParam];
     const userId = req.user?.userId;
-    
+
     if (!userId) {
       logger.debug(
         { operationType: 'AUTHORIZATION', metadata: { reason: 'No user' } },
@@ -38,19 +38,19 @@ export const isProjectOwner = (projectIdParam: string = 'projectId') => {
       );
       return false;
     }
-    
+
     if (!projectId) {
       logger.warn(
-        { 
-          operationType: 'AUTHORIZATION', 
+        {
+          operationType: 'AUTHORIZATION',
           userId,
-          metadata: { projectIdParam, reason: 'Missing project ID' } 
+          metadata: { projectIdParam, reason: 'Missing project ID' },
         },
         'Project ownership check failed - no project ID'
       );
       return false;
     }
-    
+
     try {
       return await roleService.isProjectLeader(userId, projectId);
     } catch (error) {
@@ -72,33 +72,36 @@ export const isProjectOwner = (projectIdParam: string = 'projectId') => {
 
 /**
  * Check if user has a specific role in a group
- * 
+ *
  * @param role - Role to check (e.g., 'ADMIN', 'MEMBER')
  * @param groupIdParam - Name of route param containing group ID (default: 'groupId')
  * @returns Async function for use in authorize middleware
- * 
+ *
  * @example
  * authorize({
  *   resourceOwnerCheck: hasGroupRole('ADMIN')
  * })
  */
-export const hasGroupRole = (role: string, groupIdParam: string = 'groupId') => {
+export const hasGroupRole = (
+  role: string,
+  groupIdParam: string = 'groupId'
+) => {
   return async (req: AuthRequest): Promise<boolean> => {
     const groupId = req.params[groupIdParam];
     const userId = req.user?.userId;
-    
+
     if (!userId || !groupId) {
       logger.debug(
-        { 
+        {
           operationType: 'AUTHORIZATION',
           userId,
-          metadata: { role, groupId, reason: 'Missing user or group ID' } 
+          metadata: { role, groupId, reason: 'Missing user or group ID' },
         },
         'Group role check failed'
       );
       return false;
     }
-    
+
     try {
       return await roleService.hasGroupRole(userId, groupId, role);
     } catch (error) {
@@ -121,33 +124,36 @@ export const hasGroupRole = (role: string, groupIdParam: string = 'groupId') => 
 
 /**
  * Check if user has a location-based role (ward admin, etc.)
- * 
+ *
  * @param role - Role to check (e.g., 'ADMIN', 'LEADER')
  * @param wardIdParam - Name of route param containing ward ID (default: 'wardId')
  * @returns Async function for use in authorize middleware
- * 
+ *
  * @example
  * authorize({
  *   resourceOwnerCheck: hasLocationRole('LEADER')
  * })
  */
-export const hasLocationRole = (role: string, wardIdParam: string = 'wardId') => {
+export const hasLocationRole = (
+  role: string,
+  wardIdParam: string = 'wardId'
+) => {
   return async (req: AuthRequest): Promise<boolean> => {
     const wardId = req.params[wardIdParam];
     const userId = req.user?.userId;
-    
+
     if (!userId || !wardId) {
       logger.debug(
-        { 
+        {
           operationType: 'AUTHORIZATION',
           userId,
-          metadata: { role, wardId, reason: 'Missing user or ward ID' } 
+          metadata: { role, wardId, reason: 'Missing user or ward ID' },
         },
         'Location role check failed'
       );
       return false;
     }
-    
+
     try {
       return await roleService.hasLocationRole(userId, wardId, role);
     } catch (error) {
@@ -170,16 +176,16 @@ export const hasLocationRole = (role: string, wardIdParam: string = 'wardId') =>
 
 /**
  * Check if user is a verifier (global or location-specific)
- * 
+ *
  * @param wardIdParam - Optional: name of route param for ward-specific check
  * @returns Async function for use in authorize middleware
- * 
+ *
  * @example
  * // Global verifier
  * authorize({
  *   resourceOwnerCheck: isVerifier()
  * })
- * 
+ *
  * // Ward-specific verifier
  * authorize({
  *   resourceOwnerCheck: isVerifier('wardId')
@@ -188,13 +194,13 @@ export const hasLocationRole = (role: string, wardIdParam: string = 'wardId') =>
 export const isVerifier = (wardIdParam?: string) => {
   return async (req: AuthRequest): Promise<boolean> => {
     const userId = req.user?.userId;
-    
+
     if (!userId) {
       return false;
     }
-    
+
     const wardId = wardIdParam ? req.params[wardIdParam] : undefined;
-    
+
     try {
       return await roleService.isVerifier(userId, wardId);
     } catch (error) {
@@ -216,25 +222,28 @@ export const isVerifier = (wardIdParam?: string) => {
 
 /**
  * Check if user has ANY of the listed roles in a group
- * 
+ *
  * @param roles - Array of roles to check
  * @param groupIdParam - Name of route param containing group ID
  * @returns Async function for use in authorize middleware
- * 
+ *
  * @example
  * authorize({
  *   resourceOwnerCheck: hasAnyGroupRole(['ADMIN', 'MODERATOR', 'LEADER'])
  * })
  */
-export const hasAnyGroupRole = (roles: string[], groupIdParam: string = 'groupId') => {
+export const hasAnyGroupRole = (
+  roles: string[],
+  groupIdParam: string = 'groupId'
+) => {
   return async (req: AuthRequest): Promise<boolean> => {
     const groupId = req.params[groupIdParam];
     const userId = req.user?.userId;
-    
+
     if (!userId || !groupId) {
       return false;
     }
-    
+
     try {
       // Check each role until we find one that matches
       for (const role of roles) {
@@ -251,7 +260,7 @@ export const hasAnyGroupRole = (roles: string[], groupIdParam: string = 'groupId
           return true;
         }
       }
-      
+
       logger.debug(
         {
           operationType: 'AUTHORIZATION',
@@ -281,25 +290,28 @@ export const hasAnyGroupRole = (roles: string[], groupIdParam: string = 'groupId
 
 /**
  * Check if user has ALL of the listed roles in a group
- * 
+ *
  * @param roles - Array of roles to check
  * @param groupIdParam - Name of route param containing group ID
  * @returns Async function for use in authorize middleware
- * 
+ *
  * @example
  * authorize({
  *   resourceOwnerCheck: hasAllGroupRoles(['MEMBER', 'VERIFIED'])
  * })
  */
-export const hasAllGroupRoles = (roles: string[], groupIdParam: string = 'groupId') => {
+export const hasAllGroupRoles = (
+  roles: string[],
+  groupIdParam: string = 'groupId'
+) => {
   return async (req: AuthRequest): Promise<boolean> => {
     const groupId = req.params[groupIdParam];
     const userId = req.user?.userId;
-    
+
     if (!userId || !groupId) {
       return false;
     }
-    
+
     try {
       // Must have ALL roles
       for (const role of roles) {
@@ -316,7 +328,7 @@ export const hasAllGroupRoles = (roles: string[], groupIdParam: string = 'groupI
           return false;
         }
       }
-      
+
       return true;
     } catch (error) {
       logger.error(
@@ -338,10 +350,10 @@ export const hasAllGroupRoles = (roles: string[], groupIdParam: string = 'groupI
 
 /**
  * Combine multiple ownership checks (OR logic)
- * 
+ *
  * @param checks - Array of check functions
  * @returns Async function that returns true if ANY check passes
- * 
+ *
  * @example
  * authorize({
  *   resourceOwnerCheck: anyOf([
@@ -351,7 +363,9 @@ export const hasAllGroupRoles = (roles: string[], groupIdParam: string = 'groupI
  *   ])
  * })
  */
-export const anyOf = (checks: Array<(req: AuthRequest) => Promise<boolean>>) => {
+export const anyOf = (
+  checks: Array<(req: AuthRequest) => Promise<boolean>>
+) => {
   return async (req: AuthRequest): Promise<boolean> => {
     // Try each check - return true on first success
     for (const check of checks) {
@@ -382,7 +396,7 @@ export const anyOf = (checks: Array<(req: AuthRequest) => Promise<boolean>>) => 
         // Continue to next check on error
       }
     }
-    
+
     logger.debug(
       {
         operationType: 'AUTHORIZATION',
@@ -397,10 +411,10 @@ export const anyOf = (checks: Array<(req: AuthRequest) => Promise<boolean>>) => 
 
 /**
  * Combine multiple ownership checks (AND logic)
- * 
+ *
  * @param checks - Array of check functions
  * @returns Async function that returns true only if ALL checks pass
- * 
+ *
  * @example
  * authorize({
  *   resourceOwnerCheck: allOf([
@@ -409,7 +423,9 @@ export const anyOf = (checks: Array<(req: AuthRequest) => Promise<boolean>>) => 
  *   ])
  * })
  */
-export const allOf = (checks: Array<(req: AuthRequest) => Promise<boolean>>) => {
+export const allOf = (
+  checks: Array<(req: AuthRequest) => Promise<boolean>>
+) => {
   return async (req: AuthRequest): Promise<boolean> => {
     // All checks must pass
     for (const check of checks) {
@@ -439,7 +455,7 @@ export const allOf = (checks: Array<(req: AuthRequest) => Promise<boolean>>) => 
         return false; // Fail closed on error
       }
     }
-    
+
     logger.debug(
       {
         operationType: 'AUTHORIZATION',
@@ -454,10 +470,10 @@ export const allOf = (checks: Array<(req: AuthRequest) => Promise<boolean>>) => 
 
 /**
  * Negate a check (NOT logic)
- * 
+ *
  * @param check - Check function to negate
  * @returns Async function that returns opposite of check result
- * 
+ *
  * @example
  * authorize({
  *   resourceOwnerCheck: not(isProjectOwner()) // Must NOT be owner

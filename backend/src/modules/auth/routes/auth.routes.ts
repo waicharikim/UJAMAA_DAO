@@ -2,20 +2,23 @@
  * @file src/modules/auth/routes/auth.routes.ts
  * @description
  * Complete Auth Routes - All authentication endpoints with full authorization layers
- * 
+ *
  * Updated: February 2026 — Added strong per-user & global rate limiting on write endpoints
  * Security: Full layered authorization (Layers 1–3) + dual rate limiting
  *
  * Version: 1.4 — February 2026
  */
 
-import { Router } from "express";
-import { asyncHandler } from "../../../core/utils/response.js";
-import { validateRequest } from "../../../core/middleware/validateRequest.js";
-import { authenticate, optionalAuthenticate } from "../../../core/middleware/auth.middleware.js";
-import { authorize } from "../../../core/middleware/authorize.js";
-import { toMiddleware, requireAdmin } from "../../../core/rbac/authorize.js";
-import { strictRateLimit, buildRateLimiter } from "../../../core/middleware/rateLimiter.js";
+import { Router } from 'express';
+import { asyncHandler } from '../../../core/utils/response.js';
+import { validateRequest } from '../../../core/middleware/validateRequest.js';
+import { authenticate } from '../../../core/middleware/auth.middleware.js';
+import { authorize } from '../../../core/middleware/authorize.js';
+import { toMiddleware, requireAdmin } from '../../../core/rbac/authorize.js';
+import {
+  strictRateLimit,
+  buildRateLimiter,
+} from '../../../core/middleware/rateLimiter.js';
 
 // Validators
 import {
@@ -25,8 +28,6 @@ import {
   walletNonceSchema,
   walletVerifySchema,
   walletLinkSchema,
-  sendPhoneCodeSchema,
-  verifyPhoneCodeSchema,
   sessionIdSchema,
   refreshTokenSchema,
   twoFactorCodeSchema,
@@ -36,18 +37,53 @@ import {
   securityEventIdSchema,
   resolveSecurityEventSchema,
   resetTokenQuerySchema,
-} from "../validators/auth.validators.js";
+} from '../validators/auth.validators.js';
 
 // Handlers
-import { sendMagicLink, verifyEmail, verifyMagicLink } from "../handlers/auth.handlers.js";
-import { generateNonce, verifySignature, linkWallet, disconnectWallet } from "../handlers/wallet.handlers.js";
-import { getUserSessions, revokeSession, revokeAllSessions, logout } from "../handlers/session.handlers.js";
-import { renameSession, trustDevice, untrustDevice, getSuspiciousSessions } from "../handlers/session-device.handlers.js";
-import { refreshToken, revokeAllRefreshTokens } from "../handlers/refresh-token.handlers.js";
-import { sendVerificationCode, verifyCode } from "../handlers/phone-verification.handlers.js";
-import { enable2FA, verify2FA, disable2FA, regenerateBackupCodes, get2FAStatus } from "../handlers/totp-2fa.handlers.js";
-import { requestPasswordReset, verifyResetToken, resetPassword } from "../handlers/password-reset.handlers.js";
-import { getUserSecurityEvents, getUnresolvedEvents, resolveEvent } from "../handlers/security-events.handlers.js";
+import {
+  sendMagicLink,
+  verifyEmail,
+  verifyMagicLink,
+} from '../handlers/auth.handlers.js';
+import {
+  generateNonce,
+  verifySignature,
+  linkWallet,
+  disconnectWallet,
+} from '../handlers/wallet.handlers.js';
+import {
+  getUserSessions,
+  revokeSession,
+  revokeAllSessions,
+  logout,
+} from '../handlers/session.handlers.js';
+import {
+  renameSession,
+  trustDevice,
+  untrustDevice,
+  getSuspiciousSessions,
+} from '../handlers/session-device.handlers.js';
+import {
+  refreshToken,
+  revokeAllRefreshTokens,
+} from '../handlers/refresh-token.handlers.js';
+import {
+  enable2FA,
+  verify2FA,
+  disable2FA,
+  regenerateBackupCodes,
+  get2FAStatus,
+} from '../handlers/totp-2fa.handlers.js';
+import {
+  requestPasswordReset,
+  verifyResetToken,
+  resetPassword,
+} from '../handlers/password-reset.handlers.js';
+import {
+  getUserSecurityEvents,
+  getUnresolvedEvents,
+  resolveEvent,
+} from '../handlers/security-events.handlers.js';
 
 const router = Router();
 
@@ -56,7 +92,7 @@ const router = Router();
 // ============================================================================
 
 router.post(
-  "/magic-link/send",
+  '/magic-link/send',
   strictRateLimit(),
   buildRateLimiter({ windowMs: 5 * 60 * 1000, max: 5 }),
   validateRequest({ schema: sendMagicLinkSchema, target: 'body' }),
@@ -64,46 +100,46 @@ router.post(
 );
 
 router.get(
-  "/verify-email",
+  '/verify-email',
   validateRequest({ schema: verifyEmailTokenSchema, target: 'query' }),
   asyncHandler(verifyEmail)
 );
 
 router.get(
-  "/login",
+  '/login',
   validateRequest({ schema: verifyMagicLinkSchema, target: 'query' }),
   asyncHandler(verifyMagicLink)
 );
 
 router.post(
-  "/wallet/nonce",
+  '/wallet/nonce',
   buildRateLimiter({ windowMs: 5 * 60 * 1000, max: 10 }),
   validateRequest({ schema: walletNonceSchema, target: 'body' }),
   asyncHandler(generateNonce)
 );
 
 router.post(
-  "/wallet/verify",
+  '/wallet/verify',
   buildRateLimiter({ windowMs: 5 * 60 * 1000, max: 10 }),
   validateRequest({ schema: walletVerifySchema, target: 'body' }),
   asyncHandler(verifySignature)
 );
 
 router.post(
-  "/password/request-reset",
+  '/password/request-reset',
   buildRateLimiter({ windowMs: 15 * 60 * 1000, max: 3 }),
   validateRequest({ schema: passwordResetRequestSchema, target: 'body' }),
   asyncHandler(requestPasswordReset)
 );
 
 router.get(
-  "/password/verify-token",
+  '/password/verify-token',
   validateRequest({ schema: resetTokenQuerySchema, target: 'query' }),
   asyncHandler(verifyResetToken)
 );
 
 router.post(
-  "/password/reset",
+  '/password/reset',
   strictRateLimit(),
   validateRequest({ schema: passwordResetSchema, target: 'body' }),
   asyncHandler(resetPassword)
@@ -114,7 +150,7 @@ router.post(
 // ============================================================================
 
 router.post(
-  "/wallet/link",
+  '/wallet/link',
   authenticate,
   authorize({
     verificationLevel: 'FULL_VERIFIED',
@@ -124,14 +160,14 @@ router.post(
   buildRateLimiter({
     windowMs: 60 * 1000,
     max: 2,
-    keyGenerator: (req) => req.user?.userId || req.ip,
+    keyGenerator: (req: any) => req.user?.userId || req.ip,
   }),
   validateRequest({ schema: walletLinkSchema, target: 'body' }),
   asyncHandler(linkWallet)
 );
 
 router.delete(
-  "/wallet/disconnect",
+  '/wallet/disconnect',
   authenticate,
   authorize({
     verificationLevel: 'FULL_VERIFIED',
@@ -141,20 +177,20 @@ router.delete(
   buildRateLimiter({
     windowMs: 60 * 1000,
     max: 2,
-    keyGenerator: (req) => req.user?.userId || req.ip,
+    keyGenerator: (req: any) => req.user?.userId || req.ip,
   }),
   asyncHandler(disconnectWallet)
 );
 
 router.get(
-  "/sessions",
+  '/sessions',
   authenticate,
   authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
   asyncHandler(getUserSessions)
 );
 
 router.delete(
-  "/sessions/:sessionId",
+  '/sessions/:sessionId',
   authenticate,
   authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
   validateRequest({ schema: sessionIdSchema, target: 'params' }),
@@ -162,21 +198,21 @@ router.delete(
 );
 
 router.delete(
-  "/sessions",
+  '/sessions',
   authenticate,
   authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
   asyncHandler(revokeAllSessions)
 );
 
 router.post(
-  "/logout",
+  '/logout',
   authenticate,
   authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
   asyncHandler(logout)
 );
 
 router.patch(
-  "/sessions/:sessionId/rename",
+  '/sessions/:sessionId/rename',
   authenticate,
   authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
   validateRequest({ schema: sessionIdSchema, target: 'params' }),
@@ -185,41 +221,41 @@ router.patch(
 );
 
 router.post(
-  "/sessions/:sessionId/trust",
+  '/sessions/:sessionId/trust',
   authenticate,
   authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
   asyncHandler(trustDevice)
 );
 
 router.delete(
-  "/sessions/:sessionId/trust",
+  '/sessions/:sessionId/trust',
   authenticate,
   authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
   asyncHandler(untrustDevice)
 );
 
 router.get(
-  "/sessions/suspicious",
+  '/sessions/suspicious',
   authenticate,
   authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
   asyncHandler(getSuspiciousSessions)
 );
 
 router.post(
-  "/2fa/enable",
+  '/2fa/enable',
   authenticate,
   authorize({ verificationLevel: 'FULL_VERIFIED' }),
   buildRateLimiter({ windowMs: 60 * 1000, max: 5 }),
   buildRateLimiter({
     windowMs: 60 * 1000,
     max: 2,
-    keyGenerator: (req) => req.user?.userId || req.ip,
+    keyGenerator: (req: any) => req.user?.userId || req.ip,
   }),
   asyncHandler(enable2FA)
 );
 
 router.post(
-  "/2fa/verify",
+  '/2fa/verify',
   authenticate,
   authorize({ verificationLevel: 'FULL_VERIFIED' }),
   validateRequest({ schema: twoFactorCodeSchema, target: 'body' }),
@@ -227,69 +263,69 @@ router.post(
 );
 
 router.post(
-  "/2fa/disable",
+  '/2fa/disable',
   authenticate,
   authorize({ verificationLevel: 'FULL_VERIFIED' }),
   buildRateLimiter({ windowMs: 60 * 1000, max: 5 }),
   buildRateLimiter({
     windowMs: 60 * 1000,
     max: 2,
-    keyGenerator: (req) => req.user?.userId || req.ip,
+    keyGenerator: (req: any) => req.user?.userId || req.ip,
   }),
   validateRequest({ schema: twoFactorCodeSchema, target: 'body' }),
   asyncHandler(disable2FA)
 );
 
 router.post(
-  "/2fa/regenerate-backup-codes",
+  '/2fa/regenerate-backup-codes',
   authenticate,
   authorize({ verificationLevel: 'FULL_VERIFIED' }),
   buildRateLimiter({ windowMs: 60 * 1000, max: 5 }),
   buildRateLimiter({
     windowMs: 60 * 1000,
     max: 2,
-    keyGenerator: (req) => req.user?.userId || req.ip,
+    keyGenerator: (req: any) => req.user?.userId || req.ip,
   }),
   validateRequest({ schema: twoFactorCodeSchema, target: 'body' }),
   asyncHandler(regenerateBackupCodes)
 );
 
 router.get(
-  "/2fa/status",
+  '/2fa/status',
   authenticate,
   authorize({ verificationLevel: 'FULL_VERIFIED' }),
   asyncHandler(get2FAStatus)
 );
 
 router.post(
-  "/refresh",
+  '/refresh',
   buildRateLimiter({ windowMs: 5 * 60 * 1000, max: 20 }),
   validateRequest({ schema: refreshTokenSchema, target: 'body' }),
   asyncHandler(refreshToken)
 );
 
 router.post(
-  "/revoke-refresh-tokens",
+  '/revoke-refresh-tokens',
   authenticate,
   authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
   buildRateLimiter({ windowMs: 60 * 1000, max: 5 }),
   buildRateLimiter({
     windowMs: 60 * 1000,
     max: 2,
-    keyGenerator: (req) => req.user?.userId || req.ip,
+    keyGenerator: (req: any) => req.user?.userId || req.ip,
   }),
   asyncHandler(revokeAllRefreshTokens)
 );
 
 router.get(
-  "/security-events",
+  '/security-events',
   authenticate,
   authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
   asyncHandler(getUserSecurityEvents)
 );
 
 router.get(
-  "/security-events/unresolved",
+  '/security-events/unresolved',
   authenticate,
   authorize({ verificationLevel: 'FULL_VERIFIED' }),
   toMiddleware(requireAdmin()),
@@ -297,7 +333,7 @@ router.get(
 );
 
 router.patch(
-  "/security-events/:eventId/resolve",
+  '/security-events/:eventId/resolve',
   authenticate,
   authorize({ verificationLevel: 'FULL_VERIFIED' }),
   toMiddleware(requireAdmin()),

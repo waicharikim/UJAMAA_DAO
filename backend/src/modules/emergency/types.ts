@@ -6,19 +6,19 @@
  */
 
 export enum EmergencyType {
-  FIRE = "FIRE",
-  FLOOD = "FLOOD",
-  MEDICAL = "MEDICAL",
-  SECURITY = "SECURITY",
-  ACCIDENT = "ACCIDENT",
-  OTHER = "OTHER",
+  FIRE = 'FIRE',
+  FLOOD = 'FLOOD',
+  MEDICAL = 'MEDICAL',
+  SECURITY = 'SECURITY',
+  ACCIDENT = 'ACCIDENT',
+  OTHER = 'OTHER',
 }
 
 export enum EmergencyStatus {
-  REPORTED = "REPORTED",
-  IN_PROGRESS = "IN_PROGRESS",
-  RESOLVED = "RESOLVED",
-  FALSE_ALARM = "FALSE_ALARM",
+  REPORTED = 'REPORTED',
+  IN_PROGRESS = 'IN_PROGRESS',
+  RESOLVED = 'RESOLVED',
+  FALSE_ALARM = 'FALSE_ALARM',
 }
 
 export interface ReportEmergencyDto {

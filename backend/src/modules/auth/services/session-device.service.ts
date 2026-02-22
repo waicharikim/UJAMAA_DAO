@@ -2,7 +2,7 @@
  * @file src/modules/auth/services/session-device.service.ts
  * @description
  * Session and Device Management Service
- * 
+ *
  * Features:
  * - List active sessions
  * - Rename sessions (friendly names)
@@ -10,15 +10,14 @@
  * - Revoke specific or all other sessions
  * - Detect suspicious sessions (unusual IP, concurrent logins)
  * - Periodic cleanup of expired/revoked sessions
- * 
+ *
  * Version: 1.1 — February 2026
  * Updated: Added cleanupExpiredSessions() for BullMQ worker
  */
 
-import { prisma } from "../../../core/database/client.js";
-import { ApiError } from "../../../core/errors/ApiError.js";
-import { logger } from "../../../core/logger/logger.js";
-import { tokenBlacklistService } from "../../../core/services/token-blacklist.service.js";
+import { prisma } from '../../../core/database/client.js';
+import { ApiError } from '../../../core/errors/ApiError.js';
+import { logger } from '../../../core/logger/logger.js';
 
 export interface SessionInfo {
   id: string;
@@ -37,7 +36,10 @@ class SessionDeviceService {
   /**
    * Get all active sessions for a user
    */
-  async getUserSessions(userId: string, currentSessionId?: string): Promise<SessionInfo[]> {
+  async getUserSessions(
+    userId: string,
+    currentSessionId?: string
+  ): Promise<SessionInfo[]> {
     try {
       const sessions = await prisma.session.findMany({
         where: {
@@ -48,7 +50,7 @@ class SessionDeviceService {
         orderBy: { lastActive: 'desc' },
       });
 
-      return sessions.map(session => ({
+      return sessions.map((session) => ({
         id: session.id,
         deviceName: session.deviceName,
         deviceInfo: session.deviceInfo,
@@ -61,11 +63,14 @@ class SessionDeviceService {
         expiresAt: session.expiresAt,
       }));
     } catch (error) {
-      logger.error({
-        operationType: 'SESSION_FETCH_ERROR',
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      }, 'Failed to get user sessions');
+      logger.error(
+        {
+          operationType: 'SESSION_FETCH_ERROR',
+          userId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        'Failed to get user sessions'
+      );
       throw ApiError.systemError('Failed to retrieve sessions');
     }
   }
@@ -104,19 +109,25 @@ class SessionDeviceService {
         data: { deviceName: deviceName.trim() },
       });
 
-      logger.info({
-        operationType: 'SESSION_RENAME',
-        userId,
-        metadata: { sessionId, deviceName },
-      }, 'Session renamed');
+      logger.info(
+        {
+          operationType: 'SESSION_RENAME',
+          userId,
+          metadata: { sessionId, deviceName },
+        },
+        'Session renamed'
+      );
     } catch (error) {
       if (error instanceof ApiError) throw error;
 
-      logger.error({
-        operationType: 'SESSION_RENAME_ERROR',
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      }, 'Failed to rename session');
+      logger.error(
+        {
+          operationType: 'SESSION_RENAME_ERROR',
+          userId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        'Failed to rename session'
+      );
       throw ApiError.systemError('Failed to rename session');
     }
   }
@@ -143,19 +154,25 @@ class SessionDeviceService {
         data: { isTrusted: true },
       });
 
-      logger.info({
-        operationType: 'SECURITY',
-        userId,
-        metadata: { sessionId },
-      }, 'Device marked as trusted');
+      logger.info(
+        {
+          operationType: 'SECURITY',
+          userId,
+          metadata: { sessionId },
+        },
+        'Device marked as trusted'
+      );
     } catch (error) {
       if (error instanceof ApiError) throw error;
 
-      logger.error({
-        operationType: 'TRUST_DEVICE_ERROR',
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      }, 'Failed to trust device');
+      logger.error(
+        {
+          operationType: 'TRUST_DEVICE_ERROR',
+          userId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        'Failed to trust device'
+      );
       throw ApiError.systemError('Failed to trust device');
     }
   }
@@ -166,24 +183,30 @@ class SessionDeviceService {
   async untrustDevice(userId: string, sessionId: string): Promise<void> {
     try {
       await prisma.session.update({
-        where: { 
+        where: {
           id: sessionId,
           userId,
         },
         data: { isTrusted: false },
       });
 
-      logger.info({
-        operationType: 'SECURITY',
-        userId,
-        metadata: { sessionId },
-      }, 'Device untrusted');
+      logger.info(
+        {
+          operationType: 'SECURITY',
+          userId,
+          metadata: { sessionId },
+        },
+        'Device untrusted'
+      );
     } catch (error) {
-      logger.error({
-        operationType: 'UNTRUST_DEVICE_ERROR',
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      }, 'Failed to untrust device');
+      logger.error(
+        {
+          operationType: 'UNTRUST_DEVICE_ERROR',
+          userId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        'Failed to untrust device'
+      );
       throw ApiError.systemError('Failed to untrust device');
     }
   }
@@ -210,25 +233,28 @@ class SessionDeviceService {
 
       await prisma.session.update({
         where: { id: sessionId },
-        data: { 
-          revoked: true,
-          revokedAt: new Date(),
-        },
+        data: { revoked: true },
       });
 
-      logger.info({
-        operationType: 'AUTH',
-        userId,
-        metadata: { sessionId, reason },
-      }, 'Session revoked');
+      logger.info(
+        {
+          operationType: 'AUTH',
+          userId,
+          metadata: { sessionId, reason },
+        },
+        'Session revoked'
+      );
     } catch (error) {
       if (error instanceof ApiError) throw error;
 
-      logger.error({
-        operationType: 'REVOKE_SESSION_ERROR',
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      }, 'Failed to revoke session');
+      logger.error(
+        {
+          operationType: 'REVOKE_SESSION_ERROR',
+          userId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        'Failed to revoke session'
+      );
       throw ApiError.systemError('Failed to revoke session');
     }
   }
@@ -247,25 +273,28 @@ class SessionDeviceService {
           id: { not: currentSessionId },
           revoked: false,
         },
-        data: {
-          revoked: true,
-          revokedAt: new Date(),
-        },
+        data: { revoked: true },
       });
 
-      logger.info({
-        operationType: 'AUTH',
-        userId,
-        metadata: { revokedCount: result.count, currentSessionId },
-      }, 'Other sessions revoked');
+      logger.info(
+        {
+          operationType: 'AUTH',
+          userId,
+          metadata: { revokedCount: result.count, currentSessionId },
+        },
+        'Other sessions revoked'
+      );
 
       return result.count;
     } catch (error) {
-      logger.error({
-        operationType: 'REVOKE_OTHER_SESSIONS_ERROR',
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      }, 'Failed to revoke other sessions');
+      logger.error(
+        {
+          operationType: 'REVOKE_OTHER_SESSIONS_ERROR',
+          userId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        'Failed to revoke other sessions'
+      );
       throw ApiError.systemError('Failed to revoke sessions');
     }
   }
@@ -285,34 +314,47 @@ class SessionDeviceService {
         select: { ipAddress: true },
       });
 
-      const typicalIps = new Set(recentSessions.map(s => s.ipAddress).filter(Boolean));
+      const typicalIps = new Set(
+        recentSessions.map((s) => s.ipAddress).filter(Boolean)
+      );
 
-      const suspicious = sessions.filter(session => {
-        const unusualIp = session.ipAddress && !typicalIps.has(session.ipAddress);
+      const suspicious = sessions.filter((session) => {
+        const unusualIp =
+          session.ipAddress && !typicalIps.has(session.ipAddress);
 
-        const multipleConcurrent = sessions.filter(s => 
-          s.ipAddress && s.ipAddress !== session.ipAddress &&
-          Math.abs(s.lastActive.getTime() - session.lastActive.getTime()) < 5 * 60 * 1000
-        ).length > 0;
+        const multipleConcurrent =
+          sessions.filter(
+            (s) =>
+              s.ipAddress &&
+              s.ipAddress !== session.ipAddress &&
+              Math.abs(s.lastActive.getTime() - session.lastActive.getTime()) <
+                5 * 60 * 1000
+          ).length > 0;
 
         return unusualIp || multipleConcurrent;
       });
 
       if (suspicious.length > 0) {
-        logger.warn({
-          operationType: 'SECURITY',
-          userId,
-          metadata: { suspiciousCount: suspicious.length },
-        }, 'Suspicious sessions detected');
+        logger.warn(
+          {
+            operationType: 'SECURITY',
+            userId,
+            metadata: { suspiciousCount: suspicious.length },
+          },
+          'Suspicious sessions detected'
+        );
       }
 
       return suspicious;
     } catch (error) {
-      logger.error({
-        operationType: 'SUSPICIOUS_SESSION_DETECTION_ERROR',
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      }, 'Failed to detect suspicious sessions');
+      logger.error(
+        {
+          operationType: 'SUSPICIOUS_SESSION_DETECTION_ERROR',
+          userId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        'Failed to detect suspicious sessions'
+      );
       return [];
     }
   }
@@ -327,7 +369,7 @@ class SessionDeviceService {
    * - Already revoked
    * - Expired (expiresAt < now)
    * Also deletes very old revoked sessions (>90 days) to prevent table bloat
-   * 
+   *
    * @returns Number of sessions deleted
    */
   async cleanupExpiredSessions(): Promise<number> {
@@ -337,10 +379,7 @@ class SessionDeviceService {
       // Delete expired or revoked sessions
       const expiredResult = await prisma.session.deleteMany({
         where: {
-          OR: [
-            { revoked: true },
-            { expiresAt: { lt: now } },
-          ],
+          OR: [{ revoked: true }, { expiresAt: { lt: now } }],
         },
       });
 
@@ -351,7 +390,7 @@ class SessionDeviceService {
       const oldRevokedResult = await prisma.session.deleteMany({
         where: {
           revoked: true,
-          revokedAt: { lt: oldRevokedCutoff },
+          updatedAt: { lt: oldRevokedCutoff },
         },
       });
 
