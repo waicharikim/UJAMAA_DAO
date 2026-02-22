@@ -281,10 +281,10 @@ These labels tell Traefik:
 
 ```bash
 # 1. Build your backend images
-docker-compose build web worker
+docker compose build web worker
 
 # 2. Start all services (including Traefik)
-docker-compose up -d
+docker compose up -d
 
 # 3. Traefik automatically discovers web container
 # 4. Requests are routed automatically
@@ -294,7 +294,7 @@ docker-compose up -d
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│ 1. docker-compose up                                    │
+│ 1. docker compose up (via `make dev`)                   │
 │    ↓                                                     │
 │ 2. Traefik starts (official image)                      │
 │    ↓                                                     │

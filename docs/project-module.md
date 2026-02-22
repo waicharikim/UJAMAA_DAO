@@ -1,5 +1,8 @@
 # UjamaaDAO Project Module Documentation
 
+> **Module status:** `partial` — project routes not yet mounted in `app.ts`, no tests written.
+> Expected base URL: `/api/v1/projects`
+
 ## Overview
 
 The Project module manages the lifecycle of projects created from approved proposals within UjamaaDAO. It allows creating, reading, updating, listing, and deleting projects. Projects encapsulate higher-level metadata and link to milestones for phased progress and funding.
@@ -24,7 +27,7 @@ The Project module manages the lifecycle of projects created from approved propo
 
 ### Base URL
 
-`/api/projects`
+`/api/v1/projects`
 
 ---
 

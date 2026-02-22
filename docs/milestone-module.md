@@ -1,4 +1,9 @@
-Overview
+> **Module status:** `partial` — project routes not yet mounted in `app.ts`, no tests written.
+> Expected base URL: `/api/v1/projects`
+
+# Milestone Module
+
+## Overview
 
 The Milestone module manages discrete phases within a project. Milestones have their own lifecycle allowing submission for review, approval, rejection, and tracking funding allocation and status.
 Core Features
@@ -12,7 +17,7 @@ Core Features
 API Reference
 Base URL
 
-/api/milestones
+/api/v1/projects/milestones
 POST /
 
 Create a new milestone.

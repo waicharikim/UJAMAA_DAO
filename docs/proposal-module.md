@@ -1,4 +1,7 @@
-# UjamaaDAO Proposal Module - High-Level Documentation
+# UjamaaDAO Proposal Module — High-Level Documentation
+
+> **Module status:** `partial` — governance routes not yet mounted in `app.ts`, no tests written.
+> Expected base URL: `/api/v1/governance`
 
 ## Overview
 The Proposal module handles creation, updating, retrieval, and validation of governance proposals. Supports both individual user and group proposals with business rules to ensure eligibility and correctness.

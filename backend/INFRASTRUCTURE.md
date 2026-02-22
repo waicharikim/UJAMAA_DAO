@@ -43,7 +43,7 @@ ujamaadao-backend/
 │   │   ├── database/          # Prisma client
 │   │   ├── events/            # Event bus
 │   │   ├── jobs/              # BullMQ jobs
-│   │   ├── logger/            # Winston logger
+│   │   ├── logger/            # Pino logger
 │   │   └── queue/             # Queue setup
 │   ├── modules/                # Feature modules
 │   │   ├── auth/
@@ -53,15 +53,17 @@ ujamaadao-backend/
 │   │   └── community/
 │   ├── app.ts                 # Express app
 │   ├── index.ts               # Web server entry
-│   ├── worker.ts              # Worker entry
+│   ├── workers.ts             # Worker entry
 │   └── worker-events.ts       # Event listeners
 │
 ├── prisma/
 │   ├── schema.prisma
 │   └── migrations/
 │
-├── docker-compose.yml         # Main Docker config
-├── docker-compose.prod.yml    # Production config
+│
+├── docker/                    # Docker Compose configs (project root)
+│   ├── docker-compose.yml     # Main Docker config
+│   └── docker-compose.prod.yml # Production config
 ├── Dockerfile
 ├── .env                       # Your environment variables
 ├── .env.example              # Template
@@ -287,22 +289,11 @@ make restart
 - ✅ All services isolated
 - ✅ Easy to reset/clean
 
-### Option 2: Local Development (No Docker)
+### Option 2: Local Development Without Docker
 
-**Terminal 1 - Web Server:**
-```bash
-npm run dev
-```
-
-**Terminal 2 - Worker:**
-```bash
-npm run worker
-```
-
-**Requirements:**
-- Local PostgreSQL running on port 5432
-- Local Redis running on port 6379
-- Update `.env` to use `localhost` instead of service names
+> ⚠️ **Not recommended and against project rules (ADR-005).** All development must use Docker.
+> Service names (`postgres`, `redis`) differ from `localhost` — bare-metal setup will
+> require `.env` changes that must not be committed. Use `make dev` instead.
 
 ## 🚀 Production Deployment
 
@@ -359,10 +350,10 @@ make prod-build
 make prod
 
 # Run migrations
-docker-compose -f docker-compose.prod.yml exec web npx prisma migrate deploy
+docker compose -f ../docker/docker-compose.prod.yml exec web npx prisma migrate deploy
 
 # Check status
-docker-compose -f docker-compose.prod.yml ps
+docker compose -f ../docker/docker-compose.prod.yml ps
 ```
 
 ### Step 4: Configure DNS
@@ -380,7 +371,7 @@ Traefik will automatically get SSL certificates!
 
 ```bash
 # Check status
-docker-compose ps
+docker compose ps
 
 # View specific service logs
 make logs-web
@@ -394,23 +385,23 @@ docker stats
 
 ```bash
 # Check if postgres is running
-docker-compose ps postgres
+docker compose ps postgres
 
 # Verify health
-docker-compose exec postgres pg_isready
+docker compose exec postgres pg_isready
 
 # Test connection
-docker-compose exec web npx prisma db pull
+docker compose exec web npx prisma db pull
 ```
 
 ### Redis Connection Failed
 
 ```bash
 # Check if redis is running
-docker-compose ps redis
+docker compose ps redis
 
 # Test connection
-docker-compose exec redis redis-cli ping
+docker compose exec redis redis-cli ping
 # Should return: PONG
 ```
 
@@ -418,13 +409,13 @@ docker-compose exec redis redis-cli ping
 
 ```bash
 # Check worker is running
-docker-compose ps worker
+docker compose ps worker
 
 # View worker logs
 make logs-worker
 
 # Check Redis connection from worker
-docker-compose exec worker node -e "
+docker compose exec worker node -e "
 const Redis = require('ioredis');
 const redis = new Redis(process.env.REDIS_URL);
 redis.ping().then(console.log).catch(console.error);
@@ -435,10 +426,10 @@ redis.ping().then(console.log).catch(console.error);
 
 ```bash
 # Check volume mounts
-docker-compose config | grep volumes -A 5
+docker compose config | grep volumes -A 5
 
 # Restart with rebuild
-docker-compose up -d --build
+docker compose up -d --build
 
 # Check tsx is watching
 make logs-web | grep watching
@@ -504,7 +495,7 @@ make enable-monitoring      # Start with monitoring
 1. Check the troubleshooting section above
 2. View service logs: `make logs`
 3. Check this README and UPGRADE-GUIDE.md
-4. Verify all services are up: `docker-compose ps`
+4. Verify all services are up: `docker compose ps`
 
 ---
 

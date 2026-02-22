@@ -41,12 +41,12 @@ ujamaadao-backend/
 ├── src/
 │   ├── app.ts              # Express app initialization
 │   ├── index.ts            # Server entrypoint (web)
-│   ├── worker.ts           # Background worker entrypoint
+│   ├── workers.ts          # Background worker entrypoint
 │   ├── core/               # Core infrastructure
 │   │   ├── database/       # Prisma client
 │   │   ├── events/         # Event bus
 │   │   ├── jobs/           # BullMQ jobs
-│   │   ├── logger/         # Winston logger
+│   │   ├── logger/         # Pino logger
 │   │   ├── middleware/     # Express middlewares
 │   │   ├── queue/          # Queue setup
 │   │   └── services/       # Shared services
@@ -62,10 +62,12 @@ ujamaadao-backend/
 ├── tests/                  # Vitest test suites
 ├── docs/                   # API & architecture docs
 │
-├── docker-compose.yml      # Main Docker config
 ├── Dockerfile              # Container build
 ├── Makefile                # Development commands
 ├── INFRASTRUCTURE.md       # 👈 Infrastructure & deployment guide
+│
+# Note: Docker Compose is in docker/ at the project root (../docker/docker-compose.yml)
+# Use `make dev` from this directory — the Makefile handles the path.
 ├── UPGRADE-GUIDE.md        # Observability upgrade path
 │
 ├── package.json
@@ -214,7 +216,7 @@ make prod-build
 make prod
 
 # Run migrations
-docker-compose -f docker-compose.prod.yml exec web npx prisma migrate deploy
+docker compose -f ../docker/docker-compose.prod.yml exec web npx prisma migrate deploy
 ```
 
 See [INFRASTRUCTURE.md](./INFRASTRUCTURE.md) for detailed production deployment guide.
@@ -278,7 +280,7 @@ See [UPGRADE-GUIDE.md](./UPGRADE-GUIDE.md) for observability options.
 
 ## Logging & Error Handling
 
-- **Logger**: Winston for structured logging
+- **Logger**: Pino for structured logging (`backend/src/core/logger/logger.ts`)
 - **Error Handling**: Custom `ApiError` class for consistent errors
 - **Request Logging**: All HTTP requests logged with correlation IDs
 - **Operation Logging**: Business operations logged with context
@@ -293,7 +295,7 @@ See [UPGRADE-GUIDE.md](./UPGRADE-GUIDE.md) for observability options.
 - **Database**: PostgreSQL + Prisma ORM
 - **Cache/Queue**: Redis + BullMQ
 - **Testing**: Vitest + Supertest
-- **Logging**: Winston
+- **Logging**: Pino (structured, with `operationType` context)
 - **Validation**: Zod
 - **Authentication**: JWT + Web3 wallet signatures
 

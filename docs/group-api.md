@@ -1,5 +1,8 @@
 # Group API Documentation
 
+> **Module status:** `partial` — code exists, not yet mounted in `app.ts`, no tests written.
+> Routes will be available at `/api/v1/community/groups` when connected.
+
 ## Overview
 
 The Group API manages group creation, membership, invitations, role management, and group data retrieval. All group-related endpoints require authentication.
@@ -8,7 +11,7 @@ The Group API manages group creation, membership, invitations, role management, 
 
 ## Endpoints
 
-### POST `/api/groups`
+### POST `/api/v1/community/groups`
 
 **Description:**  
 Create a new group. The authenticated user is automatically assigned as the group admin.
@@ -35,7 +38,7 @@ Bearer JWT token required.
 
 ---
 
-### GET `/api/groups/:id`
+### GET `/api/v1/community/groups/:id`
 
 **Description:**  
 Retrieve group details by ID, including active members and their user info.
@@ -55,7 +58,7 @@ Bearer JWT token required.
 
 ---
 
-### PATCH `/api/groups/:id`
+### PATCH `/api/v1/community/groups/:id`
 
 **Description:**  
 Update group details partially.
@@ -83,7 +86,7 @@ Bearer JWT token required.
 
 ---
 
-### POST `/api/groups/:id/invite`
+### POST `/api/v1/community/groups/:id/invite`
 
 **Description:**  
 Invite a user to join the group. Requires admin privileges (enforced in backend).
@@ -109,7 +112,7 @@ Bearer JWT token required.
 
 ---
 
-### POST `/api/groups/:id/accept`
+### POST `/api/v1/community/groups/:id/accept`
 
 **Description:**  
 Authenticated user accepts a pending invitation to join the group.
@@ -129,7 +132,7 @@ Bearer JWT token required.
 
 ---
 
-### POST `/api/groups/:id/role`
+### POST `/api/v1/community/groups/:id/role`
 
 **Description:**  
 Change the role of a group member (e.g., promote/demote admin/member). Requires admin privileges.
@@ -157,7 +160,7 @@ Bearer JWT token required.
 
 ## Notes
 
-- All routes under `/api/groups` require valid JWT tokens.
+- All routes under `/api/v1/community/groups` require valid JWT tokens.
 - Group names must be unique across the platform.
 - User invitations create `GroupMember` entries with `active=false` until accepted.
 - Role changes are restricted to admins (logic enforced server-side).
@@ -171,7 +174,7 @@ Bearer JWT token required.
 **Create a group:**
 
 ```bash
-curl -X POST http://localhost:4000/api/groups \
+curl -X POST http://localhost:4000/api/v1/community/groups \
 -H "Authorization: Bearer <your_jwt_token>" \
 -H "Content-Type: application/json" \
 -d '{
@@ -186,7 +189,7 @@ curl -X POST http://localhost:4000/api/groups \
 
 **Invite a user to group:**
 ```bash
-curl -X POST http://localhost:4000/api/groups/<group_id>/invite \
+curl -X POST http://localhost:4000/api/v1/community/groups/<group_id>/invite \
 -H "Authorization: Bearer <your_jwt_token>" \
 -H "Content-Type: application/json" \
 -d '{"userId": "<user_id>"}'
@@ -195,14 +198,14 @@ curl -X POST http://localhost:4000/api/groups/<group_id>/invite \
 
 **Accept an invitation:**
 ```bash
-curl -X POST http://localhost:4000/api/groups/<group_id>/accept \
+curl -X POST http://localhost:4000/api/v1/community/groups/<group_id>/accept \
 -H "Authorization: Bearer <your_jwt_token>"
 ```
 
 
 **Change member role:**
 ```bash
-curl -X POST http://localhost:4000/api/groups/<group_id>/role \
+curl -X POST http://localhost:4000/api/v1/community/groups/<group_id>/role \
 -H "Authorization: Bearer <your_jwt_token>" \
 -H "Content-Type: application/json" \
 -d '{"userId": "<user_id>", "role": "ADMIN"}'

@@ -1,13 +1,16 @@
 
+> **Module status:** `partial` — governance routes not yet mounted in `app.ts`, no tests written.
+> Expected base URL: `/api/v1/governance`
+
 ```markdown
 # UjamaaDAO Proposal Module - API Reference
 
 ## Base URL
-`/api/proposals`
+`/api/v1/governance/proposals`
 
 ---
 
-### POST `/api/proposals`
+### POST `/api/v1/governance/proposals`
 
 Create a new proposal.
 
@@ -36,7 +39,7 @@ Create a new proposal.
         403 Forbidden - User or group not eligible (e.g., insufficient impact points, no backing).
         401 Unauthorized - Missing or invalid authentication.
 
-PATCH /api/proposals/:id
+PATCH /api/v1/governance/proposals/:id
 
 Update an existing proposal.
 
@@ -49,7 +52,7 @@ Update an existing proposal.
         400 Bad Request - Validation failed.
         404 Not Found - Proposal does not exist.
 
-GET /api/proposals/:id
+GET /api/v1/governance/proposals/:id
 
 Retrieve a proposal by ID.
 
@@ -76,7 +79,7 @@ Authorization
 
 Example cURL Request
 
-curl -X POST https://yourdomain.com/api/proposals \
+curl -X POST http://localhost:4000/api/v1/governance/proposals \
 -H "Authorization: Bearer <token>" \
 -H "Content-Type: application/json" \
 -d '{

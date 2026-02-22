@@ -142,7 +142,7 @@ make enable-all
 
 ### Step 3: Verify Services
 ```bash
-docker-compose ps
+docker compose ps
 make logs-monitoring
 ```
 
@@ -192,11 +192,13 @@ services:
 ## Directory Structure
 
 ```
-ujamaa-dao/
-├── docker-compose.yml           # Main compose file (supports both versions)
-├── docker-compose.prod.yml      # Production config
-├── Makefile                     # Bridges Version A ↔ B
-├── .env                         # Profile configuration
+UJAMAA_DAO/
+├── docker/
+│   ├── docker-compose.yml       # Main compose file (supports both versions)
+│   └── docker-compose.prod.yml  # Production config
+├── backend/
+│   ├── Makefile                 # Bridges Version A ↔ B
+│   └── .env                     # Profile configuration
 │
 ├── config-templates/            # Templates for observability
 │   ├── envoy/

@@ -1,5 +1,8 @@
 # User API Documentation
 
+> **Module status:** `partial` — routes mounted at `/api/v1/users` in `app.ts`.
+> Base URL: `http://localhost:4000/api/v1`
+
 ## Overview
 
 The User API handles registration, profile management, and public user lookup by wallet address. It provides both public and authenticated endpoints for managing user data.
@@ -8,7 +11,7 @@ The User API handles registration, profile management, and public user lookup by
 
 ## Endpoints
 
-### POST `/api/users`
+### POST `/api/v1/users`
 
 **Description:**  
 Registers a new user.
@@ -37,7 +40,7 @@ None (public endpoint).
 
 ---
 
-### GET `/api/users/wallet/:walletAddress`
+### GET `/api/v1/users/wallet/:walletAddress`
 
 **Description:**  
 Fetches user details by their wallet address.
@@ -56,7 +59,7 @@ None (public endpoint).
 
 ---
 
-### GET `/api/users/me`
+### GET `/api/v1/users/me`
 
 **Description:**  
 Gets the profile of the authenticated user.
@@ -70,7 +73,7 @@ Bearer JWT token required.
 
 ---
 
-### PATCH `/api/users/me`
+### PATCH `/api/v1/users/me`
 
 **Description:**  
 Updates profile of the authenticated user.
@@ -114,7 +117,7 @@ Bearer JWT token required.
 **Register a new user:**
 
 ```bash
-curl -X POST http://localhost:4000/api/users \
+curl -X POST http://localhost:4000/api/v1/users \
 -H "Content-Type: application/json" \
 -d '{
   "walletAddress": "0xabcdef1234567890abcdef1234567890abcdef12",
@@ -131,13 +134,13 @@ curl -X POST http://localhost:4000/api/users \
 **Get user by wallet address:**
 
 ```bash
-curl http://localhost:4000/api/users/wallet/0xabcdef1234567890abcdef1234567890abcdef12
+curl http://localhost:4000/api/v1/users/wallet/0xabcdef1234567890abcdef1234567890abcdef12
 ```
 
 **Get own profile (authenticated):**
 
 ```bash
-curl http://localhost:4000/api/users/me \
+curl http://localhost:4000/api/v1/users/me \
 -H "Authorization: Bearer <your_jwt_token>"
 ```
 
@@ -145,7 +148,7 @@ curl http://localhost:4000/api/users/me \
 **Update profile (authenticated):**
 
 ```bash
-curl -X PATCH http://localhost:4000/api/users/me \
+curl -X PATCH http://localhost:4000/api/v1/users/me \
 -H "Authorization: Bearer <your_jwt_token>" \
 -H "Content-Type: application/json" \
 -d '{"name": "Jane Updated"}'

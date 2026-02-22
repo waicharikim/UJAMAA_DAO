@@ -1,65 +1,122 @@
+# UjamaaDAO
 
+UjamaaDAO is a neighborhood sovereignty platform for Kenyan wards — cooperative governance, community project funding, and marketplace for skills and goods, rooted in Ujamaa philosophy (cooperative economics, familyhood).
 
-# UjamaaDAO — Decentralized Governance Platform
+**Core premise:** Real wards become self-reliant economic, governance, and resilience units. Money and labor are traceable to measurable outcomes — a borehole drilled, a skill trained, clean water flowing.
 
-UjamaaDAO is a blockchain-enabled decentralized autonomous organization platform that facilitates secure, transparent, and inclusive governance across multiple geographic and organizational layers in Kenya.
+---
 
-## Features
+## Project Status (Feb 2026)
 
-- Wallet-based authentication and secure user identity management.
-- Multi-level governance: local groups, constituencies, counties, and national bodies.
-- Dynamic proposal creation, voting combining individual and group inputs.
-- Token economy and impact points system driving participation and rewards.
-- Project and milestone tracking with on-chain and off-chain integration.
-- Multi-channel notifications including SMS to bridge digital divides.
+| Layer | Status |
+|---|---|
+| Backend API | Architecture complete, 12 partial modules, 0 tests |
+| Prisma schema | 77 models, validated, fresh migration pending first run |
+| Docker/Infra | Fully configured, not yet run end-to-end |
+| Frontend | Not started |
+| M-Pesa | Not started |
+| On-chain (Base L2) | Not started |
+
+---
+
+## Repository Structure
+
+```
+UJAMAA_DAO/
+├── backend/            # Node.js + Express + Prisma backend
+│   ├── src/
+│   │   ├── app.ts          # Express app
+│   │   ├── index.ts        # Web server entry
+│   │   ├── workers.ts      # BullMQ worker entry
+│   │   ├── core/           # Shared infrastructure
+│   │   └── modules/        # Feature modules (auth, user, economy, community, ...)
+│   ├── prisma/             # Generated merged schema + migrations
+│   ├── Makefile            # All dev commands
+│   └── ...
+│
+├── docker/             # Docker Compose configs
+│   ├── docker-compose.yml          # Development stack
+│   ├── docker-compose.prod.yml     # Production stack
+│   └── start-*.sh                  # Container startup scripts
+│
+├── traefik/            # Traefik reverse proxy config
+│   ├── traefik.yml         # Development config
+│   └── acme.json           # SSL cert storage
+│
+├── ai_workflows/       # Claude context files (project brain)
+│   ├── CLAUDE.md       # Full project context
+│   ├── START_HERE.md   # Session orientation
+│   └── ...
+│
+├── frontend/           # Next.js frontend (not started)
+├── contracts/          # Solidity contracts (not started)
+└── docs/               # API and module documentation
+```
+
+---
 
 ## Getting Started
 
 ### Prerequisites
+- Docker + Docker Compose
+- Node.js 20+ (for local schema tooling only — all dev runs in Docker)
 
-- Node.js (v18+ recommended)
-- Docker & Docker Compose
-- PostgreSQL database (containerized or external)
-- Environment file configured with secrets (`.env`)
-
-### Installation
+### First Run
 
 ```bash
-git clone <repo-url>
-cd ujamaa-dao/backend
-npm install
+# From the project root
+cd backend
+
+# Start all services
+make dev
+
+# Then inside the web container, run the first migration:
+make db-migrate
+# Or: docker exec -it ujamaa_web npx prisma migrate dev --name schema_alignment
 ```
 
-## Development
+API is available at: `http://localhost:4000`
+Health check: `http://localhost:4000/health`
+Ready check: `http://localhost:4000/ready`
 
-### Build and run backend with Docker Compose
-```bash
-docker-compose up --build
-```
-API server runs at http://localhost:4000
+---
 
-## Testing
-```bash
-npm test        # Run all tests sequentially for stable results
-```
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Runtime | Node.js 20+, TypeScript strict |
+| Framework | Express |
+| Database | PostgreSQL + Prisma ORM |
+| Queue | BullMQ + Redis |
+| Logger | Pino (structured, with `operationType`) |
+| Testing | Vitest + Supertest (no tests written yet) |
+| Docker | Docker Compose with Traefik |
+| Blockchain (planned) | Base L2 (Sepolia), PR/UT tokens, Privy/Dynamic embedded wallets |
+| Frontend (planned) | Next.js 14, TanStack Query, Wagmi |
+
+---
+
+## Non-Negotiable Rules
+
+1. **Marketplace = discovery only.** No payments, no escrow.
+2. **Real money via M-Pesa to platform accounts.** Never P2P.
+3. **Blockchain is hybrid.** On-chain: governance, PR/UT tokens. Off-chain: UX.
+4. **PR token is soulbound.** Earned UT has no cash-out path.
+5. **Everything runs in Docker.** Use service names (`postgres`, `redis`), not `localhost`.
+
+---
 
 ## Documentation
 
-- API docs available in /docs folder (Markdown).
-- Architecture and operational guides included.
-- You can generate and extend OpenAPI specs as needed.
+- [`ai_workflows/CLAUDE.md`](ai_workflows/CLAUDE.md) — Full project context + module status table
+- [`ai_workflows/START_HERE.md`](ai_workflows/START_HERE.md) — Where to start each session
+- [`backend/README.md`](backend/README.md) — Backend-specific setup and commands
+- [`backend/INFRASTRUCTURE.md`](backend/INFRASTRUCTURE.md) — Docker, deployment, troubleshooting
+- [`docs/`](docs/) — API documentation per module
 
-## Contributing
-
-- Follow code style and commit message conventions.
-- Write comprehensive tests for new features.
-- Update documentation accordingly.
-- Use feature branches and pull requests.
+---
 
 ## License
 
-Licensed under [Your License].
-
-For detailed architecture and API docs, please see the /docs directory.
-
-Ready to shape the future of community-driven governance!
+[License TBD]

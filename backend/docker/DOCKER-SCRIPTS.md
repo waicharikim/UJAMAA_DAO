@@ -63,7 +63,7 @@ Waits for Redis to be ready before proceeding.
 4. ✅ Validates schema
 5. 🔄 Generates Prisma client
 6. ℹ️  Skips migrations (web handles this)
-7. 🚀 Starts worker with hot reload (`tsx watch src/worker.ts`)
+7. 🚀 Starts worker with hot reload (`tsx watch src/workers.ts`)
 
 **Used by:** `worker` container in `docker-compose.yml`
 
@@ -92,7 +92,7 @@ Waits for Redis to be ready before proceeding.
 4. ✅ Validates schema
 5. 🔄 Generates Prisma client
 6. ℹ️  Skips migrations (web handles this)
-7. 🚀 Starts built worker (`node dist/worker.js`)
+7. 🚀 Starts built worker (`node dist/workers.js`)
 
 **Used by:** `worker` container in `docker-compose.prod.yml`
 
@@ -105,7 +105,7 @@ Waits for Redis to be ready before proceeding.
 | **Runs Migrations** | ✅ Yes | ❌ No (waits for web) |
 | **Waits for PostgreSQL** | ✅ Yes | ✅ Yes |
 | **Waits for Redis** | ❌ No (optional) | ✅ Yes (required) |
-| **Entry Point** | `src/index.ts` | `src/worker.ts` |
+| **Entry Point** | `src/index.ts` | `src/workers.ts` |
 | **Port Exposed** | 4000 | None |
 
 ### Development vs Production
@@ -209,8 +209,8 @@ services:
 ```
 
 **Solutions:**
-- Check PostgreSQL container is running: `docker-compose ps postgres`
-- Check PostgreSQL logs: `docker-compose logs postgres`
+- Check PostgreSQL container is running: `docker compose ps postgres`
+- Check PostgreSQL logs: `docker compose logs postgres`
 - Increase timeout: Set `WAIT_TIMEOUT=120` in environment
 
 ### Redis Not Ready
@@ -219,8 +219,8 @@ services:
 ```
 
 **Solutions:**
-- Check Redis container is running: `docker-compose ps redis`
-- Check Redis logs: `docker-compose logs redis`
+- Check Redis container is running: `docker compose ps redis`
+- Check Redis logs: `docker compose logs redis`
 - Increase timeout: Set `WAIT_TIMEOUT=120` in environment
 
 ### Prisma Client Generation Failed
@@ -232,7 +232,7 @@ services:
 - Check schema is valid: `npx prisma validate`
 - Ensure `node_modules` is mounted correctly
 - Check disk space: `df -h`
-- Try rebuilding: `docker-compose build --no-cache`
+- Try rebuilding: `docker compose build --no-cache`
 
 ### Migration Errors
 
@@ -255,7 +255,7 @@ This stops the container. Fix migrations before deploying.
 **Solutions:**
 - Check volume mounts in docker-compose.yml
 - Ensure `tsx watch` is running (check logs)
-- Try restarting container: `docker-compose restart web`
+- Try restarting container: `docker compose restart web`
 
 ## Environment Variables
 

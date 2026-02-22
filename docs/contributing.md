@@ -55,20 +55,25 @@ Be respectful when giving and receiving feedback.
 2. **Set up local environment**
     Follow the instructions in README.md to install dependencies, configure .env, and run the backend/docker environment.
 
-3. **Run tests**
-    Make sure everything is working before starting:
+3. **Run the stack with Docker**
+    All development runs via Docker Compose. From the `backend/` directory:
 ```bash
-    npm install
-    npx prisma migrate dev
-    npm run dev
-    npx vitest run --threads=false
+    make dev          # Start all services
+    make db-migrate   # Run migrations inside the web container
+    # Verify: http://localhost:4000/health
+```
+
+4. **Run tests** (once tests exist — zero currently written):
+```bash
+    npx vitest run
 ```
 ## Branching and Workflow
 
-- Use the main branch for stable, production-ready code only.
-- Create feature branches from main named with a clear prefix, e.g., feature/, fix/, or chore/.
-- Example: feature/group-membership-management
-- Open a pull request (PR) against main once your work is ready for review.
+- Use the `main` branch for stable, production-ready code only.
+- Use the `develop` branch for ongoing development — all feature branches come from here.
+- Create feature branches from `develop` named with a clear prefix, e.g., `feature/`, `fix/`, or `chore/`.
+- Example: `feature/group-membership-management`
+- Open a pull request (PR) against `develop`. PRs to `main` represent production releases.
 - PRs should be small, focused, and contain clear descriptions.
 - Ensure your branch is up to date with the latest main before merging.
 

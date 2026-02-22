@@ -26,7 +26,7 @@ User Interactions Data / Requests State & Governance
 ### 1. Frontend & User Interaction Layer
 
 - Responsive Web & Mobile UI for user registration, governance participation, and project collaboration.
-- Wallet integrations (MetaMask, WalletConnect) for cryptographic identity and transaction signing.
+- Embedded wallet integrations (Privy or Dynamic — decision pending ADR-009) for cryptographic identity without seed phrase management. MetaMask is not required.
 - SMS gateway integration for rural/low-connectivity user access.
 - Real-time updates via WebSockets or polling for votes, proposals, and project status.
 
@@ -43,7 +43,7 @@ User Interactions Data / Requests State & Governance
 
 - PostgreSQL database accessed via Prisma ORM with comprehensive data modeling for multi-level geography and user roles.
 
-- Robust error handling with `ApiError` and structured logging via Pino.
+- Robust error handling with `ApiError` (`backend/src/core/errors/ApiError.ts`) and structured logging via Pino (`backend/src/core/logger/logger.ts`).
 
 - Authentication and authorization middleware enforcing JWT-based access and role-based permissions.
 
@@ -51,7 +51,7 @@ User Interactions Data / Requests State & Governance
 
 ### 3. Blockchain Layer
 
-- Smart contracts deployed on EVM-compatible chains enforcing:
+- Smart contracts deployed on **Base L2** (Coinbase L2, EVM-compatible) — Sepolia testnet for dev, Mainnet for prod. Enforces:
 
   - Token economcis (minting, transfers, staking).
   - On-chain voting and proposal approvals.

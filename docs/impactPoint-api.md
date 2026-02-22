@@ -1,6 +1,9 @@
 # Impact Points & Token Management API
 
-Base URL: `/api`
+> **Module status:** `partial` — economy routes mounted at `/api/v1/economy` in `app.ts`.
+> Impact points and token balance endpoints are part of the economy module.
+
+Base URL: `/api/v1/economy`
 
 ---
 
@@ -8,7 +11,7 @@ Base URL: `/api`
 
 ### Add or Update Impact Points
 
-**POST** `/impact-points`
+**POST** `/api/v1/economy/impact-points`
 
 **Description:** Add or modify impact points for a user or group.
 
@@ -50,7 +53,7 @@ Error Responses:
 
 Get Impact Points
 
-GET /impact-points
+GET /api/v1/economy/impact-points
 
 Description: Get impact points for a specified user or group.
 
@@ -73,7 +76,7 @@ Success Response:
 Token Balance API
 Update Token Balance
 
-POST /token-balance
+POST /api/v1/economy/token-balance
 
 Description: Add or subtract tokens from a user or group balance.
 
@@ -106,7 +109,7 @@ Error Responses:
 
 Get Token Balance
 
-GET /token-balance
+GET /api/v1/economy/token-balance
 
 Description: Retrieve the current token balance of a user or group.
 
