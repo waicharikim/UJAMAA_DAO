@@ -1,0 +1,36 @@
+## traefik/traefik.yml — Development configuration
+## For production: enable HTTPS + Let's Encrypt (see commented sections below)
+
+api:
+  dashboard: true
+  insecure: true   # Allows dashboard access without auth (dev only)
+
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+    ## Production: uncomment to enable TLS
+    # http:
+    #   tls:
+    #     certResolver: letsencrypt
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: backend
+
+## Production: uncomment and configure for Let's Encrypt
+# certificatesResolvers:
+#   letsencrypt:
+#     acme:
+#       email: your-email@example.com
+#       storage: /letsencrypt/acme.json
+#       httpChallenge:
+#         entryPoint: web
+
+log:
+  level: INFO
+
+accessLog: {}

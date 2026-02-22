@@ -69,7 +69,9 @@ services:
       - PORT=4000
       - DATABASE_URL=postgresql://${POSTGRES_USER:-ujamaa_user}:${POSTGRES_PASSWORD:-ujamaa_pass}@postgres:5432/${POSTGRES_DB:-ujamaa_db}
       - REDIS_URL=redis://redis:6379
-      - JWT_SECRET=${JWT_SECRET:-dev_jwt_secret_change_me}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=${JWT_SECRET:-6e603cfa9affb7677020ad6a930bd3f076867ff38d100586dc5d985bed845ad0}
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
       - DASHBOARD_PASSWORD=${DASHBOARD_PASSWORD:-admin123}
       # VERSION B: Uncomment for metrics
@@ -86,7 +88,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: ["./docker/start-web.sh"]         # ← Use startup script
+    command: ["sh", "./docker/start-web.sh"]    # ← Use startup script
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.web.rule=Host(`localhost`) || Host(`ujamaa.localhost`)"
@@ -157,7 +159,9 @@ services:
       - NODE_ENV=development
       - DATABASE_URL=postgresql://${POSTGRES_USER:-ujamaa_user}:${POSTGRES_PASSWORD:-ujamaa_pass}@postgres:5432/${POSTGRES_DB:-ujamaa_db}
       - REDIS_URL=redis://redis:6379
-      - JWT_SECRET=${JWT_SECRET:-dev_jwt_secret_change_me}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=${JWT_SECRET:-6e603cfa9affb7677020ad6a930bd3f076867ff38d100586dc5d985bed845ad0}
       # VERSION B: Uncomment for metrics
       # - STATSD_HOST=worker-metrics
       # - STATSD_PORT=8125
@@ -174,7 +178,7 @@ services:
         condition: service_healthy
       web:
         condition: service_started
-    command: ["./docker/start-worker.sh"]      # ← Use startup script
+    command: ["sh", "./docker/start-worker.sh"] # ← Use startup script
 
   # ═════════════════════════════════════════════════════════════════════════
   # VERSION B: WORKER POD WITH SIDECARS (COMMENTED OUT)
@@ -265,7 +269,7 @@ services:
     volumes:
       - redis_data:/data
     ports:
-      - "6379:6379"  # Exposed for direct Redis access during dev
+      - "6380:6379"  # Exposed for direct Redis access during dev (6379 reserved for host Redis)
     networks:
       - backend
     healthcheck:

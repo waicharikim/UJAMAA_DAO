@@ -47,7 +47,7 @@ help:
 # Development
 dev:
 	@echo "Starting development environment (Version A - Simple)..."
-	@docker-compose -f $(COMPOSE_FILE) up -d
+	@docker compose -f $(COMPOSE_FILE) up -d
 	@echo ""
 	@echo "✅ Services started!"
 	@echo "   API: http://localhost:4000"
@@ -58,49 +58,49 @@ dev:
 # Production
 prod:
 	@echo "Starting production environment..."
-	@docker-compose -f $(COMPOSE_PROD) up -d
+	@docker compose -f $(COMPOSE_PROD) up -d
 
 prod-build:
 	@echo "Building production images..."
-	@docker-compose -f $(COMPOSE_PROD) build --no-cache
+	@docker compose -f $(COMPOSE_PROD) build --no-cache
 
 # Common operations
 up:
-	@docker-compose -f $(COMPOSE_FILE) up -d
+	@docker compose -f $(COMPOSE_FILE) up -d
 
 down:
-	@docker-compose -f $(COMPOSE_FILE) down
+	@docker compose -f $(COMPOSE_FILE) down
 
 restart:
-	@docker-compose -f $(COMPOSE_FILE) restart
+	@docker compose -f $(COMPOSE_FILE) restart
 
 logs:
-	@docker-compose -f $(COMPOSE_FILE) logs -f
+	@docker compose -f $(COMPOSE_FILE) logs -f
 
 logs-web:
-	@docker-compose -f $(COMPOSE_FILE) logs -f web
+	@docker compose -f $(COMPOSE_FILE) logs -f web
 
 logs-worker:
-	@docker-compose -f $(COMPOSE_FILE) logs -f worker
+	@docker compose -f $(COMPOSE_FILE) logs -f worker
 
 logs-monitoring:
-	@docker-compose -f $(COMPOSE_FILE) logs -f prometheus grafana loki
+	@docker compose -f $(COMPOSE_FILE) logs -f prometheus grafana loki
 
 # Build commands
 build:
 	@echo "Building images..."
-	@docker-compose -f $(COMPOSE_FILE) build
+	@docker compose -f $(COMPOSE_FILE) build
 
 build-nc:
 	@echo "Building images (no cache)..."
-	@docker-compose -f $(COMPOSE_FILE) build --no-cache
+	@docker compose -f $(COMPOSE_FILE) build --no-cache
 
 clean:
 	@echo "WARNING: This will delete all volumes and data!"
 	@read -p "Are you sure? [y/N] " -n 1 -r; \
 	echo; \
 	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-		docker-compose -f $(COMPOSE_FILE) down -v; \
+		docker compose -f $(COMPOSE_FILE) down -v; \
 		echo "Cleaned!"; \
 	fi
 
@@ -154,7 +154,7 @@ enable-monitoring:
 	@grep -q "COMPOSE_PROFILES=" .env 2>/dev/null || echo "COMPOSE_PROFILES=" >> .env
 	@sed -i.bak 's/COMPOSE_PROFILES=\(.*\)/COMPOSE_PROFILES=\1,monitoring/' .env
 	@sed -i.bak 's/,,/,/g; s/^,//; s/,$$//' .env
-	@docker-compose -f $(COMPOSE_FILE) up -d prometheus grafana
+	@docker compose -f $(COMPOSE_FILE) up -d prometheus grafana
 	@echo "✅ Monitoring enabled!"
 	@echo "   Prometheus: http://localhost:9090"
 	@echo "   Grafana: http://localhost:3001 (admin/admin)"
@@ -164,7 +164,7 @@ enable-logging:
 	@grep -q "COMPOSE_PROFILES=" .env 2>/dev/null || echo "COMPOSE_PROFILES=" >> .env
 	@sed -i.bak 's/COMPOSE_PROFILES=\(.*\)/COMPOSE_PROFILES=\1,logging/' .env
 	@sed -i.bak 's/,,/,/g; s/^,//; s/,$$//' .env
-	@docker-compose -f $(COMPOSE_FILE) up -d loki fluent-bit
+	@docker compose -f $(COMPOSE_FILE) up -d loki fluent-bit
 	@echo "✅ Logging enabled!"
 	@echo "   Loki: http://localhost:3100"
 	@echo "   View logs in Grafana: http://localhost:3001"
@@ -174,7 +174,7 @@ enable-tracing:
 	@grep -q "COMPOSE_PROFILES=" .env 2>/dev/null || echo "COMPOSE_PROFILES=" >> .env
 	@sed -i.bak 's/COMPOSE_PROFILES=\(.*\)/COMPOSE_PROFILES=\1,tracing/' .env
 	@sed -i.bak 's/,,/,/g; s/^,//; s/,$$//' .env
-	@docker-compose -f $(COMPOSE_FILE) up -d jaeger
+	@docker compose -f $(COMPOSE_FILE) up -d jaeger
 	@echo "✅ Tracing enabled!"
 	@echo "   Jaeger UI: http://localhost:16686"
 
@@ -183,7 +183,7 @@ enable-service-mesh:
 	@grep -q "COMPOSE_PROFILES=" .env 2>/dev/null || echo "COMPOSE_PROFILES=" >> .env
 	@sed -i.bak 's/COMPOSE_PROFILES=\(.*\)/COMPOSE_PROFILES=\1,service-mesh/' .env
 	@sed -i.bak 's/,,/,/g; s/^,//; s/,$$//' .env
-	@docker-compose -f $(COMPOSE_FILE) up -d
+	@docker compose -f $(COMPOSE_FILE) up -d
 	@echo "✅ Service mesh enabled!"
 	@echo "   Envoy admin (API): http://localhost:9901"
 	@echo "   Envoy admin (Worker): http://localhost:9902"
@@ -193,7 +193,7 @@ enable-all:
 	@echo "COMPOSE_PROFILES=monitoring,logging,tracing,service-mesh" > .env.tmp
 	@cat .env 2>/dev/null | grep -v "^COMPOSE_PROFILES=" >> .env.tmp || true
 	@mv .env.tmp .env
-	@docker-compose -f $(COMPOSE_FILE) up -d
+	@docker compose -f $(COMPOSE_FILE) up -d
 	@echo ""
 	@echo "✅ Full observability stack enabled!"
 	@echo ""
@@ -208,55 +208,55 @@ enable-all:
 disable-observability:
 	@echo "Disabling all observability services (reverting to Version A)..."
 	@sed -i.bak '/^COMPOSE_PROFILES=/d' .env 2>/dev/null || true
-	@docker-compose -f $(COMPOSE_FILE) down prometheus grafana loki fluent-bit jaeger statsd-exporter
-	@docker-compose -f $(COMPOSE_FILE) up -d
+	@docker compose -f $(COMPOSE_FILE) down prometheus grafana loki fluent-bit jaeger statsd-exporter
+	@docker compose -f $(COMPOSE_FILE) up -d
 	@echo "✅ Reverted to Version A (simple mode)"
 
 # Database operations
 db-shell:
-	@docker-compose -f $(COMPOSE_FILE) exec postgres psql -U ujamaa_user -d ujamaa_db
+	@docker compose -f $(COMPOSE_FILE) exec postgres psql -U ujamaa_user -d ujamaa_db
 
 db-migrate:
-	@docker-compose -f $(COMPOSE_FILE) exec web npx prisma migrate dev
+	@docker compose -f $(COMPOSE_FILE) exec web npx prisma migrate dev
 
 db-push:
-	@docker-compose -f $(COMPOSE_FILE) exec web npx prisma db push
+	@docker compose -f $(COMPOSE_FILE) exec web npx prisma db push
 
 db-studio:
-	@docker-compose -f $(COMPOSE_FILE) exec web npx prisma studio
+	@docker compose -f $(COMPOSE_FILE) exec web npx prisma studio
 
 db-reset:
 	@echo "WARNING: This will reset the database!"
 	@read -p "Are you sure? [y/N] " -n 1 -r; \
 	echo; \
 	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-		docker-compose -f $(COMPOSE_FILE) exec web npx prisma migrate reset; \
+		docker compose -f $(COMPOSE_FILE) exec web npx prisma migrate reset; \
 	fi
 
 backup:
 	@echo "Creating database backup..."
 	@mkdir -p ./backups
-	@docker-compose -f $(COMPOSE_FILE) exec postgres pg_dump -U ujamaa_user ujamaa_db | gzip > ./backups/backup_$$(date +%Y%m%d_%H%M%S).sql.gz
+	@docker compose -f $(COMPOSE_FILE) exec postgres pg_dump -U ujamaa_user ujamaa_db | gzip > ./backups/backup_$$(date +%Y%m%d_%H%M%S).sql.gz
 	@echo "Backup created in ./backups/"
 
 # Redis operations
 redis-cli:
-	@docker-compose -f $(COMPOSE_FILE) exec redis redis-cli
+	@docker compose -f $(COMPOSE_FILE) exec redis redis-cli
 
 # Container shell access
 shell-web:
-	@docker-compose -f $(COMPOSE_FILE) exec web bash
+	@docker compose -f $(COMPOSE_FILE) exec web bash
 
 shell-worker:
-	@docker-compose -f $(COMPOSE_FILE) exec worker bash
+	@docker compose -f $(COMPOSE_FILE) exec worker bash
 
 # Check service status
 ps:
-	@docker-compose -f $(COMPOSE_FILE) ps
+	@docker compose -f $(COMPOSE_FILE) ps
 
 # View configuration
 config:
-	@docker-compose -f $(COMPOSE_FILE) config
+	@docker compose -f $(COMPOSE_FILE) config
 
 # Development helpers
 install:
@@ -291,13 +291,13 @@ worker-local:
 
 # Quick restart specific services
 restart-web:
-	@docker-compose -f $(COMPOSE_FILE) restart web
+	@docker compose -f $(COMPOSE_FILE) restart web
 
 restart-worker:
-	@docker-compose -f $(COMPOSE_FILE) restart worker
+	@docker compose -f $(COMPOSE_FILE) restart worker
 
 restart-db:
-	@docker-compose -f $(COMPOSE_FILE) restart postgres
+	@docker compose -f $(COMPOSE_FILE) restart postgres
 
 restart-redis:
-	@docker-compose -f $(COMPOSE_FILE) restart redis
+	@docker compose -f $(COMPOSE_FILE) restart redis

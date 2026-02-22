@@ -29,8 +29,10 @@ fi
 echo "✅ Prisma client generated successfully"
 
 echo "🚀 Applying Prisma migrations (dev mode)..."
-# In dev, use migrate dev — it handles pending migrations gracefully
-npx prisma migrate dev --skip-seed || echo "⚠️ Migration issues in dev — continuing..."
+# --name required for non-TTY (Docker) environments (Prisma v7+)
+npx prisma migrate dev --name "schema_alignment" || \
+  npx prisma migrate deploy || \
+  echo "⚠️ Migration issues in dev — continuing..."
 
 echo "🚀 Starting web server (tsx watch)..."
 exec npx tsx watch src/index.ts

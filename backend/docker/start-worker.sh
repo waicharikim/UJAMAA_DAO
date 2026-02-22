@@ -37,4 +37,4 @@ echo "✅ Prisma client generated successfully"
 echo "ℹ️  Skipping migrations (handled by web container)"
 
 echo "🚀 Starting worker process (tsx watch)..."
-exec npx tsx watch src/worker.ts
+exec npx tsx watch src/workers.ts
