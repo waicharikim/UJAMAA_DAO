@@ -73,11 +73,11 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 | verification | scaffold | Empty directory |
 
 **Cross-cutting gaps (apply to all modules):**
-- No test files exist anywhere — zero unit or integration tests written
+- Tests: auth module has 2 green unit tests (`sendMagicLink`). All other modules: zero tests.
 - `make dev` → `/health` ✅ verified 2026-02-22 — server responds `{"success":true,"status":"ok"}`
-- Worker container: `redischeck.sh` missing execute permission — run `chmod +x docker/*.sh` on host
-- `/ready` endpoint (Prisma connected) not yet confirmed — run `prisma migrate dev --name schema_alignment` inside web container
-- Community, governance, projects, marketplace, notifications routes not yet mounted in `app.ts`
+- `make dev` → `/ready` ✅ verified 2026-02-22 — Prisma connected, migration applied
+- Worker container: `redischeck.sh` needs `chmod +x docker/*.sh` on host after fresh clone
+- All 12 module routes mounted in `app.ts` ✅ (auth, user, admin, economy, community, governance, projects, marketplace, notifications, emergency, audit, onboarding)
 - M-Pesa: not started
 - On-chain PR/UT (Base Sepolia): not started
 - Frontend (Next.js): not started
@@ -195,3 +195,4 @@ A module is **production-ready** when ALL of these are true:
 | v2.1 | Fixed all file paths (backend/ prefix), replaced outdated progress snapshot with module status table |
 | v2.2 | Added infrastructure completion notes, added BullMQ/schema/env common issues |
 | v2.3 | Updated cross-cutting gaps: `/health` verified ✅, worker permission issue, unmounted routes. Added 6 new common issues from first `make dev` session. |
+| v2.4 | All 12 routes mounted ✅, `/ready` ✅, 2 auth tests green. Updated cross-cutting gaps. JWT jti fix documented. |
