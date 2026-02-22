@@ -5,19 +5,20 @@
  * Version: 2.0 — December 2025
  */
 
-import { Request, Response } from "express";
+import { Response } from "express";
+import { AuthRequest } from "../../../core/types/Ujamaadao.types.js";
 import { sendSuccess } from "../../../core/utils/response.js";
 import { notificationService } from "../services/notification.service.js";
 
 export class NotificationController {
-  static async getNotifications(req: Request, res: Response) {
+  static async getNotifications(req: AuthRequest, res: Response) {
     const userId = req.user!.userId;
     const unreadOnly = req.query.unread === "true";
     const notifications = await notificationService.getUserNotifications(userId, unreadOnly);
     sendSuccess(res, notifications, "Notifications retrieved");
   }
 
-  static async markAsRead(req: Request, res: Response) {
+  static async markAsRead(req: AuthRequest, res: Response) {
     const userId = req.user!.userId;
     const { notificationId } = req.body;
     await notificationService.markAsRead(userId, notificationId);

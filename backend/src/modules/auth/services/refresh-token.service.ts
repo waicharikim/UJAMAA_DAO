@@ -111,7 +111,7 @@ class RefreshTokenService {
         secondaryWardId: user.secondaryWardId || undefined,
         constituencyId: user.primaryWard?.constituencyId || undefined,
         countyId: user.primaryWard?.countyId || undefined,
-        verificationLevel: user.verificationLevel,
+        verificationLevel: user.verificationLevel as import("../../../core/types/Ujamaadao.types.js").VerificationLevel,
         emailVerified: user.emailVerified,
         phoneVerified: user.phoneVerified,
         communityVerified: user.communityVerified,

@@ -58,7 +58,7 @@ router.patch(
   buildRateLimiter({
     windowMs: 60 * 1000,
     max: 3,
-    keyGenerator: (req) => req.user?.userId || req.ip,
+    keyGenerator: (req: any) => req.user?.userId || req.ip,
   }), // per-user limit
   validateRequest({ schema: updateProfileSchema, target: 'body' }),
   asyncHandler(updateProfile)
@@ -81,7 +81,7 @@ router.post(
   buildRateLimiter({
     windowMs: 60 * 1000,
     max: 2,
-    keyGenerator: (req) => req.user?.userId || req.ip,
+    keyGenerator: (req: any) => req.user?.userId || req.ip,
   }), // per-user limit
   validateRequest({ schema: selectIndustriesSchema, target: 'body' }),
   asyncHandler(selectIndustries)
@@ -100,7 +100,7 @@ router.post(
   buildRateLimiter({
     windowMs: 60 * 1000,
     max: 2,
-    keyGenerator: (req) => req.user?.userId || req.ip,
+    keyGenerator: (req: any) => req.user?.userId || req.ip,
   }), // per-user limit
   validateRequest({ schema: selectGoodsServicesSchema, target: 'body' }),
   asyncHandler(selectGoodsServices)
@@ -123,7 +123,7 @@ router.post(
   buildRateLimiter({
     windowMs: 24 * 60 * 60 * 1000,
     max: 1,
-    keyGenerator: (req) => req.user?.userId || req.ip,
+    keyGenerator: (req: any) => req.user?.userId || req.ip,
   }), // per-user limit
   authorize({
     verificationLevel: 'COMMUNITY_VERIFIED',
@@ -140,7 +140,7 @@ router.post(
   buildRateLimiter({
     windowMs: 60 * 60 * 1000,
     max: 5,
-    keyGenerator: (req) => req.user?.userId || req.ip,
+    keyGenerator: (req: any) => req.user?.userId || req.ip,
   }), // per-user limit
   authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
   validateRequest({ schema: setTemporaryLocationSchema, target: 'body' }),
@@ -154,7 +154,7 @@ router.delete(
   buildRateLimiter({
     windowMs: 60 * 60 * 1000,
     max: 5,
-    keyGenerator: (req) => req.user?.userId || req.ip,
+    keyGenerator: (req: any) => req.user?.userId || req.ip,
   }), // per-user limit
   authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
   asyncHandler(clearTemporaryLocation)
@@ -187,7 +187,7 @@ router.post(
   buildRateLimiter({
     windowMs: 30 * 24 * 60 * 60 * 1000,
     max: 3,
-    keyGenerator: (req) => req.user?.userId || req.ip,
+    keyGenerator: (req: any) => req.user?.userId || req.ip,
   }), // per-user limit
   authorize({ verificationLevel: 'PHONE_VERIFIED' }),
   asyncHandler(requestCommunityVerification)
@@ -200,7 +200,7 @@ router.post(
   buildRateLimiter({
     windowMs: 24 * 60 * 60 * 1000,
     max: 5,
-    keyGenerator: (req) => req.user?.userId || req.ip,
+    keyGenerator: (req: any) => req.user?.userId || req.ip,
   }), // per-user limit
   authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
   validateRequest({ schema: vouchRequestSchema, target: 'body' }),
@@ -214,7 +214,7 @@ router.post(
   buildRateLimiter({
     windowMs: 24 * 60 * 60 * 1000,
     max: 3,
-    keyGenerator: (req) => req.user?.userId || req.ip,
+    keyGenerator: (req: any) => req.user?.userId || req.ip,
   }), // per-user limit
   authorize({ verificationLevel: 'PHONE_VERIFIED' }),
   validateRequest({ schema: paymentVerificationSchema, target: 'body' }),

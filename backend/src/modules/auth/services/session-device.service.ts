@@ -210,10 +210,7 @@ class SessionDeviceService {
 
       await prisma.session.update({
         where: { id: sessionId },
-        data: { 
-          revoked: true,
-          revokedAt: new Date(),
-        },
+        data: { revoked: true },
       });
 
       logger.info({
@@ -247,10 +244,7 @@ class SessionDeviceService {
           id: { not: currentSessionId },
           revoked: false,
         },
-        data: {
-          revoked: true,
-          revokedAt: new Date(),
-        },
+        data: { revoked: true },
       });
 
       logger.info({
@@ -351,7 +345,7 @@ class SessionDeviceService {
       const oldRevokedResult = await prisma.session.deleteMany({
         where: {
           revoked: true,
-          revokedAt: { lt: oldRevokedCutoff },
+          updatedAt: { lt: oldRevokedCutoff },
         },
       });
 

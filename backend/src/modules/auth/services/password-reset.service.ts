@@ -19,6 +19,7 @@
  */
 
 import { prisma } from "../../../core/database/client.js";
+import { Prisma } from "@prisma/client";
 import { ApiError } from "../../../core/errors/ApiError.js";
 import { logger, logSecurityEvent } from "../../../core/logger/logger.js";
 import { hashPassword } from "../../../core/utils/crypto.js";
@@ -329,7 +330,7 @@ class PasswordResetService {
       const passwordHash = await hashPassword(newPassword);
 
       // Update password and mark token as used (atomic transaction)
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         // Update user password
         await tx.user.update({
           where: { id: userId },

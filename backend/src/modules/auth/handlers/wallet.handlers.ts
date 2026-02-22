@@ -72,7 +72,7 @@ export async function linkWallet(req: AuthRequest, res: Response) {
   const { walletAddress, signature } = req.body;
   const userId = req.user!.userId;
 
-  await walletService.linkWallet(userId, walletAddress, signature, req.correlationId);
+  await walletService.linkWallet(userId, walletAddress, signature, { ipAddress: req.ip }, req.correlationId);
 
   sendSuccess(
     res,
@@ -89,7 +89,7 @@ export async function linkWallet(req: AuthRequest, res: Response) {
 export async function disconnectWallet(req: AuthRequest, res: Response) {
   const userId = req.user!.userId;
 
-  await walletService.disconnectWallet(userId, req.correlationId);
+  await walletService.disconnectWallet(userId, undefined, req.correlationId);
 
   sendSuccess(
     res,

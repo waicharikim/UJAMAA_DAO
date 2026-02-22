@@ -65,7 +65,7 @@ export async function registerAllJobs(): Promise<void> {
       MONTHLY_PR_REGENERATION_JOB,
       {},
       {
-        repeat: { cron: "5 0 1 * *" },
+        repeat: { pattern: "5 0 1 * *" },
         jobId: MONTHLY_PR_REGENERATION_JOB,
         removeOnComplete: { age: 3600 * 24 * 7 },
         removeOnFail: { age: 3600 * 24 * 30 },
@@ -81,7 +81,7 @@ export async function registerAllJobs(): Promise<void> {
       DAILY_COMMITMENT_PENALTIES_JOB,
       {},
       {
-        repeat: { cron: "0 2 * * *" },
+        repeat: { pattern: "0 2 * * *" },
         jobId: DAILY_COMMITMENT_PENALTIES_JOB,
         removeOnComplete: { age: 3600 * 24 * 7 },
         removeOnFail: { age: 3600 * 24 * 30 },
@@ -92,7 +92,7 @@ export async function registerAllJobs(): Promise<void> {
     // ─────────────────────────────────────────────
     // Add future jobs here
     // ─────────────────────────────────────────────
-    // await someQueue.add("daily-report", {}, { repeat: { cron: "0 3 * * *" } });
+    // await someQueue.add("daily-report", {}, { repeat: { pattern: "0 3 * * *" } });
 
     logger.info(
       { operationType: "JOB_REGISTER" },

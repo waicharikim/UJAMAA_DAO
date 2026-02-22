@@ -17,6 +17,7 @@
  */
 
 import { prisma } from "../../../core/database/client.js";
+import { Prisma } from "@prisma/client";
 import { ApiError } from "../../../core/errors/ApiError.js";
 import { logger, logSecurityEvent } from "../../../core/logger/logger.js";
 import { encrypt, decrypt, generateRandomHex } from "../../../core/utils/crypto.js";
@@ -139,7 +140,7 @@ class Totp2FAService {
 
       // Check if locked out
       if (await this.isLockedOut(twoFactor)) {
-        throw ApiError.tooManyRequests('Too many failed attempts. Please try again later.');
+        throw ApiError.tooManyRequests(15 * 60);
       }
 
       // Decrypt secret
@@ -238,9 +239,7 @@ class Totp2FAService {
           }
         );
         
-        throw ApiError.tooManyRequests(
-          'Account temporarily locked due to multiple failed 2FA attempts. Please try again in 15 minutes.'
-        );
+        throw ApiError.tooManyRequests(15 * 60);
       }
 
       // Try TOTP code first
@@ -415,7 +414,7 @@ class Totp2FAService {
     if (index === -1) return false;
 
     // Remove used backup code (atomic transaction)
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const updatedCodes = twoFactor.backupCodesEncrypted.filter(
         (_: any, i: number) => i !== index
       );

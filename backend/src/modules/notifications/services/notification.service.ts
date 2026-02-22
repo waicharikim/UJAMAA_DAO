@@ -3,17 +3,13 @@
  * @description
  * Notification Service — Multi-Channel Alerts
  *
- * Handles:
- * - Send notifications (email, SMS, in-app)
- * - Preference check
- * - Log delivery
- *
- * Version: 2.0 — December 2025
+ * Version: 2.1 — February 2026
+ * Updated: Align with actual Prisma schema field names
  */
 
+import { NotificationType as PrismaNotificationType } from "@prisma/client";
 import { prisma } from "../../../core/database/client.js";
-import { sendEmail } from "../../../core/utils/email.service.js"; // We'll add SMS later
-import { ApiError } from "../../../core/errors/ApiError.js";
+import { sendEmail } from "../../../core/utils/email.service.js";
 import { logger } from "../../../core/logger/logger.js";
 import { NotificationType, NotificationChannel, SendNotificationDto } from "../types.js";
 
@@ -22,42 +18,36 @@ class NotificationService {
    * Send notification with preference check
    */
   async send(dto: SendNotificationDto) {
-    const preferences = await prisma.notificationPreference.findUnique({
-      where: { userId: dto.userId },
-    });
-
     const channels = dto.channels || this.getDefaultChannels(dto.type);
 
-    const allowedChannels = channels.filter(channel => {
-      if (!preferences) return true; // Default allow all
-      switch (channel) {
-        case "EMAIL": return preferences.emailEnabled;
-        case "SMS": return preferences.smsEnabled;
-        case "IN_APP": return preferences.inAppEnabled;
-        case "PUSH": return preferences.pushEnabled;
-        default: return true;
-      }
-    });
+    // Check per-channel preferences
+    const allowedChannels: NotificationChannel[] = [];
+    for (const channel of channels) {
+      const pref = await prisma.notificationPreference.findFirst({
+        where: { userId: dto.userId, channel, enabled: false },
+      });
+      if (!pref) allowedChannels.push(channel); // Not explicitly disabled = allowed
+    }
 
     if (allowedChannels.length === 0) {
       logger.info({ userId: dto.userId, type: dto.type }, "Notification skipped — all channels disabled");
       return;
     }
 
-    // Create in-app record
+    // Create in-app record — map local type to Prisma schema type
     await prisma.notification.create({
       data: {
         userId: dto.userId,
-        type: dto.type,
+        type: PrismaNotificationType.SYSTEM,
         title: dto.title,
         message: dto.message,
-        data: dto.data ? JSON.parse(JSON.stringify(dto.data)) : undefined,
+        metadata: dto.data ? JSON.parse(JSON.stringify(dto.data)) : undefined,
         read: false,
       },
     });
 
     // Send email if allowed
-    if (allowedChannels.includes("EMAIL")) {
+    if (allowedChannels.includes(NotificationChannel.EMAIL)) {
       const user = await prisma.user.findUnique({
         where: { id: dto.userId },
         select: { email: true, name: true },
@@ -68,12 +58,10 @@ class NotificationService {
           to: user.email,
           subject: dto.title,
           text: dto.message,
-          html: `<p>${dto.message}</p>`, // Simple template
+          html: `<p>${dto.message}</p>`,
         });
       }
     }
-
-    // SMS/PUSH to be added later
 
     logger.info(
       { userId: dto.userId, type: dto.type, channels: allowedChannels },
@@ -85,12 +73,12 @@ class NotificationService {
     switch (type) {
       case NotificationType.DUES_OVERDUE:
       case NotificationType.DUES_REMINDER:
-        return ["EMAIL", "SMS", "IN_APP"];
+        return [NotificationChannel.EMAIL, NotificationChannel.SMS, NotificationChannel.IN_APP];
       case NotificationType.PROPOSAL_PASSED:
       case NotificationType.PROJECT_MILESTONE_VERIFIED:
-        return ["EMAIL", "IN_APP"];
+        return [NotificationChannel.EMAIL, NotificationChannel.IN_APP];
       default:
-        return ["IN_APP"];
+        return [NotificationChannel.IN_APP];
     }
   }
 
@@ -100,7 +88,7 @@ class NotificationService {
   async markAsRead(userId: string, notificationId: string) {
     await prisma.notification.updateMany({
       where: { id: notificationId, userId },
-      data: { read: true, readAt: new Date() },
+      data: { read: true },
     });
   }
 

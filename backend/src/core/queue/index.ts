@@ -11,7 +11,7 @@
  */
 
 import { Queue, Worker, QueueEvents } from "bullmq";
-import IORedis from "ioredis";
+import { Redis as IORedis } from "ioredis";
 import { logger } from "../logger/logger.js";
 
 // ─────────────────────────────────────────────
@@ -56,7 +56,6 @@ export function createQueue<T = any>(name: string): Queue<T> {
       backoff: { type: "exponential", delay: 1000 },
       removeOnComplete: { age: 3600 * 24 * 7 },  // 1 week
       removeOnFail: { count: 1000 },  // keep last 1000 failed jobs
-      failParentOnFailure: true,      // if this job fails, fail any parent
     },
   });
 }
@@ -150,7 +149,7 @@ export const deadLetterQueueEvents = new QueueEvents("dead-letter", {
 // Optional: global event listeners (example)
 // ─────────────────────────────────────────────
 
-economyQueueEvents.on("failed", ({ jobId, failedReason }) => {
+economyQueueEvents.on("failed" as any, ({ jobId, failedReason }: { jobId: string; failedReason: string }) => {
   logger.warn(
     { operationType: "QUEUE_EVENT", queue: "economy", jobId, failedReason },
     "Job moved to failed state"

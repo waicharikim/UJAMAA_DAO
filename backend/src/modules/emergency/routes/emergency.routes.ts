@@ -50,19 +50,18 @@ router.post(
       const { alertId } = req.params;
       const alert = await prisma.emergencyAlert.findUnique({
         where: { id: alertId },
-        select: { locationWardId: true },
+        select: { location: true },
       });
 
       if (!alert) return false;
 
       const isWardAdmin = await roleService.hasLocationRole(
-        req.user!.userId,
-        "WARD",
-        alert.locationWardId,
+        (req as any).user!.userId,
+        alert.location,
         "WARD_ADMIN"
       );
 
-      const isVerifier = await roleService.isVerifier(req.user!.userId, alert.locationWardId);
+      const isVerifier = await roleService.isVerifier((req as any).user!.userId, alert.location);
 
       return isWardAdmin || isVerifier;
     },

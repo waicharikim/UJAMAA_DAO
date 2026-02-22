@@ -13,6 +13,8 @@
 
 import { prisma } from "../../../core/database/client.js";
 import { participationRightsService } from "../../economy/services/participationRights.service.js";
+import { ParticipationRightsReason } from "../../economy/types.js";
+import { VoluntaryGroupType, LocationScope } from "@prisma/client";
 import { ApiError } from "../../../core/errors/ApiError.js";
 import { logger } from "../../../core/logger/logger.js";
 import { VOLUNTARY_GROUP_PR_COST } from "../types.js";
@@ -43,7 +45,7 @@ class GroupService {
     await participationRightsService.spend(
       userId,
       VOLUNTARY_GROUP_PR_COST,
-      "GROUP_CREATED",
+      ParticipationRightsReason.GROUP_CREATED,
       { groupType: dto.voluntaryType }
     );
 
@@ -51,10 +53,9 @@ class GroupService {
       data: {
         name: dto.name,
         description: dto.description,
-        avatarUrl: dto.avatarUrl,
         isSystemGroup: false,
-        voluntaryType: dto.voluntaryType,
-        creatorId: userId,
+        locationScope: LocationScope.WARD,
+        voluntaryType: dto.voluntaryType as VoluntaryGroupType,
       },
     });
 

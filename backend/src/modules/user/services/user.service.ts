@@ -17,6 +17,7 @@
  */
 
 import { prisma } from "../../../core/database/client.js";
+import { Prisma } from "@prisma/client";
 import { ApiError } from "../../../core/errors/ApiError.js";
 import { logger } from "../../../core/logger/logger.js";
 import { eventBus } from "../../../core/utils/eventBus.js";
@@ -75,7 +76,7 @@ class UserService {
     const impactBreakdown = { breakdown: [], totals: {} };
     const globalIP = user.globalImpactPoints || 0;
     const primaryImpactPoints = user.primaryWardId
-      ? { ward: 0, tier: "BRONZE" }
+      ? { ward: { points: 0, tier: "BRONZE" } }
       : null;
 
     const primaryHierarchy = user.primaryWard
@@ -152,7 +153,7 @@ class UserService {
     if (dto.name) data.name = dto.name;
     if (dto.avatarUrl) data.avatarUrl = dto.avatarUrl;
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       if (dto.privacySettings) {
         await tx.userPrivacySettings.upsert({
           where: { userId },
@@ -220,7 +221,7 @@ class UserService {
       throw ApiError.validationError("One or more industries are invalid");
     }
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.userIndustry.deleteMany({ where: { userId } });
 
       await tx.userIndustry.createMany({
@@ -281,7 +282,7 @@ class UserService {
       throw ApiError.validationError("One or more goods/services are invalid or inactive");
     }
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.userGoodsService.deleteMany({ where: { userId } });
 
       await tx.userGoodsService.createMany({
@@ -373,7 +374,7 @@ class UserService {
         oldWardId: user.primaryWardId,
         newPrimaryWardId: dto.newPrimaryWardId,
         reason: dto.reason,
-        proofUrl: dto.proofUrl,
+        proofUrl: dto.proofUrl ?? "",
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
@@ -621,8 +622,8 @@ class UserService {
     return { amount: PAYMENT_AMOUNT_KES };
   }
 
-  private async completeCommunityVerification(userId: string) {
-    await prisma.$transaction(async (tx) => {
+  async completeCommunityVerification(userId: string) {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.user.update({
         where: { id: userId },
         data: {
@@ -666,7 +667,7 @@ class UserService {
     });
 
     return {
-      status: request.status,
+      status: request.status as VerificationStatusResponse["status"],
       vouchesReceived,
       vouchesNeeded: VOUCH_THRESHOLD,
       expiresAt: request.expiresAt,
@@ -726,7 +727,7 @@ class UserService {
         data: {
           status: "EXPIRED",
           reviewedAt: new Date(),
-          reviewReason: "Expired due to inactivity",
+          rejectionReason: "Expired due to inactivity",
         },
       });
 
@@ -762,7 +763,7 @@ class UserService {
         data: {
           status: "PAYMENT_PENDING",
           reviewedAt: new Date(),
-          reviewReason: "Vouching period expired",
+          rejectionReason: "Vouching period expired",
         },
       });
 

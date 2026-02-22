@@ -3,15 +3,18 @@
  * @description
  * Proposal Service — Group-Scoped Governance
  *
- * Version: 2.0 — December 2025
+ * Version: 2.1 — February 2026
+ * Updated: Align with actual Prisma schema (GroupMemberVote, ProposalStatus, budget)
  */
 
+import { ProposalStatus, ProposalType } from "@prisma/client";
 import { prisma } from "../../../core/database/client.js";
 import { participationRightsService } from "../../economy/services/participationRights.service.js";
+import { ParticipationRightsReason } from "../../economy/types.js";
 import { globalImpactPointService } from "../../reputation/service/impactPoint.service.js";
 import { ApiError } from "../../../core/errors/ApiError.js";
 import { logger } from "../../../core/logger/logger.js";
-import { PR_COST_BY_SCOPE, IP_PERCENTILE_THRESHOLD, CastVoteDto, CreateProposalDto } from "../types.js";
+import { PR_COST_BY_SCOPE, IP_PERCENTILE_THRESHOLD, CastVoteDto, CreateProposalDto, VoteOption } from "../types.js";
 
 class ProposalService {
   /**
@@ -37,20 +40,18 @@ class ProposalService {
     const prCost = PR_COST_BY_SCOPE[scope as keyof typeof PR_COST_BY_SCOPE] || 50;
     const requiredPercentile = IP_PERCENTILE_THRESHOLD[scope as keyof typeof IP_PERCENTILE_THRESHOLD] || 1.0;
 
-    // IP percentile check
     const ips = group.members.map(m => m.user.globalImpactPoints);
     const userRank = ips.filter(ip => ip > membership.user.globalImpactPoints).length + 1;
     const percentile = userRank / ips.length;
 
     if (percentile > requiredPercentile) {
-      throw ApiError.forbidden(`You need to be in the top ${(requiredPercentile * 100).toFixed(0)}% of IP in this group to create a proposal`);
+      throw ApiError.forbidden(`You need to be in the top ${(requiredPercentile * 100).toFixed(0)}% of IP in this group`);
     }
 
-    // Spend PR
     await participationRightsService.spend(
       userId,
       prCost,
-      "PROPOSAL_CREATED",
+      ParticipationRightsReason.PROPOSAL_CREATED,
       { groupId: dto.groupId, scope, title: dto.title }
     );
 
@@ -60,16 +61,13 @@ class ProposalService {
         creatorId: userId,
         title: dto.title,
         description: dto.description,
-        fundingAmountKes: dto.fundingAmountKes,
-        isEmergency: dto.isEmergency,
-        status: "DRAFT",
+        budget: dto.fundingAmountKes,
+        proposalType: dto.isEmergency ? ProposalType.EMERGENCY : ProposalType.COMMUNITY_INITIATIVE,
+        status: ProposalStatus.DRAFT,
       },
     });
 
-    logger.info(
-      { userId, groupId: dto.groupId, scope, prCost, percentile },
-      "Proposal created"
-    );
+    logger.info({ userId, groupId: dto.groupId, scope, prCost, percentile }, "Proposal created");
 
     return proposal;
   }
@@ -85,16 +83,18 @@ class ProposalService {
 
     if (!proposal) throw ApiError.notFound("Proposal");
     if (proposal.creatorId !== userId) throw ApiError.forbidden("Only creator can start voting");
-    if (proposal.status !== "DRAFT") throw ApiError.badRequest("Proposal not in draft");
+    if (proposal.status !== ProposalStatus.DRAFT) throw ApiError.badRequest("Proposal not in draft");
 
-    const days = proposal.isEmergency ? 3 : proposal.group.locationScope === "NATIONAL" ? 21 : 7;
+    const isEmergency = proposal.proposalType === ProposalType.EMERGENCY;
+    const groupScope = proposal.group?.locationScope;
+    const days = isEmergency ? 3 : groupScope === "NATIONAL" ? 21 : 7;
     const startsAt = new Date();
     const endsAt = new Date(startsAt.getTime() + days * 24 * 60 * 60 * 1000);
 
     await prisma.proposal.update({
       where: { id: proposalId },
       data: {
-        status: "VOTING",
+        status: ProposalStatus.VOTING,
         votingStartsAt: startsAt,
         votingEndsAt: endsAt,
       },
@@ -115,25 +115,28 @@ class ProposalService {
     });
 
     if (!proposal) throw ApiError.notFound("Proposal");
-    if (proposal.status !== "VOTING") throw ApiError.badRequest("Voting not active");
-    if (!proposal.group.members.length) throw ApiError.forbidden("Not a member");
+    if (proposal.status !== ProposalStatus.VOTING) throw ApiError.badRequest("Voting not active");
+    if (!proposal.group || !proposal.group.members.length) throw ApiError.forbidden("Not a member");
 
-    const existing = await prisma.proposalVote.findUnique({
-      where: { userId_proposalId: { userId, proposalId: dto.proposalId } },
+    const groupId = proposal.groupId!;
+
+    const existing = await prisma.groupMemberVote.findUnique({
+      where: { groupId_memberId_proposalId: { groupId, memberId: userId, proposalId: dto.proposalId } },
     });
 
     if (existing) throw ApiError.conflict("Already voted");
 
-    await participationRightsService.spend(userId, 5, "VOTED", { proposalId: dto.proposalId });
+    await participationRightsService.spend(userId, 5, ParticipationRightsReason.VOTED, { proposalId: dto.proposalId });
 
     const weight = await globalImpactPointService.getTotal(userId);
 
-    await prisma.proposalVote.create({
+    await prisma.groupMemberVote.create({
       data: {
-        userId,
+        groupId,
+        memberId: userId,
         proposalId: dto.proposalId,
-        option: dto.option,
-        weight,
+        vote: dto.option === VoteOption.YES,
+        voteWeight: weight,
       },
     });
 
@@ -152,16 +155,16 @@ class ProposalService {
     });
 
     if (!proposal) throw ApiError.notFound("Proposal");
-    if (proposal.status !== "VOTING") return;
+    if (proposal.status !== ProposalStatus.VOTING) return;
 
-    const totalEligible = await prisma.groupMember.count({ where: { groupId: proposal.groupId } });
-    const totalVotes = proposal.votes.reduce((sum, v) => sum + v.weight, 0);
-    const yesVotes = proposal.votes.filter(v => v.option === "YES").reduce((sum, v) => sum + v.weight, 0);
+    const totalEligible = await prisma.groupMember.count({ where: { groupId: proposal.groupId ?? undefined } });
+    const totalVoteWeight = proposal.votes.reduce((sum, v) => sum + v.voteWeight, 0);
+    const yesWeight = proposal.votes.filter(v => v.vote === true).reduce((sum, v) => sum + v.voteWeight, 0);
 
-    const quorum = totalVotes / totalEligible >= 0.4; // from config later
-    const approved = yesVotes / totalVotes >= 0.5;
+    const quorum = totalVoteWeight / totalEligible >= 0.4;
+    const approved = totalVoteWeight > 0 && yesWeight / totalVoteWeight >= 0.5;
 
-    const newStatus = quorum && approved ? "PASSED" : "FAILED";
+    const newStatus = quorum && approved ? ProposalStatus.APPROVED : ProposalStatus.REJECTED;
 
     await prisma.proposal.update({
       where: { id: proposalId },

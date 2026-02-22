@@ -50,7 +50,12 @@ export type SecurityEventType =
   // Suspicious Activity
   | "SUSPICIOUS_ACTIVITY"
   | "ACCOUNT_TAKEOVER_ATTEMPT"
-  | "SESSION_HIJACK_ATTEMPT";
+  | "SESSION_HIJACK_ATTEMPT"
+
+  // Authorization / Role Events
+  | "ROLE_VIOLATION"
+  | "GEOGRAPHIC_VIOLATION"
+  | "ECONOMIC_FRAUD";
 
 /**
  * Map HTTP status codes to security event types
@@ -103,6 +108,11 @@ export function getEventSeverity(eventType: SecurityEventType): "LOW" | "MEDIUM"
     TWO_FACTOR_LOCKOUT: "CRITICAL",
     ACCOUNT_TAKEOVER_ATTEMPT: "CRITICAL",
     SESSION_HIJACK_ATTEMPT: "CRITICAL",
+
+    // Authorization / Role Events
+    ROLE_VIOLATION: "MEDIUM",
+    GEOGRAPHIC_VIOLATION: "HIGH",
+    ECONOMIC_FRAUD: "HIGH",
   };
   
   return severityMap[eventType] || "MEDIUM";

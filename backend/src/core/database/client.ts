@@ -26,7 +26,7 @@ if (env.NODE_ENV !== 'production') {
 }
 
 // Optional: Query logging in development
-if (env.NODE_ENV === 'development' && env.LOG_QUERIES === 'true') {
+if (env.NODE_ENV === 'development' && process.env['LOG_QUERIES'] === 'true') {
   prisma.$extends({
     query: {
       async $allOperations({ operation, args, query }) {
@@ -47,9 +47,8 @@ if (env.NODE_ENV === 'development' && env.LOG_QUERIES === 'true') {
   });
 }
 
-prisma.$on('error', (e: any) => {
-  logger.error({ operationType: 'DB_ERROR' }, 'Prisma Client Error', e);
-});
+// Note: prisma.$on('error') is not available with the PrismaPg adapter
+// Error handling is done via pool error events and Prisma's built-in error handling
 
 // Connect on startup
 async function connectDB() {

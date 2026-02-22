@@ -10,6 +10,7 @@
  */
 
 import { prisma } from "../../../core/database/client.js";
+import { Prisma } from "@prisma/client";
 import { logger } from "../../../core/logger/logger.js";
 import { ApiError } from "../../../core/errors/ApiError.js";
 
@@ -77,7 +78,7 @@ class GroupMembershipService {
         );
       }
 
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         const enrollmentPromises = [];
 
         // Primary Ward Group

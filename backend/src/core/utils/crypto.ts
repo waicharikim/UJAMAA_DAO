@@ -25,13 +25,7 @@ import { env } from "./env.js"; // Import environment variables
 // ============================================================================
 
 // Strong defaults — configurable via environment
-const BCRYPT_SALT_ROUNDS = (() => {
-  const rounds = parseInt(env.BCRYPT_SALT_ROUNDS || "12", 10);
-  if (rounds < 10 || rounds > 15) {
-    throw new Error("BCRYPT_SALT_ROUNDS must be between 10 and 15");
-  }
-  return rounds;
-})();
+const BCRYPT_SALT_ROUNDS = env.BCRYPT_SALT_ROUNDS;
 
 // AES-256-GCM encryption defaults
 const ALGORITHM = "aes-256-gcm";

@@ -15,6 +15,7 @@
 
 import { Response } from "express";
 import { AuthRequest } from "../../../core/types/Ujamaadao.types.js";
+import { prisma } from "../../../core/database/client.js";
 import { participationRightsService } from "../services/participationRights.service.js";
 import { duesService } from "../services/dues.service.js";
 import { commitmentService } from "../services/commitment.service.js";
@@ -64,7 +65,7 @@ export async function getPRBalance(req: AuthRequest, res: Response) {
 export async function getDuesHistory(req: AuthRequest, res: Response) {
   const userId = req.user!.userId;
 
-  const status = await duesService.getUserDuesStatus(userId);
+  const status = await duesService.getUserCommitments(userId);
 
   sendSuccess(
     res,
@@ -102,7 +103,7 @@ export async function optInDuesCommitment(req: AuthRequest, res: Response) {
   const userId = req.user!.userId;
   const { tier, startPeriod, durationMonths } = req.body;
 
-  const commitment = await commitmentService.createDuesCommitment(
+  const commitment = await duesService.createDuesCommitment(
     userId,
     tier as DuesTier,
     startPeriod,

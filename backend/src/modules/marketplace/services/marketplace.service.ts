@@ -3,13 +3,11 @@
  * @description
  * Marketplace Service — Discovery Platform (No Transactions)
  *
- * Users list what they offer/request
- * Others browse and contact directly
- * No payment processing, no liability
- *
- * Version: 2.0 — December 2025
+ * Version: 2.1 — February 2026
+ * Updated: Align with actual Prisma schema field names
  */
 
+import { HolderType, ListingStatus } from "@prisma/client";
 import { prisma } from "../../../core/database/client.js";
 import { ApiError } from "../../../core/errors/ApiError.js";
 import { logger } from "../../../core/logger/logger.js";
@@ -20,33 +18,16 @@ class MarketplaceService {
    * Create listing (offer or request)
    */
   async createListing(userId: string, dto: CreateListingDto) {
-    const goodsService = await prisma.goodsService.findUnique({
-      where: { id: dto.goodsServiceId },
-    });
-
-    if (!goodsService) throw ApiError.notFound("Goods/Service");
-
-    // Check user has this in UserGoodsService
-    const userGoods = await prisma.userGoodsService.findFirst({
-      where: {
-        userId,
-        goodsServiceId: dto.goodsServiceId,
-        [dto.type === "OFFER" ? "canProvide" : "canRequest"]: true,
-      },
-    });
-
-    if (!userGoods) throw ApiError.forbidden(`You cannot ${dto.type.toLowerCase()} this`);
-
     const listing = await prisma.marketplaceListing.create({
       data: {
-        userId,
-        goodsServiceId: dto.goodsServiceId,
+        sellerUserId: userId,
+        sellerType: HolderType.USER,
         title: dto.title,
         description: dto.description,
-        priceGuideKes: dto.priceGuideKes,
-        quantity: dto.quantity,
-        type: dto.type,
-        isActive: true,
+        price: dto.priceGuideKes ?? 0,
+        quantity: dto.quantity ?? 1,
+        listingType: dto.type ?? "OFFER",
+        status: ListingStatus.ACTIVE,
       },
     });
 
@@ -61,27 +42,21 @@ class MarketplaceService {
   async searchListings(dto: SearchListingsDto) {
     const skip = ((dto.page || 1) - 1) * (dto.limit || 20);
 
-    const where: any = { isActive: true };
+    const where: any = { status: ListingStatus.ACTIVE };
 
-    if (dto.goodsServiceId) where.goodsServiceId = dto.goodsServiceId;
-    if (dto.type) where.type = dto.type;
-    if (dto.wardId) {
-      where.user = { primaryWardId: dto.wardId };
-    }
+    if (dto.wardId) where.wardId = dto.wardId;
 
     const [listings, total] = await Promise.all([
       prisma.marketplaceListing.findMany({
         where,
         include: {
-          user: {
+          sellerUser: {
             select: {
               id: true,
               name: true,
               phoneNumber: true,
-              primaryWard: { select: { name: true } },
             },
           },
-          goodsService: { select: { name: true } },
         },
         orderBy: { createdAt: "desc" },
         skip,
@@ -102,26 +77,24 @@ class MarketplaceService {
   }
 
   /**
-   * Get single listing with seller contact
+   * Get single listing
    */
   async getListing(listingId: string) {
     const listing = await prisma.marketplaceListing.findUnique({
       where: { id: listingId },
       include: {
-        user: {
+        sellerUser: {
           select: {
             id: true,
             name: true,
             phoneNumber: true,
             email: true,
-            primaryWard: { select: { name: true } },
           },
         },
-        goodsService: true,
       },
     });
 
-    if (!listing || !listing.isActive) throw ApiError.notFound("Listing");
+    if (!listing || listing.status !== ListingStatus.ACTIVE) throw ApiError.notFound("Listing");
 
     return listing;
   }

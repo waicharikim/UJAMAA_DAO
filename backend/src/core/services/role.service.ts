@@ -221,7 +221,7 @@ class RoleService {
     return this.getCached(cacheKey, async () => {
       try {
         const group = await prisma.group.findFirst({
-          where: { locationScope: "WARD", locationScopeId: wardId },
+          where: { locationScope: "WARD", wardId },
           select: { id: true },
         });
 
@@ -281,10 +281,10 @@ class RoleService {
       try {
         const project = await prisma.project.findUnique({
           where: { id: projectId },
-          select: { createdById: true },
+          select: { ownerUserId: true },
         });
 
-        const isLeader = project?.createdById === userId;
+        const isLeader = project?.ownerUserId === userId;
 
         logger.debug(
           {

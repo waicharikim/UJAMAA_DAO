@@ -119,8 +119,7 @@ export const authorize = (options: UjamaadaoAuthorizeOptions) => {
           `Required: ${verificationLevel}, Found: ${user.verificationLevel}`,
           {
             userId: user.userId,
-            verificationLevel: user.verificationLevel,
-            metadata: { requiredLevel: verificationLevel, correlationId },
+            metadata: { verificationLevel: user.verificationLevel, requiredLevel: verificationLevel, correlationId },
           }
         );
         const error = ApiError.insufficientVerification(
@@ -223,7 +222,7 @@ export const authorize = (options: UjamaadaoAuthorizeOptions) => {
             "GEOGRAPHIC_VIOLATION",
             "HIGH",
             "Custom scope check failed",
-            { userId: user.userId, geographicContext: req.geographicContext, metadata: { correlationId } }
+            { userId: user.userId, metadata: { geographicContext: req.geographicContext, correlationId } }
           );
           const error = ApiError.geographicError("Invalid geographic scope", req.geographicContext, correlationId);
           res.status(error.statusCode).json(error.toJSON());

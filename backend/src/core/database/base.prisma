@@ -109,6 +109,9 @@ model Ward {
   // Marketplace module
   marketplaceListings MarketplaceListing[]
 
+  // Reputation module
+  locationImpacts UserLocationImpact[] @relation("WardLocationImpacts")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -273,6 +276,7 @@ model User {
   notifications             Notification[]
   notificationPreferences   NotificationPreference[]
   auditLogs                 UserAudit[]
+  auditLogEntries           AuditLog[]                 @relation("UserAuditLog")
   consents                  UserConsent[]
   feedback                  PlatformFeedback[]
 
@@ -284,6 +288,10 @@ model User {
   // ---- Emergency module ----
   emergencyAlerts           EmergencyAlert[]
   emergencyResponses        EmergencyResponse[]
+
+  // ---- Reputation module ----
+  impactPointLogs           ImpactPointLog[]       @relation("UserImpactPointLogs")
+  locationImpacts           UserLocationImpact[]   @relation("UserLocationImpacts")
 
   // ---- System ----
   updatedConfigs            SystemConfiguration[]  @relation("ConfigUpdater")

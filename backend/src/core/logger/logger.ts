@@ -69,14 +69,14 @@ const pinoConfig: LoggerOptions = {
     : undefined,
 };
 
-const baseLogger = pino(pinoConfig);
+const baseLogger = (pino as any)(pinoConfig);
 
 // ============================================================================
 // AUDIT LOGGER
 // ============================================================================
 
 const auditLogger = env.NODE_ENV === 'production' && env.AUDIT_LOG_FILE
-  ? pino({
+  ? (pino as any)({
       ...pinoConfig,
       level: 'info',
       transport: {

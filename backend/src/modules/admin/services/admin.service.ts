@@ -17,6 +17,7 @@
  */
 
 import { prisma } from "../../../core/database/client.js";
+import { Prisma } from "@prisma/client";
 import { participationRightsService } from "../../economy/services/participationRights.service.js";
 import { groupMembershipService } from "../../community/services/groupMembership.service.js";
 import { ApiError } from "../../../core/errors/ApiError.js";
@@ -37,7 +38,7 @@ class AdminService {
     approved: boolean,
     reason?: string
   ) {
-    return prisma.$transaction(async (tx) => {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const request = await tx.residenceChangeRequest.findUnique({
         where: { id: requestId },
         include: { user: true },
@@ -52,9 +53,9 @@ class AdminService {
         where: { id: requestId },
         data: {
           status: newStatus,
-          reviewedById: adminId,
+          reviewedBy: adminId,
           reviewedAt: new Date(),
-          reviewReason: reason,
+          rejectionReason: approved ? null : reason,
         },
       });
 
@@ -69,10 +70,9 @@ class AdminService {
         });
 
         // Sync group memberships
-        await groupMembershipService.updatePrimaryResidence(
+        await groupMembershipService.updateResidenceGroups(
           request.userId,
-          request.newPrimaryWardId,
-          request.oldWardId || undefined
+          request.newPrimaryWardId
         );
       }
 
@@ -96,11 +96,9 @@ class AdminService {
     adminId: string,
     requestId: string,
     approved: boolean,
-    reason?: string,
-    requestMoreInfo: boolean = false,
-    requestedFields?: string[]
+    reason?: string
   ) {
-    return prisma.$transaction(async (tx) => {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const request = await tx.verificationRequest.findUnique({
         where: { id: requestId },
         include: { user: true },
@@ -112,21 +110,15 @@ class AdminService {
         throw ApiError.badRequest("Request not in reviewable state");
       }
 
-      const newStatus = approved
-        ? "APPROVED"
-        : requestMoreInfo
-        ? "MORE_INFO_NEEDED"
-        : "REJECTED";
+      const newStatus = approved ? "APPROVED" : "REJECTED";
 
       await tx.verificationRequest.update({
         where: { id: requestId },
         data: {
           status: newStatus,
-          reviewedById: adminId,
+          reviewedBy: adminId,
           reviewedAt: new Date(),
           rejectionReason: approved ? null : reason,
-          requestedMoreInfo: requestMoreInfo,
-          requestedFields: requestedFields || null,
         },
       });
 
@@ -141,7 +133,6 @@ class AdminService {
           requestId,
           status: newStatus,
           reason,
-          requestMoreInfo,
         },
         `Community verification request ${newStatus.toLowerCase()}`
       );
@@ -166,7 +157,7 @@ class AdminService {
   ) {
     if (amount <= 0) throw ApiError.badRequest("Amount must be positive");
 
-    return prisma.$transaction(async (tx) => {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const user = await tx.user.findUnique({ where: { id: userId } });
       if (!user) throw ApiError.notFound("User");
 
@@ -219,7 +210,7 @@ class AdminService {
     reason: string,
     durationDays?: number
   ) {
-    return prisma.$transaction(async (tx) => {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const user = await tx.user.findUnique({ where: { id: userId } });
       if (!user) throw ApiError.notFound("User");
 
@@ -230,11 +221,7 @@ class AdminService {
       await tx.user.update({
         where: { id: userId },
         data: {
-          isSuspended: suspend,
-          suspendedUntil,
-          suspensionReason: reason,
-          suspendedById: adminId,
-          suspendedAt: suspend ? new Date() : null,
+          status: suspend ? "SUSPENDED" : "ACTIVE",
         },
       });
 
@@ -242,11 +229,7 @@ class AdminService {
         // Force logout all active sessions
         await tx.session.updateMany({
           where: { userId, revoked: false },
-          data: {
-            revoked: true,
-            revokedAt: new Date(),
-            revokedBy: "ADMIN_SUSPEND",
-          },
+          data: { revoked: true },
         });
       }
 
@@ -363,9 +346,9 @@ class AdminService {
    */
   async updateSystemConfig(adminId: string, key: string, value: string) {
     const config = await prisma.systemConfiguration.upsert({
-      where: { configKey: key },
-      update: { configValue: value, updatedById: adminId },
-      create: { configKey: key, configValue: value, updatedById: adminId },
+      where: { key },
+      update: { value, updatedBy: adminId },
+      create: { key, value, updatedBy: adminId, category: "general", dataType: "string" },
     });
 
     logger.info(
@@ -374,6 +357,43 @@ class AdminService {
     );
 
     return config;
+  }
+
+  // ============================================================================
+  // SECURITY EVENTS (ADMIN VIEW)
+  // ============================================================================
+
+  async resolveSecurityEvent(
+    adminId: string,
+    eventId: string,
+    resolved: boolean,
+    resolutionNotes?: string,
+    _actionTaken?: string
+  ) {
+    const event = await prisma.securityEvent.update({
+      where: { id: eventId },
+      data: {
+        resolved,
+        resolvedAt: resolved ? new Date() : null,
+        resolvedBy: resolved ? adminId : null,
+        resolutionNotes: resolutionNotes || null,
+      },
+    });
+
+    logger.info(
+      { operationType: "ADMIN_SECURITY", adminId, eventId, resolved },
+      "Security event resolved"
+    );
+
+    return event;
+  }
+
+  async getUserSecurityEvents(userId: string) {
+    return prisma.securityEvent.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    });
   }
 }
 

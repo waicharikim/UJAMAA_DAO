@@ -192,10 +192,11 @@ const failedJobHandler = async (job: any, err: Error) => {
   }
 };
 
-// Attach the handler to every queue
-economyQueue.on("failed", failedJobHandler);
-userCleanupQueue.on("failed", failedJobHandler);
-// Add .on('failed', failedJobHandler) for any new queues you create later
+// NOTE: "failed" events are emitted by Worker, not Queue.
+// Error handling is done inside each worker's catch block above.
+// The failedJobHandler is kept for manual invocation / future Worker-level attachment.
+// economyQueue.on("failed", failedJobHandler);  // Queue doesn't emit "failed"
+// userCleanupQueue.on("failed", failedJobHandler);
 
 /**
  * Send alert when a job fails permanently
@@ -222,7 +223,7 @@ Time: ${info.timestamp}
 Check dead-letter queue or dashboard: /admin/queues
   `.trim();
 
-  logger.critical({ alert: message }, "Job failure alert triggered");
+  logger.error({ operationType: "JOB_FAILURE", metadata: { alert: message } }, "Job failure alert triggered");
 
   // ── EMAIL ALERT (uncomment & configure Nodemailer or your email lib) ──
   /*

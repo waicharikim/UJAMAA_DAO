@@ -21,7 +21,7 @@ export * from "./types.js";
 export * as authValidators from "./validators/auth.validators.js";
 
 // Routes
-export { default as authRoutes } from "./routes/auth.routes.minimal.js";
+export { default as authRoutes } from "./routes/auth.routes.js";
 
 /**
  * USAGE IN MAIN APP:

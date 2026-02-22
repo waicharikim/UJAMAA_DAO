@@ -44,7 +44,9 @@ const MODULE_ORDER = [
   "marketplace",  // depends on community (Group)
   "education",    // standalone
   "emergency",    // depends on community (Group)
+  "reputation",   // depends on user, community (Ward back-relations)
   "notifications",// depends on user; includes audit/consent/log models
+  "audit",        // depends on user
   "admin",        // depends on all — admin views across all modules (no schema yet)
 ];
 

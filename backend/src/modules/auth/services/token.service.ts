@@ -22,7 +22,7 @@
 import { prisma } from "../../../core/database/client.js";
 import { ApiError } from "../../../core/errors/ApiError.js";
 import { logger } from "../../../core/logger/logger.js";
-import { signJwtToken as signJwt } from "../../../core/utils/jwt.service.js";
+import { signMagicLinkToken, JwtPayload } from "../../../core/utils/jwt.service.js";
 import { generateRandomHex } from "../../../core/utils/crypto.js";
 import { env } from "../../../core/utils/env.js";
 
@@ -67,11 +67,11 @@ export class TokenService {
    * Create magic link token (short-lived JWT)
    * Contains minimal payload (userId, email)
    */
-  async createMagicLinkToken(payload: { userId: string; email: string }): Promise<string> {
-    const token = signJwt(payload, `${TOKEN_CONFIG.magicLinkExpiryMinutes}m`);
+  async createMagicLinkToken(payload: JwtPayload): Promise<string> {
+    const token = signMagicLinkToken(payload);
 
     logger.info(
-      { operationType: "TOKEN_CREATE", type: "magic-link", userId: payload.userId },
+      { operationType: "TOKEN_CREATE", type: "magic-link", userId: payload.sub },
       "Magic link token created"
     );
 
@@ -81,24 +81,10 @@ export class TokenService {
   /**
    * Create password reset token (DB stored)
    */
-  async createPasswordResetToken(userId: string): Promise<string> {
-    const token = generateRandomHex(32);
-    const expiresAt = new Date(Date.now() + TOKEN_CONFIG.passwordResetExpiryHours * 60 * 60 * 1000);
-
-    await prisma.passwordResetToken.create({
-      data: {
-        userId,
-        token,
-        expiresAt,
-      },
-    });
-
-    logger.info(
-      { operationType: "TOKEN_CREATE", type: "password-reset", userId },
-      "Password reset token created"
-    );
-
-    return token;
+  async createPasswordResetToken(_userId: string): Promise<string> {
+    // Password reset is handled by passwordResetService which stores a tokenHash.
+    // This stub exists for interface compatibility only.
+    throw new Error("Use passwordResetService.requestReset() instead");
   }
 
   // ─────────────────────────────────────────────
@@ -134,25 +120,10 @@ export class TokenService {
    * Validate password reset token
    * One-time use — deletes after validation
    */
-  async validatePasswordResetToken(token: string) {
-    const record = await prisma.passwordResetToken.findUnique({
-      where: { token },
-      include: { user: true },
-    });
-
-    if (!record || record.expiresAt < new Date()) {
-      return null;
-    }
-
-    // One-time use: delete immediately
-    await prisma.passwordResetToken.delete({ where: { token } });
-
-    logger.info(
-      { operationType: "TOKEN_VALIDATE", type: "password-reset", userId: record.userId },
-      "Password reset token validated and deleted"
-    );
-
-    return record.user;
+  async validatePasswordResetToken(_token: string) {
+    // Password reset validation is handled by passwordResetService.verifyResetToken().
+    // This stub exists for interface compatibility only.
+    throw new Error("Use passwordResetService.verifyResetToken() instead");
   }
 
   // ─────────────────────────────────────────────
@@ -208,7 +179,7 @@ export class TokenService {
    */
   async cleanupExpiredPasswordResetTokens(): Promise<number> {
     try {
-      const result = await prisma.passwordResetToken.deleteMany({
+      const result = await prisma.passwordReset.deleteMany({
         where: { expiresAt: { lt: new Date() } },
       });
 
@@ -242,37 +213,9 @@ export class TokenService {
    * Only needed if refresh tokens are stored separately from sessions
    */
   async cleanupOldRefreshTokens(): Promise<number> {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - TOKEN_CONFIG.refreshTokenRetentionDays);
-
-    try {
-      const result = await prisma.refreshToken.deleteMany({
-        where: { expiresAt: { lt: cutoff } },
-      });
-
-      if (result.count > 0) {
-        logger.info(
-          {
-            operationType: "TOKEN_CLEANUP",
-            type: "refresh",
-            count: result.count,
-          },
-          "Old refresh tokens cleaned up"
-        );
-      }
-
-      return result.count;
-    } catch (err) {
-      logger.error(
-        {
-          operationType: "CLEANUP_ERROR",
-          task: "refresh-tokens",
-          error: err instanceof Error ? err.message : String(err),
-        },
-        "Failed to clean up old refresh tokens"
-      );
-      return 0;
-    }
+    // Refresh tokens are stored in Sessions (no separate RefreshToken model).
+    // Session cleanup is handled by sessionService.cleanupExpiredSessions().
+    return 0;
   }
 
   /**

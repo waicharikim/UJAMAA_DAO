@@ -6,8 +6,9 @@
  */
 
 import { eventBus } from "./core/utils/eventBus.js";
+import { logger } from "./core/logger/logger.js";
 import { participationRightsService } from "./modules/economy/services/participationRights.service.js";
-// import other services you need...
+import { PR_CONFIG, ParticipationRightsReason } from "./modules/economy/types.js";
 
 export function registerWorkerListeners() {
   // Example: award PR when verification completes

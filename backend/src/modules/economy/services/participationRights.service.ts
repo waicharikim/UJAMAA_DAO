@@ -10,9 +10,9 @@
  * Updated: Replaced dues penalties with commitment-based logic (dues optional), added event listeners
  */
 
-import { PrismaClient, ParticipationRightsLog } from "@prisma/client";
+import { PrismaClient, Prisma, ParticipationRightsLog } from "@prisma/client";
 import { prisma } from "../../../core/database/client.js";
-import { ParticipationRightsReason, PR_CONFIG, CommitmentStatus, COMMITMENT_CONFIG } from "../types.js";
+import { ParticipationRightsReason, PR_CONFIG, CommitmentStatus, COMMITMENT_CONFIG, CommitmentType } from "../types.js";
 import { ApiError } from "../../../core/errors/ApiError.js";
 import { logger } from "../../../core/logger/logger.js";
 import { eventBus } from "../../../core/utils/eventBus.js";
@@ -51,7 +51,7 @@ class ParticipationRightsService {
   ): Promise<ParticipationRightsLog> {
     if (amount <= 0) throw new Error("Award amount must be positive");
 
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const current = await this.getBalanceWithTx(tx, userId);
       const newBalance = Math.min(current + amount, MAX_BALANCE);
 
@@ -91,7 +91,7 @@ class ParticipationRightsService {
   ): Promise<ParticipationRightsLog> {
     if (amount <= 0) throw new Error("Spend amount must be positive");
 
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const current = await this.getBalanceWithTx(tx, userId);
 
       if (current < amount) {

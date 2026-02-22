@@ -13,6 +13,7 @@
  */
 
 import { prisma } from "../../../core/database/client.js";
+import { Prisma } from "@prisma/client";
 import { sendLoginEmail, sendVerificationEmail } from "../../../core/utils/email.service.js";
 import { tokenService } from "./token.service.js";
 import { sessionService } from "./session.service.js";
@@ -107,7 +108,7 @@ class AuthService {
       }
 
       // Create user in transaction
-      user = await prisma.$transaction(async (tx) => {
+      user = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         const newUser = await tx.user.create({
           data: {
             email,
@@ -244,7 +245,7 @@ class AuthService {
       }
 
       // Complete email verification in transaction
-      user = await prisma.$transaction(async (tx) => {
+      user = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         // 1. Update user verification status
         const updatedUser = await tx.user.update({
           where: { id: user!.id },

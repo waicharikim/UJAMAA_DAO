@@ -40,9 +40,7 @@ export async function reviewCommunityVerification(req: AuthRequest, res: Respons
     adminId,
     dto.requestId,
     dto.approved,
-    dto.reason,
-    dto.requestMoreInfo,
-    dto.requestedFields
+    dto.reason
   );
 
   sendSuccess(res, result, "Community verification reviewed successfully", 200);

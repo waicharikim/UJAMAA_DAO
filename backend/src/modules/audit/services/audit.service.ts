@@ -12,7 +12,7 @@
 import { prisma } from "../../../core/database/client.js";
 import { ApiError } from "../../../core/errors/ApiError.js";
 import { logger } from "../../../core/logger/logger.js";
-import { AuditAction } from "../types.js";
+import { AuditAction, AuditSearchDto } from "../types.js";
 
 class AuditService {
   /**

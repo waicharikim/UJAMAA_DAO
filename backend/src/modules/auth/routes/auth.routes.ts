@@ -124,7 +124,7 @@ router.post(
   buildRateLimiter({
     windowMs: 60 * 1000,
     max: 2,
-    keyGenerator: (req) => req.user?.userId || req.ip,
+    keyGenerator: (req: any) => req.user?.userId || req.ip,
   }),
   validateRequest({ schema: walletLinkSchema, target: 'body' }),
   asyncHandler(linkWallet)
@@ -141,7 +141,7 @@ router.delete(
   buildRateLimiter({
     windowMs: 60 * 1000,
     max: 2,
-    keyGenerator: (req) => req.user?.userId || req.ip,
+    keyGenerator: (req: any) => req.user?.userId || req.ip,
   }),
   asyncHandler(disconnectWallet)
 );
@@ -213,7 +213,7 @@ router.post(
   buildRateLimiter({
     windowMs: 60 * 1000,
     max: 2,
-    keyGenerator: (req) => req.user?.userId || req.ip,
+    keyGenerator: (req: any) => req.user?.userId || req.ip,
   }),
   asyncHandler(enable2FA)
 );
@@ -234,7 +234,7 @@ router.post(
   buildRateLimiter({
     windowMs: 60 * 1000,
     max: 2,
-    keyGenerator: (req) => req.user?.userId || req.ip,
+    keyGenerator: (req: any) => req.user?.userId || req.ip,
   }),
   validateRequest({ schema: twoFactorCodeSchema, target: 'body' }),
   asyncHandler(disable2FA)
@@ -248,7 +248,7 @@ router.post(
   buildRateLimiter({
     windowMs: 60 * 1000,
     max: 2,
-    keyGenerator: (req) => req.user?.userId || req.ip,
+    keyGenerator: (req: any) => req.user?.userId || req.ip,
   }),
   validateRequest({ schema: twoFactorCodeSchema, target: 'body' }),
   asyncHandler(regenerateBackupCodes)
@@ -276,7 +276,7 @@ router.post(
   buildRateLimiter({
     windowMs: 60 * 1000,
     max: 2,
-    keyGenerator: (req) => req.user?.userId || req.ip,
+    keyGenerator: (req: any) => req.user?.userId || req.ip,
   }),
   asyncHandler(revokeAllRefreshTokens)
 );

@@ -101,7 +101,7 @@ const SESSION_CONFIG = {
   expiryMs: 180 * 24 * 60 * 60 * 1000, // 180 days (matches JWT expiry)
   
   // Maximum concurrent sessions per user (0 = unlimited)
-  maxSessionsPerUser: parseInt(env.MAX_ACTIVE_SESSIONS_PER_USER || "5", 10),
+  maxSessionsPerUser: env.MAX_ACTIVE_SESSIONS_PER_USER,
   
   // How old revoked sessions must be before deletion (days)
   revokedSessionRetentionDays: 30,

@@ -12,6 +12,7 @@
 import { ethers } from "ethers";
 import { randomUUID } from "crypto";
 import { prisma } from "../../../core/database/client.js";
+import { Prisma } from "@prisma/client";
 import { ApiError } from "../../../core/errors/ApiError.js";
 import { logger, logSecurityEvent } from "../../../core/logger/logger.js";
 import { signJwtToken, JwtPayload } from "../../../core/utils/jwt.service.js";
@@ -121,10 +122,10 @@ class WalletService {
         "HIGH",
         "Signature does not match wallet address",
         {
-          walletAddress: normalizedAddress,
+          ipAddress: context?.ipAddress,
           metadata: {
+            walletAddress: normalizedAddress,
             recoveredAddress,
-            ipAddress: context?.ipAddress,
             correlationId,
           },
         }
@@ -215,7 +216,7 @@ class WalletService {
 
     // Complete onboarding for first-time wallet users with complete profile
     if (isNewUser || user.verificationLevel === "UNVERIFIED") {
-      user = await prisma.$transaction(async (tx) => {
+      user = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         const updatedUser = await tx.user.update({
           where: { id: user!.id },
           data: {

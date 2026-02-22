@@ -6,6 +6,7 @@
  */
 
 import { Router } from "express";
+import { prisma } from "../../../core/database/client.js";
 import { ProjectController } from "../controllers/project.controller.js";
 import { authenticate } from "../../../core/middleware/auth.middleware.js";
 import { authorize } from "../../../core/middleware/authorize.js";

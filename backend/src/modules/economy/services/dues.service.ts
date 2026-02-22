@@ -13,8 +13,9 @@
  */
 
 import { prisma } from "../../../core/database/client.js";
+import { Prisma } from "@prisma/client";
 import { participationRightsService } from "./participationRights.service.js";
-import { DuesTier, DUES_CONFIG, CommitmentStatus, COMMITMENT_CONFIG } from "../types.js";
+import { DuesTier, DUES_CONFIG, CommitmentStatus, COMMITMENT_CONFIG, CommitmentType, ParticipationRightsReason } from "../types.js";
 import { ApiError } from "../../../core/errors/ApiError.js";
 import { logger } from "../../../core/logger/logger.js";
 
@@ -34,15 +35,16 @@ class DuesService {
       throw ApiError.badRequest("Invalid tier or amount");
     }
 
-    return prisma.$transaction(async (tx) => {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Record payment
       const payment = await tx.duesPayment.create({
         data: {
           userId,
           tier,
-          amountKes,
+          totalAmount: amountKes,
           period,
           mpesaReceipt,
+          paymentMethod: "MPESA",
           status: "COMPLETED",
           paidAt: new Date(),
         },
@@ -52,7 +54,7 @@ class DuesService {
       await participationRightsService.award(
         userId,
         tierConfig.prReward,
-        `DUES_${tier}`,
+        ParticipationRightsReason[`DUES_${tier}` as keyof typeof ParticipationRightsReason],
         { period, tier, amountKes }
       );
 

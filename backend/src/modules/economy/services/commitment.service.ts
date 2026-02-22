@@ -36,8 +36,7 @@ class CommitmentService {
     amountPR?: number,
     frequency?: "MONTHLY" | "ONE_TIME" | "WEEKLY",
     durationMonths?: number,
-    targetId?: string, // Group ID, Project ID, etc.
-    description?: string
+    targetId?: string // Group ID, Project ID, etc.
   ) {
     const endDate = durationMonths
       ? new Date(new Date().setMonth(new Date().getMonth() + durationMonths))
@@ -54,7 +53,6 @@ class CommitmentService {
         endDate,
         status: CommitmentStatus.ACTIVE,
         targetId,
-        description,
       },
     });
 

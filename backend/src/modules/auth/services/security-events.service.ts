@@ -58,7 +58,7 @@ class SecurityEventsService {
           ipAddress: data.ipAddress,
           userAgent: data.userAgent,
           location: data.location,
-          details: data.details || {},
+          metadata: data.details || {},
           resolved: false,
         },
       });
