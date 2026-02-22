@@ -39,7 +39,7 @@ import {
 import {
   AUTH_CLEANUP_JOB_NAME,
   processAuthCleanup,
-} from "./modules/auth/jobs/auth-cleanup.jobs.js";
+} from './modules/auth/jobs/auth-cleanup.jobs.js';
 
 // ─────────────────────────────────────────────
 // Graceful shutdown & error handling
