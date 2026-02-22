@@ -139,10 +139,13 @@ model PasswordReset {
   
   used      Boolean  @default(false)
   usedAt    DateTime?
-  
+
+  ipAddress String?  @db.VarChar(45)
+  userAgent String?  @db.Text
+
   expiresAt DateTime
   createdAt DateTime @default(now())
-  
+
   @@index([tokenHash, used, expiresAt])
   @@index([userId])
   @@index([expiresAt]) // For cleanup
@@ -168,10 +171,13 @@ model TwoFactorAuth {
   enabled                 Boolean  @default(false)
   enabledAt               DateTime?
   disabledAt              DateTime?
-  
+
+  failedAttempts          Int      @default(0)
+  lastFailedAttempt       DateTime?
+
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
-  
+
   @@index([userId, enabled])
   @@map("two_factor_auth")
 }
@@ -268,20 +274,22 @@ model SecurityEvent {
   userId      String?  @db.Uuid // Nullable for failed login attempts
   user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   
-  eventType   String   @db.VarChar(50) // "login_failed", "password_reset", "2fa_disabled", etc.
-  severity    String   @db.VarChar(20) // "low", "medium", "high", "critical"
-  
-  ipAddress   String?  @db.VarChar(45)
-  userAgent   String?  @db.Text
-  location    String?  @db.VarChar(100) // City, Country
-  
-  details     Json?    // Additional context
-  
-  resolved    Boolean  @default(false)
-  resolvedAt  DateTime?
-  resolvedBy  String?  @db.Uuid // Admin user ID
-  
-  createdAt   DateTime @default(now())
+  eventType       String   @db.VarChar(50) // "login_failed", "password_reset", "2fa_disabled", etc.
+  severity        String   @db.VarChar(20) // "low", "medium", "high", "critical"
+  description     String?  @db.Text
+
+  ipAddress       String?  @db.VarChar(45)
+  userAgent       String?  @db.Text
+  location        String?  @db.VarChar(100) // City, Country
+
+  metadata        Json?    // Additional context
+
+  resolved        Boolean  @default(false)
+  resolvedAt      DateTime?
+  resolvedBy      String?  @db.Uuid // Admin user ID
+  resolutionNotes String?  @db.Text
+
+  createdAt       DateTime @default(now())
   
   @@index([userId, createdAt])
   @@index([eventType, severity])

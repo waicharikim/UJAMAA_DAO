@@ -14,23 +14,23 @@
  * Version: 2.0 — Aligned with December 2025 spec
  */
 
-import nodemailer from "nodemailer";
-import { logger } from "../logger/logger.js";
-import { ApiError } from "../errors/ApiError.js";
+import nodemailer from 'nodemailer';
+import { logger } from '../logger/logger.js';
+import { ApiError } from '../errors/ApiError.js';
 
 // Email configuration from environment variables
 const EMAIL_CONFIG = {
-  host: process.env.SMTP_HOST || "smtp.gmail.com",
-  port: parseInt(process.env.SMTP_PORT || "587"),
-  secure: process.env.SMTP_SECURE === "true",
+  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+  port: parseInt(process.env.SMTP_PORT || '587'),
+  secure: process.env.SMTP_SECURE === 'true',
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASSWORD,
   },
 };
 
-const FROM_EMAIL = process.env.FROM_EMAIL || "noreply@ujamaadao.org";
-const FROM_NAME = process.env.FROM_NAME || "UjamaaDAO";
+const FROM_EMAIL = process.env.FROM_EMAIL || 'noreply@ujamaadao.org';
+const FROM_NAME = process.env.FROM_NAME || 'UjamaaDAO';
 
 // Reusable transporter
 let transporter: nodemailer.Transporter | null = null;
@@ -38,7 +38,9 @@ let transporter: nodemailer.Transporter | null = null;
 function getTransporter(): nodemailer.Transporter {
   if (!transporter) {
     if (!EMAIL_CONFIG.auth.user || !EMAIL_CONFIG.auth.pass) {
-      throw new Error("Email configuration missing. Set SMTP_USER and SMTP_PASSWORD in .env");
+      throw new Error(
+        'Email configuration missing. Set SMTP_USER and SMTP_PASSWORD in .env'
+      );
     }
     transporter = nodemailer.createTransport(EMAIL_CONFIG);
   }
@@ -66,7 +68,7 @@ export async function sendEmail(options: EmailOptions): Promise<void> {
 
     const mailOptions = {
       from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
-      to: Array.isArray(options.to) ? options.to.join(", ") : options.to,
+      to: Array.isArray(options.to) ? options.to.join(', ') : options.to,
       subject: options.subject,
       html: options.html,
       text: options.text,
@@ -77,29 +79,29 @@ export async function sendEmail(options: EmailOptions): Promise<void> {
 
     logger.info(
       {
-        operationType: "GENERAL",
+        operationType: 'GENERAL',
         metadata: {
           messageId: info.messageId,
           to: mailOptions.to,
           subject: options.subject,
         },
       },
-      "Email sent successfully"
+      'Email sent successfully'
     );
   } catch (error) {
     logger.error(
       {
-        operationType: "GENERAL",
+        operationType: 'GENERAL',
         metadata: {
           error: error instanceof Error ? error.message : String(error),
           to: options.to,
           subject: options.subject,
         },
       },
-      "Failed to send email"
+      'Failed to send email'
     );
 
-    throw ApiError.systemError("Failed to send email", {
+    throw ApiError.systemError('Failed to send email', {
       original: error instanceof Error ? error.message : String(error),
     });
   }
@@ -115,7 +117,7 @@ export async function sendVerificationEmail(
 ): Promise<void> {
   await sendEmail({
     to,
-    subject: "Welcome to UjamaaDAO - Verify Your Email",
+    subject: 'Welcome to UjamaaDAO - Verify Your Email',
     html: `<!-- [Your beautiful HTML template from before] -->`,
     text: `
       Karibu UjamaaDAO, ${name}!
@@ -141,7 +143,7 @@ export async function sendLoginEmail(
 ): Promise<void> {
   await sendEmail({
     to,
-    subject: "Your UjamaaDAO Login Link",
+    subject: 'Your UjamaaDAO Login Link',
     html: `<!-- [Your beautiful login HTML template] -->`,
     text: `
       Karibu tena, ${name}!
@@ -162,15 +164,20 @@ export async function verifyEmailConfig(): Promise<boolean> {
   try {
     const transport = getTransporter();
     await transport.verify();
-    logger.info({ operationType: "GENERAL" }, "Email service configured successfully");
+    logger.info(
+      { operationType: 'GENERAL' },
+      'Email service configured successfully'
+    );
     return true;
   } catch (error) {
     logger.error(
       {
-        operationType: "GENERAL",
-        metadata: { error: error instanceof Error ? error.message : String(error) },
+        operationType: 'GENERAL',
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
       },
-      "Email service configuration failed"
+      'Email service configuration failed'
     );
     return false;
   }

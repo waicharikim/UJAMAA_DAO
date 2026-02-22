@@ -1,22 +1,22 @@
 /**
  * UJAMAADAO Enhanced Logger using Pino
  * Privacy-compliant, domain-aware, audit-ready
- * 
+ *
  * Version: 2.2 — January 2026
  * Updated: Fixed SecurityEventType imports and duplicate function declarations
  */
 
-import pino from "pino";
-import type { Logger, LoggerOptions } from "pino";
-import type { AuthRequest, UjamaadaoLogContext } from "../types/Ujamaadao.types.js";
-import { SecurityEventType, getEventSeverity } from "../types/security-event.types.js";
-import { env } from "../utils/env.js";
+import pino from 'pino';
+import type { Logger, LoggerOptions } from 'pino';
+import type {
+  AuthRequest,
+  UjamaadaoLogContext,
+} from '../types/Ujamaadao.types.js';
+import { SecurityEventType } from '../types/security-event.types.js';
+import { env } from '../utils/env.js';
 
 import {
-  redactEmail,
-  redactWallet,
   redactIP,
-  redactPhone,
   hashIdentifier,
   sanitizeLogMessage,
   sanitizeUserAgent,
@@ -30,15 +30,41 @@ import {
 } from './log-serializers.js';
 
 // Type for severity levels
-export type SecurityEventSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+export type SecurityEventSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
 export interface UjamaadaoLogger extends Logger {
-  critical(arg0: { operationType: string; queue: any; jobId: any; jobName: any; attempts: any; error: string; data: string; timestamp: string; }, arg1: string): unknown;
-  securityEvent: (msg: string, context: UjamaadaoLogContext, error?: Error) => void;
+  critical(
+    arg0: {
+      operationType: string;
+      queue: any;
+      jobId: any;
+      jobName: any;
+      attempts: any;
+      error: string;
+      data: string;
+      timestamp: string;
+    },
+    arg1: string
+  ): unknown;
+  securityEvent: (
+    msg: string,
+    context: UjamaadaoLogContext,
+    error?: Error
+  ) => void;
   geographicOperation: (msg: string, context: UjamaadaoLogContext) => void;
-  economicTransaction: (msg: string, context: UjamaadaoLogContext, level?: 'info' | 'warn' | 'error') => void;
-  participationRightsOperation: (msg: string, context: UjamaadaoLogContext) => void;
-  withRequestContext: (req: AuthRequest, includeEconomic?: boolean) => UjamaadaoLogger;
+  economicTransaction: (
+    msg: string,
+    context: UjamaadaoLogContext,
+    level?: 'info' | 'warn' | 'error'
+  ) => void;
+  participationRightsOperation: (
+    msg: string,
+    context: UjamaadaoLogContext
+  ) => void;
+  withRequestContext: (
+    req: AuthRequest,
+    includeEconomic?: boolean
+  ) => UjamaadaoLogger;
 }
 
 // ============================================================================
@@ -46,8 +72,8 @@ export interface UjamaadaoLogger extends Logger {
 // ============================================================================
 
 const pinoConfig: LoggerOptions = {
-  level: env.LOG_LEVEL || "info",
-  base: { 
+  level: env.LOG_LEVEL || 'info',
+  base: {
     pid: process.pid,
     service: env.PLATFORM_NAME || 'UJAMAADAO',
     environment: env.NODE_ENV,
@@ -57,34 +83,36 @@ const pinoConfig: LoggerOptions = {
     error: pino.stdSerializers.err,
     req: pino.stdSerializers.req,
   },
-  transport: (env.NODE_ENV === "development" && process.env.ENABLE_PRETTY_LOGS !== "false")
-    ? { 
-        target: "pino-pretty",
-        options: {
-          colorize: true,
-          translateTime: "HH:MM:ss Z",
-          ignore: "pid,hostname",
+  transport:
+    env.NODE_ENV === 'development' && process.env.ENABLE_PRETTY_LOGS !== 'false'
+      ? {
+          target: 'pino-pretty',
+          options: {
+            colorize: true,
+            translateTime: 'HH:MM:ss Z',
+            ignore: 'pid,hostname',
+          },
         }
-      } 
-    : undefined,
+      : undefined,
 };
 
-const baseLogger = pino(pinoConfig);
+const baseLogger = (pino as any)(pinoConfig);
 
 // ============================================================================
 // AUDIT LOGGER
 // ============================================================================
 
-const auditLogger = env.NODE_ENV === 'production' && env.AUDIT_LOG_FILE
-  ? pino({
-      ...pinoConfig,
-      level: 'info',
-      transport: {
-        target: 'pino/file',
-        options: { destination: env.AUDIT_LOG_FILE }
-      }
-    })
-  : baseLogger;
+const auditLogger =
+  env.NODE_ENV === 'production' && env.AUDIT_LOG_FILE
+    ? (pino as any)({
+        ...pinoConfig,
+        level: 'info',
+        transport: {
+          target: 'pino/file',
+          options: { destination: env.AUDIT_LOG_FILE },
+        },
+      })
+    : baseLogger;
 
 // ============================================================================
 // ENHANCED LOGGER
@@ -93,10 +121,15 @@ const auditLogger = env.NODE_ENV === 'production' && env.AUDIT_LOG_FILE
 const createUjamaadaoLogger = (): UjamaadaoLogger => {
   const logger = baseLogger as unknown as UjamaadaoLogger;
 
-  logger.securityEvent = (msg: string, context: UjamaadaoLogContext, error?: Error) => {
+  logger.securityEvent = (
+    msg: string,
+    context: UjamaadaoLogContext,
+    error?: Error
+  ) => {
     const sanitizedMsg = sanitizeLogMessage(msg);
     const severity = context.securityEvent?.severity || 'MEDIUM';
-    const level = severity === "CRITICAL" || severity === "HIGH" ? "error" : "warn";
+    const level =
+      severity === 'CRITICAL' || severity === 'HIGH' ? 'error' : 'warn';
 
     const logContext = { ...context, logRetentionDays: 365 };
     if (error) logContext.error = pino.stdSerializers.err(error);
@@ -109,33 +142,51 @@ const createUjamaadaoLogger = (): UjamaadaoLogger => {
     const sanitizedMsg = sanitizeLogMessage(msg);
     const shouldLog = context.metadata?.forceLog || Math.random() < 0.1;
     if (shouldLog) {
-      logger.debug({ ...context, sampleRate: 0.1, logRetentionDays: 30 }, `[GEO] ${sanitizedMsg}`);
+      logger.debug(
+        { ...context, sampleRate: 0.1, logRetentionDays: 30 },
+        `[GEO] ${sanitizedMsg}`
+      );
     }
   };
 
-  logger.economicTransaction = (msg: string, context: UjamaadaoLogContext, level: 'info' | 'warn' | 'error' = 'info') => {
+  logger.economicTransaction = (
+    msg: string,
+    context: UjamaadaoLogContext,
+    level: 'info' | 'warn' | 'error' = 'info'
+  ) => {
     const sanitizedMsg = sanitizeLogMessage(msg);
-    logger[level]({ ...context, logRetentionDays: 90 }, `[ECO] ${sanitizedMsg}`);
+    logger[level](
+      { ...context, logRetentionDays: 90 },
+      `[ECO] ${sanitizedMsg}`
+    );
   };
 
-  logger.participationRightsOperation = (msg: string, context: UjamaadaoLogContext) => {
+  logger.participationRightsOperation = (
+    msg: string,
+    context: UjamaadaoLogContext
+  ) => {
     const sanitizedMsg = sanitizeLogMessage(msg);
     logger.info({ ...context, logRetentionDays: 90 }, `[PR] ${sanitizedMsg}`);
   };
 
-  logger.withRequestContext = (req: AuthRequest, includeEconomic = false): UjamaadaoLogger => {
+  logger.withRequestContext = (
+    req: AuthRequest,
+    includeEconomic = false
+  ): UjamaadaoLogger => {
     const bindings: Record<string, any> = {
       correlationId: req.correlationId,
       user: req.user ? serializeUser(req.user) : null,
       request: serializeRequest(req),
       ipAddress: req.ip ? redactIP(req.ip) : 'unknown',
-      userAgent: sanitizeUserAgent(req.headers["user-agent"]),
+      userAgent: sanitizeUserAgent(req.headers['user-agent']),
       sessionId: req.sessionId ? hashIdentifier(req.sessionId) : 'none',
     };
 
     // Only include geographic context if present
     if (req.geographicContext) {
-      bindings.geographicContext = serializeGeographicContext(req.geographicContext);
+      bindings.geographicContext = serializeGeographicContext(
+        req.geographicContext
+      );
     }
 
     // Only include economic context if requested and present
@@ -156,12 +207,14 @@ export default logger;
 // HELPERS
 // ============================================================================
 
-export const createRequestLogger = (req: AuthRequest, includeEconomic = false) =>
-  logger.withRequestContext(req, includeEconomic);
+export const createRequestLogger = (
+  req: AuthRequest,
+  includeEconomic = false
+) => logger.withRequestContext(req, includeEconomic);
 
 /**
  * Log security events with proper typing and context
- * 
+ *
  * @param message - Human-readable security event message
  * @param eventType - Type of security event (typed enum)
  * @param severity - Severity level (LOW, MEDIUM, HIGH, CRITICAL)
@@ -183,7 +236,7 @@ export function logSecurityEvent(
   error?: Error
 ): void {
   const logContext: UjamaadaoLogContext = {
-    operationType: "SECURITY",
+    operationType: 'SECURITY',
     userId: context?.userId,
     securityEvent: {
       type: eventType,
@@ -200,7 +253,8 @@ export function logSecurityEvent(
         error: {
           message: error.message,
           name: error.name,
-          stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+          stack:
+            process.env.NODE_ENV === 'development' ? error.stack : undefined,
         },
       }),
     },
@@ -215,4 +269,7 @@ export function logSecurityEvent(
 
 // Export security event types for use across the application
 export type { SecurityEventType } from '../types/security-event.types.js';
-export { statusCodeToEventType, getEventSeverity } from '../types/security-event.types.js';
+export {
+  statusCodeToEventType,
+  getEventSeverity,
+} from '../types/security-event.types.js';

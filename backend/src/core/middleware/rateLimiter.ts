@@ -3,26 +3,26 @@
  * @description
  * Production-ready rate limiter with Redis store, server-side fingerprinting,
  * and progressive penalties.
- * 
+ *
  * Features:
  * - Redis-backed distributed rate limiting
  * - Fallback to in-memory store for dev/single-server
  * - Server-side fingerprinting (IP + User-Agent + headers)
  * - Progressive penalties for repeat offenders
  * - Security event logging
- * 
+ *
  * Version: 2.3 — January 2026
  * Security Hardened & Signature Fixed: January 2026
  */
 
-import rateLimit from "express-rate-limit";
-import RedisStore from "rate-limit-redis";
-import { createClient, RedisClientType } from "redis";
-import crypto from "crypto";
-import { Request, Response } from "express";
-import { logSecurityEvent } from "../logger/logger.js";
-import { ApiError } from "../errors/ApiError.js";
-import { env } from "../utils/env.js";
+import rateLimit from 'express-rate-limit';
+import RedisStore from 'rate-limit-redis';
+import { createClient, RedisClientType } from 'redis';
+import crypto from 'crypto';
+import { Request, Response } from 'express';
+import { logSecurityEvent } from '../logger/logger.js';
+import { ApiError } from '../errors/ApiError.js';
+import { env } from '../utils/env.js';
 
 // ============================================================================
 // REDIS CLIENT WITH PROPER INITIALIZATION
@@ -37,23 +37,25 @@ let redisReady = false;
  */
 async function initializeRedis(): Promise<void> {
   if (!env.REDIS_URL) {
-    console.warn('[RateLimit] REDIS_URL not set — using in-memory store (dev only, not for production)');
+    console.warn(
+      '[RateLimit] REDIS_URL not set — using in-memory store (dev only, not for production)'
+    );
     redisReady = true;
     return;
   }
 
   try {
     redisClient = createClient({ url: env.REDIS_URL });
-    
-    redisClient.on("error", (err: any) => {
-      console.error("[RateLimit] Redis error:", err);
+
+    redisClient.on('error', (err: any) => {
+      console.error('[RateLimit] Redis error:', err);
     });
-    
+
     await redisClient.connect();
     redisReady = true;
-    console.log("[RateLimit] Redis connected for rate limiting");
+    console.log('[RateLimit] Redis connected for rate limiting');
   } catch (err) {
-    console.error("[RateLimit] Failed to connect to Redis:", err);
+    console.error('[RateLimit] Failed to connect to Redis:', err);
     redisClient = null;
     redisReady = true;
   }
@@ -71,16 +73,16 @@ export const redisInitialized = initializeRedis();
  */
 export function generateServerFingerprint(req: Request): string {
   const parts = [
-    req.ip || "unknown",
-    req.headers["user-agent"] || "",
-    req.headers["accept-language"] || "",
-    req.headers["accept-encoding"] || "",
+    req.ip || 'unknown',
+    req.headers['user-agent'] || '',
+    req.headers['accept-language'] || '',
+    req.headers['accept-encoding'] || '',
   ];
 
   return crypto
-    .createHash("sha256")
-    .update(parts.join("|"))
-    .digest("hex")
+    .createHash('sha256')
+    .update(parts.join('|'))
+    .digest('hex')
     .slice(0, 16);
 }
 
@@ -97,12 +99,12 @@ async function recordOffense(key: string): Promise<number> {
     if (!redisClient?.isOpen) {
       return 1;
     }
-    
+
     const offenseKey = `offenses:${key}`;
     const raw = await redisClient.get(offenseKey);
     const record = raw ? JSON.parse(raw) : { count: 0 };
     record.count += 1;
-    
+
     await redisClient.set(offenseKey, JSON.stringify(record), { EX: 604800 });
     return record.count;
   } catch {
@@ -116,12 +118,12 @@ async function recordOffense(key: string): Promise<number> {
  */
 async function getBlockDuration(key: string): Promise<number> {
   const durations = [3600000, 21600000, 86400000, 259200000, 604800000];
-  
+
   try {
     if (!redisClient?.isOpen) {
       return durations[0];
     }
-    
+
     const offenseKey = `offenses:${key}`;
     const raw = await redisClient.get(offenseKey);
     const count = raw ? JSON.parse(raw).count : 0;
@@ -134,12 +136,15 @@ async function getBlockDuration(key: string): Promise<number> {
 /**
  * Determine severity based on how much the limit was exceeded
  */
-function getSeverity(current: number, limit: number): "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" {
+function getSeverity(
+  current: number,
+  limit: number
+): 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' {
   const ratio = current / limit;
-  if (ratio <= 1.5) return "LOW";
-  if (ratio <= 2) return "MEDIUM";
-  if (ratio <= 5) return "HIGH";
-  return "CRITICAL";
+  if (ratio <= 1.5) return 'LOW';
+  if (ratio <= 2) return 'MEDIUM';
+  if (ratio <= 5) return 'HIGH';
+  return 'CRITICAL';
 }
 
 // ============================================================================
@@ -159,12 +164,14 @@ interface RateLimiterConfig {
  */
 export function buildRateLimiter(config: RateLimiterConfig) {
   if (!redisReady) {
-    console.warn('[RateLimit] Building limiter before Redis ready - will use in-memory store');
+    console.warn(
+      '[RateLimit] Building limiter before Redis ready - will use in-memory store'
+    );
   }
 
   const defaultKeyGenerator = (req: Request) => {
     const fp = generateServerFingerprint(req);
-    if (!fp) throw ApiError.badRequest("Unable to identify request");
+    if (!fp) throw ApiError.badRequest('Unable to identify request');
     return config.keyPrefix ? `${config.keyPrefix}:${fp}` : fp;
   };
 
@@ -173,24 +180,25 @@ export function buildRateLimiter(config: RateLimiterConfig) {
     max: config.max,
     standardHeaders: true,
     legacyHeaders: false,
-    message: config.message || "Too many requests",
-    
-    store: (redisClient?.isOpen) 
-      ? new RedisStore({ 
-          sendCommand: (...args: any[]) => redisClient!.sendCommand(args), 
-          prefix: "rl:" 
-        }) 
+    message: config.message || 'Too many requests',
+
+    store: redisClient?.isOpen
+      ? new RedisStore({
+          sendCommand: (...args: any[]) => redisClient!.sendCommand(args),
+          prefix: 'rl:',
+        })
       : undefined,
-    
+
     keyGenerator: config.keyGenerator || defaultKeyGenerator,
-    
+
     skip: (req: Request) => {
-      const trusted = env.TRUSTED_IPS?.split(",").map((t: string) => t.trim()) || [];
-      if (trusted.includes(req.ip || "")) return true;
-      if (["/health", "/metrics"].includes(req.path)) return true;
+      const trusted =
+        env.TRUSTED_IPS?.split(',').map((t: string) => t.trim()) || [];
+      if (trusted.includes(req.ip || '')) return true;
+      if (['/health', '/metrics'].includes(req.path)) return true;
       return false;
     },
-    
+
     handler: async (req: Request, res: Response) => {
       const fp = generateServerFingerprint(req);
       const offenseCount = await recordOffense(fp);
@@ -200,8 +208,8 @@ export function buildRateLimiter(config: RateLimiterConfig) {
       const severity = getSeverity(current, config.max);
 
       logSecurityEvent(
-        "Rate limit exceeded",
-        "BRUTE_FORCE",
+        'Rate limit exceeded',
+        'BRUTE_FORCE',
         severity,
         `${current}/${config.max} requests in window. Offense #${offenseCount}`,
         {
@@ -234,8 +242,8 @@ export function strictRateLimit() {
   return buildRateLimiter({
     windowMs: 15 * 60 * 1000,
     max: 5,
-    message: "Too many attempts — try again later",
-    keyPrefix: "strict",
+    message: 'Too many attempts — try again later',
+    keyPrefix: 'strict',
   });
 }
 
@@ -247,8 +255,8 @@ export function authRateLimit() {
   return buildRateLimiter({
     windowMs: 15 * 60 * 1000,
     max: 20,
-    message: "Too many authentication attempts — please slow down",
-    keyPrefix: "auth",
+    message: 'Too many authentication attempts — please slow down',
+    keyPrefix: 'auth',
   });
 }
 
@@ -260,7 +268,7 @@ export function apiRateLimit() {
   return buildRateLimiter({
     windowMs: 15 * 60 * 1000,
     max: 100,
-    keyPrefix: "api",
+    keyPrefix: 'api',
   });
 }
 
@@ -272,7 +280,7 @@ export function publicRateLimit() {
   return buildRateLimiter({
     windowMs: 15 * 60 * 1000,
     max: 1000,
-    keyPrefix: "public",
+    keyPrefix: 'public',
   });
 }
 
@@ -284,7 +292,7 @@ export function globalRateLimit() {
   return buildRateLimiter({
     windowMs: 60 * 1000,
     max: 10000,
-    keyGenerator: () => "global",
+    keyGenerator: () => 'global',
   });
 }
 
@@ -294,7 +302,7 @@ export function globalRateLimit() {
 export async function shutdownRateLimiter(): Promise<void> {
   if (redisClient?.isOpen) {
     await redisClient.quit();
-    console.log("[RateLimit] Redis connection closed");
+    console.log('[RateLimit] Redis connection closed');
   }
 }
 

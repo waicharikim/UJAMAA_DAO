@@ -2,21 +2,21 @@
  * @file src/modules/auth/services/phone-verification.service.ts
  * @description
  * Phone Verification Service using SMS codes
- * 
+ *
  * Features:
  * - Send SMS verification codes (Twilio / Africa's Talking / mock)
  * - Verify codes with rate limiting & attempt tracking
  * - Code expiry and resend cooldown
  * - Periodic cleanup of expired codes
- * 
+ *
  * Version: 1.1 — February 2026
  * Updated: Enhanced cleanup logic, better logging, safe error handling
  */
 
-import { prisma } from "../../../core/database/client.js";
-import { ApiError } from "../../../core/errors/ApiError.js";
-import { logger } from "../../../core/logger/logger.js";
-import { generateRandomHex } from "../../../core/utils/crypto.js";
+import { prisma } from '../../../core/database/client.js';
+import { ApiError } from '../../../core/errors/ApiError.js';
+import { logger } from '../../../core/logger/logger.js';
+import { generateRandomHex } from '../../../core/utils/crypto.js';
 
 // SMS Provider Configuration
 const SMS_CONFIG = {
@@ -52,7 +52,7 @@ class PhoneVerificationService {
         { operationType: 'SMS_MOCK', phoneNumber: normalized },
         'SMS not enabled - using mock verification'
       );
-      
+
       const mockCode = this.generateCode();
       console.log(`[SMS MOCK] To: ${normalized}, Code: ${mockCode}`);
 
@@ -95,7 +95,7 @@ class PhoneVerificationService {
         {
           operationType: 'SMS_FAILURE',
           userId,
-          metadata: { 
+          metadata: {
             phoneNumber: normalized,
             error: error instanceof Error ? error.message : String(error),
           },
@@ -157,7 +157,10 @@ class PhoneVerificationService {
           {
             operationType: 'SECURITY',
             userId,
-            metadata: { phoneNumber: normalized, attempts: verification.attempts },
+            metadata: {
+              phoneNumber: normalized,
+              attempts: verification.attempts,
+            },
           },
           'Max verification attempts exceeded'
         );
@@ -170,7 +173,7 @@ class PhoneVerificationService {
       if (isValid) {
         await prisma.phoneVerification.update({
           where: { id: verification.id },
-          data: { 
+          data: {
             verified: true,
             verifiedAt: new Date(),
           },
@@ -208,7 +211,10 @@ class PhoneVerificationService {
           {
             operationType: 'VERIFICATION_ATTEMPT',
             userId,
-            metadata: { phoneNumber: normalized, attempts: verification.attempts + 1 },
+            metadata: {
+              phoneNumber: normalized,
+              attempts: verification.attempts + 1,
+            },
           },
           'Invalid verification code attempt'
         );
@@ -222,7 +228,9 @@ class PhoneVerificationService {
         {
           operationType: 'DATABASE',
           userId,
-          metadata: { error: error instanceof Error ? error.message : String(error) },
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
         },
         'Failed to verify code'
       );
@@ -287,7 +295,8 @@ class PhoneVerificationService {
 
     if (recent) {
       const waitTime = Math.ceil(
-        (recent.createdAt.getTime() + SMS_CONFIG.resendCooldown - Date.now()) / 1000
+        (recent.createdAt.getTime() + SMS_CONFIG.resendCooldown - Date.now()) /
+          1000
       );
 
       throw ApiError.rateLimitError(
@@ -304,15 +313,15 @@ class PhoneVerificationService {
       case 'twilio':
         await this.sendViaTwilio(phoneNumber, message);
         break;
-      
+
       case 'africastalking':
         await this.sendViaAfricasTalking(phoneNumber, message);
         break;
-      
+
       case 'mock':
         console.log(`[SMS Mock] To: ${phoneNumber}, Message: ${message}`);
         break;
-      
+
       default:
         throw new Error(`Unsupported SMS provider: ${SMS_CONFIG.provider}`);
     }
@@ -331,7 +340,10 @@ class PhoneVerificationService {
     console.log(`[Twilio] Would send to ${to}: ${message}`);
   }
 
-  private async sendViaAfricasTalking(to: string, message: string): Promise<void> {
+  private async sendViaAfricasTalking(
+    to: string,
+    message: string
+  ): Promise<void> {
     const apiKey = process.env.AT_API_KEY;
     const username = process.env.AT_USERNAME;
 
@@ -366,7 +378,9 @@ class PhoneVerificationService {
 
       // Optional: also delete very old unverified records (safety net)
       const oldUnverifiedCutoff = new Date();
-      oldUnverifiedCutoff.setDate(oldUnverifiedCutoff.getDate() - SMS_CONFIG.cleanupRetentionDays);
+      oldUnverifiedCutoff.setDate(
+        oldUnverifiedCutoff.getDate() - SMS_CONFIG.cleanupRetentionDays
+      );
 
       const oldResult = await prisma.phoneVerification.deleteMany({
         where: {

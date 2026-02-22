@@ -3,7 +3,7 @@
  * -----------------------------------------------------------------------------
  * Production-grade Prisma schema merger for Ujamaa DAO.
  * Usage: ts-node src/core/database/mergeSchemas.ts
- * 
+ *
  * Features:
  * - Deterministic module ordering
  * - Auto-creates output directory
@@ -14,38 +14,43 @@
  * -----------------------------------------------------------------------------
  */
 
-import fs from "fs/promises";
-import path from "path";
-import { fileURLToPath } from "url";
-import { glob } from "glob";
+import fs from 'fs/promises';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { glob } from 'glob';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT = process.cwd();
 
 // Paths
-const BASE_SCHEMA_PATH = path.join(ROOT, "src/core/database/base.prisma");
-const MODULE_SCHEMA_GLOB = path.join(ROOT, "src/modules/*/prisma/schema.prisma");
-const OUTPUT_DIR = path.join(ROOT, "prisma");
-const OUTPUT_SCHEMA_PATH = path.join(OUTPUT_DIR, "schema.prisma");
+const BASE_SCHEMA_PATH = path.join(ROOT, 'src/core/database/base.prisma');
+const MODULE_SCHEMA_GLOB = path.join(
+  ROOT,
+  'src/modules/*/prisma/schema.prisma'
+);
+const OUTPUT_DIR = path.join(ROOT, 'prisma');
+const OUTPUT_SCHEMA_PATH = path.join(OUTPUT_DIR, 'schema.prisma');
 
 // Module merge order — base.prisma always comes first (handled separately).
 // Order matters: modules earlier in the list can be referenced by later ones.
 // Rule: if module A references a model from module B, B must come before A.
 // Note: only list modules that have a prisma/schema.prisma file.
 const MODULE_ORDER = [
-  "auth",         // no cross-module dependencies
-  "user",         // depends on auth (back-relations only); includes onboarding models
-  "economy",      // depends on user (dues, work logs)
-  "community",    // depends on user, economy (GroupTreasury via DuesAllocation)
-  "governance",   // depends on community (Group), treasury (Escrow, WalletTransaction)
-  "projects",     // depends on governance (Proposal), economy (PhysicalWorkLog)
-  "treasury",     // depends on governance (Proposal), projects (Project), community (Group)
-  "marketplace",  // depends on community (Group)
-  "education",    // standalone
-  "emergency",    // depends on community (Group)
-  "notifications",// depends on user; includes audit/consent/log models
-  "admin",        // depends on all — admin views across all modules (no schema yet)
+  'auth', // no cross-module dependencies
+  'user', // depends on auth (back-relations only); includes onboarding models
+  'economy', // depends on user (dues, work logs)
+  'community', // depends on user, economy (GroupTreasury via DuesAllocation)
+  'governance', // depends on community (Group), treasury (Escrow, WalletTransaction)
+  'projects', // depends on governance (Proposal), economy (PhysicalWorkLog)
+  'treasury', // depends on governance (Proposal), projects (Project), community (Group)
+  'marketplace', // depends on community (Group)
+  'education', // standalone
+  'emergency', // depends on community (Group)
+  'reputation', // depends on user, community (Ward back-relations)
+  'notifications', // depends on user; includes audit/consent/log models
+  'audit', // depends on user
+  'admin', // depends on all — admin views across all modules (no schema yet)
 ];
 
 async function fileExists(p: string) {
@@ -78,17 +83,17 @@ function extractModelNames(content: string): Set<string> {
 
 function annotate(content: string, name: string) {
   return [
-    "",
-    "// ============================================================================",
+    '',
+    '// ============================================================================',
     `// MODULE: ${name.toUpperCase()}`,
-    "// ============================================================================",
+    '// ============================================================================',
     content.trim(),
-    ""
-  ].join("\n");
+    '',
+  ].join('\n');
 }
 
 export async function mergeSchemas(): Promise<void> {
-  console.log("🔄 Merging Prisma schemas...");
+  console.log('🔄 Merging Prisma schemas...');
 
   // ensure output dir
   await fs.mkdir(OUTPUT_DIR, { recursive: true });
@@ -96,27 +101,29 @@ export async function mergeSchemas(): Promise<void> {
   // load base
   if (!(await fileExists(BASE_SCHEMA_PATH))) {
     console.error(`Base schema not found at: ${BASE_SCHEMA_PATH}`);
-    throw new Error("base.prisma missing");
+    throw new Error('base.prisma missing');
   }
-  const base = (await fs.readFile(BASE_SCHEMA_PATH, "utf8")).trim();
+  const base = (await fs.readFile(BASE_SCHEMA_PATH, 'utf8')).trim();
   if (!base) {
-    console.error("Base schema is empty.");
-    throw new Error("base.prisma empty");
+    console.error('Base schema is empty.');
+    throw new Error('base.prisma empty');
   }
-  console.log("✔ Base schema loaded");
+  console.log('✔ Base schema loaded');
 
   // NEW: Track models for duplicate detection
   const seenModels = new Set<string>();
   const baseModels = extractModelNames(base);
-  baseModels.forEach(m => seenModels.add(m));
+  baseModels.forEach((m) => seenModels.add(m));
   console.log(`✔ Base schema contains ${baseModels.size} models`);
 
   // find module schemas
   const modulePaths = await glob(MODULE_SCHEMA_GLOB, { nodir: true });
   if (!modulePaths || modulePaths.length === 0) {
-    console.warn("⚠ No module schemas found. Only base will be used.");
-    await fs.writeFile(OUTPUT_SCHEMA_PATH, base + "\n", "utf8");
-    console.log(`✨ Prisma schema written → ${path.relative(ROOT, OUTPUT_SCHEMA_PATH)}`);
+    console.warn('⚠ No module schemas found. Only base will be used.');
+    await fs.writeFile(OUTPUT_SCHEMA_PATH, base + '\n', 'utf8');
+    console.log(
+      `✨ Prisma schema written → ${path.relative(ROOT, OUTPUT_SCHEMA_PATH)}`
+    );
     return;
   }
 
@@ -133,55 +140,71 @@ export async function mergeSchemas(): Promise<void> {
   });
 
   // NEW: Warn about missing expected modules
-  const foundModules = sorted.map(p => path.basename(path.dirname(path.dirname(p))));
-  const missingModules = MODULE_ORDER.filter(m => !foundModules.includes(m));
+  const foundModules = sorted.map((p) =>
+    path.basename(path.dirname(path.dirname(p)))
+  );
+  const missingModules = MODULE_ORDER.filter((m) => !foundModules.includes(m));
   if (missingModules.length > 0) {
-    console.warn(`⚠ Missing expected modules: ${missingModules.join(", ")}`);
+    console.warn(`⚠ Missing expected modules: ${missingModules.join(', ')}`);
   }
 
   // read, strip, validate, & annotate
   const modulesContentPromises = sorted.map(async (p) => {
-    let content = (await fs.readFile(p, "utf8")).trim();
+    let content = (await fs.readFile(p, 'utf8')).trim();
     const moduleName = path.basename(path.dirname(path.dirname(p)));
-    
+
     // NEW: Strip generator/datasource blocks
     const originalLength = content.length;
     content = stripGeneratorAndDatasource(content);
     if (content.length < originalLength) {
       console.log(`  Stripped generator/datasource from ${moduleName}`);
     }
-    
+
     // NEW: Check for duplicate models
     const moduleModels = extractModelNames(content);
     for (const model of moduleModels) {
       if (seenModels.has(model)) {
         throw new Error(
           `❌ Duplicate model "${model}" found in ${moduleName}. ` +
-          `This model already exists in a previous schema.`
+            `This model already exists in a previous schema.`
         );
       }
       seenModels.add(model);
     }
-    
-    console.log(`✔ Included module schema: ${moduleName} (${moduleModels.size} models)`);
+
+    console.log(
+      `✔ Included module schema: ${moduleName} (${moduleModels.size} models)`
+    );
     return annotate(content, moduleName);
   });
 
-  const modulesContent = (await Promise.all(modulesContentPromises)).join("\n\n");
+  const modulesContent = (await Promise.all(modulesContentPromises)).join(
+    '\n\n'
+  );
 
   // combine
-  const merged = [base.trim(), modulesContent.trim()].filter(Boolean).join("\n\n");
+  const merged = [base.trim(), modulesContent.trim()]
+    .filter(Boolean)
+    .join('\n\n');
 
   // write
-  await fs.writeFile(OUTPUT_SCHEMA_PATH, merged + "\n", "utf8");
-  console.log(`✨ Prisma schema merged successfully → ${path.relative(ROOT, OUTPUT_SCHEMA_PATH)}`);
+  await fs.writeFile(OUTPUT_SCHEMA_PATH, merged + '\n', 'utf8');
+  console.log(
+    `✨ Prisma schema merged successfully → ${path.relative(ROOT, OUTPUT_SCHEMA_PATH)}`
+  );
   console.log(`   Total models: ${seenModels.size}`);
 }
 
 // If run directly
-if (import.meta.url === `file://${process.argv[1]}` || process.argv[1].endsWith("mergeSchemas.ts")) {
+if (
+  import.meta.url === `file://${process.argv[1]}` ||
+  process.argv[1].endsWith('mergeSchemas.ts')
+) {
   mergeSchemas().catch((err) => {
-    console.error("❌ Schema merge failed:", err instanceof Error ? err.message : err);
+    console.error(
+      '❌ Schema merge failed:',
+      err instanceof Error ? err.message : err
+    );
     process.exit(1);
   });
 }

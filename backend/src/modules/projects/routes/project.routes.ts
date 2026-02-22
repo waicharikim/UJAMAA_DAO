@@ -5,37 +5,38 @@
  * Version: 2.0 — December 2025
  */
 
-import { Router } from "express";
-import { ProjectController } from "../controllers/project.controller.js";
-import { authenticate } from "../../../core/middleware/auth.middleware.js";
-import { authorize } from "../../../core/middleware/authorize.js";
-import { validateRequest } from "../../../core/middleware/validateRequest.js";
-import { z } from "zod";
-import { asyncHandler } from "../../../core/utils/response.js";
-import { roleService } from "../../../core/services/role.service.js";
+import { Router } from 'express';
+import { prisma } from '../../../core/database/client.js';
+import { ProjectController } from '../controllers/project.controller.js';
+import { authenticate } from '../../../core/middleware/auth.middleware.js';
+import { authorize } from '../../../core/middleware/authorize.js';
+import { validateRequest } from '../../../core/middleware/validateRequest.js';
+import { z } from 'zod';
+import { asyncHandler } from '../../../core/utils/response.js';
+import { roleService } from '../../../core/services/role.service.js';
 
 const router = Router();
 
 router.use(authenticate);
 
 router.post(
-  "/from-proposal",
+  '/from-proposal',
   validateRequest({
     schema: z.object({
       proposalId: z.string().uuid(),
     }),
-    target: "body",
+    target: 'body',
   }),
   asyncHandler(ProjectController.createFromProposal)
 );
 
 router.post(
-  "/milestone/start",
+  '/milestone/start',
   validateRequest({
     schema: z.object({
       milestoneId: z.string().uuid(),
     }),
-    target: "body",
+    target: 'body',
   }),
   authorize({
     scopeCheck: async (req) => {
@@ -52,27 +53,27 @@ router.post(
 );
 
 router.post(
-  "/milestone/submit",
+  '/milestone/submit',
   validateRequest({
     schema: z.object({
       milestoneId: z.string().uuid(),
       proofUrl: z.string().url(),
       description: z.string(),
     }),
-    target: "body",
+    target: 'body',
   }),
   asyncHandler(ProjectController.submitMilestone)
 );
 
 router.post(
-  "/milestone/verify",
+  '/milestone/verify',
   validateRequest({
     schema: z.object({
       milestoneId: z.string().uuid(),
       approved: z.boolean(),
       feedback: z.string().optional(),
     }),
-    target: "body",
+    target: 'body',
   }),
   authorize({
     scopeCheck: async (req) => {
@@ -82,7 +83,10 @@ router.post(
         select: { projectId: true },
       });
       if (!milestone) return false;
-      const isLeader = await roleService.isProjectLeader(req.user!.userId, milestone.projectId);
+      const isLeader = await roleService.isProjectLeader(
+        req.user!.userId,
+        milestone.projectId
+      );
       const isVerifier = await roleService.isVerifier(req.user!.userId);
       return isLeader || isVerifier;
     },

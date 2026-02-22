@@ -3,12 +3,12 @@
  * @description
  * Base class for all internal errors in UjamaaDAO
  * PII-safe, production-ready
- * 
+ *
  * Version: 2.0 — December 2025
  * Security Hardened: December 2025
  */
 
-import { autoRedactObject, containsPII } from "../logger/log-sanitizer.js";
+import { autoRedactObject, containsPII } from '../logger/log-sanitizer.js';
 
 export interface BaseErrorOptions {
   statusCode?: number;
@@ -26,33 +26,30 @@ export class BaseError extends Error {
   public readonly timestamp: Date;
   public readonly cause?: Error;
 
-  constructor(
-    message: string,
-    statusCode = 500,
-    options?: BaseErrorOptions
-  ) {
+  constructor(message: string, statusCode = 500, options?: BaseErrorOptions) {
     // Truncate long messages (prevent log flooding)
     super(message.slice(0, 500));
-    
+
     // Validate status code
     this.statusCode = this.validateStatusCode(statusCode);
     this.timestamp = new Date();
 
     if (options) {
       this.code = options.code;
-      
+
       // Sanitize details if they contain PII
-      this.details = options.details && containsPII(options.details)
-        ? autoRedactObject(options.details)
-        : options.details;
-      
+      this.details =
+        options.details && containsPII(options.details)
+          ? autoRedactObject(options.details)
+          : options.details;
+
       this.correlationId = options.correlationId;
       this.cause = options.cause;
     }
 
     // Maintain proper prototype chain
     Object.setPrototypeOf(this, new.target.prototype);
-    
+
     // Capture stack trace (excluding constructor)
     if (Error.captureStackTrace) {
       Error.captureStackTrace(this, this.constructor);
@@ -64,7 +61,9 @@ export class BaseError extends Error {
    */
   private validateStatusCode(code: number): number {
     if (typeof code !== 'number' || code < 100 || code >= 600) {
-      console.warn(`[BaseError] Invalid status code ${code}, defaulting to 500`);
+      console.warn(
+        `[BaseError] Invalid status code ${code}, defaulting to 500`
+      );
       return 500;
     }
     return code;
@@ -101,7 +100,7 @@ export class BaseError extends Error {
     // Stack traces ONLY in development
     if (process.env.NODE_ENV === 'development') {
       json.stack = this.stack;
-      
+
       // Include full cause in development
       if (this.cause) {
         json.causeStack = this.cause.stack;
@@ -133,7 +132,10 @@ export class BaseError extends Error {
   /**
    * Create BaseError from any error type
    */
-  static fromError(err: unknown, overrides?: Partial<BaseErrorOptions>): BaseError {
+  static fromError(
+    err: unknown,
+    overrides?: Partial<BaseErrorOptions>
+  ): BaseError {
     if (err instanceof BaseError) return err;
 
     // Extract message safely

@@ -7,13 +7,13 @@
  * repeated failures, etc.) will be wired here as they are implemented.
  */
 
-import { logger } from "../../../core/logger/logger.js";
+import { logger } from '../../../core/logger/logger.js';
 
 export async function registerAuthListeners(): Promise<void> {
   // Placeholder — no auth-specific listeners yet.
   // Future listeners (e.g. auth.failed, auth.locked, auth.session.expired) go here.
   logger.info(
-    { operationType: "SYSTEM" },
-    "Auth event listeners registered (no-op stub)"
+    { operationType: 'SYSTEM' },
+    'Auth event listeners registered (no-op stub)'
   );
 }

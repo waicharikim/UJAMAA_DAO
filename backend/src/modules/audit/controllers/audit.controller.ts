@@ -5,15 +5,16 @@
  * Version: 2.0 — December 2025
  */
 
-import { Request, Response } from "express";
-import { sendSuccess } from "../../../core/utils/response.js";
-import { auditService } from "../services/audit.service.js";
+import { Response } from 'express';
+import { AuthRequest } from '../../../core/types/Ujamaadao.types.js';
+import { sendSuccess } from '../../../core/utils/response.js';
+import { auditService } from '../services/audit.service.js';
 
 export class AuditController {
-  static async searchLogs(req: Request, res: Response) {
+  static async searchLogs(req: AuthRequest, res: Response) {
     const adminId = req.user!.userId;
     const dto = req.query as any;
     const result = await auditService.searchLogs(adminId, dto);
-    sendSuccess(res, result, "Audit logs retrieved");
+    sendSuccess(res, result, 'Audit logs retrieved');
   }
 }

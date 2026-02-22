@@ -1,9 +1,9 @@
 /**
  * @file env.ts
- * 
+ *
  * @description
  * Environment configuration loader with strict validation
- * 
+ *
  * Features:
  * - Multi-environment support (.env, .env.development, .env.production)
  * - Runtime validation using Zod
@@ -11,7 +11,7 @@
  * - Safe test mode with required defaults
  * - Secret strength validation in production
  * - PII redaction in error messages
- * 
+ *
  * Version: 2.1 — January 2026
  * Security Hardened: January 2026
  */
@@ -67,44 +67,63 @@ const FORBIDDEN_SECRETS = [
 // ============================================================================
 
 const EnvSchema = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  NODE_ENV: z
+    .enum(['development', 'test', 'production'])
+    .default('development'),
 
   // Server Configuration
   PORT: z.string().default('4000'),
   HOST: z.string().default('0.0.0.0'),
-  BASE_URL: z.string().url().optional().refine(
-    (val) => process.env.NODE_ENV !== 'production' || val,
-    { message: 'BASE_URL is required in production for JWT issuer' }
-  ),
+  BASE_URL: z
+    .string()
+    .url()
+    .optional()
+    .refine((val) => process.env.NODE_ENV !== 'production' || val, {
+      message: 'BASE_URL is required in production for JWT issuer',
+    }),
 
   // Database
-  DATABASE_URL: z.string().url({ message: 'DATABASE_URL must be a valid URL' }).refine(
-    (val) => {
-      // In production, check for weak passwords in connection string
-      if (process.env.NODE_ENV === 'production') {
-        try {
-          const url = new URL(val);
-          const weakPasswords = ['password', 'admin', '12345', 'postgres', 'root'];
-          if (url.password && weakPasswords.some(weak => url.password.toLowerCase().includes(weak))) {
-            return false;
+  DATABASE_URL: z
+    .string()
+    .url({ message: 'DATABASE_URL must be a valid URL' })
+    .refine(
+      (val) => {
+        // In production, check for weak passwords in connection string
+        if (process.env.NODE_ENV === 'production') {
+          try {
+            const url = new URL(val);
+            const weakPasswords = [
+              'password',
+              'admin',
+              '12345',
+              'postgres',
+              'root',
+            ];
+            if (
+              url.password &&
+              weakPasswords.some((weak) =>
+                url.password.toLowerCase().includes(weak)
+              )
+            ) {
+              return false;
+            }
+          } catch {
+            // URL parsing failed - let the url() validator handle it
           }
-        } catch {
-          // URL parsing failed - let the url() validator handle it
         }
-      }
-      return true;
-    },
-    { message: 'DATABASE_URL contains weak credentials in production' }
-  ),
+        return true;
+      },
+      { message: 'DATABASE_URL contains weak credentials in production' }
+    ),
   TEST_DATABASE_URL: z.string().url().optional(),
 
   // JWT Authentication
-  JWT_SECRET: z.string()
+  JWT_SECRET: z
+    .string()
     .min(32, 'JWT_SECRET must be at least 32 characters')
-    .refine(
-      (val) => !FORBIDDEN_SECRETS.includes(val.toLowerCase()),
-      { message: 'JWT_SECRET cannot be a common/example value' }
-    )
+    .refine((val) => !FORBIDDEN_SECRETS.includes(val.toLowerCase()), {
+      message: 'JWT_SECRET cannot be a common/example value',
+    })
     .refine(
       (val) => process.env.NODE_ENV !== 'production' || val.length >= 64,
       { message: 'JWT_SECRET should be at least 64 characters in production' }
@@ -117,15 +136,21 @@ const EnvSchema = z.object({
   JWT_EXPIRES_IN: z.string().default('7d'),
 
   // Encryption
-  ENCRYPTION_KEY: z.string()
+  ENCRYPTION_KEY: z
+    .string()
     .length(64, 'ENCRYPTION_KEY must be exactly 64 hex characters (32 bytes)')
     .regex(/^[0-9a-fA-F]{64}$/, 'ENCRYPTION_KEY must be valid hexadecimal')
     .optional(),
-  MASTER_ENCRYPTION_KEY: z.string()
+  MASTER_ENCRYPTION_KEY: z
+    .string()
     .length(64, 'MASTER_ENCRYPTION_KEY must be exactly 64 hex characters')
-    .regex(/^[0-9a-fA-F]{64}$/, 'MASTER_ENCRYPTION_KEY must be valid hexadecimal')
+    .regex(
+      /^[0-9a-fA-F]{64}$/,
+      'MASTER_ENCRYPTION_KEY must be valid hexadecimal'
+    )
     .optional(),
-  BCRYPT_SALT_ROUNDS: z.coerce.number()
+  BCRYPT_SALT_ROUNDS: z.coerce
+    .number()
     .min(10, 'BCRYPT_SALT_ROUNDS must be at least 10')
     .max(15, 'BCRYPT_SALT_ROUNDS must be at most 15')
     .default(12),
@@ -133,9 +158,9 @@ const EnvSchema = z.object({
   // Web3 / Wallet
   WEB3_RPC_URL: z.string().url().optional(),
   SUPPORTED_CHAINS: z.string().default('1,137,42161'),
-  WALLET_AUTH_MESSAGE_TEMPLATE: z.string().default(
-    'Sign this message to authenticate with UjamaaDAO: {nonce}'
-  ),
+  WALLET_AUTH_MESSAGE_TEMPLATE: z
+    .string()
+    .default('Sign this message to authenticate with UjamaaDAO: {nonce}'),
   NONCE_EXPIRY_SECONDS: z.coerce.number().default(300),
 
   // Rate Limiting
@@ -152,9 +177,10 @@ const EnvSchema = z.object({
   // CORS
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
   CORS_CREDENTIALS: z.coerce.boolean().default(true),
-  ALLOWED_ORIGINS: z.string().optional().transform((val) => 
-    val ? val.split(',').map(o => o.trim()) : []
-  ),
+  ALLOWED_ORIGINS: z
+    .string()
+    .optional()
+    .transform((val) => (val ? val.split(',').map((o) => o.trim()) : [])),
 
   // Redis
   REDIS_URL: z.string().optional(),
@@ -178,14 +204,18 @@ const EnvSchema = z.object({
 
   // M-Pesa
   ENABLE_MPESA: z.coerce.boolean().default(false),
-  MPESA_CONSUMER_KEY: z.string().optional().refine(
-    (val) => !process.env.ENABLE_MPESA || val,
-    { message: 'MPESA_CONSUMER_KEY required when ENABLE_MPESA is true' }
-  ),
-  MPESA_CONSUMER_SECRET: z.string().optional().refine(
-    (val) => !process.env.ENABLE_MPESA || val,
-    { message: 'MPESA_CONSUMER_SECRET required when ENABLE_MPESA is true' }
-  ),
+  MPESA_CONSUMER_KEY: z
+    .string()
+    .optional()
+    .refine((val) => !process.env.ENABLE_MPESA || val, {
+      message: 'MPESA_CONSUMER_KEY required when ENABLE_MPESA is true',
+    }),
+  MPESA_CONSUMER_SECRET: z
+    .string()
+    .optional()
+    .refine((val) => !process.env.ENABLE_MPESA || val, {
+      message: 'MPESA_CONSUMER_SECRET required when ENABLE_MPESA is true',
+    }),
   MPESA_PASSKEY: z.string().optional(),
   MPESA_SHORTCODE: z.string().optional(),
   MPESA_ENVIRONMENT: z.enum(['sandbox', 'production']).default('sandbox'),
@@ -217,7 +247,7 @@ function redactSensitiveData(obj: any): any {
   const redacted = Array.isArray(obj) ? [...obj] : { ...obj };
 
   for (const key in redacted) {
-    if (SENSITIVE_KEYS.some(sensitive => key.includes(sensitive))) {
+    if (SENSITIVE_KEYS.some((sensitive) => key.includes(sensitive))) {
       redacted[key] = '[REDACTED]';
     } else if (typeof redacted[key] === 'object' && redacted[key] !== null) {
       redacted[key] = redactSensitiveData(redacted[key]);
@@ -237,29 +267,40 @@ let envData: z.infer<typeof EnvSchema>;
 
 if (!parsed.success) {
   if (process.env.NODE_ENV === 'test') {
-    console.warn('[env] ⚠️  Validation failed in test mode — applying safe defaults');
-    
+    console.warn(
+      '[env] ⚠️  Validation failed in test mode — applying safe defaults'
+    );
+
     // Provide safe defaults for test environment
     const testDefaults = {
-      JWT_SECRET: process.env.JWT_SECRET || 'test-jwt-secret-must-be-at-least-32-characters-long-abc123xyz789',
-      DATABASE_URL: process.env.DATABASE_URL || process.env.TEST_DATABASE_URL || 'postgresql://test:test@localhost:5432/test_db',
+      JWT_SECRET:
+        process.env.JWT_SECRET ||
+        'test-jwt-secret-must-be-at-least-32-characters-long-abc123xyz789',
+      DATABASE_URL:
+        process.env.DATABASE_URL ||
+        process.env.TEST_DATABASE_URL ||
+        'postgresql://test:test@localhost:5432/test_db',
       BASE_URL: process.env.BASE_URL || 'http://localhost:4000',
       REDIS_URL: process.env.REDIS_URL, // Optional in tests
     };
-    
+
     // Merge test defaults with existing env vars
     const testEnv = { ...testDefaults, ...process.env };
-    
+
     // Re-validate with test defaults
     const testParsed = EnvSchema.safeParse(testEnv);
-    
+
     if (!testParsed.success) {
       console.error('[env] ❌ Critical env vars missing even in test mode:');
-      console.error(JSON.stringify(redactSensitiveData(testParsed.error.format()), null, 2));
-      console.error('\n[env] Even test mode requires valid JWT_SECRET and DATABASE_URL');
+      console.error(
+        JSON.stringify(redactSensitiveData(testParsed.error.format()), null, 2)
+      );
+      console.error(
+        '\n[env] Even test mode requires valid JWT_SECRET and DATABASE_URL'
+      );
       process.exit(1);
     }
-    
+
     envData = testParsed.data;
     console.log('[env] ✅ Test mode initialized with safe defaults');
   } else {
@@ -267,7 +308,9 @@ if (!parsed.success) {
     console.error('[env] ❌ Invalid environment configuration:');
     const safeError = redactSensitiveData(parsed.error.format());
     console.error(JSON.stringify(safeError, null, 2));
-    console.error('\n[env] Please check your environment variables and try again.');
+    console.error(
+      '\n[env] Please check your environment variables and try again.'
+    );
     process.exit(1);
   }
 } else {
@@ -312,12 +355,14 @@ if (isProd) {
   }
 
   if (!env.REDIS_URL && env.ENABLE_TOKEN_REVOCATION) {
-    warnings.push('Token revocation enabled but REDIS_URL not configured (will use in-memory - not suitable for multi-server)');
+    warnings.push(
+      'Token revocation enabled but REDIS_URL not configured (will use in-memory - not suitable for multi-server)'
+    );
   }
 
   if (warnings.length > 0) {
     console.warn('[env] ⚠️  PRODUCTION WARNINGS:');
-    warnings.forEach(w => console.warn(`   - ${w}`));
+    warnings.forEach((w) => console.warn(`   - ${w}`));
   }
 }
 

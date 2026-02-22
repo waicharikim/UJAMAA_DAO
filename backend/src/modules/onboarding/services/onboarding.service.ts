@@ -12,11 +12,11 @@
  * Version: 2.0 — December 2025
  */
 
-import { prisma } from "../../../core/database/client.js";
-import { participationRightsService } from "../../economy/services/participationRights.service.js";
-import { ParticipationRightsReason } from "../../economy/types.js";
-import { ApiError } from "../../../core/errors/ApiError.js";
-import { logger } from "../../../core/logger/logger.js";
+import { prisma } from '../../../core/database/client.js';
+import { participationRightsService } from '../../economy/services/participationRights.service.js';
+import { ParticipationRightsReason } from '../../economy/types.js';
+import { ApiError } from '../../../core/errors/ApiError.js';
+import { logger } from '../../../core/logger/logger.js';
 
 class OnboardingService {
   /**
@@ -28,12 +28,23 @@ class OnboardingService {
     });
 
     const tutorials = await prisma.onboardingTutorial.findMany({
-      select: { key: true, title: true, requiredFor: true, ipReward: true, prReward: true },
+      select: {
+        key: true,
+        title: true,
+        requiredFor: true,
+        ipReward: true,
+        prReward: true,
+      },
     });
 
     const completions = await prisma.userTutorialCompletion.findMany({
       where: { userId },
-      select: { tutorialId: true, completed: true, ipEarned: true, prEarned: true },
+      select: {
+        tutorialId: true,
+        completed: true,
+        ipEarned: true,
+        prEarned: true,
+      },
     });
 
     const milestones = await prisma.onboardingMilestone.findMany({
@@ -58,7 +69,7 @@ class OnboardingService {
     });
 
     if (!tutorial || !tutorial.active) {
-      throw ApiError.notFound("Tutorial", tutorialKey);
+      throw ApiError.notFound('Tutorial', tutorialKey);
     }
 
     const existing = await prisma.userTutorialCompletion.findUnique({
@@ -71,7 +82,12 @@ class OnboardingService {
 
     const completion = await prisma.userTutorialCompletion.upsert({
       where: { userId_tutorialId: { userId, tutorialId: tutorial.id } },
-      update: { completed: true, completedAt: new Date(), ipEarned: tutorial.ipReward, prEarned: tutorial.prReward },
+      update: {
+        completed: true,
+        completedAt: new Date(),
+        ipEarned: tutorial.ipReward,
+        prEarned: tutorial.prReward,
+      },
       create: {
         userId,
         tutorialId: tutorial.id,
@@ -94,7 +110,7 @@ class OnboardingService {
 
     // TODO: Award IP when impact point service ready
 
-    logger.info({ userId, tutorialKey }, "Tutorial completed");
+    logger.info({ userId, tutorialKey }, 'Tutorial completed');
 
     return completion;
   }
@@ -127,7 +143,7 @@ class OnboardingService {
       { milestoneKey }
     );
 
-    logger.info({ userId, milestoneKey }, "Onboarding milestone achieved");
+    logger.info({ userId, milestoneKey }, 'Onboarding milestone achieved');
 
     return milestone;
   }
@@ -135,7 +151,10 @@ class OnboardingService {
   /**
    * Check if user has completed required tutorials for a feature
    */
-  async hasRequiredTutorials(userId: string, requiredFor: string): Promise<boolean> {
+  async hasRequiredTutorials(
+    userId: string,
+    requiredFor: string
+  ): Promise<boolean> {
     const required = await prisma.onboardingTutorial.findMany({
       where: { requiredFor, active: true },
     });
@@ -145,7 +164,7 @@ class OnboardingService {
     const completed = await prisma.userTutorialCompletion.count({
       where: {
         userId,
-        tutorialId: { in: required.map(t => t.id) },
+        tutorialId: { in: required.map((t) => t.id) },
         completed: true,
       },
     });

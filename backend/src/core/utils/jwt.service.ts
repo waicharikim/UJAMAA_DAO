@@ -7,29 +7,31 @@
  * Security Hardened: January 2026
  */
 
-import jwt, { SignOptions } from "jsonwebtoken";
-import { env } from "./env.js";
-import { AuthUser, VerificationLevel } from "../types/Ujamaadao.types.js";
-import { generateRandomHex } from "../utils/crypto.js";
+import jwt, { SignOptions } from 'jsonwebtoken';
+import { env } from './env.js';
+import { AuthUser, VerificationLevel } from '../types/Ujamaadao.types.js';
+import { generateRandomHex } from '../utils/crypto.js';
 
 const JWT_SECRET = env.JWT_SECRET;
-if (!JWT_SECRET) throw new Error("JWT_SECRET is required");
+if (!JWT_SECRET) throw new Error('JWT_SECRET is required');
 
 if (JWT_SECRET.length < 32) {
-  throw new Error("JWT_SECRET must be at least 32 characters for adequate security");
+  throw new Error(
+    'JWT_SECRET must be at least 32 characters for adequate security'
+  );
 }
 
-const JWT_ISSUER = env.JWT_ISSUER || "ujamaadao.org";
-const JWT_AUDIENCE = env.JWT_AUDIENCE || "ujamaadao-api";
-const JWT_ALGORITHM = "HS256" as const;
+const JWT_ISSUER = env.JWT_ISSUER || 'ujamaadao.org';
+const JWT_AUDIENCE = env.JWT_AUDIENCE || 'ujamaadao-api';
+const JWT_ALGORITHM = 'HS256' as const;
 
 const VALID_VERIFICATION_LEVELS: VerificationLevel[] = [
-  "UNVERIFIED",
-  "EMAIL_VERIFIED",
-  "PHONE_VERIFIED",
-  "COMMUNITY_VERIFIED",
-  "LOCATION_VERIFIED",
-  "FULL_VERIFIED",
+  'UNVERIFIED',
+  'EMAIL_VERIFIED',
+  'PHONE_VERIFIED',
+  'COMMUNITY_VERIFIED',
+  'LOCATION_VERIFIED',
+  'FULL_VERIFIED',
 ];
 
 const MAX_TOKEN_SIZE = 2048;
@@ -55,7 +57,7 @@ export interface JwtPayload {
   utilityTokens?: number;
   participationRights?: number;
   sessionId?: string;
-  type?: "permanent" | "temporary" | "refresh" | "magic-link" | "access";
+  type?: 'permanent' | 'temporary' | 'refresh' | 'magic-link' | 'access';
 
   jti?: string;
   iss?: string;
@@ -83,7 +85,7 @@ function safeNumericValue(value: number | undefined | null): number {
 
 /**
  * Sign JWT with proper type handling
- * 
+ *
  * @param payload - JWT payload (sub is required)
  * @param expiresIn - Expiration time (e.g., "1h", "7d", 3600) or undefined for no expiry
  * @param notBefore - Not valid before (seconds or time string) - default 0 (valid immediately)
@@ -93,8 +95,8 @@ export function signJwtToken(
   expiresIn?: string | number,
   notBefore?: string | number
 ): string {
-  if (!payload.sub || payload.sub.trim() === "") {
-    throw new Error("JWT subject (sub) is required");
+  if (!payload.sub || payload.sub.trim() === '') {
+    throw new Error('JWT subject (sub) is required');
   }
 
   const jti = generateRandomHex(16);
@@ -127,7 +129,9 @@ export function signJwtToken(
   const token = jwt.sign(clean, JWT_SECRET, options);
 
   if (token.length > MAX_TOKEN_SIZE) {
-    throw new Error(`Generated token too large (${token.length} > ${MAX_TOKEN_SIZE})`);
+    throw new Error(
+      `Generated token too large (${token.length} > ${MAX_TOKEN_SIZE})`
+    );
   }
 
   return token;
@@ -136,7 +140,9 @@ export function signJwtToken(
 /**
  * Verify JWT
  */
-export function verifyJwtToken<T extends JwtPayload = JwtPayload>(token: string): T {
+export function verifyJwtToken<T extends JwtPayload = JwtPayload>(
+  token: string
+): T {
   try {
     const decoded = jwt.verify(token, JWT_SECRET, {
       algorithms: [JWT_ALGORITHM],
@@ -145,12 +151,12 @@ export function verifyJwtToken<T extends JwtPayload = JwtPayload>(token: string)
     }) as T;
 
     if (!decoded.jti) {
-      throw new Error("Token missing jti claim");
+      throw new Error('Token missing jti claim');
     }
 
     return decoded;
   } catch (error) {
-    throw error instanceof jwt.JsonWebTokenError 
+    throw error instanceof jwt.JsonWebTokenError
       ? new Error(`JWT verification failed: ${error.message}`)
       : error;
   }
@@ -160,13 +166,14 @@ export function verifyJwtToken<T extends JwtPayload = JwtPayload>(token: string)
  * Map payload to AuthUser
  */
 export function jwtPayloadToAuthUser(payload: JwtPayload): AuthUser {
-  const verificationLevel: VerificationLevel = 
-    payload.verificationLevel && VALID_VERIFICATION_LEVELS.includes(payload.verificationLevel)
+  const verificationLevel: VerificationLevel =
+    payload.verificationLevel &&
+    VALID_VERIFICATION_LEVELS.includes(payload.verificationLevel)
       ? payload.verificationLevel
-      : "UNVERIFIED";
+      : 'UNVERIFIED';
 
-  const roles = Array.isArray(payload.roles) 
-    ? payload.roles.filter(r => typeof r === "string")
+  const roles = Array.isArray(payload.roles)
+    ? payload.roles.filter((r) => typeof r === 'string')
     : [];
 
   return {
@@ -197,14 +204,14 @@ export function jwtPayloadToAuthUser(payload: JwtPayload): AuthUser {
  * Includes 30s notBefore for clock skew protection
  */
 export function signAccessToken(payload: JwtPayload): string {
-  return signJwtToken(payload, "1h", 30);
+  return signJwtToken(payload, '1h', 30);
 }
 
 /**
  * Sign refresh token (long-lived, 30 days)
  */
 export function signRefreshToken(payload: JwtPayload): string {
-  return signJwtToken({ ...payload, type: "refresh" }, "30d");
+  return signJwtToken({ ...payload, type: 'refresh' }, '30d');
 }
 
 /**
@@ -212,7 +219,7 @@ export function signRefreshToken(payload: JwtPayload): string {
  * Includes 30s notBefore for clock skew protection
  */
 export function signMagicLinkToken(payload: JwtPayload): string {
-  return signJwtToken({ ...payload, type: "magic-link" }, "15m", 30);
+  return signJwtToken({ ...payload, type: 'magic-link' }, '15m', 30);
 }
 
 /**
@@ -220,18 +227,21 @@ export function signMagicLinkToken(payload: JwtPayload): string {
  * Used for "remember me" functionality
  */
 export function signPermanentToken(payload: JwtPayload): string {
-  return signJwtToken({ ...payload, type: "permanent" }, "180d");
+  return signJwtToken({ ...payload, type: 'permanent' }, '180d');
 }
 
 /**
  * Sign temporary session token (configurable expiry)
- * 
+ *
  * @param payload - JWT payload
  * @param expiresIn - Custom expiration (default from env or 7d)
  */
-export function signSessionToken(payload: JwtPayload, expiresIn?: string): string {
+export function signSessionToken(
+  payload: JwtPayload,
+  expiresIn?: string
+): string {
   return signJwtToken(
-    { ...payload, type: "temporary" }, 
-    expiresIn || env.JWT_EXPIRES_IN || "7d"
+    { ...payload, type: 'temporary' },
+    expiresIn || env.JWT_EXPIRES_IN || '7d'
   );
 }

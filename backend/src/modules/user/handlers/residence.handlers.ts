@@ -2,16 +2,16 @@
  * @file src/modules/user/handlers/residence.handlers.ts
  * @description
  * Handlers for residence change requests and temporary location management
- * 
+ *
  * Version: 1.0 — February 2026
  */
 
-import { Response } from "express";
-import { AuthRequest } from "../../../core/types/Ujamaadao.types.js";
-import { userService } from "../services/user.service.js";
-import { sendSuccess } from "../../../core/utils/response.js";
-import { ApiError } from "../../../core/errors/ApiError.js";
-import { logger } from "../../../core/logger/logger.js";
+import { Response } from 'express';
+import { AuthRequest } from '../../../core/types/Ujamaadao.types.js';
+import { userService } from '../services/user.service.js';
+import { sendSuccess } from '../../../core/utils/response.js';
+import { ApiError } from '../../../core/errors/ApiError.js';
+import { logger } from '../../../core/logger/logger.js';
 
 /**
  * POST /users/me/request-residence-change
@@ -27,13 +27,17 @@ export async function requestResidenceChange(req: AuthRequest, res: Response) {
     sendSuccess(
       res,
       request,
-      "Residence change request submitted successfully",
+      'Residence change request submitted successfully',
       201
     );
   } catch (error) {
     logger.error(
-      { operationType: "USER_RESIDENCE", userId, error: error instanceof Error ? error.message : String(error) },
-      "Failed to request residence change"
+      {
+        operationType: 'USER_RESIDENCE',
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      'Failed to request residence change'
     );
     throw error;
   }
@@ -43,7 +47,10 @@ export async function requestResidenceChange(req: AuthRequest, res: Response) {
  * GET /users/me/residence-change-requests
  * Get user's residence change requests
  */
-export async function getMyResidenceChangeRequests(req: AuthRequest, res: Response) {
+export async function getMyResidenceChangeRequests(
+  req: AuthRequest,
+  res: Response
+) {
   const userId = req.user!.userId;
 
   try {
@@ -52,13 +59,17 @@ export async function getMyResidenceChangeRequests(req: AuthRequest, res: Respon
     sendSuccess(
       res,
       requests,
-      "Residence change requests retrieved successfully",
+      'Residence change requests retrieved successfully',
       200
     );
   } catch (error) {
     logger.error(
-      { operationType: "USER_RESIDENCE", userId, error: error instanceof Error ? error.message : String(error) },
-      "Failed to retrieve residence change requests"
+      {
+        operationType: 'USER_RESIDENCE',
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      'Failed to retrieve residence change requests'
     );
     throw error;
   }
@@ -78,18 +89,21 @@ export async function setTemporaryLocation(req: AuthRequest, res: Response) {
       throw ApiError.badRequest("Invalid 'until' date format");
     }
 
-    const result = await userService.setTemporaryLocation(userId, wardId, untilDate);
-
-    sendSuccess(
-      res,
-      result,
-      "Temporary location set successfully",
-      200
+    const result = await userService.setTemporaryLocation(
+      userId,
+      wardId,
+      untilDate
     );
+
+    sendSuccess(res, result, 'Temporary location set successfully', 200);
   } catch (error) {
     logger.error(
-      { operationType: "USER_RESIDENCE", userId, error: error instanceof Error ? error.message : String(error) },
-      "Failed to set temporary location"
+      {
+        operationType: 'USER_RESIDENCE',
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      'Failed to set temporary location'
     );
     throw error;
   }
@@ -108,13 +122,17 @@ export async function clearTemporaryLocation(req: AuthRequest, res: Response) {
     sendSuccess(
       res,
       { success: true },
-      "Temporary location cleared successfully",
+      'Temporary location cleared successfully',
       200
     );
   } catch (error) {
     logger.error(
-      { operationType: "USER_RESIDENCE", userId, error: error instanceof Error ? error.message : String(error) },
-      "Failed to clear temporary location"
+      {
+        operationType: 'USER_RESIDENCE',
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      'Failed to clear temporary location'
     );
     throw error;
   }

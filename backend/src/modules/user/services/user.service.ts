@@ -16,10 +16,11 @@
  * Updated: Added full cleanup methods for BullMQ worker
  */
 
-import { prisma } from "../../../core/database/client.js";
-import { ApiError } from "../../../core/errors/ApiError.js";
-import { logger } from "../../../core/logger/logger.js";
-import { eventBus } from "../../../core/utils/eventBus.js";
+import { prisma } from '../../../core/database/client.js';
+import { Prisma } from '@prisma/client';
+import { ApiError } from '../../../core/errors/ApiError.js';
+import { logger } from '../../../core/logger/logger.js';
+import { eventBus } from '../../../core/utils/eventBus.js';
 import {
   UpdateProfileDto,
   SelectIndustriesDto,
@@ -32,8 +33,8 @@ import {
   UserGoodsServiceResponse,
   ResidenceChangeRequestResponse,
   TemporaryLocationResponse,
-  VerificationStatusResponse
-} from "../user.types.js";
+  VerificationStatusResponse,
+} from '../user.types.js';
 
 const RESIDENCE_CHANGE_COOLDOWN_MONTHS = 6;
 const TEMPORARY_LOCATION_MAX_MONTHS = 6;
@@ -69,13 +70,13 @@ class UserService {
       },
     });
 
-    if (!user) throw ApiError.notFound("User", userId);
+    if (!user) throw ApiError.notFound('User', userId);
 
     // Mock impact data (replace with real services when ready)
     const impactBreakdown = { breakdown: [], totals: {} };
     const globalIP = user.globalImpactPoints || 0;
     const primaryImpactPoints = user.primaryWardId
-      ? { ward: 0, tier: "BRONZE" }
+      ? { ward: { points: 0, tier: 'BRONZE' } }
       : null;
 
     const primaryHierarchy = user.primaryWard
@@ -152,7 +153,7 @@ class UserService {
     if (dto.name) data.name = dto.name;
     if (dto.avatarUrl) data.avatarUrl = dto.avatarUrl;
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       if (dto.privacySettings) {
         await tx.userPrivacySettings.upsert({
           where: { userId },
@@ -178,11 +179,14 @@ class UserService {
     });
 
     logger.info(
-      { operationType: "USER_UPDATE", userId, updates: Object.keys(dto) },
-      "User profile updated"
+      { operationType: 'USER_UPDATE', userId, updates: Object.keys(dto) },
+      'User profile updated'
     );
 
-    eventBus.publish("user.profile.updated", { userId, updates: Object.keys(dto) });
+    eventBus.publish('user.profile.updated', {
+      userId,
+      updates: Object.keys(dto),
+    });
 
     return { success: true };
   }
@@ -194,7 +198,7 @@ class UserService {
     const userIndustries = await prisma.userIndustry.findMany({
       where: { userId },
       include: { industry: true },
-      orderBy: { isPrimary: "desc" },
+      orderBy: { isPrimary: 'desc' },
     });
 
     return userIndustries.map((ui) => ({
@@ -209,7 +213,7 @@ class UserService {
    */
   async selectIndustries(userId: string, dto: SelectIndustriesDto) {
     if (dto.industryIds.length > 3) {
-      throw ApiError.badRequest("Maximum 3 industries allowed");
+      throw ApiError.badRequest('Maximum 3 industries allowed');
     }
 
     const industries = await prisma.industry.findMany({
@@ -217,10 +221,10 @@ class UserService {
     });
 
     if (industries.length !== dto.industryIds.length) {
-      throw ApiError.validationError("One or more industries are invalid");
+      throw ApiError.validationError('One or more industries are invalid');
     }
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.userIndustry.deleteMany({ where: { userId } });
 
       await tx.userIndustry.createMany({
@@ -235,11 +239,18 @@ class UserService {
     });
 
     logger.info(
-      { operationType: "USER_INDUSTRIES", userId, count: dto.industryIds.length },
-      "User industries updated"
+      {
+        operationType: 'USER_INDUSTRIES',
+        userId,
+        count: dto.industryIds.length,
+      },
+      'User industries updated'
     );
 
-    eventBus.publish("user.industries.updated", { userId, industryIds: dto.industryIds });
+    eventBus.publish('user.industries.updated', {
+      userId,
+      industryIds: dto.industryIds,
+    });
 
     return { success: true };
   }
@@ -247,7 +258,9 @@ class UserService {
   /**
    * Get user's selected goods/services
    */
-  async getUserGoodsServices(userId: string): Promise<UserGoodsServiceResponse[]> {
+  async getUserGoodsServices(
+    userId: string
+  ): Promise<UserGoodsServiceResponse[]> {
     const userGoodsServices = await prisma.userGoodsService.findMany({
       where: { userId },
       include: { goodsService: true },
@@ -270,7 +283,7 @@ class UserService {
       dto.goodsServiceIds.length !== dto.canProvide.length ||
       dto.goodsServiceIds.length !== dto.canRequest.length
     ) {
-      throw ApiError.badRequest("Arrays must have same length");
+      throw ApiError.badRequest('Arrays must have same length');
     }
 
     const goodsServices = await prisma.goodsService.findMany({
@@ -278,10 +291,12 @@ class UserService {
     });
 
     if (goodsServices.length !== dto.goodsServiceIds.length) {
-      throw ApiError.validationError("One or more goods/services are invalid or inactive");
+      throw ApiError.validationError(
+        'One or more goods/services are invalid or inactive'
+      );
     }
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.userGoodsService.deleteMany({ where: { userId } });
 
       await tx.userGoodsService.createMany({
@@ -295,11 +310,18 @@ class UserService {
     });
 
     logger.info(
-      { operationType: "USER_GOODS", userId, count: dto.goodsServiceIds.length },
-      "User goods/services updated"
+      {
+        operationType: 'USER_GOODS',
+        userId,
+        count: dto.goodsServiceIds.length,
+      },
+      'User goods/services updated'
     );
 
-    eventBus.publish("user.goods_services.updated", { userId, count: dto.goodsServiceIds.length });
+    eventBus.publish('user.goods_services.updated', {
+      userId,
+      count: dto.goodsServiceIds.length,
+    });
 
     return { success: true };
   }
@@ -307,14 +329,16 @@ class UserService {
   /**
    * Get user's residence change requests
    */
-  async getUserResidenceChangeRequests(userId: string): Promise<ResidenceChangeRequestResponse[]> {
+  async getUserResidenceChangeRequests(
+    userId: string
+  ): Promise<ResidenceChangeRequestResponse[]> {
     const requests = await prisma.residenceChangeRequest.findMany({
       where: { userId },
       include: {
         newWard: { select: { id: true, name: true } },
         oldWard: { select: { id: true, name: true } },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: 'desc' },
     });
 
     return requests.map((req) => ({
@@ -343,29 +367,34 @@ class UserService {
       select: { lastResidenceChangeAt: true, primaryWardId: true },
     });
 
-    if (!user) throw ApiError.notFound("User");
+    if (!user) throw ApiError.notFound('User');
 
     if (user.lastResidenceChangeAt) {
       const monthsSince =
         (Date.now() - user.lastResidenceChangeAt.getTime()) /
         (30 * 24 * 60 * 60 * 1000);
       if (monthsSince < RESIDENCE_CHANGE_COOLDOWN_MONTHS) {
-        const remaining = Math.ceil(RESIDENCE_CHANGE_COOLDOWN_MONTHS - monthsSince);
-        throw ApiError.forbidden(`Residence change on cooldown. ${remaining} month(s) remaining.`);
+        const remaining = Math.ceil(
+          RESIDENCE_CHANGE_COOLDOWN_MONTHS - monthsSince
+        );
+        throw ApiError.forbidden(
+          `Residence change on cooldown. ${remaining} month(s) remaining.`
+        );
       }
     }
 
     const pending = await prisma.residenceChangeRequest.findFirst({
-      where: { userId, status: "PENDING" },
+      where: { userId, status: 'PENDING' },
     });
 
-    if (pending) throw ApiError.conflict("Residence change request already pending");
+    if (pending)
+      throw ApiError.conflict('Residence change request already pending');
 
     const newWard = await prisma.ward.findUnique({
       where: { id: dto.newPrimaryWardId },
     });
 
-    if (!newWard) throw ApiError.notFound("Ward", dto.newPrimaryWardId);
+    if (!newWard) throw ApiError.notFound('Ward', dto.newPrimaryWardId);
 
     const request = await prisma.residenceChangeRequest.create({
       data: {
@@ -373,17 +402,21 @@ class UserService {
         oldWardId: user.primaryWardId,
         newPrimaryWardId: dto.newPrimaryWardId,
         reason: dto.reason,
-        proofUrl: dto.proofUrl,
+        proofUrl: dto.proofUrl ?? '',
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
 
     logger.info(
-      { operationType: "USER_RESIDENCE_REQUEST", userId, requestId: request.id },
-      "Residence change requested"
+      {
+        operationType: 'USER_RESIDENCE_REQUEST',
+        userId,
+        requestId: request.id,
+      },
+      'Residence change requested'
     );
 
-    eventBus.publish("user.residence_change.requested", {
+    eventBus.publish('user.residence_change.requested', {
       userId,
       requestId: request.id,
       newWardId: dto.newPrimaryWardId,
@@ -395,19 +428,27 @@ class UserService {
   /**
    * Set temporary location
    */
-  async setTemporaryLocation(userId: string, wardId: string, until: Date): Promise<TemporaryLocationResponse> {
+  async setTemporaryLocation(
+    userId: string,
+    wardId: string,
+    until: Date
+  ): Promise<TemporaryLocationResponse> {
     if (isNaN(until.getTime()) || until <= new Date()) {
-      throw ApiError.validationError("Invalid expiry date — must be in the future");
+      throw ApiError.validationError(
+        'Invalid expiry date — must be in the future'
+      );
     }
 
     const maxDate = new Date();
     maxDate.setMonth(maxDate.getMonth() + TEMPORARY_LOCATION_MAX_MONTHS);
     if (until > maxDate) {
-      throw ApiError.validationError(`Temporary location cannot exceed ${TEMPORARY_LOCATION_MAX_MONTHS} months`);
+      throw ApiError.validationError(
+        `Temporary location cannot exceed ${TEMPORARY_LOCATION_MAX_MONTHS} months`
+      );
     }
 
     const ward = await prisma.ward.findUnique({ where: { id: wardId } });
-    if (!ward) throw ApiError.notFound("Ward");
+    if (!ward) throw ApiError.notFound('Ward');
 
     const user = await prisma.user.update({
       where: { id: userId },
@@ -418,11 +459,16 @@ class UserService {
     });
 
     logger.info(
-      { operationType: "USER_TEMP_LOCATION", userId, wardId, until: until.toISOString() },
-      "Temporary location set"
+      {
+        operationType: 'USER_TEMP_LOCATION',
+        userId,
+        wardId,
+        until: until.toISOString(),
+      },
+      'Temporary location set'
     );
 
-    eventBus.publish("user.temporary_location.set", { userId, wardId, until });
+    eventBus.publish('user.temporary_location.set', { userId, wardId, until });
 
     return {
       currentLocationId: user.currentLocationId,
@@ -443,9 +489,12 @@ class UserService {
       },
     });
 
-    logger.info({ operationType: "USER_TEMP_LOCATION_CLEAR", userId }, "Temporary location cleared");
+    logger.info(
+      { operationType: 'USER_TEMP_LOCATION_CLEAR', userId },
+      'Temporary location cleared'
+    );
 
-    eventBus.publish("user.temporary_location.cleared", { userId });
+    eventBus.publish('user.temporary_location.cleared', { userId });
 
     return { success: true };
   }
@@ -454,7 +503,9 @@ class UserService {
    * Get privacy settings (create default if missing)
    */
   async getPrivacySettings(userId: string) {
-    let settings = await prisma.userPrivacySettings.findUnique({ where: { userId } });
+    let settings = await prisma.userPrivacySettings.findUnique({
+      where: { userId },
+    });
 
     if (!settings) {
       settings = await prisma.userPrivacySettings.create({
@@ -469,7 +520,9 @@ class UserService {
    * Get accessibility settings (create default if missing)
    */
   async getAccessibilitySettings(userId: string) {
-    let settings = await prisma.userAccessibility.findUnique({ where: { userId } });
+    let settings = await prisma.userAccessibility.findUnique({
+      where: { userId },
+    });
 
     if (!settings) {
       settings = await prisma.userAccessibility.create({
@@ -490,17 +543,22 @@ class UserService {
       select: { verificationLevel: true },
     });
 
-    if (!user) throw ApiError.notFound("User");
+    if (!user) throw ApiError.notFound('User');
     if (user.verificationLevel !== 'PHONE_VERIFIED') {
-      throw ApiError.insufficientVerification("Complete phone verification first");
+      throw ApiError.insufficientVerification(
+        'Complete phone verification first'
+      );
     }
 
     const existing = await prisma.verificationRequest.findUnique({
       where: { userId_type: { userId, type: 'COMMUNITY' } },
     });
 
-    if (existing && ['PENDING', 'VOUCHING', 'PAYMENT_PENDING'].includes(existing.status)) {
-      throw ApiError.conflict("Verification request already in progress");
+    if (
+      existing &&
+      ['PENDING', 'VOUCHING', 'PAYMENT_PENDING'].includes(existing.status)
+    ) {
+      throw ApiError.conflict('Verification request already in progress');
     }
 
     const request = await prisma.verificationRequest.create({
@@ -508,16 +566,18 @@ class UserService {
         userId,
         type: 'COMMUNITY',
         status: 'VOUCHING',
-        expiresAt: new Date(Date.now() + VOUCH_WINDOW_DAYS * 24 * 60 * 60 * 1000),
+        expiresAt: new Date(
+          Date.now() + VOUCH_WINDOW_DAYS * 24 * 60 * 60 * 1000
+        ),
       },
     });
 
     logger.info(
-      { operationType: "VERIFICATION_REQUEST", userId, requestId: request.id },
-      "Community verification requested"
+      { operationType: 'VERIFICATION_REQUEST', userId, requestId: request.id },
+      'Community verification requested'
     );
 
-    eventBus.publish("user.verification.requested", {
+    eventBus.publish('user.verification.requested', {
       userId,
       type: 'COMMUNITY',
       requestId: request.id,
@@ -539,9 +599,11 @@ class UserService {
       select: { verificationLevel: true, primaryWardId: true },
     });
 
-    if (!voucher) throw ApiError.notFound("Voucher user");
+    if (!voucher) throw ApiError.notFound('Voucher user');
     if (voucher.verificationLevel < 'COMMUNITY_VERIFIED') {
-      throw ApiError.insufficientVerification("Only community-verified users can vouch");
+      throw ApiError.insufficientVerification(
+        'Only community-verified users can vouch'
+      );
     }
 
     const target = await prisma.user.findUnique({
@@ -549,10 +611,10 @@ class UserService {
       select: { primaryWardId: true },
     });
 
-    if (!target) throw ApiError.notFound("Target user");
+    if (!target) throw ApiError.notFound('Target user');
 
     if (voucher.primaryWardId !== wardId || target.primaryWardId !== wardId) {
-      throw ApiError.geographicError("Vouch must be in same ward");
+      throw ApiError.geographicError('Vouch must be in same ward');
     }
 
     const request = await prisma.verificationRequest.findUnique({
@@ -560,14 +622,14 @@ class UserService {
     });
 
     if (!request || request.status !== 'VOUCHING') {
-      throw ApiError.conflict("No active vouching request");
+      throw ApiError.conflict('No active vouching request');
     }
 
     const existing = await prisma.communityVouch.findUnique({
       where: { userId_voucherId: { userId: targetUserId, voucherId } },
     });
 
-    if (existing) throw ApiError.conflict("Already vouched");
+    if (existing) throw ApiError.conflict('Already vouched');
 
     await prisma.communityVouch.create({
       data: {
@@ -577,9 +639,13 @@ class UserService {
       },
     });
 
-    logger.info({ voucherId, targetUserId, wardId }, "Vouch added");
+    logger.info({ voucherId, targetUserId, wardId }, 'Vouch added');
 
-    eventBus.publish("user.verification.vouch", { targetUserId, voucherId, wardId });
+    eventBus.publish('user.verification.vouch', {
+      targetUserId,
+      voucherId,
+      wardId,
+    });
 
     const vouchCount = await prisma.communityVouch.count({
       where: { userId: targetUserId },
@@ -592,7 +658,10 @@ class UserService {
     return { success: true, vouchCount, needed: VOUCH_THRESHOLD };
   }
 
-  async processVerificationPayment(userId: string, dto: PaymentVerificationDto) {
+  async processVerificationPayment(
+    userId: string,
+    dto: PaymentVerificationDto
+  ) {
     const { transactionId } = dto;
 
     const request = await prisma.verificationRequest.findUnique({
@@ -600,29 +669,31 @@ class UserService {
     });
 
     if (!request || request.status !== 'PAYMENT_PENDING') {
-      throw ApiError.conflict("No active payment request");
+      throw ApiError.conflict('No active payment request');
     }
 
     const payment = await this.verifyMPesaPayment(transactionId);
 
     if (!payment || payment.amount < PAYMENT_AMOUNT_KES) {
-      throw ApiError.validationError("Invalid or insufficient payment");
+      throw ApiError.validationError('Invalid or insufficient payment');
     }
 
     await this.completeCommunityVerification(userId);
 
-    logger.info({ userId, transactionId }, "Payment verification completed");
+    logger.info({ userId, transactionId }, 'Payment verification completed');
 
     return { success: true };
   }
 
-  private async verifyMPesaPayment(transactionId: string): Promise<{ amount: number } | null> {
+  private async verifyMPesaPayment(
+    transactionId: string
+  ): Promise<{ amount: number } | null> {
     // TODO: Real M-Pesa Daraja API integration
     return { amount: PAYMENT_AMOUNT_KES };
   }
 
-  private async completeCommunityVerification(userId: string) {
-    await prisma.$transaction(async (tx) => {
+  async completeCommunityVerification(userId: string) {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.user.update({
         where: { id: userId },
         data: {
@@ -640,15 +711,17 @@ class UserService {
       });
     });
 
-    logger.info({ userId }, "Community verification completed");
+    logger.info({ userId }, 'Community verification completed');
 
-    eventBus.publish("user.verification.completed", {
+    eventBus.publish('user.verification.completed', {
       userId,
       level: 'COMMUNITY_VERIFIED',
     });
   }
 
-  async getVerificationStatus(userId: string): Promise<VerificationStatusResponse> {
+  async getVerificationStatus(
+    userId: string
+  ): Promise<VerificationStatusResponse> {
     const request = await prisma.verificationRequest.findUnique({
       where: { userId_type: { userId, type: 'COMMUNITY' } },
     });
@@ -666,7 +739,7 @@ class UserService {
     });
 
     return {
-      status: request.status,
+      status: request.status as VerificationStatusResponse['status'],
       vouchesReceived,
       vouchesNeeded: VOUCH_THRESHOLD,
       expiresAt: request.expiresAt,
@@ -697,16 +770,20 @@ class UserService {
 
       if (result.count > 0) {
         logger.info(
-          { operationType: "CLEANUP", count: result.count },
-          "Expired temporary locations cleared"
+          { operationType: 'CLEANUP', count: result.count },
+          'Expired temporary locations cleared'
         );
       }
 
       return result.count;
     } catch (err) {
       logger.error(
-        { operationType: "CLEANUP_ERROR", task: "temp-locations", error: String(err) },
-        "Failed to clean up expired temporary locations"
+        {
+          operationType: 'CLEANUP_ERROR',
+          task: 'temp-locations',
+          error: String(err),
+        },
+        'Failed to clean up expired temporary locations'
       );
       return 0;
     }
@@ -720,28 +797,32 @@ class UserService {
     try {
       const result = await prisma.residenceChangeRequest.updateMany({
         where: {
-          status: "PENDING",
+          status: 'PENDING',
           expiresAt: { lt: new Date() },
         },
         data: {
-          status: "EXPIRED",
+          status: 'EXPIRED',
           reviewedAt: new Date(),
-          reviewReason: "Expired due to inactivity",
+          rejectionReason: 'Expired due to inactivity',
         },
       });
 
       if (result.count > 0) {
         logger.info(
-          { operationType: "CLEANUP", count: result.count },
-          "Stale residence change requests expired"
+          { operationType: 'CLEANUP', count: result.count },
+          'Stale residence change requests expired'
         );
       }
 
       return result.count;
     } catch (err) {
       logger.error(
-        { operationType: "CLEANUP_ERROR", task: "residence-requests", error: String(err) },
-        "Failed to expire stale residence change requests"
+        {
+          operationType: 'CLEANUP_ERROR',
+          task: 'residence-requests',
+          error: String(err),
+        },
+        'Failed to expire stale residence change requests'
       );
       return 0;
     }
@@ -755,29 +836,33 @@ class UserService {
     try {
       const result = await prisma.verificationRequest.updateMany({
         where: {
-          type: "COMMUNITY",
-          status: "VOUCHING",
+          type: 'COMMUNITY',
+          status: 'VOUCHING',
           expiresAt: { lt: new Date() },
         },
         data: {
-          status: "PAYMENT_PENDING",
+          status: 'PAYMENT_PENDING',
           reviewedAt: new Date(),
-          reviewReason: "Vouching period expired",
+          rejectionReason: 'Vouching period expired',
         },
       });
 
       if (result.count > 0) {
         logger.info(
-          { operationType: "CLEANUP", count: result.count },
-          "Incomplete vouching requests timed out → payment pending"
+          { operationType: 'CLEANUP', count: result.count },
+          'Incomplete vouching requests timed out → payment pending'
         );
       }
 
       return result.count;
     } catch (err) {
       logger.error(
-        { operationType: "CLEANUP_ERROR", task: "vouching-timeouts", error: String(err) },
-        "Failed to check vouching timeouts"
+        {
+          operationType: 'CLEANUP_ERROR',
+          task: 'vouching-timeouts',
+          error: String(err),
+        },
+        'Failed to check vouching timeouts'
       );
       return 0;
     }

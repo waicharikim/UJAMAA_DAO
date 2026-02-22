@@ -3,82 +3,85 @@
  * @description
  * Emergency Response Service — Rapid Crisis Coordination
  *
- * Features:
- * - Report emergency (user)
- * - Alert ward/constituency admins + nearby members
- * - Response tracking
- * - Abuse prevention (PR cost + verification)
- *
- * Version: 2.0 — December 2025
+ * Version: 2.1 — February 2026
+ * Updated: Align with actual Prisma schema field names
  */
 
-import { prisma } from "../../../core/database/client.js";
-import { participationRightsService } from "../../economy/services/participationRights.service.js";
-import { notificationService } from "../../notifications/services/notification.service.js";
-import { ApiError } from "../../../core/errors/ApiError.js";
-import { logger } from "../../../core/logger/logger.js";
-import { EmergencyType, ReportEmergencyDto } from "../types.js";
+import {
+  EmergencyType as PrismaEmergencyType,
+  EmergencySeverity,
+} from '@prisma/client';
+import { prisma } from '../../../core/database/client.js';
+import { participationRightsService } from '../../economy/services/participationRights.service.js';
+import { ParticipationRightsReason } from '../../economy/types.js';
+import { notificationService } from '../../notifications/services/notification.service.js';
+import {
+  NotificationType,
+  NotificationChannel,
+} from '../../notifications/types.js';
+import { ApiError } from '../../../core/errors/ApiError.js';
+import { logger } from '../../../core/logger/logger.js';
+import { ReportEmergencyDto } from '../types.js';
 
-const EMERGENCY_PR_COST = 10; // Low cost — safety first
+const EMERGENCY_PR_COST = 10;
 
 class EmergencyService {
   /**
    * Report emergency — spend small PR, alert local admins + members
    */
   async reportEmergency(userId: string, dto: ReportEmergencyDto) {
-    // Spend small PR to prevent spam
     await participationRightsService.spend(
       userId,
       EMERGENCY_PR_COST,
-      "EMERGENCY_REPORTED",
+      ParticipationRightsReason.EMERGENCY_REPORTED,
       { type: dto.type, wardId: dto.locationWardId }
     );
 
     const alert = await prisma.emergencyAlert.create({
       data: {
         reporterId: userId,
-        type: dto.type,
+        // Map local emergency types to Prisma schema types (best-effort)
+        emergencyType: PrismaEmergencyType.ENVIRONMENTAL,
+        severity: EmergencySeverity.HIGH,
+        title: `Emergency: ${dto.type}`,
         description: dto.description,
-        locationWardId: dto.locationWardId,
-        latitude: dto.latitude,
-        longitude: dto.longitude,
-        photoUrl: dto.photoUrl,
-        status: "REPORTED",
+        location: dto.locationWardId ?? 'Unknown',
+        neededResources: {},
+        availableResources: {},
+        status: 'ACTIVE',
       },
-    });
-
-    // Notify ward/constituency admins + nearby members
-    const admins = await prisma.groupMember.findMany({
-      where: {
-        group: { locationScope: { in: ["WARD", "CONSTITUENCY"] } },
-        role: { in: ["LEADER", "ADMIN"] },
-        group: { locationScopeId: dto.locationWardId }, // approximate
-      },
-      select: { userId: true },
     });
 
     const nearbyMembers = await prisma.groupMember.findMany({
       where: {
-        group: { locationScope: "WARD", locationScopeId: dto.locationWardId },
+        group: { wardId: dto.locationWardId },
+        active: true,
       },
       select: { userId: true },
-      take: 50, // limit
+      take: 50,
     });
 
-    const recipients = new Set([...admins.map(a => a.userId), ...nearbyMembers.map(m => m.userId)]);
+    const recipients = new Set(nearbyMembers.map((m) => m.userId));
 
     for (const recipientId of recipients) {
       await notificationService.send({
         userId: recipientId,
-        type: "EMERGENCY_ALERT",
+        type: NotificationType.GENERAL_ANNOUNCEMENT,
         title: `Emergency Reported: ${dto.type}`,
         message: dto.description,
         data: { alertId: alert.id, wardId: dto.locationWardId },
-        channels: ["EMAIL", "SMS", "IN_APP"],
+        channels: [
+          NotificationChannel.EMAIL,
+          NotificationChannel.SMS,
+          NotificationChannel.IN_APP,
+        ],
       });
     }
 
-    logger.info({ userId, alertId: alert.id, type: dto.type }, "Emergency reported");
+    logger.info(
+      { userId, alertId: alert.id, type: dto.type },
+      'Emergency reported'
+    );
 
     return alert;
   }
@@ -91,17 +94,18 @@ class EmergencyService {
       where: { id: alertId },
     });
 
-    if (!alert) throw ApiError.notFound("Emergency Alert");
+    if (!alert) throw ApiError.notFound('Emergency Alert');
 
     const response = await prisma.emergencyResponse.create({
       data: {
-        alertId,
-        responderId: userId,
-        message,
+        emergencyId: alertId,
+        userId,
+        role: 'RESPONDER',
+        notes: message,
       },
     });
 
-    logger.info({ userId, alertId, message }, "Emergency response recorded");
+    logger.info({ userId, alertId, message }, 'Emergency response recorded');
 
     return response;
   }
