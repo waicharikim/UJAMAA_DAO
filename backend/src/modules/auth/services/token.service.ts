@@ -20,11 +20,9 @@
  */
 
 import { prisma } from "../../../core/database/client.js";
-import { ApiError } from "../../../core/errors/ApiError.js";
 import { logger } from "../../../core/logger/logger.js";
-import { signJwtToken as signJwt } from "../../../core/utils/jwt.service.js";
+import { signMagicLinkToken, JwtPayload } from "../../../core/utils/jwt.service.js";
 import { generateRandomHex } from "../../../core/utils/crypto.js";
-import { env } from "../../../core/utils/env.js";
 
 const TOKEN_CONFIG = {
   verificationExpiryHours: 24,      // Email verification / registration
@@ -67,11 +65,11 @@ export class TokenService {
    * Create magic link token (short-lived JWT)
    * Contains minimal payload (userId, email)
    */
-  async createMagicLinkToken(payload: { userId: string; email: string }): Promise<string> {
-    const token = signJwt(payload, `${TOKEN_CONFIG.magicLinkExpiryMinutes}m`);
+  async createMagicLinkToken(payload: JwtPayload): Promise<string> {
+    const token = signMagicLinkToken(payload);
 
     logger.info(
-      { operationType: "TOKEN_CREATE", type: "magic-link", userId: payload.userId },
+      { operationType: "TOKEN_CREATE", type: "magic-link", userId: payload.sub },
       "Magic link token created"
     );
 

@@ -17,6 +17,7 @@ import { prisma } from "../../../core/database/client.js";
 import { ApiError } from "../../../core/errors/ApiError.js";
 import { logger } from "../../../core/logger/logger.js";
 import { generateRandomHex } from "../../../core/utils/crypto.js";
+import { eventBus } from "../../../core/utils/eventBus.js";
 
 // SMS Provider Configuration
 const SMS_CONFIG = {
@@ -178,13 +179,26 @@ class PhoneVerificationService {
 
         // Update user if userId provided
         if (userId) {
+          const currentUser = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { verificationLevel: true, phoneVerified: true },
+          });
+
+          const isFirstVerification = !currentUser?.phoneVerified;
+          const shouldUpgradeLevel = currentUser?.verificationLevel === 'EMAIL_VERIFIED';
+
           await prisma.user.update({
             where: { id: userId },
             data: {
               phoneNumber: normalized,
               phoneVerified: true,
+              ...(shouldUpgradeLevel && { verificationLevel: 'PHONE_VERIFIED' }),
             },
           });
+
+          if (isFirstVerification) {
+            eventBus.publish('user.phone.verified', { userId });
+          }
         }
 
         logger.info(

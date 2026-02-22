@@ -113,6 +113,32 @@ router.post(
 // PROTECTED ROUTES — Full Layered Authorization + Rate Limiting
 // ============================================================================
 
+// ============================================================================
+// PHONE VERIFICATION (requires authenticated user with EMAIL_VERIFIED level)
+// ============================================================================
+
+router.post(
+  "/phone/send",
+  authenticate,
+  authorize({ verificationLevel: 'EMAIL_VERIFIED' }),
+  buildRateLimiter({ windowMs: 60 * 1000, max: 3 }),
+  validateRequest({ schema: sendPhoneCodeSchema, target: 'body' }),
+  asyncHandler(sendVerificationCode)
+);
+
+router.post(
+  "/phone/verify",
+  authenticate,
+  authorize({ verificationLevel: 'EMAIL_VERIFIED' }),
+  buildRateLimiter({ windowMs: 5 * 60 * 1000, max: 10 }),
+  validateRequest({ schema: verifyPhoneCodeSchema, target: 'body' }),
+  asyncHandler(verifyCode)
+);
+
+// ============================================================================
+// WALLET MANAGEMENT
+// ============================================================================
+
 router.post(
   "/wallet/link",
   authenticate,

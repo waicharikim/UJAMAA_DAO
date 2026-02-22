@@ -189,7 +189,6 @@ class AuthService {
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email || undefined,
-      type: "magic-link",
     };
 
     const magicLinkToken = await tokenService.createMagicLinkToken(payload);

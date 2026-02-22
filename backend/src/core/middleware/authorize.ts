@@ -78,7 +78,7 @@ export const authorize = (options: UjamaadaoAuthorizeOptions) => {
         return;
       }
 
-      if (skipAdmin && user.roles.includes("SUPER_ADMIN")) {
+      if (skipAdmin && user.roles.includes("super_admin")) {
         logger.info({ operationType: "AUTH", metadata: { bypass: "super_admin" } }, "Super admin bypassed authorization");
         return next();
       }

@@ -73,6 +73,7 @@ class RefreshTokenService {
         include: {
           primaryWard: true,
           secondaryWard: true,
+          userRoles: { where: { active: true }, include: { role: { select: { id: true, name: true } } } },
         },
       });
 
@@ -116,7 +117,7 @@ class RefreshTokenService {
         phoneVerified: user.phoneVerified,
         communityVerified: user.communityVerified,
         locationVerified: user.locationVerified,
-        roles: user.roles || [],
+        roles: user.userRoles.map(ur => ur.role.name),
         globalImpactPoints: user.globalImpactPoints,
         utilityTokens: user.utilityTokens,
         participationRights: user.participationRights,
