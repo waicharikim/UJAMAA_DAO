@@ -18,7 +18,7 @@ import { logger } from "../logger/logger.js";
 // ─────────────────────────────────────────────
 
 // Economy / PR related
-import { registerEconomyListeners } from "../../modules/economy/listeners/onboarding-events.listeners.js";
+import { registerOnboardingListeners as registerEconomyListeners } from "../../modules/economy/listeners/onboarding-events.listeners.js";
 
 // Auth / User related (verification, profile, etc.)
 import { registerAuthListeners } from "../../modules/auth/listeners/auth-events.listener.js";

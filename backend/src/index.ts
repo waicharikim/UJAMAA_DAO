@@ -130,6 +130,12 @@ async function startServer() {
         `${signal} received — initiating graceful shutdown`
       );
 
+      // Force exit after 15 seconds if shutdown hangs
+      const forceExitTimeout = setTimeout(() => {
+        logger.error({ operationType: "SHUTDOWN" }, "Shutdown timeout — forcing exit");
+        process.exit(1);
+      }, 15000).unref();
+
       // Stop accepting new connections
       server.close(() => {
         logger.info({ operationType: "SHUTDOWN" }, "HTTP server closed");
@@ -162,6 +168,7 @@ async function startServer() {
         );
       }
 
+      clearTimeout(forceExitTimeout);
       logger.info({ operationType: "SHUTDOWN" }, "Graceful shutdown complete");
       process.exit(0);
     };
@@ -169,15 +176,6 @@ async function startServer() {
     // Register shutdown handlers
     process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
     process.on("SIGINT", () => gracefulShutdown("SIGINT"));
-
-    // Force exit after 15 seconds if shutdown hangs
-    const forceExitTimeout = setTimeout(() => {
-      logger.error({ operationType: "SHUTDOWN" }, "Shutdown timeout — forcing exit");
-      process.exit(1);
-    }, 15000);
-
-    // Clear timeout on successful shutdown
-    process.on("exit", () => clearTimeout(forceExitTimeout));
 
   } catch (error) {
     logger.error(

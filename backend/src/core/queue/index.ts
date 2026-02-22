@@ -157,22 +157,3 @@ economyQueueEvents.on("failed", ({ jobId, failedReason }) => {
   );
 });
 
-// Dead-letter queue
-export const deadLetterQueue = createQueue("dead-letter");
-
-// In worker.ts - move exhausted jobs here
-createWorker("economy", async (job) => {
-  // ... your logic ...
-}).on("failed", async (job, err) => {
-  if (job.failedReason === "exhausted") {
-    await deadLetterQueue.add("failed-job", {
-      originalQueue: job.queueName,
-      jobName: job.name,
-      jobId: job.id,
-      data: job.data,
-      error: err.message,
-      timestamp: new Date().toISOString(),
-    });
-    logger.critical({ jobId: job.id }, "Moved to dead-letter queue");
-  }
-});

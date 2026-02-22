@@ -74,7 +74,10 @@ async function initializeServices(): Promise<void> {
     await redisInitialized;
     logger.debug({ operationType: 'STARTUP' }, 'Redis connected');
 
-   
+    // 2. Register cross-module event listeners
+    registerAllListeners();
+    logger.debug({ operationType: 'STARTUP' }, 'Event listeners registered');
+
     logger.info({ operationType: 'STARTUP' }, '✅ All async services initialized');
   } catch (error) {
     logger.error(
