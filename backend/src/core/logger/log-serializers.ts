@@ -3,16 +3,16 @@
  * @description
  * Custom serializers for structured, privacy-safe logging
  * Ensures consistent log format across the application
- * 
+ *
  * Version: 1.0 — December 2025
  */
 
 import type { Request, Response } from 'express';
 import type { AuthRequest } from '../types/Ujamaadao.types.js';
-import { 
-  redactEmail, 
-  redactWallet, 
-  redactIP, 
+import {
+  redactEmail,
+  redactWallet,
+  redactIP,
   sanitizeUserAgent,
   sanitizeURL,
   autoRedactObject,
@@ -31,10 +31,10 @@ export function serializeEconomicContext(ctx?: {
   utilityTokens?: number;
 }): any {
   if (!ctx) return { tier: 'unknown' };
-  
+
   const pr = ctx.participationRights || 0;
   const ip = ctx.globalImpactPoints || 0;
-  
+
   // Convert to tiers for privacy
   let prTier: string;
   if (pr === 0) prTier = 'none';
@@ -43,7 +43,7 @@ export function serializeEconomicContext(ctx?: {
   else if (pr < 1000) prTier = 'medium';
   else if (pr < 10000) prTier = 'high';
   else prTier = 'whale';
-  
+
   let ipTier: string;
   if (ip === 0) ipTier = 'none';
   else if (ip < 100) ipTier = 'minimal';
@@ -51,7 +51,7 @@ export function serializeEconomicContext(ctx?: {
   else if (ip < 10000) ipTier = 'medium';
   else if (ip < 100000) ipTier = 'high';
   else ipTier = 'elite';
-  
+
   return {
     participationRightsTier: prTier,
     impactPointsTier: ipTier,
@@ -70,7 +70,7 @@ export function serializeEconomicTransaction(transaction: {
   reason?: string;
 }): any {
   const amount = transaction.amount || 0;
-  
+
   // Convert amount to magnitude for privacy
   let magnitude: string;
   if (amount === 0) magnitude = 'zero';
@@ -79,7 +79,7 @@ export function serializeEconomicTransaction(transaction: {
   else if (Math.abs(amount) < 1000) magnitude = 'medium';
   else if (Math.abs(amount) < 10000) magnitude = 'large';
   else magnitude = 'massive';
-  
+
   return {
     type: transaction.type,
     currency: transaction.currency || 'unknown',
@@ -99,7 +99,7 @@ export function serializeEconomicTransaction(transaction: {
  */
 export function serializeGeographicContext(ctx?: any): any {
   if (!ctx) return { scope: 'unknown' };
-  
+
   return {
     scope: ctx.locationScope || 'unknown',
     countyId: ctx.countyId,
@@ -118,7 +118,7 @@ export function serializeGeographicContext(ctx?: any): any {
  */
 export function serializeUser(user?: any): any {
   if (!user) return null;
-  
+
   return {
     userId: user.userId || user.id,
     email: redactEmail(user.email),
@@ -173,7 +173,7 @@ export function serializeHeaders(headers: any): any {
     'x-auth-token',
     'proxy-authorization',
   ];
-  
+
   for (const key in headers) {
     const lowerKey = key.toLowerCase();
     if (sensitiveHeaders.includes(lowerKey)) {
@@ -182,7 +182,7 @@ export function serializeHeaders(headers: any): any {
       safe[key] = headers[key];
     }
   }
-  
+
   return safe;
 }
 
@@ -195,14 +195,14 @@ export function serializeHeaders(headers: any): any {
  */
 export function serializeError(error: any): any {
   if (!error) return null;
-  
+
   const serialized: any = {
     name: error.name || 'Error',
     message: error.message || String(error),
     code: error.code,
     statusCode: error.statusCode || error.status,
   };
-  
+
   // Include stack trace only in development
   if (process.env.NODE_ENV !== 'production') {
     serialized.stack = error.stack;
@@ -211,12 +211,12 @@ export function serializeError(error: any): any {
     const firstLine = error.stack?.split('\n')[0];
     serialized.stackFirstLine = firstLine;
   }
-  
+
   // Include additional error properties
   if (error.data) {
     serialized.data = autoRedactObject(error.data);
   }
-  
+
   return serialized;
 }
 
@@ -258,7 +258,12 @@ export function serializeSecurityEvent(event: {
  * Serialize authentication event
  */
 export function serializeAuthEvent(event: {
-  type: 'login' | 'logout' | 'token_refresh' | 'token_revoked' | 'password_reset';
+  type:
+    | 'login'
+    | 'logout'
+    | 'token_refresh'
+    | 'token_revoked'
+    | 'password_reset';
   success: boolean;
   userId?: string;
   walletAddress?: string;
@@ -321,7 +326,7 @@ export function serializeDatabaseQuery(query: {
   const sanitizedSQL = query.sql
     ? query.sql.replace(/('([^'\\]|\\.)*'|"([^"\\]|\\.)*")/g, '***')
     : undefined;
-  
+
   return {
     method: query.method,
     table: query.table,
@@ -353,7 +358,9 @@ export function serializeAPICall(call: {
     endpoint: sanitizeURL(call.endpoint),
     statusCode: call.statusCode,
     duration: call.duration,
-    success: call.statusCode ? call.statusCode >= 200 && call.statusCode < 300 : false,
+    success: call.statusCode
+      ? call.statusCode >= 200 && call.statusCode < 300
+      : false,
     error: call.error ? serializeError(call.error) : undefined,
   };
 }
@@ -379,7 +386,9 @@ export function serializeGovernanceOperation(operation: {
     vote: operation.vote,
     // Log PR tier, not exact amount
     voterTier: operation.participationRights
-      ? serializeEconomicContext({ participationRights: operation.participationRights }).participationRightsTier
+      ? serializeEconomicContext({
+          participationRights: operation.participationRights,
+        }).participationRightsTier
       : 'unknown',
     timestamp: new Date().toISOString(),
   };
@@ -393,27 +402,27 @@ export default {
   // Economic
   serializeEconomicContext,
   serializeEconomicTransaction,
-  
+
   // Geographic
   serializeGeographicContext,
-  
+
   // User
   serializeUser,
-  
+
   // Request/Response
   serializeRequest,
   serializeResponse,
   serializeHeaders,
-  
+
   // Errors
   serializeError,
-  
+
   // Events
   serializeSecurityEvent,
   serializeAuthEvent,
   serializeWalletOperation,
   serializeGovernanceOperation,
-  
+
   // Infrastructure
   serializeDatabaseQuery,
   serializeAPICall,

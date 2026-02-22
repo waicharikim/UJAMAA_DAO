@@ -2,15 +2,15 @@
  * @file src/modules/user/handlers/goods-services.handlers.ts
  * @description
  * Handlers for user goods/services selection & retrieval
- * 
+ *
  * Version: 1.0 — February 2026
  */
 
-import { Response } from "express";
-import { AuthRequest } from "../../../core/types/Ujamaadao.types.js";
-import { userService } from "../services/user.service.js";
-import { sendSuccess } from "../../../core/utils/response.js";
-import { logger } from "../../../core/logger/logger.js";
+import { Response } from 'express';
+import { AuthRequest } from '../../../core/types/Ujamaadao.types.js';
+import { userService } from '../services/user.service.js';
+import { sendSuccess } from '../../../core/utils/response.js';
+import { logger } from '../../../core/logger/logger.js';
 
 /**
  * POST /users/me/goods-services
@@ -23,16 +23,15 @@ export async function selectGoodsServices(req: AuthRequest, res: Response) {
   try {
     const result = await userService.selectGoodsServices(userId, dto);
 
-    sendSuccess(
-      res,
-      result,
-      "Goods/services updated successfully",
-      200
-    );
+    sendSuccess(res, result, 'Goods/services updated successfully', 200);
   } catch (error) {
     logger.error(
-      { operationType: "USER_GOODS_SERVICES", userId, error: error instanceof Error ? error.message : String(error) },
-      "Failed to update user goods/services"
+      {
+        operationType: 'USER_GOODS_SERVICES',
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      'Failed to update user goods/services'
     );
     throw error;
   }
@@ -51,13 +50,17 @@ export async function getMyGoodsServices(req: AuthRequest, res: Response) {
     sendSuccess(
       res,
       goodsServices,
-      "Goods/services retrieved successfully",
+      'Goods/services retrieved successfully',
       200
     );
   } catch (error) {
     logger.error(
-      { operationType: "USER_GOODS_SERVICES", userId, error: error instanceof Error ? error.message : String(error) },
-      "Failed to retrieve user goods/services"
+      {
+        operationType: 'USER_GOODS_SERVICES',
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      'Failed to retrieve user goods/services'
     );
     throw error;
   }

@@ -13,9 +13,9 @@
  * Features: graceful shutdown, full error handling, failed job alerts, dead-letter queue
  */
 
-import { logger } from "./core/logger/logger.js";
-import { registerAllJobs } from "./core/jobs/register.js";
-import { createWorker, createQueue, economyQueue, userCleanupQueue } from "./core/queue/index.js";
+import { logger } from './core/logger/logger.js';
+import { registerAllJobs } from './core/jobs/register.js';
+import { createWorker, createQueue } from './core/queue/index.js';
 
 // ─────────────────────────────────────────────
 // Import job processors
@@ -24,44 +24,53 @@ import { createWorker, createQueue, economyQueue, userCleanupQueue } from "./cor
 import {
   USER_CLEANUP_JOB_NAME,
   processUserCleanup,
-} from "./modules/user/jobs/user-cleanup.jobs.js";
+} from './modules/user/jobs/user-cleanup.jobs.js';
 
 import {
   MONTHLY_PR_REGENERATION_JOB,
   processMonthlyPRRegeneration,
-} from "./modules/economy/jobs/pr-regeneration.jobs.js";
+} from './modules/economy/jobs/pr-regeneration.jobs.js';
 
 import {
   DAILY_COMMITMENT_PENALTIES_JOB,
   processCommitmentPenalties,
-} from "./modules/economy/jobs/commitment-penalties.jobs.js";
+} from './modules/economy/jobs/commitment-penalties.jobs.js';
 
 // ─────────────────────────────────────────────
 // Graceful shutdown & error handling
 // ─────────────────────────────────────────────
 
-process.on("SIGINT", () => {
-  logger.info({ operationType: "WORKER" }, "SIGINT received — shutting down worker");
+process.on('SIGINT', () => {
+  logger.info(
+    { operationType: 'WORKER' },
+    'SIGINT received — shutting down worker'
+  );
   process.exit(0);
 });
 
-process.on("SIGTERM", () => {
-  logger.info({ operationType: "WORKER" }, "SIGTERM received — shutting down worker");
+process.on('SIGTERM', () => {
+  logger.info(
+    { operationType: 'WORKER' },
+    'SIGTERM received — shutting down worker'
+  );
   process.exit(0);
 });
 
-process.on("uncaughtException", (err) => {
+process.on('uncaughtException', (err) => {
   logger.error(
-    { operationType: "WORKER", error: err.message, stack: err.stack },
-    "Uncaught exception in worker — exiting"
+    { operationType: 'WORKER', error: err.message, stack: err.stack },
+    'Uncaught exception in worker — exiting'
   );
   process.exit(1);
 });
 
-process.on("unhandledRejection", (reason) => {
+process.on('unhandledRejection', (reason) => {
   logger.error(
-    { operationType: "WORKER", reason: reason instanceof Error ? reason.message : String(reason) },
-    "Unhandled promise rejection in worker"
+    {
+      operationType: 'WORKER',
+      reason: reason instanceof Error ? reason.message : String(reason),
+    },
+    'Unhandled promise rejection in worker'
   );
 });
 
@@ -69,7 +78,7 @@ process.on("unhandledRejection", (reason) => {
 // Create workers for each queue
 // ─────────────────────────────────────────────
 
-createWorker("economy", async (job) => {
+createWorker('economy', async (job) => {
   const { name } = job;
 
   try {
@@ -78,40 +87,46 @@ createWorker("economy", async (job) => {
     } else if (name === DAILY_COMMITMENT_PENALTIES_JOB) {
       await processCommitmentPenalties();
     } else {
-      logger.warn({ jobName: name, queue: "economy" }, "Unknown economy job received");
+      logger.warn(
+        { jobName: name, queue: 'economy' },
+        'Unknown economy job received'
+      );
     }
   } catch (err) {
     logger.error(
       {
         jobId: job.id,
         jobName: name,
-        queue: "economy",
+        queue: 'economy',
         error: err instanceof Error ? err.message : String(err),
         stack: err instanceof Error ? err.stack : undefined,
       },
-      "Economy job failed"
+      'Economy job failed'
     );
     throw err;
   }
 });
 
-createWorker("user-cleanup", async (job) => {
+createWorker('user-cleanup', async (job) => {
   try {
     if (job.name === USER_CLEANUP_JOB_NAME) {
       await processUserCleanup(job);
     } else {
-      logger.warn({ jobName: job.name, queue: "user-cleanup" }, "Unknown user-cleanup job");
+      logger.warn(
+        { jobName: job.name, queue: 'user-cleanup' },
+        'Unknown user-cleanup job'
+      );
     }
   } catch (err) {
     logger.error(
       {
         jobId: job.id,
         jobName: job.name,
-        queue: "user-cleanup",
+        queue: 'user-cleanup',
         error: err instanceof Error ? err.message : String(err),
         stack: err instanceof Error ? err.stack : undefined,
       },
-      "User cleanup job failed"
+      'User cleanup job failed'
     );
     throw err;
   }
@@ -122,19 +137,25 @@ createWorker("user-cleanup", async (job) => {
 // ─────────────────────────────────────────────
 
 async function startWorker() {
-  logger.info({ operationType: "WORKER" }, "Background worker process starting...");
+  logger.info(
+    { operationType: 'WORKER' },
+    'Background worker process starting...'
+  );
 
   try {
     await registerAllJobs();
-    logger.info({ operationType: "WORKER" }, "Worker ready — all queues active and processing");
+    logger.info(
+      { operationType: 'WORKER' },
+      'Worker ready — all queues active and processing'
+    );
   } catch (err) {
     logger.error(
       {
-        operationType: "WORKER",
+        operationType: 'WORKER',
         error: err instanceof Error ? err.message : String(err),
         stack: err instanceof Error ? err.stack : undefined,
       },
-      "Failed to start worker / register jobs"
+      'Failed to start worker / register jobs'
     );
     process.exit(1);
   }
@@ -146,14 +167,17 @@ startWorker();
 // FAILED JOB ALERTS + DEAD-LETTER QUEUE
 // ─────────────────────────────────────────────
 
-const deadLetterQueue = createQueue("dead-letter");
+const deadLetterQueue = createQueue('dead-letter');
 
 const failedJobHandler = async (job: any, err: Error) => {
   // Trigger only on final failure (after max retries)
-  if (job.failedReason === "exhausted" || job.attemptsMade >= job.opts.attempts) {
+  if (
+    job.failedReason === 'exhausted' ||
+    job.attemptsMade >= job.opts.attempts
+  ) {
     logger.critical(
       {
-        operationType: "JOB_FAILED_FINAL",
+        operationType: 'JOB_FAILED_FINAL',
         queue: job.queueName,
         jobId: job.id,
         jobName: job.name,
@@ -162,12 +186,12 @@ const failedJobHandler = async (job: any, err: Error) => {
         data: JSON.stringify(job.data || {}),
         timestamp: new Date().toISOString(),
       },
-      "CRITICAL: Job failed permanently — moving to dead-letter queue"
+      'CRITICAL: Job failed permanently — moving to dead-letter queue'
     );
 
     // Move job to dead-letter queue for later inspection/retry
     await deadLetterQueue.add(
-      "failed-job",
+      'failed-job',
       {
         originalQueue: job.queueName,
         jobName: job.name,
@@ -223,7 +247,10 @@ Time: ${info.timestamp}
 Check dead-letter queue or dashboard: /admin/queues
   `.trim();
 
-  logger.error({ operationType: "JOB_FAILURE", metadata: { alert: message } }, "Job failure alert triggered");
+  logger.error(
+    { operationType: 'JOB_FAILURE', metadata: { alert: message } },
+    'Job failure alert triggered'
+  );
 
   // ── EMAIL ALERT (uncomment & configure Nodemailer or your email lib) ──
   /*

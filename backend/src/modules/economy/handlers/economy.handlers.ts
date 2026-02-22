@@ -2,29 +2,25 @@
  * @file src/modules/economy/handlers/economy.handlers.ts
  * @description
  * Request handlers for economy endpoints
- * 
+ *
  * Exposes:
  * - PR balance & history
  * - Dues payment history & status
  * - User commitments list
  * - Opt-in to monthly dues commitment
- * 
+ *
  * Version: 1.1 — January 2026
  * Updated: Removed unused validator imports, made code airtight
  */
 
-import { Response } from "express";
-import { AuthRequest } from "../../../core/types/Ujamaadao.types.js";
-import { prisma } from "../../../core/database/client.js";
-import { participationRightsService } from "../services/participationRights.service.js";
-import { duesService } from "../services/dues.service.js";
-import { commitmentService } from "../services/commitment.service.js";
-import { sendSuccess } from "../../../core/utils/response.js";
-import { authenticate } from "../../../core/middleware/auth.middleware.js";
-import { authorize } from "../../../core/middleware/authorize.js";
-import { buildRateLimiter } from "../../../core/middleware/rateLimiter.js";
-import { asyncHandler } from "../../../core/utils/response.js";
-import { DuesTier } from "../types.js";
+import { Response } from 'express';
+import { AuthRequest } from '../../../core/types/Ujamaadao.types.js';
+import { prisma } from '../../../core/database/client.js';
+import { participationRightsService } from '../services/participationRights.service.js';
+import { duesService } from '../services/dues.service.js';
+import { commitmentService } from '../services/commitment.service.js';
+import { sendSuccess } from '../../../core/utils/response.js';
+import { DuesTier } from '../types.js';
 
 /**
  * GET /economy/pr
@@ -37,11 +33,11 @@ export async function getPRBalance(req: AuthRequest, res: Response) {
   const balance = await participationRightsService.getBalance(userId);
   const logs = await prisma.participationRightsLog.findMany({
     where: { userId },
-    orderBy: { createdAt: "desc" },
+    orderBy: { createdAt: 'desc' },
     take: 20, // last 20 transactions
   });
 
-  const history = logs.map(log => ({
+  const history = logs.map((log) => ({
     amount: log.amount,
     balance: log.balance,
     reason: log.reason,
@@ -52,7 +48,7 @@ export async function getPRBalance(req: AuthRequest, res: Response) {
   sendSuccess(
     res,
     { balance, history },
-    "Participation Rights retrieved successfully",
+    'Participation Rights retrieved successfully',
     200
   );
 }
@@ -67,12 +63,7 @@ export async function getDuesHistory(req: AuthRequest, res: Response) {
 
   const status = await duesService.getUserCommitments(userId);
 
-  sendSuccess(
-    res,
-    status,
-    "Dues payment history retrieved successfully",
-    200
-  );
+  sendSuccess(res, status, 'Dues payment history retrieved successfully', 200);
 }
 
 /**
@@ -85,12 +76,7 @@ export async function getCommitments(req: AuthRequest, res: Response) {
 
   const commitments = await commitmentService.getUserCommitments(userId);
 
-  sendSuccess(
-    res,
-    commitments,
-    "Commitments retrieved successfully",
-    200
-  );
+  sendSuccess(res, commitments, 'Commitments retrieved successfully', 200);
 }
 
 /**
@@ -113,7 +99,7 @@ export async function optInDuesCommitment(req: AuthRequest, res: Response) {
   sendSuccess(
     res,
     commitment,
-    "Dues commitment created successfully (voluntary monthly)",
+    'Dues commitment created successfully (voluntary monthly)',
     201
   );
 }

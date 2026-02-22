@@ -9,35 +9,26 @@
  * Version: 1.1 — February 2026
  */
 
-import { logger } from "../logger/logger.js";
-import { economyQueue, userCleanupQueue } from "../queue/index.js";
+import { logger } from '../logger/logger.js';
+import { economyQueue, userCleanupQueue } from '../queue/index.js';
 
 // ─────────────────────────────────────────────
 // Import all job names & processors
 // ─────────────────────────────────────────────
 
-import {
-  USER_CLEANUP_JOB_NAME,
-  processUserCleanup,
-} from "../../modules/user/jobs/user-cleanup.jobs.js";
+import { USER_CLEANUP_JOB_NAME } from '../../modules/user/jobs/user-cleanup.jobs.js';
 
-import {
-  MONTHLY_PR_REGENERATION_JOB,
-  processMonthlyPRRegeneration,
-} from "../../modules/economy/jobs/pr-regeneration.jobs.js";
+import { MONTHLY_PR_REGENERATION_JOB } from '../../modules/economy/jobs/pr-regeneration.jobs.js';
 
-import {
-  DAILY_COMMITMENT_PENALTIES_JOB,
-  processCommitmentPenalties,
-} from "../../modules/economy/jobs/commitment-penalties.jobs.js";
+import { DAILY_COMMITMENT_PENALTIES_JOB } from '../../modules/economy/jobs/commitment-penalties.jobs.js';
 
 // Add future jobs here when needed
 // import { SOME_OTHER_JOB, processOtherJob } from "...";
 
 export async function registerAllJobs(): Promise<void> {
   logger.info(
-    { operationType: "JOB_REGISTER" },
-    "Registering all BullMQ repeatable jobs"
+    { operationType: 'JOB_REGISTER' },
+    'Registering all BullMQ repeatable jobs'
   );
 
   try {
@@ -52,10 +43,10 @@ export async function registerAllJobs(): Promise<void> {
         repeat: { every: 4 * 60 * 60 * 1000 }, // 4 hours
         jobId: USER_CLEANUP_JOB_NAME,
         removeOnComplete: { age: 3600 * 24 * 7 }, // 1 week
-        removeOnFail: { age: 3600 * 24 * 30 },    // 1 month
+        removeOnFail: { age: 3600 * 24 * 30 }, // 1 month
       }
     );
-    logger.info({ job: USER_CLEANUP_JOB_NAME }, "Job registered");
+    logger.info({ job: USER_CLEANUP_JOB_NAME }, 'Job registered');
 
     // ─────────────────────────────────────────────
     // MONTHLY PR REGENERATION
@@ -65,13 +56,13 @@ export async function registerAllJobs(): Promise<void> {
       MONTHLY_PR_REGENERATION_JOB,
       {},
       {
-        repeat: { pattern: "5 0 1 * *" },
+        repeat: { pattern: '5 0 1 * *' },
         jobId: MONTHLY_PR_REGENERATION_JOB,
         removeOnComplete: { age: 3600 * 24 * 7 },
         removeOnFail: { age: 3600 * 24 * 30 },
       }
     );
-    logger.info({ job: MONTHLY_PR_REGENERATION_JOB }, "Job registered");
+    logger.info({ job: MONTHLY_PR_REGENERATION_JOB }, 'Job registered');
 
     // ─────────────────────────────────────────────
     // DAILY COMMITMENT PENALTIES
@@ -81,13 +72,13 @@ export async function registerAllJobs(): Promise<void> {
       DAILY_COMMITMENT_PENALTIES_JOB,
       {},
       {
-        repeat: { pattern: "0 2 * * *" },
+        repeat: { pattern: '0 2 * * *' },
         jobId: DAILY_COMMITMENT_PENALTIES_JOB,
         removeOnComplete: { age: 3600 * 24 * 7 },
         removeOnFail: { age: 3600 * 24 * 30 },
       }
     );
-    logger.info({ job: DAILY_COMMITMENT_PENALTIES_JOB }, "Job registered");
+    logger.info({ job: DAILY_COMMITMENT_PENALTIES_JOB }, 'Job registered');
 
     // ─────────────────────────────────────────────
     // Add future jobs here
@@ -95,17 +86,17 @@ export async function registerAllJobs(): Promise<void> {
     // await someQueue.add("daily-report", {}, { repeat: { pattern: "0 3 * * *" } });
 
     logger.info(
-      { operationType: "JOB_REGISTER" },
-      "All BullMQ repeatable jobs successfully registered"
+      { operationType: 'JOB_REGISTER' },
+      'All BullMQ repeatable jobs successfully registered'
     );
   } catch (err) {
     logger.error(
       {
-        operationType: "JOB_REGISTER",
+        operationType: 'JOB_REGISTER',
         error: err instanceof Error ? err.message : String(err),
         stack: err instanceof Error ? err.stack : undefined,
       },
-      "Failed to register BullMQ jobs"
+      'Failed to register BullMQ jobs'
     );
     throw err;
   }

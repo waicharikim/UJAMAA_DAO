@@ -2,20 +2,20 @@
  * @file src/core/services/role.service.ts
  * @description
  * Scoped Role Checks — Distributed RBAC with caching
- * 
+ *
  * Security Features:
  * - Input validation
  * - Query timeouts
  * - Error handling
  * - Result caching
  * - Logging
- * 
+ *
  * Version: 2.1 — January 2026
  * Security Hardened: January 2026
  */
 
-import { prisma } from "../database/client.js";
-import { logger, createRequestLogger } from "../logger/logger.js";
+import { prisma } from '../database/client.js';
+import { logger } from '../logger/logger.js';
 
 // Simple in-memory cache (use Redis in production for multi-server)
 interface CacheEntry {
@@ -32,7 +32,9 @@ class RoleService {
    * Validate UUID format (prevent injection)
    */
   private isValidUuid(id: string): boolean {
-    return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      id
+    );
   }
 
   /**
@@ -50,7 +52,7 @@ class RoleService {
     queryFn: () => Promise<T>
   ): Promise<T> {
     const cached = this.cache.get(key);
-    
+
     if (cached && cached.expiresAt > Date.now()) {
       return cached.value as T;
     }
@@ -59,7 +61,10 @@ class RoleService {
       const result = await Promise.race([
         queryFn(),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Query timeout')), this.QUERY_TIMEOUT)
+          setTimeout(
+            () => reject(new Error('Query timeout')),
+            this.QUERY_TIMEOUT
+          )
         ),
       ]);
 
@@ -103,7 +108,7 @@ class RoleService {
         this.cache.delete(key);
       }
     }
-    
+
     logger.debug(
       {
         operationType: 'GENERAL',
@@ -120,7 +125,11 @@ class RoleService {
    * @param role - The role to check for
    * @returns Promise resolving to true if the user has the role
    */
-  async hasGroupRole(userId: string, groupId: string, role: string): Promise<boolean> {
+  async hasGroupRole(
+    userId: string,
+    groupId: string,
+    role: string
+  ): Promise<boolean> {
     if (!this.isValidUuid(userId) || !this.isValidUuid(groupId)) {
       logger.warn(
         {
@@ -191,7 +200,11 @@ class RoleService {
    * @param role - The role to check for
    * @returns Promise resolving to true if the user has the role
    */
-  async hasLocationRole(userId: string, wardId: string, role: string): Promise<boolean> {
+  async hasLocationRole(
+    userId: string,
+    wardId: string,
+    role: string
+  ): Promise<boolean> {
     if (!this.isValidUuid(userId) || !this.isValidUuid(wardId)) {
       logger.warn(
         {
@@ -221,7 +234,7 @@ class RoleService {
     return this.getCached(cacheKey, async () => {
       try {
         const group = await prisma.group.findFirst({
-          where: { locationScope: "WARD", wardId },
+          where: { locationScope: 'WARD', wardId },
           select: { id: true },
         });
 
@@ -350,10 +363,10 @@ class RoleService {
 
     return this.getCached(cacheKey, async () => {
       try {
-        const where: any = { userId, role: "VERIFIER" };
+        const where: any = { userId, role: 'VERIFIER' };
 
         if (wardId) {
-          where.group = { locationScope: "WARD", locationScopeId: wardId };
+          where.group = { locationScope: 'WARD', locationScopeId: wardId };
         }
 
         const membership = await prisma.groupMember.findFirst({

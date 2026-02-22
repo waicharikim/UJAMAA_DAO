@@ -2,37 +2,37 @@
  * @file src/modules/auth/services/security-events.service.ts
  * @description
  * Security Events Service - Log and track suspicious activity
- * 
+ *
  * Features:
  * - Log security events (failed logins, 2FA changes, password resets)
  * - Detect anomalies (unusual IPs, concurrent logins, brute force)
  * - Alert users of suspicious activity
  * - Provide security dashboard data
- * 
+ *
  * Version: 1.0 — January 2026
  */
 
-import { prisma } from "../../../core/database/client.js";
-import { logger } from "../../../core/logger/logger.js";
-import { ApiError } from "../../../core/errors/ApiError.js";
-import { eventBus } from "../../../core/utils/eventBus.js";
+import { prisma } from '../../../core/database/client.js';
+import { logger } from '../../../core/logger/logger.js';
+import { ApiError } from '../../../core/errors/ApiError.js';
+import { eventBus } from '../../../core/utils/eventBus.js';
 
 export type SecurityEventType =
-  | "login_failed"
-  | "login_success"
-  | "password_reset_requested"
-  | "password_reset_completed"
-  | "2fa_enabled"
-  | "2fa_disabled"
-  | "2fa_failed"
-  | "wallet_linked"
-  | "wallet_disconnected"
-  | "session_revoked"
-  | "suspicious_login"
-  | "brute_force_detected"
-  | "account_locked";
+  | 'login_failed'
+  | 'login_success'
+  | 'password_reset_requested'
+  | 'password_reset_completed'
+  | '2fa_enabled'
+  | '2fa_disabled'
+  | '2fa_failed'
+  | 'wallet_linked'
+  | 'wallet_disconnected'
+  | 'session_revoked'
+  | 'suspicious_login'
+  | 'brute_force_detected'
+  | 'account_locked';
 
-export type SecurityEventSeverity = "low" | "medium" | "high" | "critical";
+export type SecurityEventSeverity = 'low' | 'medium' | 'high' | 'critical';
 
 export interface SecurityEventData {
   userId?: string;
@@ -64,10 +64,10 @@ class SecurityEventsService {
       });
 
       // Log high/critical events
-      if (data.severity === "high" || data.severity === "critical") {
+      if (data.severity === 'high' || data.severity === 'critical') {
         logger.warn(
           {
-            operationType: "SECURITY",
+            operationType: 'SECURITY',
             userId: data.userId,
             metadata: {
               eventId: event.id,
@@ -80,7 +80,7 @@ class SecurityEventsService {
         );
 
         // Publish event for real-time alerts
-        eventBus.publish("security.event", {
+        eventBus.publish('security.event', {
           eventId: event.id,
           userId: data.userId,
           eventType: data.eventType,
@@ -88,17 +88,19 @@ class SecurityEventsService {
         });
 
         // TODO: Send email/SMS alert for critical events
-        if (data.severity === "critical" && data.userId) {
+        if (data.severity === 'critical' && data.userId) {
           await this.sendSecurityAlert(data.userId, data.eventType);
         }
       }
     } catch (error) {
       logger.error(
         {
-          operationType: "DATABASE",
-          metadata: { error: error instanceof Error ? error.message : String(error) },
+          operationType: 'DATABASE',
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
         },
-        "Failed to log security event"
+        'Failed to log security event'
       );
     }
   }
@@ -106,14 +108,11 @@ class SecurityEventsService {
   /**
    * Get security events for a user
    */
-  async getUserEvents(
-    userId: string,
-    limit = 50
-  ): Promise<any[]> {
+  async getUserEvents(userId: string, limit = 50): Promise<any[]> {
     try {
       const events = await prisma.securityEvent.findMany({
         where: { userId },
-        orderBy: { createdAt: "desc" },
+        orderBy: { createdAt: 'desc' },
         take: limit,
       });
 
@@ -121,13 +120,15 @@ class SecurityEventsService {
     } catch (error) {
       logger.error(
         {
-          operationType: "DATABASE",
+          operationType: 'DATABASE',
           userId,
-          metadata: { error: error instanceof Error ? error.message : String(error) },
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
         },
-        "Failed to get user security events"
+        'Failed to get user security events'
       );
-      throw ApiError.systemError("Failed to retrieve security events");
+      throw ApiError.systemError('Failed to retrieve security events');
     }
   }
 
@@ -142,7 +143,7 @@ class SecurityEventsService {
       // Count failed login attempts in last 15 minutes
       const recentFailures = await prisma.securityEvent.count({
         where: {
-          eventType: "login_failed",
+          eventType: 'login_failed',
           ipAddress,
           createdAt: {
             gte: new Date(Date.now() - 15 * 60 * 1000),
@@ -153,8 +154,8 @@ class SecurityEventsService {
       // 5+ failed attempts = brute force
       if (recentFailures >= 5) {
         await this.logEvent({
-          eventType: "brute_force_detected",
-          severity: "critical",
+          eventType: 'brute_force_detected',
+          severity: 'critical',
           ipAddress,
           details: {
             identifier,
@@ -169,10 +170,12 @@ class SecurityEventsService {
     } catch (error) {
       logger.error(
         {
-          operationType: "DATABASE",
-          metadata: { error: error instanceof Error ? error.message : String(error) },
+          operationType: 'DATABASE',
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
         },
-        "Failed to detect brute force"
+        'Failed to detect brute force'
       );
       return false;
     }
@@ -191,7 +194,7 @@ class SecurityEventsService {
       const recentLogins = await prisma.securityEvent.findMany({
         where: {
           userId,
-          eventType: "login_success",
+          eventType: 'login_success',
           createdAt: {
             gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Last 30 days
           },
@@ -203,8 +206,12 @@ class SecurityEventsService {
       });
 
       // Check if IP or user agent is new
-      const knownIPs = new Set(recentLogins.map((l) => l.ipAddress).filter(Boolean));
-      const knownUserAgents = new Set(recentLogins.map((l) => l.userAgent).filter(Boolean));
+      const knownIPs = new Set(
+        recentLogins.map((l) => l.ipAddress).filter(Boolean)
+      );
+      const knownUserAgents = new Set(
+        recentLogins.map((l) => l.userAgent).filter(Boolean)
+      );
 
       const isNewIP = ipAddress && !knownIPs.has(ipAddress);
       const isNewDevice = userAgent && !knownUserAgents.has(userAgent);
@@ -213,12 +220,12 @@ class SecurityEventsService {
       if (isNewIP && isNewDevice && recentLogins.length > 0) {
         await this.logEvent({
           userId,
-          eventType: "suspicious_login",
-          severity: "high",
+          eventType: 'suspicious_login',
+          severity: 'high',
           ipAddress,
           userAgent,
           details: {
-            reason: "New IP and device",
+            reason: 'New IP and device',
             knownIPCount: knownIPs.size,
             knownDeviceCount: knownUserAgents.size,
           },
@@ -231,11 +238,13 @@ class SecurityEventsService {
     } catch (error) {
       logger.error(
         {
-          operationType: "DATABASE",
+          operationType: 'DATABASE',
           userId,
-          metadata: { error: error instanceof Error ? error.message : String(error) },
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
         },
-        "Failed to detect suspicious login"
+        'Failed to detect suspicious login'
       );
       return false;
     }
@@ -257,20 +266,22 @@ class SecurityEventsService {
 
       logger.info(
         {
-          operationType: "SECURITY",
+          operationType: 'SECURITY',
           metadata: { eventId, resolvedBy },
         },
-        "Security event resolved"
+        'Security event resolved'
       );
     } catch (error) {
       logger.error(
         {
-          operationType: "DATABASE",
-          metadata: { error: error instanceof Error ? error.message : String(error) },
+          operationType: 'DATABASE',
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
         },
-        "Failed to resolve security event"
+        'Failed to resolve security event'
       );
-      throw ApiError.systemError("Failed to resolve event");
+      throw ApiError.systemError('Failed to resolve event');
     }
   }
 
@@ -281,7 +292,7 @@ class SecurityEventsService {
     try {
       const events = await prisma.securityEvent.findMany({
         where: { resolved: false },
-        orderBy: [{ severity: "desc" }, { createdAt: "desc" }],
+        orderBy: [{ severity: 'desc' }, { createdAt: 'desc' }],
         take: limit,
         include: {
           user: {
@@ -298,12 +309,14 @@ class SecurityEventsService {
     } catch (error) {
       logger.error(
         {
-          operationType: "DATABASE",
-          metadata: { error: error instanceof Error ? error.message : String(error) },
+          operationType: 'DATABASE',
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
         },
-        "Failed to get unresolved events"
+        'Failed to get unresolved events'
       );
-      throw ApiError.systemError("Failed to retrieve events");
+      throw ApiError.systemError('Failed to retrieve events');
     }
   }
 
@@ -317,15 +330,15 @@ class SecurityEventsService {
     // TODO: Implement email/SMS alerts
     logger.info(
       {
-        operationType: "SECURITY",
+        operationType: 'SECURITY',
         userId,
         metadata: { eventType },
       },
-      "Security alert triggered (email/SMS not yet implemented)"
+      'Security alert triggered (email/SMS not yet implemented)'
     );
 
     // Publish event for real-time notifications
-    eventBus.publish("security.alert", {
+    eventBus.publish('security.alert', {
       userId,
       eventType,
       timestamp: new Date(),
@@ -350,10 +363,10 @@ class SecurityEventsService {
       if (result.count > 0) {
         logger.info(
           {
-            operationType: "GENERAL",
+            operationType: 'GENERAL',
             metadata: { deletedCount: result.count },
           },
-          "Old security events cleaned up"
+          'Old security events cleaned up'
         );
       }
 
@@ -361,10 +374,12 @@ class SecurityEventsService {
     } catch (error) {
       logger.error(
         {
-          operationType: "DATABASE",
-          metadata: { error: error instanceof Error ? error.message : String(error) },
+          operationType: 'DATABASE',
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
         },
-        "Failed to cleanup old events"
+        'Failed to cleanup old events'
       );
       return 0;
     }

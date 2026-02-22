@@ -10,21 +10,21 @@
  * Features: shared Redis connection, default job options, logging, dead-letter queue
  */
 
-import { Queue, Worker, QueueEvents } from "bullmq";
-import { Redis as IORedis } from "ioredis";
-import { logger } from "../logger/logger.js";
+import { Queue, Worker, QueueEvents } from 'bullmq';
+import { Redis as IORedis } from 'ioredis';
+import { logger } from '../logger/logger.js';
 
 // ─────────────────────────────────────────────
 // Shared Redis connection (used by all queues & workers)
 // ─────────────────────────────────────────────
 
 export const redisConnection = new IORedis({
-  host: process.env.REDIS_HOST || "localhost",
+  host: process.env.REDIS_HOST || 'localhost',
   port: Number(process.env.REDIS_PORT) || 6379,
   password: process.env.REDIS_PASSWORD || undefined,
   db: Number(process.env.REDIS_DB) || 0,
-  maxRetriesPerRequest: null,           // Recommended for BullMQ
-  enableOfflineQueue: false,            // Fail fast if Redis is down
+  maxRetriesPerRequest: null, // Recommended for BullMQ
+  enableOfflineQueue: false, // Fail fast if Redis is down
   retryStrategy: (times) => {
     const delay = Math.min(times * 50, 2000);
     return delay;
@@ -32,15 +32,15 @@ export const redisConnection = new IORedis({
 });
 
 // Log Redis connection issues
-redisConnection.on("error", (err) => {
+redisConnection.on('error', (err) => {
   logger.error(
-    { operationType: "REDIS", error: err.message },
-    "Redis connection error"
+    { operationType: 'REDIS', error: err.message },
+    'Redis connection error'
   );
 });
 
-redisConnection.on("connect", () => {
-  logger.info({ operationType: "REDIS" }, "Redis connected successfully");
+redisConnection.on('connect', () => {
+  logger.info({ operationType: 'REDIS' }, 'Redis connected successfully');
 });
 
 // ─────────────────────────────────────────────
@@ -50,12 +50,12 @@ redisConnection.on("connect", () => {
 export function createQueue<T = any>(name: string): Queue<T> {
   return new Queue<T>(name, {
     connection: redisConnection,
-    prefix: "bull", // default prefix, can be changed if needed
+    prefix: 'bull', // default prefix, can be changed if needed
     defaultJobOptions: {
-      attempts: 5,                    // retry up to 5 times
-      backoff: { type: "exponential", delay: 1000 },
-      removeOnComplete: { age: 3600 * 24 * 7 },  // 1 week
-      removeOnFail: { count: 1000 },  // keep last 1000 failed jobs
+      attempts: 5, // retry up to 5 times
+      backoff: { type: 'exponential', delay: 1000 },
+      removeOnComplete: { age: 3600 * 24 * 7 }, // 1 week
+      removeOnFail: { count: 1000 }, // keep last 1000 failed jobs
     },
   });
 }
@@ -76,23 +76,23 @@ export function createWorker<T = any>(
     ...options,
   });
 
-  worker.on("completed", (job) => {
+  worker.on('completed', (job) => {
     logger.info(
       {
-        operationType: "BULLMQ_COMPLETED",
+        operationType: 'BULLMQ_COMPLETED',
         queue: queueName,
         jobId: job.id,
         jobName: job.name,
         duration: job.processedOn ? Date.now() - job.processedOn : undefined,
       },
-      "Job completed successfully"
+      'Job completed successfully'
     );
   });
 
-  worker.on("failed", (job, err) => {
+  worker.on('failed', (job, err) => {
     logger.error(
       {
-        operationType: "BULLMQ_FAILED",
+        operationType: 'BULLMQ_FAILED',
         queue: queueName,
         jobId: job?.id,
         jobName: job?.name,
@@ -100,19 +100,19 @@ export function createWorker<T = any>(
         error: err.message,
         stack: err.stack,
       },
-      "Job failed"
+      'Job failed'
     );
   });
 
-  worker.on("progress", (job, progress) => {
+  worker.on('progress', (job, progress) => {
     logger.debug(
       {
-        operationType: "BULLMQ_PROGRESS",
+        operationType: 'BULLMQ_PROGRESS',
         queue: queueName,
         jobId: job.id,
         progress,
       },
-      "Job progress update"
+      'Job progress update'
     );
   });
 
@@ -123,25 +123,25 @@ export function createWorker<T = any>(
 // All queues used in the system
 // ─────────────────────────────────────────────
 
-export const economyQueue = createQueue("economy");
-export const userCleanupQueue = createQueue("user-cleanup");
+export const economyQueue = createQueue('economy');
+export const userCleanupQueue = createQueue('user-cleanup');
 
 // Dead-letter queue for permanently failed jobs (after max retries)
-export const deadLetterQueue = createQueue("dead-letter");
+export const deadLetterQueue = createQueue('dead-letter');
 
 // ─────────────────────────────────────────────
 // Queue events (for monitoring or real-time alerts)
 // ─────────────────────────────────────────────
 
-export const economyQueueEvents = new QueueEvents("economy", {
+export const economyQueueEvents = new QueueEvents('economy', {
   connection: redisConnection,
 });
 
-export const userCleanupQueueEvents = new QueueEvents("user-cleanup", {
+export const userCleanupQueueEvents = new QueueEvents('user-cleanup', {
   connection: redisConnection,
 });
 
-export const deadLetterQueueEvents = new QueueEvents("dead-letter", {
+export const deadLetterQueueEvents = new QueueEvents('dead-letter', {
   connection: redisConnection,
 });
 
@@ -149,10 +149,12 @@ export const deadLetterQueueEvents = new QueueEvents("dead-letter", {
 // Optional: global event listeners (example)
 // ─────────────────────────────────────────────
 
-economyQueueEvents.on("failed" as any, ({ jobId, failedReason }: { jobId: string; failedReason: string }) => {
-  logger.warn(
-    { operationType: "QUEUE_EVENT", queue: "economy", jobId, failedReason },
-    "Job moved to failed state"
-  );
-});
-
+economyQueueEvents.on(
+  'failed' as any,
+  ({ jobId, failedReason }: { jobId: string; failedReason: string }) => {
+    logger.warn(
+      { operationType: 'QUEUE_EVENT', queue: 'economy', jobId, failedReason },
+      'Job moved to failed state'
+    );
+  }
+);

@@ -13,17 +13,17 @@
  * Version: 1.0 — January 2026
  */
 
-import { prisma } from "../../../core/database/client.js";
-import { participationRightsService } from "./participationRights.service.js";
+import { prisma } from '../../../core/database/client.js';
+import { participationRightsService } from './participationRights.service.js';
 import {
   CommitmentType,
   CommitmentStatus,
   COMMITMENT_CONFIG,
   ParticipationRightsReason,
-} from "../types.js";
-import { ApiError } from "../../../core/errors/ApiError.js";
-import { logger } from "../../../core/logger/logger.js";
-import { eventBus } from "../../../core/utils/eventBus.js";
+} from '../types.js';
+import { ApiError } from '../../../core/errors/ApiError.js';
+import { logger } from '../../../core/logger/logger.js';
+import { eventBus } from '../../../core/utils/eventBus.js';
 
 class CommitmentService {
   /**
@@ -34,7 +34,7 @@ class CommitmentService {
     type: CommitmentType,
     amountKes?: number,
     amountPR?: number,
-    frequency?: "MONTHLY" | "ONE_TIME" | "WEEKLY",
+    frequency?: 'MONTHLY' | 'ONE_TIME' | 'WEEKLY',
     durationMonths?: number,
     targetId?: string // Group ID, Project ID, etc.
   ) {
@@ -58,10 +58,10 @@ class CommitmentService {
 
     logger.info(
       { userId, commitmentId: commitment.id, type, amountKes, amountPR },
-      "[COMMITMENT] New commitment created"
+      '[COMMITMENT] New commitment created'
     );
 
-    eventBus.publish("economy.commitment.created", {
+    eventBus.publish('economy.commitment.created', {
       userId,
       commitmentId: commitment.id,
       type,
@@ -75,14 +75,18 @@ class CommitmentService {
   /**
    * Mark commitment as fulfilled for current period (e.g. payment received)
    */
-  async markFulfilled(commitmentId: string, amountKes?: number, amountPR?: number) {
+  async markFulfilled(
+    commitmentId: string,
+    amountKes?: number,
+    amountPR?: number
+  ) {
     const commitment = await prisma.commitment.findUnique({
       where: { id: commitmentId },
     });
 
-    if (!commitment) throw ApiError.notFound("Commitment");
+    if (!commitment) throw ApiError.notFound('Commitment');
     if (commitment.status !== CommitmentStatus.ACTIVE) {
-      throw ApiError.badRequest("Commitment is not active");
+      throw ApiError.badRequest('Commitment is not active');
     }
 
     await prisma.commitment.update({
@@ -96,7 +100,7 @@ class CommitmentService {
 
     logger.info(
       { commitmentId, amountKes, amountPR },
-      "[COMMITMENT] Commitment fulfilled for period"
+      '[COMMITMENT] Commitment fulfilled for period'
     );
   }
 
@@ -108,16 +112,13 @@ class CommitmentService {
       where: { id: commitmentId },
       data: {
         status: CommitmentStatus.CANCELLED,
-        breachReason: reason || "User cancelled",
+        breachReason: reason || 'User cancelled',
       },
     });
 
-    logger.info(
-      { commitmentId, reason },
-      "[COMMITMENT] Commitment cancelled"
-    );
+    logger.info({ commitmentId, reason }, '[COMMITMENT] Commitment cancelled');
 
-    eventBus.publish("economy.commitment.cancelled", {
+    eventBus.publish('economy.commitment.cancelled', {
       commitmentId,
       userId: commitment.userId,
       reason,
@@ -139,18 +140,27 @@ class CommitmentService {
     let breachedCount = 0;
 
     for (const commitment of activeCommitments) {
-      const isBreached = await this.isBreachedThisPeriod(commitment, currentPeriod);
+      const isBreached = await this.isBreachedThisPeriod(
+        commitment,
+        currentPeriod
+      );
 
       if (isBreached) {
         commitment.missedCount += 1;
 
-        const penaltyStep = Math.min(commitment.missedCount - 1, COMMITMENT_CONFIG.PENALTY_ON_BREACH.length - 1);
+        const penaltyStep = Math.min(
+          commitment.missedCount - 1,
+          COMMITMENT_CONFIG.PENALTY_ON_BREACH.length - 1
+        );
         const penaltyAmount = COMMITMENT_CONFIG.PENALTY_ON_BREACH[penaltyStep];
 
-        if (penaltyAmount === "ROLE_SUSPENSION") {
+        if (penaltyAmount === 'ROLE_SUSPENSION') {
           // Future: revoke group role or access
-          logger.warn({ commitmentId: commitment.id }, "[BREACH] Role suspension triggered");
-        } else if (typeof penaltyAmount === "number") {
+          logger.warn(
+            { commitmentId: commitment.id },
+            '[BREACH] Role suspension triggered'
+          );
+        } else if (typeof penaltyAmount === 'number') {
           await participationRightsService.spend(
             commitment.userId,
             penaltyAmount,
@@ -159,7 +169,9 @@ class CommitmentService {
           );
         }
 
-        if (commitment.missedCount >= COMMITMENT_CONFIG.MAX_MISSED_BEFORE_BREACH) {
+        if (
+          commitment.missedCount >= COMMITMENT_CONFIG.MAX_MISSED_BEFORE_BREACH
+        ) {
           await prisma.commitment.update({
             where: { id: commitment.id },
             data: {
@@ -172,10 +184,10 @@ class CommitmentService {
 
           logger.info(
             { commitmentId: commitment.id, missed: commitment.missedCount },
-            "[COMMITMENT] Breach threshold reached — status updated"
+            '[COMMITMENT] Breach threshold reached — status updated'
           );
 
-          eventBus.publish("economy.commitment.breached", {
+          eventBus.publish('economy.commitment.breached', {
             commitmentId: commitment.id,
             userId: commitment.userId,
             missedCount: commitment.missedCount,
@@ -196,7 +208,10 @@ class CommitmentService {
       }
     }
 
-    logger.info({ breachedCount, checked: activeCommitments.length }, "[COMMITMENT] Monthly breach check completed");
+    logger.info(
+      { breachedCount, checked: activeCommitments.length },
+      '[COMMITMENT] Monthly breach check completed'
+    );
 
     return breachedCount;
   }
@@ -205,14 +220,17 @@ class CommitmentService {
    * Check if commitment is breached for current period
    * Customize logic per commitment type
    */
-  private async isBreachedThisPeriod(commitment: any, currentPeriod: string): Promise<boolean> {
+  private async isBreachedThisPeriod(
+    commitment: any,
+    currentPeriod: string
+  ): Promise<boolean> {
     if (commitment.type === CommitmentType.DUES) {
       // Check if payment exists for current period
       const payment = await prisma.duesPayment.findFirst({
         where: {
           userId: commitment.userId,
           period: currentPeriod,
-          status: "COMPLETED",
+          status: 'COMPLETED',
         },
       });
       return !payment;
@@ -229,10 +247,10 @@ class CommitmentService {
   async getUserCommitments(userId: string) {
     const commitments = await prisma.commitment.findMany({
       where: { userId },
-      orderBy: { startDate: "desc" },
+      orderBy: { startDate: 'desc' },
     });
 
-    return commitments.map(c => ({
+    return commitments.map((c) => ({
       id: c.id,
       type: c.type,
       status: c.status,

@@ -7,11 +7,15 @@
  * Updated: Align with actual Prisma schema field names
  */
 
-import { NotificationType as PrismaNotificationType } from "@prisma/client";
-import { prisma } from "../../../core/database/client.js";
-import { sendEmail } from "../../../core/utils/email.service.js";
-import { logger } from "../../../core/logger/logger.js";
-import { NotificationType, NotificationChannel, SendNotificationDto } from "../types.js";
+import { NotificationType as PrismaNotificationType } from '@prisma/client';
+import { prisma } from '../../../core/database/client.js';
+import { sendEmail } from '../../../core/utils/email.service.js';
+import { logger } from '../../../core/logger/logger.js';
+import {
+  NotificationType,
+  NotificationChannel,
+  SendNotificationDto,
+} from '../types.js';
 
 class NotificationService {
   /**
@@ -30,7 +34,10 @@ class NotificationService {
     }
 
     if (allowedChannels.length === 0) {
-      logger.info({ userId: dto.userId, type: dto.type }, "Notification skipped — all channels disabled");
+      logger.info(
+        { userId: dto.userId, type: dto.type },
+        'Notification skipped — all channels disabled'
+      );
       return;
     }
 
@@ -65,7 +72,7 @@ class NotificationService {
 
     logger.info(
       { userId: dto.userId, type: dto.type, channels: allowedChannels },
-      "Notification sent"
+      'Notification sent'
     );
   }
 
@@ -73,7 +80,11 @@ class NotificationService {
     switch (type) {
       case NotificationType.DUES_OVERDUE:
       case NotificationType.DUES_REMINDER:
-        return [NotificationChannel.EMAIL, NotificationChannel.SMS, NotificationChannel.IN_APP];
+        return [
+          NotificationChannel.EMAIL,
+          NotificationChannel.SMS,
+          NotificationChannel.IN_APP,
+        ];
       case NotificationType.PROPOSAL_PASSED:
       case NotificationType.PROJECT_MILESTONE_VERIFIED:
         return [NotificationChannel.EMAIL, NotificationChannel.IN_APP];
@@ -98,7 +109,7 @@ class NotificationService {
   async getUserNotifications(userId: string, unreadOnly = false) {
     return prisma.notification.findMany({
       where: { userId, ...(unreadOnly && { read: false }) },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: 'desc' },
       take: 50,
     });
   }

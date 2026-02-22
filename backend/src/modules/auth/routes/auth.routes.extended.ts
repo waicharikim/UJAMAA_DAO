@@ -2,7 +2,7 @@
  * @file src/modules/auth/routes/auth.routes.extended.ts
  * @description
  * Extended authentication routes - Refresh tokens, session management, phone verification
- * 
+ *
  * Endpoints:
  * - POST /refresh - Refresh access token
  * - GET /sessions - List active sessions
@@ -12,7 +12,7 @@
  * - DELETE /sessions/others - Revoke all other sessions
  * - POST /phone/send-code - Send SMS verification code
  * - POST /phone/verify - Verify SMS code
- * 
+ *
  * Version: 1.0 — January 2026
  */
 
@@ -20,7 +20,10 @@ import { Response, Router } from 'express';
 import { z } from 'zod';
 import { authenticate } from '../../../core/middleware/auth.middleware.js';
 import { validateBody } from '../../../core/middleware/validateRequest.js';
-import { authRateLimit, strictRateLimit } from '../../../core/middleware/rateLimiter.js';
+import {
+  authRateLimit,
+  strictRateLimit,
+} from '../../../core/middleware/rateLimiter.js';
 import { refreshTokenService } from '../services/refresh-token.service.js';
 import { sessionDeviceService } from '../services/session-device.service.js';
 import { phoneVerificationService } from '../services/phone-verification.service.js';
@@ -46,16 +49,18 @@ router.post(
   '/refresh',
   authRateLimit(),
   validateBody(refreshTokenSchema),
-  catchAsync(async (req: AuthRequest, res: Response<any, Record<string, any>>) => {
-    const { refreshToken } = req.body;
+  catchAsync(
+    async (req: AuthRequest, res: Response<any, Record<string, any>>) => {
+      const { refreshToken } = req.body;
 
-    const result = await refreshTokenService.refresh(refreshToken, {
-      ipAddress: req.ip,
-      userAgent: req.headers['user-agent'],
-    });
+      const result = await refreshTokenService.refresh(refreshToken, {
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'],
+      });
 
-    sendSuccess(res, result, 'Token refreshed successfully');
-  })
+      sendSuccess(res, result, 'Token refreshed successfully');
+    }
+  )
 );
 
 // ==========================================================================
@@ -70,14 +75,19 @@ router.get(
   '/sessions',
   authRateLimit(),
   authenticate,
-  catchAsync(async (req: AuthRequest, res: Response<any, Record<string, any>>) => {
-    const userId = req.user!.userId;
-    const currentSessionId = req.sessionId;
+  catchAsync(
+    async (req: AuthRequest, res: Response<any, Record<string, any>>) => {
+      const userId = req.user!.userId;
+      const currentSessionId = req.sessionId;
 
-    const sessions = await sessionDeviceService.getUserSessions(userId, currentSessionId);
+      const sessions = await sessionDeviceService.getUserSessions(
+        userId,
+        currentSessionId
+      );
 
-    sendSuccess(res, sessions, 'Sessions retrieved successfully');
-  })
+      sendSuccess(res, sessions, 'Sessions retrieved successfully');
+    }
+  )
 );
 
 /**
@@ -88,13 +98,16 @@ router.get(
   '/sessions/suspicious',
   authRateLimit(),
   authenticate,
-  catchAsync(async (req: AuthRequest, res: Response<any, Record<string, any>>) => {
-    const userId = req.user!.userId;
+  catchAsync(
+    async (req: AuthRequest, res: Response<any, Record<string, any>>) => {
+      const userId = req.user!.userId;
 
-    const suspicious = await sessionDeviceService.detectSuspiciousSessions(userId);
+      const suspicious =
+        await sessionDeviceService.detectSuspiciousSessions(userId);
 
-    sendSuccess(res, suspicious, 'Suspicious sessions detected');
-  })
+      sendSuccess(res, suspicious, 'Suspicious sessions detected');
+    }
+  )
 );
 
 const renameSessionSchema = z.object({
@@ -110,15 +123,17 @@ router.post(
   authRateLimit(),
   authenticate,
   validateBody(renameSessionSchema),
-  catchAsync(async (req: AuthRequest, res: Response<any, Record<string, any>>) => {
-    const userId = req.user!.userId;
-    const { sessionId } = req.params;
-    const { deviceName } = req.body;
+  catchAsync(
+    async (req: AuthRequest, res: Response<any, Record<string, any>>) => {
+      const userId = req.user!.userId;
+      const { sessionId } = req.params;
+      const { deviceName } = req.body;
 
-    await sessionDeviceService.renameSession(userId, sessionId, deviceName);
+      await sessionDeviceService.renameSession(userId, sessionId, deviceName);
 
-    sendSuccess(res, null, 'Session renamed successfully');
-  })
+      sendSuccess(res, null, 'Session renamed successfully');
+    }
+  )
 );
 
 /**
@@ -129,14 +144,16 @@ router.post(
   '/sessions/:sessionId/trust',
   authRateLimit(),
   authenticate,
-  catchAsync(async (req: AuthRequest, res: Response<any, Record<string, any>>) => {
-    const userId = req.user!.userId;
-    const { sessionId } = req.params;
+  catchAsync(
+    async (req: AuthRequest, res: Response<any, Record<string, any>>) => {
+      const userId = req.user!.userId;
+      const { sessionId } = req.params;
 
-    await sessionDeviceService.trustDevice(userId, sessionId);
+      await sessionDeviceService.trustDevice(userId, sessionId);
 
-    sendSuccess(res, null, 'Device marked as trusted');
-  })
+      sendSuccess(res, null, 'Device marked as trusted');
+    }
+  )
 );
 
 /**
@@ -147,14 +164,16 @@ router.delete(
   '/sessions/:sessionId/trust',
   authRateLimit(),
   authenticate,
-  catchAsync(async (req: AuthRequest, res: Response<any, Record<string, any>>) => {
-    const userId = req.user!.userId;
-    const { sessionId } = req.params;
+  catchAsync(
+    async (req: AuthRequest, res: Response<any, Record<string, any>>) => {
+      const userId = req.user!.userId;
+      const { sessionId } = req.params;
 
-    await sessionDeviceService.untrustDevice(userId, sessionId);
+      await sessionDeviceService.untrustDevice(userId, sessionId);
 
-    sendSuccess(res, null, 'Device untrusted');
-  })
+      sendSuccess(res, null, 'Device untrusted');
+    }
+  )
 );
 
 /**
@@ -165,14 +184,16 @@ router.delete(
   '/sessions/:sessionId',
   authRateLimit(),
   authenticate,
-  catchAsync(async (req: AuthRequest, res: Response<any, Record<string, any>>) => {
-    const userId = req.user!.userId;
-    const { sessionId } = req.params;
+  catchAsync(
+    async (req: AuthRequest, res: Response<any, Record<string, any>>) => {
+      const userId = req.user!.userId;
+      const { sessionId } = req.params;
 
-    await sessionDeviceService.revokeSession(userId, sessionId);
+      await sessionDeviceService.revokeSession(userId, sessionId);
 
-    sendSuccess(res, null, 'Session revoked successfully');
-  })
+      sendSuccess(res, null, 'Session revoked successfully');
+    }
+  )
 );
 
 /**
@@ -183,19 +204,28 @@ router.delete(
   '/sessions/others',
   authRateLimit(),
   authenticate,
-  catchAsync(async (req: AuthRequest, res: Response<any, Record<string, any>>) => {
-    const userId = req.user!.userId;
-    const currentSessionId = req.sessionId;
+  catchAsync(
+    async (req: AuthRequest, res: Response<any, Record<string, any>>) => {
+      const userId = req.user!.userId;
+      const currentSessionId = req.sessionId;
 
-    if (!currentSessionId) {
-      sendError(res, { message: 'No active session found' }, 400);
-      return;
+      if (!currentSessionId) {
+        sendError(res, { message: 'No active session found' }, 400);
+        return;
+      }
+
+      const count = await sessionDeviceService.revokeOtherSessions(
+        userId,
+        currentSessionId
+      );
+
+      sendSuccess(
+        res,
+        { revokedCount: count },
+        `Logged out from ${count} other device(s)`
+      );
     }
-
-    const count = await sessionDeviceService.revokeOtherSessions(userId, currentSessionId);
-
-    sendSuccess(res, { revokedCount: count }, `Logged out from ${count} other device(s)`);
-  })
+  )
 );
 
 // ==========================================================================
@@ -215,14 +245,19 @@ router.post(
   strictRateLimit(), // Very strict - prevent SMS spam
   authenticate,
   validateBody(sendCodeSchema),
-  catchAsync(async (req: AuthRequest, res: Response<any, Record<string, any>>) => {
-    const userId = req.user!.userId;
-    const { phoneNumber } = req.body;
+  catchAsync(
+    async (req: AuthRequest, res: Response<any, Record<string, any>>) => {
+      const userId = req.user!.userId;
+      const { phoneNumber } = req.body;
 
-    const result = await phoneVerificationService.sendVerificationCode(phoneNumber, userId);
+      const result = await phoneVerificationService.sendVerificationCode(
+        phoneNumber,
+        userId
+      );
 
-    sendSuccess(res, result, 'Verification code sent successfully');
-  })
+      sendSuccess(res, result, 'Verification code sent successfully');
+    }
+  )
 );
 
 const verifyCodeSchema = z.object({
@@ -239,14 +274,16 @@ router.post(
   strictRateLimit(),
   authenticate,
   validateBody(verifyCodeSchema),
-  catchAsync(async (req: AuthRequest, res: Response<any, Record<string, any>>) => {
-    const userId = req.user!.userId;
-    const { phoneNumber, code } = req.body;
+  catchAsync(
+    async (req: AuthRequest, res: Response<any, Record<string, any>>) => {
+      const userId = req.user!.userId;
+      const { phoneNumber, code } = req.body;
 
-    await phoneVerificationService.verifyCode(phoneNumber, code, userId);
+      await phoneVerificationService.verifyCode(phoneNumber, code, userId);
 
-    sendSuccess(res, null, 'Phone number verified successfully');
-  })
+      sendSuccess(res, null, 'Phone number verified successfully');
+    }
+  )
 );
 
 export default router;

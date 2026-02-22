@@ -49,13 +49,16 @@ export const UJAMAADAO_ERROR_CODES = {
   RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
 } as const;
 
-export type UjamaadaoErrorCode = typeof UJAMAADAO_ERROR_CODES[keyof typeof UJAMAADAO_ERROR_CODES];
+export type UjamaadaoErrorCode =
+  (typeof UJAMAADAO_ERROR_CODES)[keyof typeof UJAMAADAO_ERROR_CODES];
 
 /**
  * Helper to check if a string is a valid error code
  */
 export function isValidErrorCode(code: string): code is UjamaadaoErrorCode {
-  return Object.values(UJAMAADAO_ERROR_CODES).includes(code as UjamaadaoErrorCode);
+  return Object.values(UJAMAADAO_ERROR_CODES).includes(
+    code as UjamaadaoErrorCode
+  );
 }
 
 /**
@@ -123,24 +126,32 @@ export const ERROR_CODE_MESSAGES: Record<UjamaadaoErrorCode, string> = {
   [UJAMAADAO_ERROR_CODES.WALLET_SIGNATURE_INVALID]: 'Invalid wallet signature',
 
   // Authorization
-  [UJAMAADAO_ERROR_CODES.AUTHORIZATION_ERROR]: 'You do not have permission to perform this action',
+  [UJAMAADAO_ERROR_CODES.AUTHORIZATION_ERROR]:
+    'You do not have permission to perform this action',
   [UJAMAADAO_ERROR_CODES.INSUFFICIENT_PERMISSIONS]: 'Insufficient permissions',
-  [UJAMAADAO_ERROR_CODES.INSUFFICIENT_VERIFICATION]: 'Your account verification level is insufficient',
-  [UJAMAADAO_ERROR_CODES.INSUFFICIENT_IMPACT_POINTS]: 'Insufficient impact points',
-  [UJAMAADAO_ERROR_CODES.RESIDENCE_CHANGE_COOLDOWN]: 'Residence change is on cooldown',
+  [UJAMAADAO_ERROR_CODES.INSUFFICIENT_VERIFICATION]:
+    'Your account verification level is insufficient',
+  [UJAMAADAO_ERROR_CODES.INSUFFICIENT_IMPACT_POINTS]:
+    'Insufficient impact points',
+  [UJAMAADAO_ERROR_CODES.RESIDENCE_CHANGE_COOLDOWN]:
+    'Residence change is on cooldown',
 
   // Geographic
   [UJAMAADAO_ERROR_CODES.GEOGRAPHIC_ERROR]: 'Geographic operation failed',
-  [UJAMAADAO_ERROR_CODES.INSUFFICIENT_GEOGRAPHIC_SCOPE]: 'Insufficient geographic scope',
-  [UJAMAADAO_ERROR_CODES.GEOGRAPHIC_IDENTIFIER_MISMATCH]: 'Geographic identifier mismatch',
-  [UJAMAADAO_ERROR_CODES.MISSING_GEOGRAPHIC_CONTEXT]: 'Missing geographic context',
+  [UJAMAADAO_ERROR_CODES.INSUFFICIENT_GEOGRAPHIC_SCOPE]:
+    'Insufficient geographic scope',
+  [UJAMAADAO_ERROR_CODES.GEOGRAPHIC_IDENTIFIER_MISMATCH]:
+    'Geographic identifier mismatch',
+  [UJAMAADAO_ERROR_CODES.MISSING_GEOGRAPHIC_CONTEXT]:
+    'Missing geographic context',
 
   // Economic
   [UJAMAADAO_ERROR_CODES.ECONOMIC_ERROR]: 'Economic operation failed',
   [UJAMAADAO_ERROR_CODES.INSUFFICIENT_TOKENS]: 'Insufficient tokens',
   [UJAMAADAO_ERROR_CODES.TRANSACTION_FAILED]: 'Transaction failed',
   [UJAMAADAO_ERROR_CODES.WALLET_ERROR]: 'Wallet operation failed',
-  [UJAMAADAO_ERROR_CODES.INSUFFICIENT_PARTICIPATION_RIGHTS]: 'Insufficient Participation Rights (PR) to perform this action',
+  [UJAMAADAO_ERROR_CODES.INSUFFICIENT_PARTICIPATION_RIGHTS]:
+    'Insufficient Participation Rights (PR) to perform this action',
 
   // Resources
   [UJAMAADAO_ERROR_CODES.NOT_FOUND]: 'Resource not found',
@@ -150,6 +161,7 @@ export const ERROR_CODE_MESSAGES: Record<UjamaadaoErrorCode, string> = {
   // System
   [UJAMAADAO_ERROR_CODES.SYSTEM_ERROR]: 'An unexpected error occurred',
   [UJAMAADAO_ERROR_CODES.DATABASE_ERROR]: 'Database operation failed',
-  [UJAMAADAO_ERROR_CODES.EXTERNAL_SERVICE_ERROR]: 'External service unavailable',
+  [UJAMAADAO_ERROR_CODES.EXTERNAL_SERVICE_ERROR]:
+    'External service unavailable',
   [UJAMAADAO_ERROR_CODES.RATE_LIMIT_EXCEEDED]: 'Too many requests',
 };

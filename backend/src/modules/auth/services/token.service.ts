@@ -2,36 +2,37 @@
  * @file src/modules/auth/services/token.service.ts
  * @description
  * Token Service — Handles creation, validation, and cleanup of various short-lived tokens
- * 
+ *
  * Supported token types:
  * - Email verification / registration tokens (DB stored, one-time use)
  * - Magic link tokens (JWT, short-lived)
  * - Password reset tokens (DB stored, short-lived)
  * - Refresh tokens (if stored separately from sessions)
- * 
+ *
  * Responsibilities:
  * - Secure token generation
  * - Validation & one-time use enforcement
  * - Periodic cleanup of expired tokens
  * - Logging & audit trail
- * 
+ *
  * Version: 1.1 — February 2026
  * Updated: Added full cleanup methods for BullMQ integration
  */
 
-import { prisma } from "../../../core/database/client.js";
-import { ApiError } from "../../../core/errors/ApiError.js";
-import { logger } from "../../../core/logger/logger.js";
-import { signMagicLinkToken, JwtPayload } from "../../../core/utils/jwt.service.js";
-import { generateRandomHex } from "../../../core/utils/crypto.js";
-import { env } from "../../../core/utils/env.js";
+import { prisma } from '../../../core/database/client.js';
+import { logger } from '../../../core/logger/logger.js';
+import {
+  signMagicLinkToken,
+  JwtPayload,
+} from '../../../core/utils/jwt.service.js';
+import { generateRandomHex } from '../../../core/utils/crypto.js';
 
 const TOKEN_CONFIG = {
-  verificationExpiryHours: 24,      // Email verification / registration
-  magicLinkExpiryMinutes: 15,       // Magic link JWT
-  passwordResetExpiryHours: 2,      // Password reset
-  refreshTokenRetentionDays: 90,    // Old refresh tokens cleanup
-  cleanupRetentionDays: 30,         // Safety net for unverified old tokens
+  verificationExpiryHours: 24, // Email verification / registration
+  magicLinkExpiryMinutes: 15, // Magic link JWT
+  passwordResetExpiryHours: 2, // Password reset
+  refreshTokenRetentionDays: 90, // Old refresh tokens cleanup
+  cleanupRetentionDays: 30, // Safety net for unverified old tokens
 };
 
 export class TokenService {
@@ -45,7 +46,9 @@ export class TokenService {
    */
   async createVerificationToken(userId: string): Promise<string> {
     const token = generateRandomHex(32);
-    const expiresAt = new Date(Date.now() + TOKEN_CONFIG.verificationExpiryHours * 60 * 60 * 1000);
+    const expiresAt = new Date(
+      Date.now() + TOKEN_CONFIG.verificationExpiryHours * 60 * 60 * 1000
+    );
 
     await prisma.emailVerificationToken.create({
       data: {
@@ -56,8 +59,8 @@ export class TokenService {
     });
 
     logger.info(
-      { operationType: "TOKEN_CREATE", type: "verification", userId },
-      "Verification token created"
+      { operationType: 'TOKEN_CREATE', type: 'verification', userId },
+      'Verification token created'
     );
 
     return token;
@@ -71,8 +74,12 @@ export class TokenService {
     const token = signMagicLinkToken(payload);
 
     logger.info(
-      { operationType: "TOKEN_CREATE", type: "magic-link", userId: payload.sub },
-      "Magic link token created"
+      {
+        operationType: 'TOKEN_CREATE',
+        type: 'magic-link',
+        userId: payload.sub,
+      },
+      'Magic link token created'
     );
 
     return token;
@@ -84,7 +91,7 @@ export class TokenService {
   async createPasswordResetToken(_userId: string): Promise<string> {
     // Password reset is handled by passwordResetService which stores a tokenHash.
     // This stub exists for interface compatibility only.
-    throw new Error("Use passwordResetService.requestReset() instead");
+    throw new Error('Use passwordResetService.requestReset() instead');
   }
 
   // ─────────────────────────────────────────────
@@ -109,8 +116,12 @@ export class TokenService {
     await prisma.emailVerificationToken.delete({ where: { token } });
 
     logger.info(
-      { operationType: "TOKEN_VALIDATE", type: "verification", userId: record.userId },
-      "Verification token validated and deleted"
+      {
+        operationType: 'TOKEN_VALIDATE',
+        type: 'verification',
+        userId: record.userId,
+      },
+      'Verification token validated and deleted'
     );
 
     return record.user;
@@ -123,7 +134,7 @@ export class TokenService {
   async validatePasswordResetToken(_token: string) {
     // Password reset validation is handled by passwordResetService.verifyResetToken().
     // This stub exists for interface compatibility only.
-    throw new Error("Use passwordResetService.verifyResetToken() instead");
+    throw new Error('Use passwordResetService.verifyResetToken() instead');
   }
 
   // ─────────────────────────────────────────────
@@ -142,11 +153,11 @@ export class TokenService {
       if (result.count > 0) {
         logger.info(
           {
-            operationType: "TOKEN_CLEANUP",
-            type: "verification",
+            operationType: 'TOKEN_CLEANUP',
+            type: 'verification',
             count: result.count,
           },
-          "Expired verification tokens cleaned up"
+          'Expired verification tokens cleaned up'
         );
       }
 
@@ -154,11 +165,11 @@ export class TokenService {
     } catch (err) {
       logger.error(
         {
-          operationType: "CLEANUP_ERROR",
-          task: "verification-tokens",
+          operationType: 'CLEANUP_ERROR',
+          task: 'verification-tokens',
           error: err instanceof Error ? err.message : String(err),
         },
-        "Failed to clean up expired verification tokens"
+        'Failed to clean up expired verification tokens'
       );
       return 0;
     }
@@ -186,11 +197,11 @@ export class TokenService {
       if (result.count > 0) {
         logger.info(
           {
-            operationType: "TOKEN_CLEANUP",
-            type: "password-reset",
+            operationType: 'TOKEN_CLEANUP',
+            type: 'password-reset',
             count: result.count,
           },
-          "Expired password reset tokens cleaned up"
+          'Expired password reset tokens cleaned up'
         );
       }
 
@@ -198,11 +209,11 @@ export class TokenService {
     } catch (err) {
       logger.error(
         {
-          operationType: "CLEANUP_ERROR",
-          task: "password-reset-tokens",
+          operationType: 'CLEANUP_ERROR',
+          task: 'password-reset-tokens',
           error: err instanceof Error ? err.message : String(err),
         },
-        "Failed to clean up expired password reset tokens"
+        'Failed to clean up expired password reset tokens'
       );
       return 0;
     }

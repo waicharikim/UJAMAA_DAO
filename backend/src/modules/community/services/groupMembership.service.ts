@@ -9,13 +9,18 @@
  * Version: 2.3 — February 2026 — Aligned with actual Prisma schema
  */
 
-import { prisma } from "../../../core/database/client.js";
-import { Prisma } from "@prisma/client";
-import { logger } from "../../../core/logger/logger.js";
-import { ApiError } from "../../../core/errors/ApiError.js";
+import { prisma } from '../../../core/database/client.js';
+import { Prisma } from '@prisma/client';
+import { logger } from '../../../core/logger/logger.js';
+import { ApiError } from '../../../core/errors/ApiError.js';
 
 // Import Prisma enums (auto-generated from merged schema)
-import { LocationScope, GroupRole, GroupStatus, SystemGroupType } from "@prisma/client";
+import {
+  LocationScope,
+  GroupRole,
+  GroupStatus,
+  SystemGroupType,
+} from '@prisma/client';
 
 class GroupMembershipService {
   /**
@@ -73,7 +78,7 @@ class GroupMembershipService {
 
       if (!primaryWard || !secondaryWard) {
         throw ApiError.notFound(
-          "Ward",
+          'Ward',
           !primaryWard ? primaryWardId : secondaryWardId
         );
       }
@@ -139,7 +144,10 @@ class GroupMembershipService {
         }
 
         // Secondary County Group (if different from primary)
-        if (primaryWard.constituency.county.id !== secondaryWard.constituency.county.id) {
+        if (
+          primaryWard.constituency.county.id !==
+          secondaryWard.constituency.county.id
+        ) {
           enrollmentPromises.push(
             this.ensureSystemGroupAndEnroll(
               tx,
@@ -152,25 +160,23 @@ class GroupMembershipService {
         }
 
         // National Group (all users)
-        enrollmentPromises.push(
-          this.ensureNationalGroupAndEnroll(tx, userId)
-        );
+        enrollmentPromises.push(this.ensureNationalGroupAndEnroll(tx, userId));
 
         await Promise.all(enrollmentPromises);
       });
 
       logger.info(
         {
-          operationType: "COMMUNITY",
+          operationType: 'COMMUNITY',
           userId,
           metadata: { primaryWardId, secondaryWardId },
         },
-        "User enrolled in system groups"
+        'User enrolled in system groups'
       );
     } catch (error) {
       logger.error(
         {
-          operationType: "COMMUNITY",
+          operationType: 'COMMUNITY',
           userId,
           metadata: {
             primaryWardId,
@@ -178,15 +184,14 @@ class GroupMembershipService {
             error: error instanceof Error ? error.message : String(error),
           },
         },
-        "Failed to enroll user in system groups"
+        'Failed to enroll user in system groups'
       );
 
       if (error instanceof ApiError) throw error;
 
-      throw ApiError.systemError(
-        "Failed to enroll in system groups",
-        { reason: "enrollment_failed" }
-      );
+      throw ApiError.systemError('Failed to enroll in system groups', {
+        reason: 'enrollment_failed',
+      });
     }
   }
 
@@ -206,7 +211,8 @@ class GroupMembershipService {
       isSystemGroup: true,
       locationScope,
       wardId: locationScope === LocationScope.WARD ? locationId : null,
-      constituencyId: locationScope === LocationScope.CONSTITUENCY ? locationId : null,
+      constituencyId:
+        locationScope === LocationScope.CONSTITUENCY ? locationId : null,
       countyId: locationScope === LocationScope.COUNTY ? locationId : null,
     };
 
@@ -226,7 +232,8 @@ class GroupMembershipService {
           systemType: this.getSystemGroupType(locationScope),
           status: GroupStatus.ACTIVE,
           wardId: locationScope === LocationScope.WARD ? locationId : null,
-          constituencyId: locationScope === LocationScope.CONSTITUENCY ? locationId : null,
+          constituencyId:
+            locationScope === LocationScope.CONSTITUENCY ? locationId : null,
           countyId: locationScope === LocationScope.COUNTY ? locationId : null,
         },
         select: { id: true, memberCount: true },
@@ -295,8 +302,8 @@ class GroupMembershipService {
     if (!group) {
       group = await tx.group.create({
         data: {
-          name: "Kenya National Community",
-          description: "Official national community group for all citizens",
+          name: 'Kenya National Community',
+          description: 'Official national community group for all citizens',
           locationScope: LocationScope.NATIONAL,
           isSystemGroup: true,
           systemType: SystemGroupType.NATIONAL,
@@ -376,7 +383,7 @@ class GroupMembershipService {
         });
 
         if (!user || !user.secondaryWardId) {
-          throw ApiError.notFound("User or secondary ward not found");
+          throw ApiError.notFound('User or secondary ward not found');
         }
 
         newSecondaryWardId = user.secondaryWardId;
@@ -394,11 +401,15 @@ class GroupMembershipService {
       });
 
       // Re-enroll in new groups
-      await this.enrollInSystemGroups(userId, newPrimaryWardId, newSecondaryWardId);
+      await this.enrollInSystemGroups(
+        userId,
+        newPrimaryWardId,
+        newSecondaryWardId
+      );
 
       logger.info(
         {
-          operationType: "COMMUNITY",
+          operationType: 'COMMUNITY',
           userId,
           metadata: { newPrimaryWardId, newSecondaryWardId },
         },
@@ -407,7 +418,7 @@ class GroupMembershipService {
     } catch (error) {
       logger.error(
         {
-          operationType: "COMMUNITY",
+          operationType: 'COMMUNITY',
           userId,
           metadata: {
             newPrimaryWardId,
@@ -415,15 +426,14 @@ class GroupMembershipService {
             error: error instanceof Error ? error.message : String(error),
           },
         },
-        "Failed to update residence groups"
+        'Failed to update residence groups'
       );
 
       if (error instanceof ApiError) throw error;
 
-      throw ApiError.systemError(
-        "Failed to update residence groups",
-        { reason: "update_failed" }
-      );
+      throw ApiError.systemError('Failed to update residence groups', {
+        reason: 'update_failed',
+      });
     }
   }
 
@@ -441,9 +451,11 @@ class GroupMembershipService {
         active: true,
         group: {
           isSystemGroup:
-            includeSystem && !includeVoluntary ? true :
-            includeVoluntary && !includeSystem ? false :
-            undefined,
+            includeSystem && !includeVoluntary
+              ? true
+              : includeVoluntary && !includeSystem
+                ? false
+                : undefined,
         },
       },
       include: {
@@ -464,7 +476,7 @@ class GroupMembershipService {
           },
         },
       },
-      orderBy: { joinedAt: "desc" },
+      orderBy: { joinedAt: 'desc' },
     });
 
     return memberships.map((m: any) => ({
@@ -504,7 +516,7 @@ class GroupMembershipService {
           },
         },
       },
-      orderBy: { joinedAt: "asc" },
+      orderBy: { joinedAt: 'asc' },
       take: limit,
       skip: offset,
     });

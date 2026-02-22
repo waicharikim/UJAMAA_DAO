@@ -2,27 +2,19 @@
  * @file src/modules/admin/handlers/admin.handlers.ts
  * @description
  * Admin Handlers — HTTP layer for administrative actions
- * 
+ *
  * All handlers assume:
  * - Input is already validated by Zod (via validateRequest middleware)
  * - User is authenticated & authorized (via authenticate + authorize middleware)
  * - req.user is available
- * 
+ *
  * Version: 1.0 — February 2026
  */
 
-import { Response } from "express";
-import { AuthRequest } from "../../../core/types/Ujamaadao.types.js";
-import { adminService } from "../services/admin.service.js";
-import { sendSuccess } from "../../../core/utils/response.js";
-import { logger } from "../../../core/logger/logger.js";
-import {
-  communityVerificationReviewSchema,
-  residenceChangeReviewSchema,
-  prAdjustSchema,
-  banUserSchema,
-  resolveSecurityEventAdminSchema,
-} from "../validators/admin.validators.js";
+import { Response } from 'express';
+import { AuthRequest } from '../../../core/types/Ujamaadao.types.js';
+import { adminService } from '../services/admin.service.js';
+import { sendSuccess } from '../../../core/utils/response.js';
 
 // ============================================================================
 // COMMUNITY VERIFICATION ADMIN HANDLERS
@@ -32,7 +24,10 @@ import {
  * PATCH /admin/verification/community/approve
  * Approve, reject or request more info on community verification
  */
-export async function reviewCommunityVerification(req: AuthRequest, res: Response) {
+export async function reviewCommunityVerification(
+  req: AuthRequest,
+  res: Response
+) {
   const adminId = req.user!.userId;
   const dto = req.body;
 
@@ -43,7 +38,7 @@ export async function reviewCommunityVerification(req: AuthRequest, res: Respons
     dto.reason
   );
 
-  sendSuccess(res, result, "Community verification reviewed successfully", 200);
+  sendSuccess(res, result, 'Community verification reviewed successfully', 200);
 }
 
 /**
@@ -60,7 +55,7 @@ export async function getPendingVerifications(req: AuthRequest, res: Response) {
     wardId as string | undefined
   );
 
-  sendSuccess(res, result, "Pending verifications retrieved", 200);
+  sendSuccess(res, result, 'Pending verifications retrieved', 200);
 }
 
 // ============================================================================
@@ -82,14 +77,17 @@ export async function reviewResidenceChange(req: AuthRequest, res: Response) {
     dto.reason
   );
 
-  sendSuccess(res, result, "Residence change request reviewed", 200);
+  sendSuccess(res, result, 'Residence change request reviewed', 200);
 }
 
 /**
  * GET /admin/residence/pending
  * List pending residence change requests
  */
-export async function getPendingResidenceChanges(req: AuthRequest, res: Response) {
+export async function getPendingResidenceChanges(
+  req: AuthRequest,
+  res: Response
+) {
   const { page = 1, pageSize = 20 } = req.query;
 
   const result = await adminService.getPendingResidenceChanges(
@@ -97,7 +95,7 @@ export async function getPendingResidenceChanges(req: AuthRequest, res: Response
     Number(pageSize)
   );
 
-  sendSuccess(res, result, "Pending residence changes retrieved", 200);
+  sendSuccess(res, result, 'Pending residence changes retrieved', 200);
 }
 
 // ============================================================================
@@ -108,7 +106,10 @@ export async function getPendingResidenceChanges(req: AuthRequest, res: Response
  * POST /admin/pr/adjust
  * Manually adjust user's Participation Rights
  */
-export async function adjustParticipationRights(req: AuthRequest, res: Response) {
+export async function adjustParticipationRights(
+  req: AuthRequest,
+  res: Response
+) {
   const adminId = req.user!.userId;
   const dto = req.body;
 
@@ -120,7 +121,7 @@ export async function adjustParticipationRights(req: AuthRequest, res: Response)
     dto.reason
   );
 
-  sendSuccess(res, result, "Participation Rights adjusted successfully", 200);
+  sendSuccess(res, result, 'Participation Rights adjusted successfully', 200);
 }
 
 // ============================================================================
@@ -144,7 +145,12 @@ export async function suspendUser(req: AuthRequest, res: Response) {
     durationDays
   );
 
-  sendSuccess(res, result, `User ${banned ? "suspended" : "unsuspended"} successfully`, 200);
+  sendSuccess(
+    res,
+    result,
+    `User ${banned ? 'suspended' : 'unsuspended'} successfully`,
+    200
+  );
 }
 
 // ============================================================================
@@ -168,21 +174,24 @@ export async function resolveSecurityEvent(req: AuthRequest, res: Response) {
     dto.actionTaken
   );
 
-  sendSuccess(res, result, "Security event resolved", 200);
+  sendSuccess(res, result, 'Security event resolved', 200);
 }
 
 /**
  * GET /admin/users/:userId/security-events
  * Admin view of a user's security events
  */
-export async function getUserSecurityEventsAdmin(req: AuthRequest, res: Response) {
+export async function getUserSecurityEventsAdmin(
+  req: AuthRequest,
+  res: Response
+) {
   const adminId = req.user!.userId;
   const { userId } = req.params;
 
   // Optional: add pagination later
   const events = await adminService.getUserSecurityEvents(userId);
 
-  sendSuccess(res, events, "User security events retrieved (admin view)", 200);
+  sendSuccess(res, events, 'User security events retrieved (admin view)', 200);
 }
 
 // ============================================================================
@@ -199,5 +208,5 @@ export async function updateSystemConfig(req: AuthRequest, res: Response) {
 
   const result = await adminService.updateSystemConfig(adminId, key, value);
 
-  sendSuccess(res, result, "System configuration updated", 200);
+  sendSuccess(res, result, 'System configuration updated', 200);
 }

@@ -2,17 +2,17 @@
  * @file src/modules/user/handlers/user.handlers.ts
  * @description
  * Request handlers for user profile management
- * 
+ *
  * Version: 1.1 — February 2026
  * Updated: Added proper error handling, consistent logging, and minor type safety
  */
 
-import { Response } from "express";
-import { AuthRequest } from "../../../core/types/Ujamaadao.types.js";
-import { userService } from "../services/user.service.js";
-import { sendSuccess } from "../../../core/utils/response.js";
-import { ApiError } from "../../../core/errors/ApiError.js";
-import { logger } from "../../../core/logger/logger.js";
+import { Response } from 'express';
+import { AuthRequest } from '../../../core/types/Ujamaadao.types.js';
+import { userService } from '../services/user.service.js';
+import { sendSuccess } from '../../../core/utils/response.js';
+import { ApiError } from '../../../core/errors/ApiError.js';
+import { logger } from '../../../core/logger/logger.js';
 
 /**
  * GET /users/me
@@ -24,16 +24,15 @@ export async function getMyProfile(req: AuthRequest, res: Response) {
   try {
     const profile = await userService.getProfile(userId);
 
-    sendSuccess(
-      res,
-      profile,
-      "Profile retrieved successfully",
-      200
-    );
+    sendSuccess(res, profile, 'Profile retrieved successfully', 200);
   } catch (error) {
     logger.error(
-      { operationType: "USER", userId, error: error instanceof Error ? error.message : String(error) },
-      "Failed to retrieve user profile"
+      {
+        operationType: 'USER',
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      'Failed to retrieve user profile'
     );
     throw error;
   }
@@ -53,16 +52,16 @@ export async function getUserProfile(req: AuthRequest, res: Response) {
     // TODO: Apply privacy filters based on requesterId & profile privacy settings
     // For now, return full profile if authenticated (as per original)
 
-    sendSuccess(
-      res,
-      profile,
-      "Profile retrieved successfully",
-      200
-    );
+    sendSuccess(res, profile, 'Profile retrieved successfully', 200);
   } catch (error) {
     logger.error(
-      { operationType: "USER", userId, requesterId, error: error instanceof Error ? error.message : String(error) },
-      "Failed to retrieve public profile"
+      {
+        operationType: 'USER',
+        userId,
+        requesterId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      'Failed to retrieve public profile'
     );
     throw error;
   }
@@ -79,16 +78,15 @@ export async function updateProfile(req: AuthRequest, res: Response) {
   try {
     const user = await userService.updateProfile(userId, dto);
 
-    sendSuccess(
-      res,
-      user,
-      "Profile updated successfully",
-      200
-    );
+    sendSuccess(res, user, 'Profile updated successfully', 200);
   } catch (error) {
     logger.error(
-      { operationType: "USER", userId, error: error instanceof Error ? error.message : String(error) },
-      "Failed to update user profile"
+      {
+        operationType: 'USER',
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      'Failed to update user profile'
     );
     throw error;
   }
@@ -105,16 +103,15 @@ export async function selectIndustries(req: AuthRequest, res: Response) {
   try {
     const result = await userService.selectIndustries(userId, dto);
 
-    sendSuccess(
-      res,
-      result,
-      "Industries updated successfully",
-      200
-    );
+    sendSuccess(res, result, 'Industries updated successfully', 200);
   } catch (error) {
     logger.error(
-      { operationType: "USER", userId, error: error instanceof Error ? error.message : String(error) },
-      "Failed to update user industries"
+      {
+        operationType: 'USER',
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      'Failed to update user industries'
     );
     throw error;
   }
@@ -130,16 +127,15 @@ export async function getMyIndustries(req: AuthRequest, res: Response) {
   try {
     const industries = await userService.getUserIndustries(userId);
 
-    sendSuccess(
-      res,
-      industries,
-      "Industries retrieved successfully",
-      200
-    );
+    sendSuccess(res, industries, 'Industries retrieved successfully', 200);
   } catch (error) {
     logger.error(
-      { operationType: "USER", userId, error: error instanceof Error ? error.message : String(error) },
-      "Failed to retrieve user industries"
+      {
+        operationType: 'USER',
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      'Failed to retrieve user industries'
     );
     throw error;
   }
@@ -156,16 +152,15 @@ export async function selectGoodsServices(req: AuthRequest, res: Response) {
   try {
     const result = await userService.selectGoodsServices(userId, dto);
 
-    sendSuccess(
-      res,
-      result,
-      "Goods/services updated successfully",
-      200
-    );
+    sendSuccess(res, result, 'Goods/services updated successfully', 200);
   } catch (error) {
     logger.error(
-      { operationType: "USER", userId, error: error instanceof Error ? error.message : String(error) },
-      "Failed to update user goods/services"
+      {
+        operationType: 'USER',
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      'Failed to update user goods/services'
     );
     throw error;
   }
@@ -184,13 +179,17 @@ export async function getMyGoodsServices(req: AuthRequest, res: Response) {
     sendSuccess(
       res,
       goodsServices,
-      "Goods/services retrieved successfully",
+      'Goods/services retrieved successfully',
       200
     );
   } catch (error) {
     logger.error(
-      { operationType: "USER", userId, error: error instanceof Error ? error.message : String(error) },
-      "Failed to retrieve user goods/services"
+      {
+        operationType: 'USER',
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      'Failed to retrieve user goods/services'
     );
     throw error;
   }
@@ -210,13 +209,17 @@ export async function requestResidenceChange(req: AuthRequest, res: Response) {
     sendSuccess(
       res,
       request,
-      "Residence change request submitted successfully",
+      'Residence change request submitted successfully',
       201
     );
   } catch (error) {
     logger.error(
-      { operationType: "USER", userId, error: error instanceof Error ? error.message : String(error) },
-      "Failed to request residence change"
+      {
+        operationType: 'USER',
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      'Failed to request residence change'
     );
     throw error;
   }
@@ -226,7 +229,10 @@ export async function requestResidenceChange(req: AuthRequest, res: Response) {
  * GET /users/me/residence-change-requests
  * Get user's residence change requests
  */
-export async function getMyResidenceChangeRequests(req: AuthRequest, res: Response) {
+export async function getMyResidenceChangeRequests(
+  req: AuthRequest,
+  res: Response
+) {
   const userId = req.user!.userId;
 
   try {
@@ -235,13 +241,17 @@ export async function getMyResidenceChangeRequests(req: AuthRequest, res: Respon
     sendSuccess(
       res,
       requests,
-      "Residence change requests retrieved successfully",
+      'Residence change requests retrieved successfully',
       200
     );
   } catch (error) {
     logger.error(
-      { operationType: "USER", userId, error: error instanceof Error ? error.message : String(error) },
-      "Failed to retrieve residence change requests"
+      {
+        operationType: 'USER',
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      'Failed to retrieve residence change requests'
     );
     throw error;
   }
@@ -261,18 +271,21 @@ export async function setTemporaryLocation(req: AuthRequest, res: Response) {
       throw ApiError.badRequest("Invalid 'until' date format");
     }
 
-    const result = await userService.setTemporaryLocation(userId, wardId, untilDate);
-
-    sendSuccess(
-      res,
-      result,
-      "Temporary location set successfully",
-      200
+    const result = await userService.setTemporaryLocation(
+      userId,
+      wardId,
+      untilDate
     );
+
+    sendSuccess(res, result, 'Temporary location set successfully', 200);
   } catch (error) {
     logger.error(
-      { operationType: "USER", userId, error: error instanceof Error ? error.message : String(error) },
-      "Failed to set temporary location"
+      {
+        operationType: 'USER',
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      'Failed to set temporary location'
     );
     throw error;
   }
@@ -291,13 +304,17 @@ export async function clearTemporaryLocation(req: AuthRequest, res: Response) {
     sendSuccess(
       res,
       { success: true },
-      "Temporary location cleared successfully",
+      'Temporary location cleared successfully',
       200
     );
   } catch (error) {
     logger.error(
-      { operationType: "USER", userId, error: error instanceof Error ? error.message : String(error) },
-      "Failed to clear temporary location"
+      {
+        operationType: 'USER',
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      'Failed to clear temporary location'
     );
     throw error;
   }
@@ -313,16 +330,15 @@ export async function getPrivacySettings(req: AuthRequest, res: Response) {
   try {
     const settings = await userService.getPrivacySettings(userId);
 
-    sendSuccess(
-      res,
-      settings,
-      "Privacy settings retrieved successfully",
-      200
-    );
+    sendSuccess(res, settings, 'Privacy settings retrieved successfully', 200);
   } catch (error) {
     logger.error(
-      { operationType: "USER", userId, error: error instanceof Error ? error.message : String(error) },
-      "Failed to retrieve privacy settings"
+      {
+        operationType: 'USER',
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      'Failed to retrieve privacy settings'
     );
     throw error;
   }
@@ -332,7 +348,10 @@ export async function getPrivacySettings(req: AuthRequest, res: Response) {
  * GET /users/me/accessibility
  * Get user's accessibility settings
  */
-export async function getAccessibilitySettings(req: AuthRequest, res: Response) {
+export async function getAccessibilitySettings(
+  req: AuthRequest,
+  res: Response
+) {
   const userId = req.user!.userId;
 
   try {
@@ -341,13 +360,17 @@ export async function getAccessibilitySettings(req: AuthRequest, res: Response) 
     sendSuccess(
       res,
       settings,
-      "Accessibility settings retrieved successfully",
+      'Accessibility settings retrieved successfully',
       200
     );
   } catch (error) {
     logger.error(
-      { operationType: "USER", userId, error: error instanceof Error ? error.message : String(error) },
-      "Failed to retrieve accessibility settings"
+      {
+        operationType: 'USER',
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      'Failed to retrieve accessibility settings'
     );
     throw error;
   }

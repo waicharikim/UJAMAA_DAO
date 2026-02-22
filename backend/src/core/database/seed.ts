@@ -1,7 +1,7 @@
 /**
  * @file prisma/seed/core.ts
  * @description Core database seeding for UjamaaDAO — v2.1
- * 
+ *
  * Seeds:
  * - System configuration
  * - Industries & Goods/Services
@@ -10,12 +10,12 @@
  * - Built-in roles
  * - Onboarding tutorials
  * - Test admin user (dev/test only)
- * 
+ *
  * Safety:
  * - Blocks production runs unless FORCE_SEED=true
  * - Uses upsert to avoid duplicates
  * - Bulk operations for performance
- * 
+ *
  * Version: 2.1 — January 2026
  */
 
@@ -29,7 +29,10 @@ import { goodsServices as goodsList } from '../data/goodsServices.js';
 // SAFETY CHECK
 // ============================================================================
 
-if (process.env.NODE_ENV === 'production' && process.env.FORCE_SEED !== 'true') {
+if (
+  process.env.NODE_ENV === 'production' &&
+  process.env.FORCE_SEED !== 'true'
+) {
   console.error('🚫 ERROR: Seeding is disabled in production.');
   console.error('   To override, run with FORCE_SEED=true');
   process.exit(1);
@@ -45,59 +48,325 @@ async function seedSystemConfiguration() {
 
   const configs = [
     // Voting thresholds
-    { key: 'voting.quorum.community', value: 0.40, category: 'GOVERNANCE', dataType: 'NUMBER', description: 'Community initiative quorum', isPublic: true },
-    { key: 'voting.approval.community', value: 0.50, category: 'GOVERNANCE', dataType: 'NUMBER', description: 'Community initiative approval threshold', isPublic: true },
-    { key: 'voting.period.community', value: 7, category: 'GOVERNANCE', dataType: 'NUMBER', description: 'Community initiative voting period (days)', isPublic: true },
+    {
+      key: 'voting.quorum.community',
+      value: 0.4,
+      category: 'GOVERNANCE',
+      dataType: 'NUMBER',
+      description: 'Community initiative quorum',
+      isPublic: true,
+    },
+    {
+      key: 'voting.approval.community',
+      value: 0.5,
+      category: 'GOVERNANCE',
+      dataType: 'NUMBER',
+      description: 'Community initiative approval threshold',
+      isPublic: true,
+    },
+    {
+      key: 'voting.period.community',
+      value: 7,
+      category: 'GOVERNANCE',
+      dataType: 'NUMBER',
+      description: 'Community initiative voting period (days)',
+      isPublic: true,
+    },
 
-    { key: 'voting.quorum.major', value: 0.50, category: 'GOVERNANCE', dataType: 'NUMBER', description: 'Major project quorum', isPublic: true },
-    { key: 'voting.approval.major', value: 0.60, category: 'GOVERNANCE', dataType: 'NUMBER', description: 'Major project approval threshold', isPublic: true },
-    { key: 'voting.period.major', value: 14, category: 'GOVERNANCE', dataType: 'NUMBER', description: 'Major project voting period (days)', isPublic: true },
+    {
+      key: 'voting.quorum.major',
+      value: 0.5,
+      category: 'GOVERNANCE',
+      dataType: 'NUMBER',
+      description: 'Major project quorum',
+      isPublic: true,
+    },
+    {
+      key: 'voting.approval.major',
+      value: 0.6,
+      category: 'GOVERNANCE',
+      dataType: 'NUMBER',
+      description: 'Major project approval threshold',
+      isPublic: true,
+    },
+    {
+      key: 'voting.period.major',
+      value: 14,
+      category: 'GOVERNANCE',
+      dataType: 'NUMBER',
+      description: 'Major project voting period (days)',
+      isPublic: true,
+    },
 
-    { key: 'voting.quorum.strategic', value: 0.60, category: 'GOVERNANCE', dataType: 'NUMBER', description: 'Strategic decision quorum', isPublic: true },
-    { key: 'voting.approval.strategic', value: 0.66, category: 'GOVERNANCE', dataType: 'NUMBER', description: 'Strategic decision approval threshold', isPublic: true },
-    { key: 'voting.period.strategic', value: 21, category: 'GOVERNANCE', dataType: 'NUMBER', description: 'Strategic decision voting period (days)', isPublic: true },
+    {
+      key: 'voting.quorum.strategic',
+      value: 0.6,
+      category: 'GOVERNANCE',
+      dataType: 'NUMBER',
+      description: 'Strategic decision quorum',
+      isPublic: true,
+    },
+    {
+      key: 'voting.approval.strategic',
+      value: 0.66,
+      category: 'GOVERNANCE',
+      dataType: 'NUMBER',
+      description: 'Strategic decision approval threshold',
+      isPublic: true,
+    },
+    {
+      key: 'voting.period.strategic',
+      value: 21,
+      category: 'GOVERNANCE',
+      dataType: 'NUMBER',
+      description: 'Strategic decision voting period (days)',
+      isPublic: true,
+    },
 
-    { key: 'voting.quorum.emergency', value: 0.30, category: 'GOVERNANCE', dataType: 'NUMBER', description: 'Emergency proposal quorum', isPublic: true },
-    { key: 'voting.approval.emergency', value: 0.60, category: 'GOVERNANCE', dataType: 'NUMBER', description: 'Emergency proposal approval threshold', isPublic: true },
-    { key: 'voting.period.emergency', value: 3, category: 'GOVERNANCE', dataType: 'NUMBER', description: 'Emergency proposal voting period (days)', isPublic: true },
+    {
+      key: 'voting.quorum.emergency',
+      value: 0.3,
+      category: 'GOVERNANCE',
+      dataType: 'NUMBER',
+      description: 'Emergency proposal quorum',
+      isPublic: true,
+    },
+    {
+      key: 'voting.approval.emergency',
+      value: 0.6,
+      category: 'GOVERNANCE',
+      dataType: 'NUMBER',
+      description: 'Emergency proposal approval threshold',
+      isPublic: true,
+    },
+    {
+      key: 'voting.period.emergency',
+      value: 3,
+      category: 'GOVERNANCE',
+      dataType: 'NUMBER',
+      description: 'Emergency proposal voting period (days)',
+      isPublic: true,
+    },
 
     // Dues
-    { key: 'dues.tier.ordinary', value: 60, category: 'ECONOMY', dataType: 'NUMBER', description: 'Ordinary monthly dues (KES)', isPublic: true },
-    { key: 'dues.tier.supporter', value: 200, category: 'ECONOMY', dataType: 'NUMBER', description: 'Supporter monthly dues (KES)', isPublic: true },
-    { key: 'dues.tier.sponsor', value: 1000, category: 'ECONOMY', dataType: 'NUMBER', description: 'Sponsor monthly dues (KES)', isPublic: true },
-    { key: 'dues.grace_period', value: 30, category: 'ECONOMY', dataType: 'NUMBER', description: 'Dues grace period (days)', isPublic: true },
+    {
+      key: 'dues.tier.ordinary',
+      value: 60,
+      category: 'ECONOMY',
+      dataType: 'NUMBER',
+      description: 'Ordinary monthly dues (KES)',
+      isPublic: true,
+    },
+    {
+      key: 'dues.tier.supporter',
+      value: 200,
+      category: 'ECONOMY',
+      dataType: 'NUMBER',
+      description: 'Supporter monthly dues (KES)',
+      isPublic: true,
+    },
+    {
+      key: 'dues.tier.sponsor',
+      value: 1000,
+      category: 'ECONOMY',
+      dataType: 'NUMBER',
+      description: 'Sponsor monthly dues (KES)',
+      isPublic: true,
+    },
+    {
+      key: 'dues.grace_period',
+      value: 30,
+      category: 'ECONOMY',
+      dataType: 'NUMBER',
+      description: 'Dues grace period (days)',
+      isPublic: true,
+    },
 
     // Impact Points
-    { key: 'ip.decay.monthly_rate', value: 0.10, category: 'REPUTATION', dataType: 'NUMBER', description: 'Monthly IP decay rate', isPublic: true },
-    { key: 'ip.decay.active_user_rate', value: 0.05, category: 'REPUTATION', dataType: 'NUMBER', description: 'Active user reduced decay rate', isPublic: true },
-    { key: 'ip.grace_period_months', value: 3, category: 'REPUTATION', dataType: 'NUMBER', description: 'No decay for first N months', isPublic: true },
+    {
+      key: 'ip.decay.monthly_rate',
+      value: 0.1,
+      category: 'REPUTATION',
+      dataType: 'NUMBER',
+      description: 'Monthly IP decay rate',
+      isPublic: true,
+    },
+    {
+      key: 'ip.decay.active_user_rate',
+      value: 0.05,
+      category: 'REPUTATION',
+      dataType: 'NUMBER',
+      description: 'Active user reduced decay rate',
+      isPublic: true,
+    },
+    {
+      key: 'ip.grace_period_months',
+      value: 3,
+      category: 'REPUTATION',
+      dataType: 'NUMBER',
+      description: 'No decay for first N months',
+      isPublic: true,
+    },
 
     // Participation Rights
-    { key: 'pr.monthly_regen', value: 25, category: 'REPUTATION', dataType: 'NUMBER', description: 'Base monthly PR regeneration', isPublic: true },
-    { key: 'pr.max_balance', value: 500, category: 'REPUTATION', dataType: 'NUMBER', description: 'Maximum PR balance', isPublic: true },
-    { key: 'pr.low_warning', value: 20, category: 'REPUTATION', dataType: 'NUMBER', description: 'Low PR warning threshold', isPublic: true },
+    {
+      key: 'pr.monthly_regen',
+      value: 25,
+      category: 'REPUTATION',
+      dataType: 'NUMBER',
+      description: 'Base monthly PR regeneration',
+      isPublic: true,
+    },
+    {
+      key: 'pr.max_balance',
+      value: 500,
+      category: 'REPUTATION',
+      dataType: 'NUMBER',
+      description: 'Maximum PR balance',
+      isPublic: true,
+    },
+    {
+      key: 'pr.low_warning',
+      value: 20,
+      category: 'REPUTATION',
+      dataType: 'NUMBER',
+      description: 'Low PR warning threshold',
+      isPublic: true,
+    },
 
     // PR from dues
-    { key: 'pr.dues.ordinary', value: 100, category: 'ECONOMY', dataType: 'NUMBER', description: 'PR from ordinary dues', isPublic: true },
-    { key: 'pr.dues.supporter', value: 200, category: 'ECONOMY', dataType: 'NUMBER', description: 'PR from supporter dues', isPublic: true },
-    { key: 'pr.dues.sponsor', value: 500, category: 'ECONOMY', dataType: 'NUMBER', description: 'PR from sponsor dues', isPublic: true },
+    {
+      key: 'pr.dues.ordinary',
+      value: 100,
+      category: 'ECONOMY',
+      dataType: 'NUMBER',
+      description: 'PR from ordinary dues',
+      isPublic: true,
+    },
+    {
+      key: 'pr.dues.supporter',
+      value: 200,
+      category: 'ECONOMY',
+      dataType: 'NUMBER',
+      description: 'PR from supporter dues',
+      isPublic: true,
+    },
+    {
+      key: 'pr.dues.sponsor',
+      value: 500,
+      category: 'ECONOMY',
+      dataType: 'NUMBER',
+      description: 'PR from sponsor dues',
+      isPublic: true,
+    },
 
     // PR costs
-    { key: 'pr.cost.vote', value: 5, category: 'GOVERNANCE', dataType: 'NUMBER', description: 'PR cost to vote', isPublic: true },
-    { key: 'pr.cost.proposal.ward', value: 50, category: 'GOVERNANCE', dataType: 'NUMBER', description: 'PR cost for ward proposal', isPublic: true },
-    { key: 'pr.cost.proposal.constituency', value: 100, category: 'GOVERNANCE', dataType: 'NUMBER', description: 'PR cost for constituency proposal', isPublic: true },
-    { key: 'pr.cost.proposal.county', value: 150, category: 'GOVERNANCE', dataType: 'NUMBER', description: 'PR cost for county proposal', isPublic: true },
-    { key: 'pr.cost.proposal.national', value: 200, category: 'GOVERNANCE', dataType: 'NUMBER', description: 'PR cost for national proposal', isPublic: true },
-    { key: 'pr.cost.group_create', value: 100, category: 'COMMUNITY', dataType: 'NUMBER', description: 'PR cost to create group', isPublic: true },
+    {
+      key: 'pr.cost.vote',
+      value: 5,
+      category: 'GOVERNANCE',
+      dataType: 'NUMBER',
+      description: 'PR cost to vote',
+      isPublic: true,
+    },
+    {
+      key: 'pr.cost.proposal.ward',
+      value: 50,
+      category: 'GOVERNANCE',
+      dataType: 'NUMBER',
+      description: 'PR cost for ward proposal',
+      isPublic: true,
+    },
+    {
+      key: 'pr.cost.proposal.constituency',
+      value: 100,
+      category: 'GOVERNANCE',
+      dataType: 'NUMBER',
+      description: 'PR cost for constituency proposal',
+      isPublic: true,
+    },
+    {
+      key: 'pr.cost.proposal.county',
+      value: 150,
+      category: 'GOVERNANCE',
+      dataType: 'NUMBER',
+      description: 'PR cost for county proposal',
+      isPublic: true,
+    },
+    {
+      key: 'pr.cost.proposal.national',
+      value: 200,
+      category: 'GOVERNANCE',
+      dataType: 'NUMBER',
+      description: 'PR cost for national proposal',
+      isPublic: true,
+    },
+    {
+      key: 'pr.cost.group_create',
+      value: 100,
+      category: 'COMMUNITY',
+      dataType: 'NUMBER',
+      description: 'PR cost to create group',
+      isPublic: true,
+    },
 
     // Onboarding rewards
-    { key: 'onboarding.email_verified.ip', value: 50, category: 'REPUTATION', dataType: 'NUMBER', description: 'IP reward for email verification', isPublic: true },
-    { key: 'onboarding.email_verified.pr', value: 25, category: 'REPUTATION', dataType: 'NUMBER', description: 'PR reward for email verification', isPublic: true },
-    { key: 'onboarding.profile_complete.ip', value: 25, category: 'REPUTATION', dataType: 'NUMBER', description: 'IP reward for profile completion', isPublic: true },
-    { key: 'onboarding.wallet_connected.ip', value: 200, category: 'REPUTATION', dataType: 'NUMBER', description: 'IP reward for wallet connection', isPublic: true },
-    { key: 'onboarding.wallet_connected.pr', value: 100, category: 'REPUTATION', dataType: 'NUMBER', description: 'PR reward for wallet connection', isPublic: true },
-    { key: 'onboarding.phone_verified.ip', value: 100, category: 'REPUTATION', dataType: 'NUMBER', description: 'IP reward for phone verification', isPublic: true },
-    { key: 'onboarding.phone_verified.pr', value: 25, category: 'REPUTATION', dataType: 'NUMBER', description: 'PR reward for phone verification', isPublic: true },
+    {
+      key: 'onboarding.email_verified.ip',
+      value: 50,
+      category: 'REPUTATION',
+      dataType: 'NUMBER',
+      description: 'IP reward for email verification',
+      isPublic: true,
+    },
+    {
+      key: 'onboarding.email_verified.pr',
+      value: 25,
+      category: 'REPUTATION',
+      dataType: 'NUMBER',
+      description: 'PR reward for email verification',
+      isPublic: true,
+    },
+    {
+      key: 'onboarding.profile_complete.ip',
+      value: 25,
+      category: 'REPUTATION',
+      dataType: 'NUMBER',
+      description: 'IP reward for profile completion',
+      isPublic: true,
+    },
+    {
+      key: 'onboarding.wallet_connected.ip',
+      value: 200,
+      category: 'REPUTATION',
+      dataType: 'NUMBER',
+      description: 'IP reward for wallet connection',
+      isPublic: true,
+    },
+    {
+      key: 'onboarding.wallet_connected.pr',
+      value: 100,
+      category: 'REPUTATION',
+      dataType: 'NUMBER',
+      description: 'PR reward for wallet connection',
+      isPublic: true,
+    },
+    {
+      key: 'onboarding.phone_verified.ip',
+      value: 100,
+      category: 'REPUTATION',
+      dataType: 'NUMBER',
+      description: 'IP reward for phone verification',
+      isPublic: true,
+    },
+    {
+      key: 'onboarding.phone_verified.pr',
+      value: 25,
+      category: 'REPUTATION',
+      dataType: 'NUMBER',
+      description: 'PR reward for phone verification',
+      isPublic: true,
+    },
   ];
 
   let created = 0;
@@ -144,7 +413,7 @@ async function seedIndustriesAndGoods() {
   });
 
   const industries = await prisma.industry.findMany();
-  const industryMap = new Map(industries.map(i => [i.name, i.id]));
+  const industryMap = new Map(industries.map((i) => [i.name, i.id]));
 
   console.log(`   Created/ensured ${industries.length} industries`);
 
@@ -153,7 +422,9 @@ async function seedIndustriesAndGoods() {
     .map((good: any) => {
       const industryId = industryMap.get(good.industry);
       if (!industryId) {
-        console.warn(`   Skipping "${good.name}" — industry "${good.industry}" not found`);
+        console.warn(
+          `   Skipping "${good.name}" — industry "${good.industry}" not found`
+        );
         return null;
       }
       return {
@@ -188,7 +459,9 @@ async function seedGeography() {
     prisma.county.deleteMany(),
   ]);
 
-  let counties = 0, constituencies = 0, wards = 0;
+  let counties = 0,
+    constituencies = 0,
+    wards = 0;
 
   const countyCreates = [];
   const constituencyCreates = [];
@@ -238,7 +511,9 @@ async function seedGeography() {
   await prisma.constituency.createMany({ data: constituencyCreates });
   await prisma.ward.createMany({ data: wardCreates });
 
-  console.log(`Created ${counties} counties, ${constituencies} constituencies, ${wards} wards`);
+  console.log(
+    `Created ${counties} counties, ${constituencies} constituencies, ${wards} wards`
+  );
 }
 // ============================================================================
 // 4. SYSTEM GROUPS
@@ -269,7 +544,7 @@ async function seedSystemGroups() {
   ]);
 
   const groupData = [
-    ...counties.map(c => ({
+    ...counties.map((c) => ({
       id: uuidv4(),
       name: `${c.name} County Community`,
       description: `County-level community for ${c.name}`,
@@ -281,7 +556,7 @@ async function seedSystemGroups() {
       canBeRenamed: false,
       status: 'ACTIVE' as const,
     })),
-    ...constituencies.map(c => ({
+    ...constituencies.map((c) => ({
       id: uuidv4(),
       name: `${c.name} Constituency Community`,
       description: `Constituency community for ${c.name}`,
@@ -294,7 +569,7 @@ async function seedSystemGroups() {
       canBeRenamed: false,
       status: 'ACTIVE' as const,
     })),
-    ...wards.map(w => ({
+    ...wards.map((w) => ({
       id: uuidv4(),
       name: `${w.name} Ward Community`,
       description: `Local community for ${w.name} Ward`,
@@ -315,7 +590,9 @@ async function seedSystemGroups() {
     skipDuplicates: true,
   });
 
-  console.log(`   Created 1 national + ${counties.length} county + ${constituencies.length} constituency + ${wards.length} ward groups`);
+  console.log(
+    `   Created 1 national + ${counties.length} county + ${constituencies.length} constituency + ${wards.length} ward groups`
+  );
 }
 
 // ============================================================================
@@ -326,21 +603,81 @@ async function seedRoles() {
   console.log('Seeding built-in roles...');
 
   const roles = [
-    { name: 'system:super_admin', namespace: 'system', description: 'Full platform access', builtin: true },
-    { name: 'system:auditor', namespace: 'system', description: 'Read-only audit access', builtin: true },
-    { name: 'system:support', namespace: 'system', description: 'User support and moderation', builtin: true },
+    {
+      name: 'system:super_admin',
+      namespace: 'system',
+      description: 'Full platform access',
+      builtin: true,
+    },
+    {
+      name: 'system:auditor',
+      namespace: 'system',
+      description: 'Read-only audit access',
+      builtin: true,
+    },
+    {
+      name: 'system:support',
+      namespace: 'system',
+      description: 'User support and moderation',
+      builtin: true,
+    },
 
-    { name: 'location:ward_admin', namespace: 'location', description: 'Ward administrator', builtin: true },
-    { name: 'location:constituency_admin', namespace: 'location', description: 'Constituency administrator', builtin: true },
-    { name: 'location:county_admin', namespace: 'location', description: 'County administrator', builtin: true },
+    {
+      name: 'location:ward_admin',
+      namespace: 'location',
+      description: 'Ward administrator',
+      builtin: true,
+    },
+    {
+      name: 'location:constituency_admin',
+      namespace: 'location',
+      description: 'Constituency administrator',
+      builtin: true,
+    },
+    {
+      name: 'location:county_admin',
+      namespace: 'location',
+      description: 'County administrator',
+      builtin: true,
+    },
 
-    { name: 'group:leader', namespace: 'group', description: 'Group leader', builtin: true },
-    { name: 'group:treasurer', namespace: 'group', description: 'Group treasurer', builtin: true },
-    { name: 'group:admin', namespace: 'group', description: 'Group administrator', builtin: true },
-    { name: 'group:auditor', namespace: 'group', description: 'Group auditor', builtin: true },
+    {
+      name: 'group:leader',
+      namespace: 'group',
+      description: 'Group leader',
+      builtin: true,
+    },
+    {
+      name: 'group:treasurer',
+      namespace: 'group',
+      description: 'Group treasurer',
+      builtin: true,
+    },
+    {
+      name: 'group:admin',
+      namespace: 'group',
+      description: 'Group administrator',
+      builtin: true,
+    },
+    {
+      name: 'group:auditor',
+      namespace: 'group',
+      description: 'Group auditor',
+      builtin: true,
+    },
 
-    { name: 'project:manager', namespace: 'project', description: 'Project manager', builtin: true },
-    { name: 'project:verifier', namespace: 'project', description: 'Milestone verifier', builtin: true },
+    {
+      name: 'project:manager',
+      namespace: 'project',
+      description: 'Project manager',
+      builtin: true,
+    },
+    {
+      name: 'project:verifier',
+      namespace: 'project',
+      description: 'Milestone verifier',
+      builtin: true,
+    },
   ];
 
   for (const role of roles) {
@@ -443,7 +780,9 @@ async function seedTestAdmin() {
     },
   });
 
-  const superRole = await prisma.role.findUnique({ where: { name: 'system:super_admin' } });
+  const superRole = await prisma.role.findUnique({
+    where: { name: 'system:super_admin' },
+  });
   if (superRole) {
     await prisma.userRole.upsert({
       where: {

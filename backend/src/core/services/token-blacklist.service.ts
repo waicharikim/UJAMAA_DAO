@@ -2,10 +2,10 @@
  * @file src/core/services/token-blacklist.service.ts
  * @description
  * JWT Token Revocation Service with Redis backing and in-memory fallback
- * 
+ *
  * Enables instant logout by blacklisting JWT tokens before their natural expiry.
  * Uses Redis for distributed deployments, falls back to in-memory Set for dev/testing.
- * 
+ *
  * Version: 2.1 — January 2026
  * Security Hardened: January 2026
  */
@@ -18,10 +18,10 @@ class TokenBlacklistService {
   private client: RedisClientType | null = null;
   private readonly KEY_PREFIX = 'token:blacklist:';
   private readonly CLEANUP_INTERVAL = 3600000; // 1 hour
-  
+
   // In-memory fallback when Redis is unavailable
   private fallbackSet = new Set<string>();
-  
+
   /**
    * Initialize Redis connection or set up in-memory fallback
    */
@@ -34,23 +34,23 @@ class TokenBlacklistService {
       this.startFallbackCleanup();
       return;
     }
-    
+
     try {
       this.client = createClient({ url: env.REDIS_URL });
-      
+
       // Handle connection errors gracefully
       this.client.on('error', (err) => {
         logger.error(
-          { 
+          {
             operationType: 'SYSTEM_ANOMALY',
-            metadata: { error: err.message } 
+            metadata: { error: err.message },
           },
           'Redis client error - falling back to in-memory storage'
         );
       });
-      
+
       await this.client.connect();
-      
+
       logger.info(
         { operationType: 'GENERAL' },
         'Token blacklist service connected to Redis'
@@ -59,8 +59,8 @@ class TokenBlacklistService {
       logger.error(
         {
           operationType: 'SYSTEM_ANOMALY',
-          metadata: { 
-            error: error instanceof Error ? error.message : String(error) 
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
           },
         },
         'Failed to connect to Redis - using in-memory fallback'
@@ -68,10 +68,10 @@ class TokenBlacklistService {
       this.startFallbackCleanup();
     }
   }
-  
+
   /**
    * Revoke a JWT token by its JTI (JWT ID) claim
-   * 
+   *
    * @param jti - The unique identifier from the JWT's jti claim
    * @param expiresAt - When the token naturally expires (for TTL calculation)
    */
@@ -79,7 +79,7 @@ class TokenBlacklistService {
     if (!jti || typeof jti !== 'string') {
       throw new Error('Invalid JTI for token revocation');
     }
-    
+
     // Validate jti format (32-char hex from crypto.randomBytes(16))
     if (!/^[0-9a-f]{32}$/i.test(jti)) {
       logger.warn(
@@ -91,29 +91,32 @@ class TokenBlacklistService {
       );
       throw new Error('Invalid JTI format');
     }
-    
+
     // Calculate time-to-live in seconds
-    const ttl = Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
-    
+    const ttl = Math.max(
+      0,
+      Math.floor((expiresAt.getTime() - Date.now()) / 1000)
+    );
+
     // Don't store already-expired tokens
     if (ttl <= 0) {
       logger.debug(
-        { 
+        {
           operationType: 'GENERAL',
-          metadata: { jti, reason: 'Already expired' } 
+          metadata: { jti, reason: 'Already expired' },
         },
         'Token revocation skipped - already expired'
       );
       return;
     }
-    
+
     const key = this.KEY_PREFIX + jti;
-    
+
     try {
       if (this.client?.isOpen) {
         // Store in Redis with automatic expiration matching token expiry
         await this.client.set(key, '1', { EX: ttl });
-        
+
         logger.info(
           {
             operationType: 'SECURITY',
@@ -125,7 +128,7 @@ class TokenBlacklistService {
         // Fallback: store in memory and schedule cleanup
         this.fallbackSet.add(jti);
         setTimeout(() => this.fallbackSet.delete(jti), ttl * 1000);
-        
+
         logger.warn(
           {
             operationType: 'GENERAL',
@@ -138,22 +141,22 @@ class TokenBlacklistService {
       logger.error(
         {
           operationType: 'SYSTEM_ANOMALY',
-          metadata: { 
-            error: error instanceof Error ? error.message : String(error) 
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
           },
         },
         'Failed to revoke token in Redis'
       );
-      
+
       // Fall back to in-memory storage on Redis failure
       this.fallbackSet.add(jti);
       setTimeout(() => this.fallbackSet.delete(jti), ttl * 1000);
     }
   }
-  
+
   /**
    * Check if a token has been revoked
-   * 
+   *
    * @param jti - The JWT ID to check
    * @returns true if token is blacklisted, false otherwise
    */
@@ -161,7 +164,7 @@ class TokenBlacklistService {
     if (!jti || typeof jti !== 'string') {
       return false; // Invalid JTI = not explicitly revoked
     }
-    
+
     // Validate jti format
     if (!/^[0-9a-f]{32}$/i.test(jti)) {
       logger.warn(
@@ -173,9 +176,9 @@ class TokenBlacklistService {
       );
       return false;
     }
-    
+
     const key = this.KEY_PREFIX + jti;
-    
+
     try {
       if (this.client?.isOpen) {
         const exists = await this.client.exists(key);
@@ -190,13 +193,13 @@ class TokenBlacklistService {
       logger.error(
         {
           operationType: 'SYSTEM_ANOMALY',
-          metadata: { 
-            error: error instanceof Error ? error.message : String(error) 
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
           },
         },
         'Failed to check token revocation'
       );
-      
+
       logger.warn(
         {
           operationType: 'SECURITY',
@@ -204,18 +207,21 @@ class TokenBlacklistService {
         },
         'Revocation check failed - ALLOWING token (investigate Redis immediately)'
       );
-      
+
       return false;
     }
   }
-  
+
   /**
    * Revoke all tokens for a user (logout from all devices)
-   * 
+   *
    * @param userId - The user ID (for logging only)
    * @param tokens - Array of {jti, expiresAt} pairs to revoke
    */
-  async revokeAllForUser(userId: string, tokens: Array<{ jti: string; expiresAt: Date }>): Promise<void> {
+  async revokeAllForUser(
+    userId: string,
+    tokens: Array<{ jti: string; expiresAt: Date }>
+  ): Promise<void> {
     logger.info(
       {
         operationType: 'SECURITY',
@@ -224,12 +230,12 @@ class TokenBlacklistService {
       },
       'Revoking all tokens for user (logout all devices)'
     );
-    
+
     await Promise.all(
       tokens.map(({ jti, expiresAt }) => this.revoke(jti, expiresAt))
     );
   }
-  
+
   /**
    * Periodic cleanup for in-memory fallback (just for monitoring)
    */
@@ -244,14 +250,17 @@ class TokenBlacklistService {
       );
     }, this.CLEANUP_INTERVAL);
   }
-  
+
   /**
    * Graceful shutdown - close Redis connection
    */
   async shutdown(): Promise<void> {
     if (this.client?.isOpen) {
       await this.client.quit();
-      logger.info({ operationType: 'GENERAL' }, 'Token blacklist service disconnected from Redis');
+      logger.info(
+        { operationType: 'GENERAL' },
+        'Token blacklist service disconnected from Redis'
+      );
     }
   }
 }
@@ -264,7 +273,9 @@ tokenBlacklistService.initialize().catch((error) => {
   logger.error(
     {
       operationType: 'SYSTEM_ANOMALY',
-      metadata: { error: error instanceof Error ? error.message : String(error) },
+      metadata: {
+        error: error instanceof Error ? error.message : String(error),
+      },
     },
     'Failed to initialize token blacklist service'
   );

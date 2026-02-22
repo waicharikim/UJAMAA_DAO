@@ -7,10 +7,10 @@
  * Version: 2.0 — December 2025
  */
 
-import { prisma } from "../../../core/database/client.js";
-import { Prisma } from "@prisma/client";
-import { ImpactPointReason } from "../types.js";
-import { logger } from "../../../core/logger/logger.js";
+import { prisma } from '../../../core/database/client.js';
+import { Prisma } from '@prisma/client';
+import { ImpactPointReason } from '../types.js';
+import { logger } from '../../../core/logger/logger.js';
 
 class GlobalImpactPointService {
   async award(
@@ -27,7 +27,7 @@ class GlobalImpactPointService {
           userId,
           amount,
           reason,
-          scope: "GLOBAL",
+          scope: 'GLOBAL',
           metadata,
         },
       });
@@ -37,7 +37,10 @@ class GlobalImpactPointService {
         data: { globalImpactPoints: { increment: amount } },
       });
 
-      logger.info({ userId, amount, reason }, "[IP] Global Impact Points awarded");
+      logger.info(
+        { userId, amount, reason },
+        '[IP] Global Impact Points awarded'
+      );
 
       return log;
     });

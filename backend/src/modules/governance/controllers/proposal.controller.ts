@@ -5,36 +5,36 @@
  * Version: 2.0 — December 2025
  */
 
-import { Response } from "express";
-import { AuthRequest } from "../../../core/types/Ujamaadao.types.js";
-import { sendSuccess } from "../../../core/utils/response.js";
-import { proposalService } from "../services/proposal.service.js";
+import { Response } from 'express';
+import { AuthRequest } from '../../../core/types/Ujamaadao.types.js';
+import { sendSuccess } from '../../../core/utils/response.js';
+import { proposalService } from '../services/proposal.service.js';
 
 export class ProposalController {
   static async createProposal(req: AuthRequest, res: Response) {
     const userId = req.user!.userId;
     const dto = req.body;
     const proposal = await proposalService.createProposal(userId, dto);
-    sendSuccess(res, proposal, "Proposal created");
+    sendSuccess(res, proposal, 'Proposal created');
   }
 
   static async startVoting(req: AuthRequest, res: Response) {
     const userId = req.user!.userId;
     const { proposalId } = req.body;
     const result = await proposalService.startVoting(userId, proposalId);
-    sendSuccess(res, result, "Voting started");
+    sendSuccess(res, result, 'Voting started');
   }
 
   static async castVote(req: AuthRequest, res: Response) {
     const userId = req.user!.userId;
     const dto = req.body;
     const result = await proposalService.castVote(userId, dto);
-    sendSuccess(res, result, "Vote cast");
+    sendSuccess(res, result, 'Vote cast');
   }
 
   static async tallyVotes(req: AuthRequest, res: Response) {
     const { proposalId } = req.params;
     const result = await proposalService.tallyVotes(proposalId);
-    sendSuccess(res, result, "Votes tallied");
+    sendSuccess(res, result, 'Votes tallied');
   }
 }

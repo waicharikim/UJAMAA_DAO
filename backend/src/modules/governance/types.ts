@@ -6,18 +6,18 @@
  */
 
 export enum ProposalStatus {
-  DRAFT = "DRAFT",
-  VOTING = "VOTING",
-  PASSED = "PASSED",
-  FAILED = "FAILED",
-  EXECUTING = "EXECUTING",
-  COMPLETED = "COMPLETED",
+  DRAFT = 'DRAFT',
+  VOTING = 'VOTING',
+  PASSED = 'PASSED',
+  FAILED = 'FAILED',
+  EXECUTING = 'EXECUTING',
+  COMPLETED = 'COMPLETED',
 }
 
 export enum VoteOption {
-  YES = "YES",
-  NO = "NO",
-  ABSTAIN = "ABSTAIN",
+  YES = 'YES',
+  NO = 'NO',
+  ABSTAIN = 'ABSTAIN',
 }
 
 export interface CreateProposalDto {
@@ -46,9 +46,9 @@ export const PR_COST_BY_SCOPE = {
 } as const;
 
 export const IP_PERCENTILE_THRESHOLD = {
-  WARD: 0.90,
-  CONSTITUENCY: 0.80,
-  COUNTY: 0.70,
-  NATIONAL: 0.60,
-  VOLUNTARY: 1.00, // all members
+  WARD: 0.9,
+  CONSTITUENCY: 0.8,
+  COUNTY: 0.7,
+  NATIONAL: 0.6,
+  VOLUNTARY: 1.0, // all members
 } as const;

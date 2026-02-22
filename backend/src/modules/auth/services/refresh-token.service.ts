@@ -2,20 +2,25 @@
  * @file src/modules/auth/services/refresh-token.service.ts
  * @description
  * Refresh Token Service - Handle token refresh and rotation
- * 
+ *
  * Features:
  * - Refresh token rotation (old token invalidated on use)
  * - Device tracking
  * - Suspicious activity detection
- * 
+ *
  * Version: 1.0 — January 2026
  */
 
-import { prisma } from "../../../core/database/client.js";
-import { signAccessToken, signRefreshToken, verifyJwtToken, JwtPayload } from "../../../core/utils/jwt.service.js";
-import { ApiError } from "../../../core/errors/ApiError.js";
-import { tokenBlacklistService } from "../../../core/services/token-blacklist.service.js";
-import { logger } from "../../../core/logger/logger.js";
+import { prisma } from '../../../core/database/client.js';
+import {
+  signAccessToken,
+  signRefreshToken,
+  verifyJwtToken,
+  JwtPayload,
+} from '../../../core/utils/jwt.service.js';
+import { ApiError } from '../../../core/errors/ApiError.js';
+import { tokenBlacklistService } from '../../../core/services/token-blacklist.service.js';
+import { logger } from '../../../core/logger/logger.js';
 
 export interface RefreshTokenResult {
   accessToken: string;
@@ -44,11 +49,14 @@ class RefreshTokenService {
 
       // 2. Verify it's actually a refresh token
       if (payload.type !== 'refresh') {
-        logger.warn({
-          operationType: 'SECURITY',
-          userId: payload.sub,
-          metadata: { tokenType: payload.type, ipAddress: context.ipAddress },
-        }, 'Non-refresh token used in refresh endpoint');
+        logger.warn(
+          {
+            operationType: 'SECURITY',
+            userId: payload.sub,
+            metadata: { tokenType: payload.type, ipAddress: context.ipAddress },
+          },
+          'Non-refresh token used in refresh endpoint'
+        );
 
         throw ApiError.tokenInvalid('Invalid token type');
       }
@@ -57,11 +65,17 @@ class RefreshTokenService {
       if (payload.jti) {
         const isRevoked = await tokenBlacklistService.isRevoked(payload.jti);
         if (isRevoked) {
-          logger.warn({
-            operationType: 'SECURITY',
-            userId: payload.sub,
-            metadata: { jti: payload.jti.slice(0, 8) + '...', ipAddress: context.ipAddress },
-          }, 'Attempted reuse of revoked refresh token');
+          logger.warn(
+            {
+              operationType: 'SECURITY',
+              userId: payload.sub,
+              metadata: {
+                jti: payload.jti.slice(0, 8) + '...',
+                ipAddress: context.ipAddress,
+              },
+            },
+            'Attempted reuse of revoked refresh token'
+          );
 
           throw ApiError.tokenInvalid('Token has been revoked');
         }
@@ -82,11 +96,14 @@ class RefreshTokenService {
 
       // 5. Check if user is still active
       if (user.status === 'SUSPENDED' || user.status === 'BANNED') {
-        logger.warn({
-          operationType: 'SECURITY',
-          userId: user.id,
-          metadata: { status: user.status },
-        }, 'Suspended/banned user attempted token refresh');
+        logger.warn(
+          {
+            operationType: 'SECURITY',
+            userId: user.id,
+            metadata: { status: user.status },
+          },
+          'Suspended/banned user attempted token refresh'
+        );
 
         throw ApiError.authenticationError('Account is not active');
       }
@@ -98,7 +115,10 @@ class RefreshTokenService {
 
       // 7. Invalidate old refresh token (rotation)
       if (payload.jti && payload.exp) {
-        await tokenBlacklistService.revoke(payload.jti, new Date(payload.exp * 1000));
+        await tokenBlacklistService.revoke(
+          payload.jti,
+          new Date(payload.exp * 1000)
+        );
       }
 
       // 8. Build new payload with fresh data
@@ -111,7 +131,8 @@ class RefreshTokenService {
         secondaryWardId: user.secondaryWardId || undefined,
         constituencyId: user.primaryWard?.constituencyId || undefined,
         countyId: user.primaryWard?.countyId || undefined,
-        verificationLevel: user.verificationLevel as import("../../../core/types/Ujamaadao.types.js").VerificationLevel,
+        verificationLevel:
+          user.verificationLevel as import('../../../core/types/Ujamaadao.types.js').VerificationLevel,
         emailVerified: user.emailVerified,
         phoneVerified: user.phoneVerified,
         communityVerified: user.communityVerified,
@@ -129,41 +150,53 @@ class RefreshTokenService {
 
       // 10. Update session if exists
       if (payload.sessionId) {
-        await prisma.session.update({
-          where: { id: payload.sessionId },
-          data: {
-            lastActive: new Date(),
-            ipAddress: context.ipAddress,
-            userAgent: context.userAgent,
-          },
-        }).catch(() => {
-          // Session might have been deleted - not critical
-          logger.debug({
-            operationType: 'GENERAL',
-            userId: user.id,
-          }, 'Could not update session on refresh');
-        });
+        await prisma.session
+          .update({
+            where: { id: payload.sessionId },
+            data: {
+              lastActive: new Date(),
+              ipAddress: context.ipAddress,
+              userAgent: context.userAgent,
+            },
+          })
+          .catch(() => {
+            // Session might have been deleted - not critical
+            logger.debug(
+              {
+                operationType: 'GENERAL',
+                userId: user.id,
+              },
+              'Could not update session on refresh'
+            );
+          });
       }
 
-      logger.info({
-        operationType: 'AUTH',
-        userId: user.id,
-        metadata: { ipAddress: context.ipAddress },
-      }, 'Token refreshed successfully');
+      logger.info(
+        {
+          operationType: 'AUTH',
+          userId: user.id,
+          metadata: { ipAddress: context.ipAddress },
+        },
+        'Token refreshed successfully'
+      );
 
       return {
         accessToken: newAccessToken,
         refreshToken: newRefreshToken,
         expiresIn: 3600, // 1 hour in seconds
       };
-
     } catch (error) {
       if (error instanceof ApiError) throw error;
 
-      logger.error({
-        operationType: 'GENERAL',
-        metadata: { error: error instanceof Error ? error.message : String(error) },
-      }, 'Token refresh failed');
+      logger.error(
+        {
+          operationType: 'GENERAL',
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        },
+        'Token refresh failed'
+      );
 
       throw ApiError.tokenInvalid('Invalid refresh token');
     }
@@ -189,40 +222,58 @@ class RefreshTokenService {
       if (!session) return;
 
       // Check for IP change
-      if (session.ipAddress && context.ipAddress && session.ipAddress !== context.ipAddress) {
-        logger.warn({
-          operationType: 'SECURITY',
-          userId: session.userId,
-          metadata: {
-            oldIp: session.ipAddress,
-            newIp: context.ipAddress,
-            sessionId,
+      if (
+        session.ipAddress &&
+        context.ipAddress &&
+        session.ipAddress !== context.ipAddress
+      ) {
+        logger.warn(
+          {
+            operationType: 'SECURITY',
+            userId: session.userId,
+            metadata: {
+              oldIp: session.ipAddress,
+              newIp: context.ipAddress,
+              sessionId,
+            },
           },
-        }, 'IP address changed during session - possible session hijacking');
+          'IP address changed during session - possible session hijacking'
+        );
 
         // TODO: Send security alert email
         // TODO: Consider requiring re-authentication
       }
 
       // Check for user agent change
-      if (session.userAgent && context.userAgent && session.userAgent !== context.userAgent) {
-        logger.warn({
-          operationType: 'SECURITY',
-          userId: session.userId,
-          metadata: {
-            oldUserAgent: session.userAgent,
-            newUserAgent: context.userAgent,
-            sessionId,
+      if (
+        session.userAgent &&
+        context.userAgent &&
+        session.userAgent !== context.userAgent
+      ) {
+        logger.warn(
+          {
+            operationType: 'SECURITY',
+            userId: session.userId,
+            metadata: {
+              oldUserAgent: session.userAgent,
+              newUserAgent: context.userAgent,
+              sessionId,
+            },
           },
-        }, 'User agent changed during session - possible session hijacking');
+          'User agent changed during session - possible session hijacking'
+        );
       }
-
     } catch (error) {
       // Non-critical - don't fail the refresh
-      logger.debug({
-        operationType: 'GENERAL',
-        metadata: { error: error instanceof Error ? error.message : String(error) },
-      }, 'Could not check suspicious activity');
+      logger.debug(
+        {
+          operationType: 'GENERAL',
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        },
+        'Could not check suspicious activity'
+      );
     }
   }
 
@@ -233,7 +284,7 @@ class RefreshTokenService {
     try {
       // Get all active sessions
       const sessions = await prisma.session.findMany({
-        where: { 
+        where: {
           userId,
           revoked: false,
         },
@@ -246,18 +297,25 @@ class RefreshTokenService {
         data: { revoked: true },
       });
 
-      logger.info({
-        operationType: 'SECURITY',
-        userId,
-        metadata: { sessionCount: sessions.length },
-      }, 'All refresh tokens revoked for user');
-
+      logger.info(
+        {
+          operationType: 'SECURITY',
+          userId,
+          metadata: { sessionCount: sessions.length },
+        },
+        'All refresh tokens revoked for user'
+      );
     } catch (error) {
-      logger.error({
-        operationType: 'DATABASE',
-        userId,
-        metadata: { error: error instanceof Error ? error.message : String(error) },
-      }, 'Failed to revoke all refresh tokens');
+      logger.error(
+        {
+          operationType: 'DATABASE',
+          userId,
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        },
+        'Failed to revoke all refresh tokens'
+      );
       throw ApiError.systemError('Failed to revoke tokens');
     }
   }

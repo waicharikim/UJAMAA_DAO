@@ -16,13 +16,12 @@
  * Updated: Added full set of admin actions, transactions, granular logging
  */
 
-import { prisma } from "../../../core/database/client.js";
-import { Prisma } from "@prisma/client";
-import { participationRightsService } from "../../economy/services/participationRights.service.js";
-import { groupMembershipService } from "../../community/services/groupMembership.service.js";
-import { ApiError } from "../../../core/errors/ApiError.js";
-import { logger } from "../../../core/logger/logger.js";
-import { userService } from "../../user/services/user.service.js";
+import { prisma } from '../../../core/database/client.js';
+import { Prisma } from '@prisma/client';
+import { groupMembershipService } from '../../community/services/groupMembership.service.js';
+import { ApiError } from '../../../core/errors/ApiError.js';
+import { logger } from '../../../core/logger/logger.js';
+import { userService } from '../../user/services/user.service.js';
 
 class AdminService {
   // ============================================================================
@@ -44,10 +43,11 @@ class AdminService {
         include: { user: true },
       });
 
-      if (!request) throw ApiError.notFound("Residence change request");
-      if (request.status !== "PENDING") throw ApiError.badRequest("Request already processed");
+      if (!request) throw ApiError.notFound('Residence change request');
+      if (request.status !== 'PENDING')
+        throw ApiError.badRequest('Request already processed');
 
-      const newStatus = approved ? "APPROVED" : "REJECTED";
+      const newStatus = approved ? 'APPROVED' : 'REJECTED';
 
       await tx.residenceChangeRequest.update({
         where: { id: requestId },
@@ -77,7 +77,13 @@ class AdminService {
       }
 
       logger.info(
-        { operationType: "ADMIN_RESIDENCE", adminId, requestId, approved, reason },
+        {
+          operationType: 'ADMIN_RESIDENCE',
+          adminId,
+          requestId,
+          approved,
+          reason,
+        },
         `Residence change request ${newStatus.toLowerCase()}`
       );
 
@@ -104,13 +110,20 @@ class AdminService {
         include: { user: true },
       });
 
-      if (!request) throw ApiError.notFound("Verification request");
+      if (!request) throw ApiError.notFound('Verification request');
 
-      if (!["PENDING", "VOUCHING_COMPLETED", "PAYMENT_PENDING", "ADMIN_REVIEW"].includes(request.status)) {
-        throw ApiError.badRequest("Request not in reviewable state");
+      if (
+        ![
+          'PENDING',
+          'VOUCHING_COMPLETED',
+          'PAYMENT_PENDING',
+          'ADMIN_REVIEW',
+        ].includes(request.status)
+      ) {
+        throw ApiError.badRequest('Request not in reviewable state');
       }
 
-      const newStatus = approved ? "APPROVED" : "REJECTED";
+      const newStatus = approved ? 'APPROVED' : 'REJECTED';
 
       await tx.verificationRequest.update({
         where: { id: requestId },
@@ -128,7 +141,7 @@ class AdminService {
 
       logger.info(
         {
-          operationType: "ADMIN_VERIFICATION",
+          operationType: 'ADMIN_VERIFICATION',
           adminId,
           requestId,
           status: newStatus,
@@ -152,16 +165,16 @@ class AdminService {
     adminId: string,
     userId: string,
     amount: number,
-    type: "ADD" | "DEDUCT",
+    type: 'ADD' | 'DEDUCT',
     reason: string
   ) {
-    if (amount <= 0) throw ApiError.badRequest("Amount must be positive");
+    if (amount <= 0) throw ApiError.badRequest('Amount must be positive');
 
     return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const user = await tx.user.findUnique({ where: { id: userId } });
-      if (!user) throw ApiError.notFound("User");
+      if (!user) throw ApiError.notFound('User');
 
-      const adjustment = type === "ADD" ? amount : -amount;
+      const adjustment = type === 'ADD' ? amount : -amount;
       const newPR = Math.max(0, user.participationRights + adjustment);
 
       await tx.user.update({
@@ -175,13 +188,17 @@ class AdminService {
           amount: adjustment,
           balance: newPR,
           reason: `ADMIN_ADJUST_${type}`,
-          metadata: { adminId, reason, originalBalance: user.participationRights },
+          metadata: {
+            adminId,
+            reason,
+            originalBalance: user.participationRights,
+          },
         },
       });
 
       logger.info(
         {
-          operationType: "ADMIN_PR_ADJUST",
+          operationType: 'ADMIN_PR_ADJUST',
           adminId,
           userId,
           amount,
@@ -189,7 +206,7 @@ class AdminService {
           reason,
           newBalance: newPR,
         },
-        `Participation Rights ${type === "ADD" ? "increased" : "decreased"}`
+        `Participation Rights ${type === 'ADD' ? 'increased' : 'decreased'}`
       );
 
       return { previous: user.participationRights, new: newPR };
@@ -212,7 +229,7 @@ class AdminService {
   ) {
     return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const user = await tx.user.findUnique({ where: { id: userId } });
-      if (!user) throw ApiError.notFound("User");
+      if (!user) throw ApiError.notFound('User');
 
       const suspendedUntil = durationDays
         ? new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000)
@@ -221,7 +238,7 @@ class AdminService {
       await tx.user.update({
         where: { id: userId },
         data: {
-          status: suspend ? "SUSPENDED" : "ACTIVE",
+          status: suspend ? 'SUSPENDED' : 'ACTIVE',
         },
       });
 
@@ -235,14 +252,14 @@ class AdminService {
 
       logger.info(
         {
-          operationType: "ADMIN_USER_SUSPEND",
+          operationType: 'ADMIN_USER_SUSPEND',
           adminId,
           userId,
           suspended: suspend,
           durationDays,
           reason,
         },
-        `User ${suspend ? "suspended" : "unsuspended"}`
+        `User ${suspend ? 'suspended' : 'unsuspended'}`
       );
 
       return { suspended: suspend, suspendedUntil };
@@ -265,7 +282,14 @@ class AdminService {
     const skip = (page - 1) * pageSize;
 
     const where = {
-      status: status || { in: ["PENDING", "VOUCHING_COMPLETED", "PAYMENT_PENDING", "ADMIN_REVIEW"] },
+      status: status || {
+        in: [
+          'PENDING',
+          'VOUCHING_COMPLETED',
+          'PAYMENT_PENDING',
+          'ADMIN_REVIEW',
+        ],
+      },
       ...(wardId && { wardId }),
     };
 
@@ -274,7 +298,7 @@ class AdminService {
         where,
         skip,
         take: pageSize,
-        orderBy: { createdAt: "desc" },
+        orderBy: { createdAt: 'desc' },
         include: {
           user: {
             select: {
@@ -308,10 +332,10 @@ class AdminService {
 
     const [requests, total] = await Promise.all([
       prisma.residenceChangeRequest.findMany({
-        where: { status: "PENDING" },
+        where: { status: 'PENDING' },
         skip,
         take: pageSize,
-        orderBy: { createdAt: "desc" },
+        orderBy: { createdAt: 'desc' },
         include: {
           user: {
             select: {
@@ -323,7 +347,7 @@ class AdminService {
           },
         },
       }),
-      prisma.residenceChangeRequest.count({ where: { status: "PENDING" } }),
+      prisma.residenceChangeRequest.count({ where: { status: 'PENDING' } }),
     ]);
 
     return {
@@ -348,12 +372,18 @@ class AdminService {
     const config = await prisma.systemConfiguration.upsert({
       where: { key },
       update: { value, updatedBy: adminId },
-      create: { key, value, updatedBy: adminId, category: "general", dataType: "string" },
+      create: {
+        key,
+        value,
+        updatedBy: adminId,
+        category: 'general',
+        dataType: 'string',
+      },
     });
 
     logger.info(
-      { operationType: "ADMIN_CONFIG", adminId, key, value },
-      "System configuration updated"
+      { operationType: 'ADMIN_CONFIG', adminId, key, value },
+      'System configuration updated'
     );
 
     return config;
@@ -381,8 +411,8 @@ class AdminService {
     });
 
     logger.info(
-      { operationType: "ADMIN_SECURITY", adminId, eventId, resolved },
-      "Security event resolved"
+      { operationType: 'ADMIN_SECURITY', adminId, eventId, resolved },
+      'Security event resolved'
     );
 
     return event;
@@ -391,7 +421,7 @@ class AdminService {
   async getUserSecurityEvents(userId: string) {
     return prisma.securityEvent.findMany({
       where: { userId },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: 'desc' },
       take: 50,
     });
   }

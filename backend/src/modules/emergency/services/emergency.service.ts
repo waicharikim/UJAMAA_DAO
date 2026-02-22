@@ -7,15 +7,21 @@
  * Updated: Align with actual Prisma schema field names
  */
 
-import { EmergencyType as PrismaEmergencyType, EmergencySeverity } from "@prisma/client";
-import { prisma } from "../../../core/database/client.js";
-import { participationRightsService } from "../../economy/services/participationRights.service.js";
-import { ParticipationRightsReason } from "../../economy/types.js";
-import { notificationService } from "../../notifications/services/notification.service.js";
-import { NotificationType, NotificationChannel } from "../../notifications/types.js";
-import { ApiError } from "../../../core/errors/ApiError.js";
-import { logger } from "../../../core/logger/logger.js";
-import { ReportEmergencyDto } from "../types.js";
+import {
+  EmergencyType as PrismaEmergencyType,
+  EmergencySeverity,
+} from '@prisma/client';
+import { prisma } from '../../../core/database/client.js';
+import { participationRightsService } from '../../economy/services/participationRights.service.js';
+import { ParticipationRightsReason } from '../../economy/types.js';
+import { notificationService } from '../../notifications/services/notification.service.js';
+import {
+  NotificationType,
+  NotificationChannel,
+} from '../../notifications/types.js';
+import { ApiError } from '../../../core/errors/ApiError.js';
+import { logger } from '../../../core/logger/logger.js';
+import { ReportEmergencyDto } from '../types.js';
 
 const EMERGENCY_PR_COST = 10;
 
@@ -39,10 +45,10 @@ class EmergencyService {
         severity: EmergencySeverity.HIGH,
         title: `Emergency: ${dto.type}`,
         description: dto.description,
-        location: dto.locationWardId ?? "Unknown",
+        location: dto.locationWardId ?? 'Unknown',
         neededResources: {},
         availableResources: {},
-        status: "ACTIVE",
+        status: 'ACTIVE',
       },
     });
 
@@ -64,11 +70,18 @@ class EmergencyService {
         title: `Emergency Reported: ${dto.type}`,
         message: dto.description,
         data: { alertId: alert.id, wardId: dto.locationWardId },
-        channels: [NotificationChannel.EMAIL, NotificationChannel.SMS, NotificationChannel.IN_APP],
+        channels: [
+          NotificationChannel.EMAIL,
+          NotificationChannel.SMS,
+          NotificationChannel.IN_APP,
+        ],
       });
     }
 
-    logger.info({ userId, alertId: alert.id, type: dto.type }, "Emergency reported");
+    logger.info(
+      { userId, alertId: alert.id, type: dto.type },
+      'Emergency reported'
+    );
 
     return alert;
   }
@@ -81,18 +94,18 @@ class EmergencyService {
       where: { id: alertId },
     });
 
-    if (!alert) throw ApiError.notFound("Emergency Alert");
+    if (!alert) throw ApiError.notFound('Emergency Alert');
 
     const response = await prisma.emergencyResponse.create({
       data: {
         emergencyId: alertId,
         userId,
-        role: "RESPONDER",
+        role: 'RESPONDER',
         notes: message,
       },
     });
 
-    logger.info({ userId, alertId, message }, "Emergency response recorded");
+    logger.info({ userId, alertId, message }, 'Emergency response recorded');
 
     return response;
   }

@@ -2,15 +2,14 @@
  * @file src/modules/auth/types.ts
  * @description
  * Auth Module Type Definitions and DTOs
- * 
+ *
  * Combines Zod validation schemas with TypeScript types.
  * All request/response types and utility functions for auth module.
- * 
+ *
  * Version: 2.1 — January 2026
  */
 
-import { z } from "zod";
-import { VerificationLevel } from "../../core/types/Ujamaadao.types.js";
+import { z } from 'zod';
 
 // ============================================================================
 // ZOD VALIDATION SCHEMAS
@@ -21,42 +20,61 @@ import { VerificationLevel } from "../../core/types/Ujamaadao.types.js";
  * Used for both new user registration and returning user login
  */
 export const SendMagicLinkSchema = z.object({
-  email: z.string().email("Invalid email address"),
-  name: z.string().min(2, "Name must be at least 2 characters").max(100, "Name too long").optional(),
-  phoneNumber: z.string().regex(/^\+?[1-9]\d{1,14}$/, "Invalid phone number format (E.164)").optional(),
-  primaryWardId: z.string().uuid("Invalid primary ward ID").optional(),
-  secondaryWardId: z.string().uuid("Invalid secondary ward ID").optional(),
-  industryIds: z.array(z.string().uuid()).min(1, "At least one industry is required").max(10, "Maximum 10 industries allowed").optional(),
-  goodsServiceIds: z.array(z.string().uuid()).min(1, "At least one goods/service is required").max(20, "Maximum 20 goods/services allowed").optional(),
+  email: z.string().email('Invalid email address'),
+  name: z
+    .string()
+    .min(2, 'Name must be at least 2 characters')
+    .max(100, 'Name too long')
+    .optional(),
+  phoneNumber: z
+    .string()
+    .regex(/^\+?[1-9]\d{1,14}$/, 'Invalid phone number format (E.164)')
+    .optional(),
+  primaryWardId: z.string().uuid('Invalid primary ward ID').optional(),
+  secondaryWardId: z.string().uuid('Invalid secondary ward ID').optional(),
+  industryIds: z
+    .array(z.string().uuid())
+    .min(1, 'At least one industry is required')
+    .max(10, 'Maximum 10 industries allowed')
+    .optional(),
+  goodsServiceIds: z
+    .array(z.string().uuid())
+    .min(1, 'At least one goods/service is required')
+    .max(20, 'Maximum 20 goods/services allowed')
+    .optional(),
 });
 
 /**
  * Verify Token Query Params
  */
 export const VerifyTokenSchema = z.object({
-  token: z.string().min(1, "Token is required"),
+  token: z.string().min(1, 'Token is required'),
 });
 
 /**
  * Logout Schema
  */
 export const LogoutSchema = z.object({
-  sessionId: z.string().uuid("Invalid session ID"),
+  sessionId: z.string().uuid('Invalid session ID'),
 });
 
 /**
  * Wallet Nonce Request Schema
  */
 export const WalletNonceSchema = z.object({
-  walletAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid Ethereum address"),
+  walletAddress: z
+    .string()
+    .regex(/^0x[a-fA-F0-9]{40}$/, 'Invalid Ethereum address'),
 });
 
 /**
  * Wallet Verify Signature Schema
  */
 export const WalletVerifySchema = z.object({
-  walletAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid Ethereum address"),
-  signature: z.string().min(1, "Signature is required"),
+  walletAddress: z
+    .string()
+    .regex(/^0x[a-fA-F0-9]{40}$/, 'Invalid Ethereum address'),
+  signature: z.string().min(1, 'Signature is required'),
 });
 
 // ============================================================================
@@ -168,7 +186,7 @@ export interface OnboardingMissingFields {
 export interface MagicLinkPayload {
   sub: string;
   email?: string;
-  type: "magic-link";
+  type: 'magic-link';
 }
 
 /**
@@ -224,7 +242,10 @@ export function toUserResponse(user: any): AuthUserResponse {
 /**
  * Convert Prisma Session to safe SessionResponse
  */
-export function toSessionResponse(session: any, isCurrent = false): SessionResponse {
+export function toSessionResponse(
+  session: any,
+  isCurrent = false
+): SessionResponse {
   return {
     id: session.id,
     deviceInfo: session.deviceInfo,
@@ -260,7 +281,7 @@ export function needsOnboarding(user: any): boolean {
     !user.email ||
     !user.primaryWardId ||
     !user.secondaryWardId ||
-    user.verificationLevel === "UNVERIFIED"
+    user.verificationLevel === 'UNVERIFIED'
   );
 }
 
@@ -268,4 +289,4 @@ export function needsOnboarding(user: any): boolean {
 // RE-EXPORTS
 // ============================================================================
 
-export type { VerificationLevel } from "../../core/types/Ujamaadao.types.js";
+export type { VerificationLevel } from '../../core/types/Ujamaadao.types.js';

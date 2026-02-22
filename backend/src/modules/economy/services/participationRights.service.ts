@@ -10,14 +10,21 @@
  * Updated: Replaced dues penalties with commitment-based logic (dues optional), added event listeners
  */
 
-import { PrismaClient, Prisma, ParticipationRightsLog } from "@prisma/client";
-import { prisma } from "../../../core/database/client.js";
-import { ParticipationRightsReason, PR_CONFIG, CommitmentStatus, COMMITMENT_CONFIG, CommitmentType } from "../types.js";
-import { ApiError } from "../../../core/errors/ApiError.js";
-import { logger } from "../../../core/logger/logger.js";
-import { eventBus } from "../../../core/utils/eventBus.js";
+import { PrismaClient, Prisma, ParticipationRightsLog } from '@prisma/client';
+import { prisma } from '../../../core/database/client.js';
+import {
+  ParticipationRightsReason,
+  PR_CONFIG,
+  CommitmentStatus,
+  COMMITMENT_CONFIG,
+  CommitmentType,
+} from '../types.js';
+import { ApiError } from '../../../core/errors/ApiError.js';
+import { logger } from '../../../core/logger/logger.js';
+import { eventBus } from '../../../core/utils/eventBus.js';
 
-const { MAX_BALANCE, MONTHLY_REGEN_BASE, ACTIVE_USER_DAYS_THRESHOLD } = PR_CONFIG;
+const { MAX_BALANCE, MONTHLY_REGEN_BASE, ACTIVE_USER_DAYS_THRESHOLD } =
+  PR_CONFIG;
 
 class ParticipationRightsService {
   private prisma: PrismaClient;
@@ -32,7 +39,7 @@ class ParticipationRightsService {
   async getBalance(userId: string): Promise<number> {
     const logs = await this.prisma.participationRightsLog.findMany({
       where: { userId },
-      orderBy: { createdAt: "asc" },
+      orderBy: { createdAt: 'asc' },
     });
 
     if (logs.length === 0) return 0;
@@ -49,7 +56,7 @@ class ParticipationRightsService {
     reason: ParticipationRightsReason,
     metadata?: Record<string, any>
   ): Promise<ParticipationRightsLog> {
-    if (amount <= 0) throw new Error("Award amount must be positive");
+    if (amount <= 0) throw new Error('Award amount must be positive');
 
     return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const current = await this.getBalanceWithTx(tx, userId);
@@ -73,7 +80,7 @@ class ParticipationRightsService {
 
       logger.info(
         { userId, amount, reason, newBalance, metadata },
-        "[PR] Awarded Participation Rights"
+        '[PR] Awarded Participation Rights'
       );
 
       return log;
@@ -89,14 +96,14 @@ class ParticipationRightsService {
     reason: ParticipationRightsReason,
     metadata?: Record<string, any>
   ): Promise<ParticipationRightsLog> {
-    if (amount <= 0) throw new Error("Spend amount must be positive");
+    if (amount <= 0) throw new Error('Spend amount must be positive');
 
     return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const current = await this.getBalanceWithTx(tx, userId);
 
       if (current < amount) {
         throw ApiError.insufficientParticipationRights(
-          "Insufficient Participation Rights",
+          'Insufficient Participation Rights',
           amount,
           current
         );
@@ -121,7 +128,7 @@ class ParticipationRightsService {
 
       logger.info(
         { userId, amount: -amount, reason, newBalance, metadata },
-        "[PR] Spent Participation Rights"
+        '[PR] Spent Participation Rights'
       );
 
       return log;
@@ -140,9 +147,12 @@ class ParticipationRightsService {
   private async getBalanceWithTx(tx: any, userId: string): Promise<number> {
     const logs = await tx.participationRightsLog.findMany({
       where: { userId },
-      orderBy: { createdAt: "asc" },
+      orderBy: { createdAt: 'asc' },
     });
-    return logs.reduce((sum: number, log: ParticipationRightsLog) => sum + log.amount, 0);
+    return logs.reduce(
+      (sum: number, log: ParticipationRightsLog) => sum + log.amount,
+      0
+    );
   }
 
   /**
@@ -161,14 +171,22 @@ class ParticipationRightsService {
 
     const results = await Promise.all(
       activeUsers.map((user) =>
-        this.award(user.id, MONTHLY_REGEN_BASE, ParticipationRightsReason.MONTHLY_REGENERATION, {
-          type: "monthly_regen",
-          activeUser: true,
-        }).catch(() => null)
+        this.award(
+          user.id,
+          MONTHLY_REGEN_BASE,
+          ParticipationRightsReason.MONTHLY_REGENERATION,
+          {
+            type: 'monthly_regen',
+            activeUser: true,
+          }
+        ).catch(() => null)
       )
     );
 
-    logger.info({ regeneratedCount: results.filter(Boolean).length }, "[PR] Monthly regeneration completed");
+    logger.info(
+      { regeneratedCount: results.filter(Boolean).length },
+      '[PR] Monthly regeneration completed'
+    );
   }
 
   /**
@@ -190,13 +208,19 @@ class ParticipationRightsService {
       if (isBreached) {
         commitment.missedCount += 1;
 
-        const penaltyStep = Math.min(commitment.missedCount - 1, COMMITMENT_CONFIG.PENALTY_ON_BREACH.length - 1);
+        const penaltyStep = Math.min(
+          commitment.missedCount - 1,
+          COMMITMENT_CONFIG.PENALTY_ON_BREACH.length - 1
+        );
         const penaltyAmount = COMMITMENT_CONFIG.PENALTY_ON_BREACH[penaltyStep];
 
-        if (penaltyAmount === "ROLE_SUSPENSION") {
+        if (penaltyAmount === 'ROLE_SUSPENSION') {
           // Future: suspend role/group membership
-          logger.warn({ commitmentId: commitment.id }, "[BREACH] Role suspension triggered");
-        } else if (typeof penaltyAmount === "number") {
+          logger.warn(
+            { commitmentId: commitment.id },
+            '[BREACH] Role suspension triggered'
+          );
+        } else if (typeof penaltyAmount === 'number') {
           await this.spend(
             commitment.userId,
             penaltyAmount,
@@ -205,7 +229,9 @@ class ParticipationRightsService {
           );
         }
 
-        if (commitment.missedCount >= COMMITMENT_CONFIG.MAX_MISSED_BEFORE_BREACH) {
+        if (
+          commitment.missedCount >= COMMITMENT_CONFIG.MAX_MISSED_BEFORE_BREACH
+        ) {
           await this.prisma.commitment.update({
             where: { id: commitment.id },
             data: {
@@ -218,10 +244,10 @@ class ParticipationRightsService {
 
           logger.info(
             { commitmentId: commitment.id, missed: commitment.missedCount },
-            "[COMMITMENT] Breach threshold reached — status updated"
+            '[COMMITMENT] Breach threshold reached — status updated'
           );
 
-          eventBus.publish("economy.commitment.breached", {
+          eventBus.publish('economy.commitment.breached', {
             commitmentId: commitment.id,
             userId: commitment.userId,
             missedCount: commitment.missedCount,
@@ -241,7 +267,10 @@ class ParticipationRightsService {
       }
     }
 
-    logger.info({ breachedCount, checked: activeCommitments.length }, "[COMMITMENT] Monthly penalties applied");
+    logger.info(
+      { breachedCount, checked: activeCommitments.length },
+      '[COMMITMENT] Monthly penalties applied'
+    );
   }
 
   /**
@@ -255,7 +284,7 @@ class ParticipationRightsService {
         where: {
           userId: commitment.userId,
           period: currentPeriod,
-          status: "COMPLETED",
+          status: 'COMPLETED',
         },
       });
       return !payment;
@@ -272,40 +301,56 @@ export const participationRightsService = new ParticipationRightsService();
 // EVENT LISTENERS — Award PR on key events
 // ============================================================================
 
-eventBus.on("user.verification.completed", async (payload) => {
+eventBus.on('user.verification.completed', async (payload) => {
   const { userId, level } = payload;
 
   let amount = 0;
   switch (level) {
-    case "EMAIL_VERIFIED":
+    case 'EMAIL_VERIFIED':
       amount = PR_CONFIG.EMAIL_VERIFIED;
       break;
-    case "PHONE_VERIFIED":
+    case 'PHONE_VERIFIED':
       amount = PR_CONFIG.PHONE_VERIFIED;
       break;
-    case "COMMUNITY_VERIFIED":
+    case 'COMMUNITY_VERIFIED':
       amount = PR_CONFIG.COMMUNITY_VERIFIED;
       break;
-    case "LOCATION_VERIFIED":
+    case 'LOCATION_VERIFIED':
       amount = PR_CONFIG.LOCATION_VERIFIED;
       break;
   }
 
   if (amount > 0) {
-    await participationRightsService.award(userId, amount, ParticipationRightsReason[level as keyof typeof ParticipationRightsReason]);
+    await participationRightsService.award(
+      userId,
+      amount,
+      ParticipationRightsReason[level as keyof typeof ParticipationRightsReason]
+    );
   }
 });
 
-eventBus.on("governance.vote.cast", async (payload) => {
-  await participationRightsService.award(payload.userId, PR_CONFIG.VOTE_CAST, ParticipationRightsReason.VOTED);
+eventBus.on('governance.vote.cast', async (payload) => {
+  await participationRightsService.award(
+    payload.userId,
+    PR_CONFIG.VOTE_CAST,
+    ParticipationRightsReason.VOTED
+  );
 });
 
-eventBus.on("governance.proposal.created", async (payload) => {
-  await participationRightsService.award(payload.createdById, PR_CONFIG.PROPOSAL_CREATED, ParticipationRightsReason.PROPOSAL_CREATED);
+eventBus.on('governance.proposal.created', async (payload) => {
+  await participationRightsService.award(
+    payload.createdById,
+    PR_CONFIG.PROPOSAL_CREATED,
+    ParticipationRightsReason.PROPOSAL_CREATED
+  );
 });
 
-eventBus.on("governance.milestone.verified", async (payload) => {
+eventBus.on('governance.milestone.verified', async (payload) => {
   if (payload.approved) {
-    await participationRightsService.award(payload.submittedById, PR_CONFIG.MILESTONE_VERIFIED_BASE, ParticipationRightsReason.MILESTONE_VERIFIED);
+    await participationRightsService.award(
+      payload.submittedById,
+      PR_CONFIG.MILESTONE_VERIFIED_BASE,
+      ParticipationRightsReason.MILESTONE_VERIFIED
+    );
   }
 });

@@ -7,11 +7,11 @@
  * Updated: Align with actual Prisma schema field names
  */
 
-import { HolderType, ListingStatus } from "@prisma/client";
-import { prisma } from "../../../core/database/client.js";
-import { ApiError } from "../../../core/errors/ApiError.js";
-import { logger } from "../../../core/logger/logger.js";
-import { CreateListingDto, SearchListingsDto } from "../types.js";
+import { HolderType, ListingStatus } from '@prisma/client';
+import { prisma } from '../../../core/database/client.js';
+import { ApiError } from '../../../core/errors/ApiError.js';
+import { logger } from '../../../core/logger/logger.js';
+import { CreateListingDto, SearchListingsDto } from '../types.js';
 
 class MarketplaceService {
   /**
@@ -26,12 +26,15 @@ class MarketplaceService {
         description: dto.description,
         price: dto.priceGuideKes ?? 0,
         quantity: dto.quantity ?? 1,
-        listingType: dto.type ?? "OFFER",
+        listingType: dto.type ?? 'OFFER',
         status: ListingStatus.ACTIVE,
       },
     });
 
-    logger.info({ userId, listingId: listing.id, type: dto.type }, "Marketplace listing created");
+    logger.info(
+      { userId, listingId: listing.id, type: dto.type },
+      'Marketplace listing created'
+    );
 
     return listing;
   }
@@ -58,7 +61,7 @@ class MarketplaceService {
             },
           },
         },
-        orderBy: { createdAt: "desc" },
+        orderBy: { createdAt: 'desc' },
         skip,
         take: dto.limit || 20,
       }),
@@ -94,7 +97,8 @@ class MarketplaceService {
       },
     });
 
-    if (!listing || listing.status !== ListingStatus.ACTIVE) throw ApiError.notFound("Listing");
+    if (!listing || listing.status !== ListingStatus.ACTIVE)
+      throw ApiError.notFound('Listing');
 
     return listing;
   }
