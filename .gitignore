@@ -5,3 +5,6 @@ npm-debug.log*
 .vscode/
 *.tsbuildinfo
 .prisma/client/
+
+# Let's Encrypt — never commit live certs
+traefik/acme.json
