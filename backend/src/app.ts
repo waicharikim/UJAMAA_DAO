@@ -26,6 +26,7 @@
 import express, { RequestHandler } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import { timingSafeEqual, createHash } from 'crypto';
 import { logger } from './core/logger/logger.js';
 
 // Database & services
@@ -282,7 +283,14 @@ app.use('/api/v1/onboarding', onboardingRoutes);
 // Install required packages first:
 // npm install @bull-board/api @bull-board/express bull-board
 
-// Simple basic auth middleware (change password in production!)
+// Timing-safe string comparison — prevents timing attacks on credentials
+function safeCompare(a: string, b: string): boolean {
+  const hashA = createHash('sha256').update(a).digest();
+  const hashB = createHash('sha256').update(b).digest();
+  return timingSafeEqual(hashA, hashB);
+}
+
+// Simple basic auth middleware (change DASHBOARD_PASSWORD env var in production!)
 const requireDashboardAuth = (req: any, res: any, next: any) => {
   const auth = {
     login: 'admin',
@@ -293,7 +301,7 @@ const requireDashboardAuth = (req: any, res: any, next: any) => {
     .toString()
     .split(':');
 
-  if (login === auth.login && password === auth.password) {
+  if (safeCompare(login || '', auth.login) && safeCompare(password || '', auth.password)) {
     return next();
   }
 
