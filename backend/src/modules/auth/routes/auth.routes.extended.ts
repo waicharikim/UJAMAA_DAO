@@ -19,7 +19,7 @@
 import { Response, Router } from 'express';
 import { z } from 'zod';
 import { authenticate } from '../../../core/middleware/auth.middleware.js';
-import { validateBody } from '../../../core/middleware/ValidateRequests.js';
+import { validateBody } from '../../../core/middleware/validateRequest.js';
 import { authRateLimit, strictRateLimit } from '../../../core/middleware/rateLimiter.js';
 import { refreshTokenService } from '../services/refresh-token.service.js';
 import { sessionDeviceService } from '../services/session-device.service.js';

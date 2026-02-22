@@ -8,7 +8,7 @@
 import { Router } from "express";
 import { MarketplaceController } from "../controllers/marketplace.controller.js";
 import { authenticate, optionalAuthenticate } from "../../../core/middleware/auth.middleware.js";
-import { validateRequest } from "../../../core/middleware/ValidateRequests.js";
+import { validateRequest } from "../../../core/middleware/validateRequest.js";
 import { z } from "zod";
 import { asyncHandler } from "../../../core/utils/response.js";
 

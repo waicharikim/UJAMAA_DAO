@@ -21,7 +21,7 @@ import { Router, Request, Response, NextFunction } from "express";
 import { contextMiddleware } from "../../../core/middleware/context.middleware.js";
 import { authController } from "../controllers/auth.controller.js";
 import { authenticate } from "../../../core/middleware/auth.middleware.js";
-import { validateRequest } from "../../../core/middleware/ValidateRequests.js";
+import { validateRequest } from "../../../core/middleware/validateRequest.js";
 import { strictRateLimit, authRateLimit } from "../../../core/middleware/rateLimiter.js";
 import {
   SendMagicLinkSchema,
