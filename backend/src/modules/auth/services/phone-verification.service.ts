@@ -351,8 +351,15 @@ class PhoneVerificationService {
       throw new Error("Africa's Talking credentials not configured");
     }
 
-    // TODO: Implement actual Africa's Talking API call
-    console.log(`[Africa's Talking] Would send to ${to}: ${message}`);
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore — africastalking has no TypeScript type declarations
+    const AfricasTalking = (await import('africastalking')).default;
+    const at = AfricasTalking({ apiKey, username });
+    await at.SMS.send({
+      to: [to],
+      message,
+      from: process.env.AT_SENDER_ID || undefined,
+    });
   }
 
   // ─────────────────────────────────────────────
