@@ -36,6 +36,11 @@ import {
   processCommitmentPenalties,
 } from './modules/economy/jobs/commitment-penalties.jobs.js';
 
+import {
+  AUTH_CLEANUP_JOB_NAME,
+  processAuthCleanup,
+} from './modules/auth/jobs/auth-cleanup.jobs.js';
+
 // ─────────────────────────────────────────────
 // Graceful shutdown & error handling
 // ─────────────────────────────────────────────
@@ -111,6 +116,8 @@ createWorker('user-cleanup', async (job) => {
   try {
     if (job.name === USER_CLEANUP_JOB_NAME) {
       await processUserCleanup(job);
+    } else if (job.name === AUTH_CLEANUP_JOB_NAME) {
+      await processAuthCleanup(job);
     } else {
       logger.warn(
         { jobName: job.name, queue: 'user-cleanup' },

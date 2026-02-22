@@ -22,8 +22,7 @@ import { MONTHLY_PR_REGENERATION_JOB } from '../../modules/economy/jobs/pr-regen
 
 import { DAILY_COMMITMENT_PENALTIES_JOB } from '../../modules/economy/jobs/commitment-penalties.jobs.js';
 
-// Add future jobs here when needed
-// import { SOME_OTHER_JOB, processOtherJob } from "...";
+import { AUTH_CLEANUP_JOB_NAME } from '../../modules/auth/jobs/auth-cleanup.jobs.js';
 
 export async function registerAllJobs(): Promise<void> {
   logger.info(
@@ -81,9 +80,20 @@ export async function registerAllJobs(): Promise<void> {
     logger.info({ job: DAILY_COMMITMENT_PENALTIES_JOB }, 'Job registered');
 
     // ─────────────────────────────────────────────
-    // Add future jobs here
+    // AUTH CLEANUP JOB
+    // Every day at 03:00 — email verification & password reset token cleanup
     // ─────────────────────────────────────────────
-    // await someQueue.add("daily-report", {}, { repeat: { pattern: "0 3 * * *" } });
+    await userCleanupQueue.add(
+      AUTH_CLEANUP_JOB_NAME,
+      {},
+      {
+        repeat: { pattern: '0 3 * * *' },
+        jobId: AUTH_CLEANUP_JOB_NAME,
+        removeOnComplete: { age: 3600 * 24 * 7 },
+        removeOnFail: { age: 3600 * 24 * 30 },
+      }
+    );
+    logger.info({ job: AUTH_CLEANUP_JOB_NAME }, 'Job registered');
 
     logger.info(
       { operationType: 'JOB_REGISTER' },

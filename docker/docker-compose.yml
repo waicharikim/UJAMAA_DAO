@@ -74,6 +74,11 @@ services:
       - JWT_SECRET=${JWT_SECRET:-6e603cfa9affb7677020ad6a930bd3f076867ff38d100586dc5d985bed845ad0}
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
       - DASHBOARD_PASSWORD=${DASHBOARD_PASSWORD:-admin123}
+      - ENABLE_SMS=${ENABLE_SMS:-false}
+      - SMS_PROVIDER=${SMS_PROVIDER:-africastalking}
+      - AT_API_KEY=${AT_API_KEY:-}
+      - AT_USERNAME=${AT_USERNAME:-sandbox}
+      - AT_SENDER_ID=${AT_SENDER_ID:-}
       # VERSION B: Uncomment for metrics
       # - STATSD_HOST=web-metrics
       # - STATSD_PORT=8125
