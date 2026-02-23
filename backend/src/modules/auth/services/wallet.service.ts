@@ -23,6 +23,7 @@ import { participationRightsService } from '../../economy/services/participation
 import { ParticipationRightsReason, PR_CONFIG } from '../../economy/types.js';
 import { eventBus } from '../../../core/utils/eventBus.js';
 import { VerificationLevel } from '../../../core/types/Ujamaadao.types.js';
+import { userService } from '../../user/services/user.service.js';
 import {
   WalletAuthResult,
   toUserResponse,
@@ -540,23 +541,10 @@ class WalletService {
     // Remove used nonce
     nonceStore.delete(normalizedAddress);
 
-    // Link wallet to user and check for FULL_VERIFIED promotion
-    const currentUser = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { verificationLevel: true },
-    });
-
-    const newVerificationLevel: VerificationLevel =
-      currentUser?.verificationLevel === 'COMMUNITY_VERIFIED'
-        ? 'FULL_VERIFIED'
-        : (currentUser?.verificationLevel as VerificationLevel) || 'UNVERIFIED';
-
+    // Link wallet to user
     const user = await prisma.user.update({
       where: { id: userId },
-      data: {
-        walletAddress: normalizedAddress,
-        verificationLevel: newVerificationLevel,
-      },
+      data: { walletAddress: normalizedAddress },
       select: { id: true, email: true, name: true, walletAddress: true },
     });
 
@@ -564,7 +552,7 @@ class WalletService {
       {
         operationType: 'AUTH',
         userId,
-        metadata: { walletAddress: normalizedAddress, verificationLevel: newVerificationLevel },
+        metadata: { walletAddress: normalizedAddress },
       },
       'Wallet linked to account'
     );
@@ -589,12 +577,8 @@ class WalletService {
       walletAddress: normalizedAddress,
     });
 
-    if (newVerificationLevel === 'FULL_VERIFIED') {
-      eventBus.publish('user.verification.completed', {
-        userId,
-        level: 'FULL_VERIFIED',
-      });
-    }
+    // Check if all four flags now met → promote to FULL_VERIFIED
+    await userService.checkFullVerification(userId);
 
     return user;
   }

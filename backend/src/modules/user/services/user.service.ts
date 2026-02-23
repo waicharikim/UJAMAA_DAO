@@ -705,19 +705,11 @@ class UserService {
   }
 
   async completeCommunityVerification(userId: string) {
-    // Check if user already has a wallet — if so, promote directly to FULL_VERIFIED
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { walletAddress: true },
-    });
-
-    const newLevel = user?.walletAddress ? 'FULL_VERIFIED' : 'COMMUNITY_VERIFIED';
-
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.user.update({
         where: { id: userId },
         data: {
-          verificationLevel: newLevel,
+          verificationLevel: 'COMMUNITY_VERIFIED',
           communityVerified: true,
         },
       });
@@ -731,11 +723,56 @@ class UserService {
       });
     });
 
-    logger.info({ userId, verificationLevel: newLevel }, 'Community verification completed');
+    logger.info({ userId }, 'Community verification completed');
 
     eventBus.publish('user.verification.completed', {
       userId,
-      level: newLevel,
+      level: 'COMMUNITY_VERIFIED',
+    });
+
+    // Check if all four flags are now met → promote to FULL_VERIFIED
+    await this.checkFullVerification(userId);
+  }
+
+  /**
+   * Promote user to FULL_VERIFIED if all four criteria are met:
+   * emailVerified + phoneVerified + communityVerified + walletAddress
+   *
+   * Safe to call after any of the four flags is set.
+   */
+  async checkFullVerification(userId: string): Promise<void> {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        emailVerified: true,
+        phoneVerified: true,
+        communityVerified: true,
+        walletAddress: true,
+        verificationLevel: true,
+      },
+    });
+
+    if (!user) return;
+    if (user.verificationLevel === 'FULL_VERIFIED') return;
+
+    const allMet =
+      user.emailVerified &&
+      user.phoneVerified &&
+      user.communityVerified &&
+      !!user.walletAddress;
+
+    if (!allMet) return;
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { verificationLevel: 'FULL_VERIFIED' },
+    });
+
+    logger.info({ userId }, 'User promoted to FULL_VERIFIED');
+
+    eventBus.publish('user.verification.completed', {
+      userId,
+      level: 'FULL_VERIFIED',
     });
   }
 

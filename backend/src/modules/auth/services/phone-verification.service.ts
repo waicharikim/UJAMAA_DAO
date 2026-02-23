@@ -17,6 +17,7 @@ import { prisma } from '../../../core/database/client.js';
 import { ApiError } from '../../../core/errors/ApiError.js';
 import { logger } from '../../../core/logger/logger.js';
 import { generateRandomHex } from '../../../core/utils/crypto.js';
+import { userService } from '../../user/services/user.service.js';
 
 // SMS Provider Configuration
 const SMS_CONFIG = {
@@ -188,6 +189,9 @@ class PhoneVerificationService {
               phoneVerified: true,
             },
           });
+
+          // Check if all four flags now met → promote to FULL_VERIFIED
+          await userService.checkFullVerification(userId);
         }
 
         logger.info(

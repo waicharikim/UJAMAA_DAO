@@ -32,6 +32,7 @@ import {
   VerificationLevel,
   WalletAuthContext,
 } from '../../../core/types/Ujamaadao.types.js';
+import { userService } from '../../user/services/user.service.js';
 import {
   SendMagicLinkDto,
   SendMagicLinkResponse,
@@ -405,6 +406,9 @@ class AuthService {
         primaryWardId: user.primaryWardId,
         secondaryWardId: user.secondaryWardId,
       });
+
+      // Check if all four flags now met → promote to FULL_VERIFIED
+      await userService.checkFullVerification(user.id);
     }
 
     // Create session using sessionService
