@@ -418,3 +418,40 @@ Apply queued docker-compose.yml env var fixes (`BASE_URL`, `SMTP_*`, etc.), then
 
 **Token usage:**
 Sonnet 4.6 — heavy session (CI fixes, 2 PRs merged including a rebase with conflicts, full docs audit across 8 files)
+
+---
+
+## [2026-02-23] — Auth module hardened: 104/104 tests green, 5 service bugs fixed, PR #6 merged
+
+**What was built:**
+- **New migration** (`20260223173236_add_2fa_security_fields`): adds `failedAttempts` + `lastFailedAttempt` to `two_factor_auth`; renames `security_events.details` → `metadata` and adds `description` + `resolutionNotes` columns — these were missing from the DB while the services already expected them
+- **10 new test files** covering the entire auth module: `helpers.ts` (shared seeders + JWT helpers), `token.service.test.ts`, `session.service.test.ts`, `refresh-token.service.test.ts`, `password-reset.service.test.ts`, `totp-2fa.service.test.ts`, `phone-verification.test.ts`, `security-events.service.test.ts`, `wallet.service.test.ts`, `auth.routes.test.ts` (34 supertest HTTP integration tests covering every auth route)
+- **5 service bug fixes** found by the new tests:
+  1. `phone-verification.service.ts` — `generateCode()` called `generateRandomHex(3)` but the crypto utility enforces a minimum of 8 bytes; fixed to `generateRandomHex(8).slice(0, 8)`
+  2. `refresh-token.service.ts` — `refresh()` never checked if the DB session was revoked before issuing new tokens; added `prisma.session.findUnique({ select: { revoked: true } })` guard
+  3. `session.handlers.ts` — `logout()` threw 401 when the token had no `sessionId` (permanent tokens used in tests and headless clients); now returns 200 gracefully
+  4. `BaseError.ts` — `toJSON()` was missing `success: false`; all error responses returned `success: undefined`
+  5. `errorHandler.ts` — `responseBody` was also missing `success: false`; routes test assertions for `res.body.success === false` were failing
+- **4 test infrastructure fixes**:
+  1. `vitest.config.ts` — added `resolve.alias` for `@core/*` and `@modules/*` (tsconfig path aliases were not forwarded to vitest; `auth.routes.test.ts` imports the full app which pulls `@core/queue/index.js`)
+  2. `validateRequest.ts` — replaced direct `(req.query as any) = data` assignment (throws `TypeError: Cannot set property query` — getter-only on `IncomingMessage`) with `Object.defineProperty`
+  3. `rateLimiter.ts` — `buildRateLimiter` now returns a no-op middleware in `NODE_ENV=test`; `strictRateLimit` (5 req/15min) was blocking repeated test hits on the same endpoint
+  4. `password-reset.service.test.ts` — added `vi.clearAllMocks()` to `beforeEach`; mock call counts were bleeding across tests
+- **gitignore fix** — `backend/.gitignore` had `*.sql` which was silently ignoring all Prisma migration SQL files; added `!prisma/migrations/**/*.sql` exception and committed both migration SQLs for the first time
+- **PR #6** (`fix/audit-remaining` → `develop`): merged, branch deleted — `develop` is now at `02bb44d`
+
+**Decisions made:**
+- No new architectural decisions — all changes were bug fixes, schema corrections, and test infrastructure alignment
+- Confirmed pattern: routes integration tests that exercise DB-touching endpoints must use `beforeEach` (not `beforeAll`) for seeding — the global truncation in `testSetup.ts` runs before each test, so any seeding done in `beforeAll` is wiped before the first test runs
+
+**What's still broken or incomplete:**
+- User module tests: zero (GET /users/me, PATCH profile not yet covered)
+- `// @ts-nocheck` in 3 scaffold service files (`project.service.ts`, `impactPoint.service.ts`, `locationImpact.service.ts`) still deferred
+- `BASE_URL`, `SMTP_*`, `ENCRYPTION_KEY`, `ALLOWED_ORIGINS` still not confirmed in `docker/docker-compose.yml` web service (carried from previous session — applied in `fix/audit-remaining` but worth re-verifying)
+- `auth.onboarding.test.ts` full E2E integration test still in `tests/old/`; the full new-user + email-verify + magic-link-login flow is not tested end-to-end
+
+**Next milestone:**
+Write user module unit + integration tests (GET /users/me, PATCH /users/me/profile) to move auth → user from tested to production-ready.
+
+**Token usage:**
+Sonnet 4.6 — heavy session (schema migration, 10 test files, 5 service bugs, 4 infra fixes)

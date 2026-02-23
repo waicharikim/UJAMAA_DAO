@@ -48,13 +48,14 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 > **How to read this table:**
 > - `scaffold` = directory + schema only, no working logic
 > - `partial` = controllers/services/routes written, core logic exists, no tests, not verified end-to-end
-> - `production-ready` = passes full checklist in section 6 (no module is here yet — zero tests exist)
+> - `tested` = all service + route tests green, schema aligned; not yet production-deployed or fully signed off
+> - `production-ready` = passes full checklist in section 6
 >
 > **Update this table at the end of every session that changes code.**
 
 | Module | Status | Notes |
 |---|---|---|
-| auth | partial | 10+ handlers, 10+ services, routes, validators, prisma schema. SMS phone verification wired (AT SDK). Auth-cleanup BullMQ job added. 11 green unit tests. Most complete module. |
+| auth | tested | 10+ handlers, 10+ services, routes, validators, prisma schema. SMS wired (AT SDK). Auth-cleanup BullMQ job. **104 green tests** across 11 files (service units + 34 HTTP route integration tests). Schema fully aligned (2FA + security_events migration applied). |
 | user | partial | 7 handlers, services, routes, validators, prisma schema, cleanup job |
 | economy | partial | Cron jobs (dues penalties, monthly regen), PR award logic, BullMQ jobs, event listeners |
 | community | partial | Group management: controllers, services, routes, member event listeners |
@@ -73,7 +74,7 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 | verification | scaffold | Empty directory |
 
 **Cross-cutting gaps (apply to all modules):**
-- Tests: auth module has **11 green unit tests** (`sendMagicLink` x2, `verifyEmailToken` x4, `verifyMagicLink` x5). All other modules: zero tests.
+- Tests: auth module has **104 green tests** across 11 files (full service units + 34 HTTP route integration tests). All other modules: zero tests.
 - `make dev` → `/health` ✅ verified 2026-02-22 — server responds `{"success":true,"status":"ok"}`
 - `make dev` → `/ready` ✅ verified 2026-02-22 — Prisma connected, migration applied
 - Worker container: `redischeck.sh` needs `chmod +x docker/*.sh` on host after fresh clone
@@ -107,7 +108,7 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 - Structured logging — `backend/src/core/logger/logger.ts` with `operationType`
 - Error handling — `ApiError` class (`backend/src/core/errors/ApiError.ts`)
 - RBAC — `backend/src/core/rbac/` (roles, authorize middleware, integration)
-- Testing — Vitest + Supertest (`backend/vitest.config.ts`) — 11 auth tests passing; `fileParallelism: false` required (shared test DB)
+- Testing — Vitest + Supertest (`backend/vitest.config.ts`) — 104 auth tests passing across 11 files; `fileParallelism: false` required (shared test DB); `resolve.alias` for `@core/*` and `@modules/*` required in vitest config
 
 ### Infrastructure (active)
 - Docker Compose: `docker/docker-compose.yml` — services: `traefik`, `web`, `worker`, `postgres`, `postgres_test`, `redis`
@@ -194,6 +195,13 @@ A module is **production-ready** when ALL of these are true:
 | CI fails: `PrismaConfigEnvError: Cannot resolve environment variable: DATABASE_URL` | Prisma v7 `prisma.config.ts` calls `env('DATABASE_URL')` at config-load time, even during `prisma generate`. Add `DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ci_db` to the job-level `env:` block in `.github/workflows/ci.yml`. |
 | ESLint error: `Cannot find module '@eslint/js/dist/configs/typescript.js'` | That subpath does not exist in `@eslint/js`. Rewrite `eslint.config.js` to import `@typescript-eslint/eslint-plugin`, `@typescript-eslint/parser`, and `globals` directly — do not rely on `@eslint/js` TypeScript re-exports. |
 | JWT `jti` claim does not match session ID | `signJwtToken` generates a new random hex `jti` regardless of the payload's `jti` field. The actual session ID travels in the JWT `sessionId` field (not `jti`). Token revocation checks must use `sessionId`, not `jti`. |
+| Prisma migration SQL files not committed (silently gitignored) | `backend/.gitignore` has a `*.sql` rule. Add `!prisma/migrations/**/*.sql` directly after it to exempt migration files. Without this, migration files are invisible to git and teammates can't reproduce the schema history. |
+| `TypeError: Cannot set property query of #<IncomingMessage> which has only a getter` | Express `req.query` is a getter-only property on `IncomingMessage`. Assigning `(req.query as any) = data` throws at runtime. Use `Object.defineProperty(req, 'query', { value: data, writable: true, configurable: true })` instead. |
+| Rate limiter blocks tests (`strictRateLimit` 5 req/15min exceeded) | Add a `NODE_ENV === 'test'` guard at the top of `buildRateLimiter` that returns a no-op middleware. Rate limiters share in-memory (or Redis) state across test cases hitting the same endpoint in the same run. |
+| `generateRandomHex(n)` throws "Must generate at least 8 bytes" | The crypto utility enforces a minimum of 8 bytes. Never pass a value less than 8. If you need fewer output characters, generate 8 bytes and slice: `generateRandomHex(8).slice(0, desiredLength)`. |
+| Routes integration test returns 400 for a valid request | The endpoint queries the DB and the required row doesn't exist (user, ward, industry, etc.). Routes tests need a `beforeEach` that seeds the DB — the global `testSetup.ts` truncates all 81 tables before each test, so `beforeAll` seeding is wiped before the first test runs. Always seed in `beforeEach` for routes tests. |
+| Refresh token issues new tokens for a revoked session | `refresh-token.service.ts` must check `prisma.session.findUnique({ select: { revoked: true } })` after decoding the refresh JWT and before issuing new tokens. Without this check, a revoked session can keep refreshing indefinitely. |
+| Error response body has `success: undefined` | `BaseError.toJSON()` and `errorHandler.ts` `responseBody` must include `success: false` explicitly. Tests checking `res.body.success === false` will fail silently if `success` is omitted from the serialized error object. |
 
 ---
 
@@ -213,3 +221,4 @@ A module is **production-ready** when ALL of these are true:
 | v2.4 | All 12 routes mounted ✅, `/ready` ✅, 2 auth tests green. Updated cross-cutting gaps. JWT jti fix documented. |
 | v2.5 | TypeScript CI: 134 → 0 errors ✅. Reputation schema added (80 models). Auth tests: 2 → 11. 4 new common issues. `fileParallelism: false` note added. |
 | v2.6 | SMS wired (AT SDK). Auth-cleanup BullMQ job. Dead scheduling code deleted. ESLint fixed. PR #3 + PR #4 merged to develop. Bull Board added to tech stack. 7 new common issues. Scheduling convention tightened (BullMQ-only). |
+| v2.7 | Auth module: 104 tests green (11 files). Auth status upgraded partial → tested. `tested` tier added to status legend. 5 service bugs fixed (phone-verification, refresh-token, logout, BaseError, errorHandler). 8 new common issues (gitignore SQL, req.query setter, rate limiter, generateRandomHex, routes seeding, refresh revocation, success field). vitest alias note added. PR #6 merged. |
