@@ -31,18 +31,24 @@ export const TEST_WARD_ID_2 = '22345678-9abc-4def-1234-56789abcdef0';
  * Must be called after the global TRUNCATE (testSetup.ts beforeEach).
  */
 export async function seedLocation(): Promise<void> {
-  await prisma.county.create({
-    data: { id: TEST_COUNTY_ID, name: 'Test County', code: 'TC-HELPER-01' },
+  await prisma.county.upsert({
+    where: { id: TEST_COUNTY_ID },
+    update: {},
+    create: { id: TEST_COUNTY_ID, name: 'Test County', code: 'TC-HELPER-01' },
   });
-  await prisma.constituency.create({
-    data: {
+  await prisma.constituency.upsert({
+    where: { id: TEST_CONST_ID },
+    update: {},
+    create: {
       id: TEST_CONST_ID,
       name: 'Test Constituency',
       countyId: TEST_COUNTY_ID,
     },
   });
-  await prisma.ward.create({
-    data: {
+  await prisma.ward.upsert({
+    where: { id: TEST_WARD_ID },
+    update: {},
+    create: {
       id: TEST_WARD_ID,
       name: 'Test Ward',
       constituencyId: TEST_CONST_ID,
@@ -149,10 +155,6 @@ export function makeAccessToken(
       phoneVerified: false,
       communityVerified:
         verificationLevel === 'COMMUNITY_VERIFIED' ||
-        verificationLevel === 'LOCATION_VERIFIED' ||
-        verificationLevel === 'FULL_VERIFIED',
-      locationVerified:
-        verificationLevel === 'LOCATION_VERIFIED' ||
         verificationLevel === 'FULL_VERIFIED',
       type: 'permanent',
       ...extra,

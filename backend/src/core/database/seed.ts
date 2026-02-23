@@ -524,7 +524,7 @@ async function seedSystemGroups() {
 
   const [national, counties, constituencies, wards] = await Promise.all([
     prisma.group.upsert({
-      where: { systemType: 'NATIONAL' },
+      where: { name: 'Kenya National Community' },
       update: {},
       create: {
         id: uuidv4(),
@@ -686,7 +686,8 @@ async function seedRoles() {
       update: {},
       create: {
         id: uuidv4(),
-        ...role,
+        name: role.name,
+        description: role.description,
       },
     });
   }

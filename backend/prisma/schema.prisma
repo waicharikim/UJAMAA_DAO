@@ -681,7 +681,7 @@ model ResidenceChangeRequest {
   oldWardId        String?               @db.Uuid
   newPrimaryWardId String                @db.Uuid
   reason           String?
-  proofUrl         String
+  proofUrl         String?
   status           ResidenceChangeStatus @default(PENDING)
   reviewedBy       String?               @db.Uuid
   reviewedAt       DateTime?
