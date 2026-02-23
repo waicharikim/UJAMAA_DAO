@@ -23,6 +23,7 @@ build/
 *.db
 *.sqlite
 *.sql
+!prisma/migrations/**/*.sql
 backups/*.sql.gz
 
 # Docker volumes

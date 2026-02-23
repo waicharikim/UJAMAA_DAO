@@ -20,23 +20,23 @@ enum LocationScope {
 }
 
 enum GroupStatus {
-  FORMING      // Initial creation, gathering members
-  ACTIVE       // Fully operational
-  SUSPENDED    // Temporarily inactive (violations, disputes)
-  INACTIVE     // No activity for extended period
-  DISSOLVED    // Permanently closed
-  MERGED       // Combined with another group
+  FORMING // Initial creation, gathering members
+  ACTIVE // Fully operational
+  SUSPENDED // Temporarily inactive (violations, disputes)
+  INACTIVE // No activity for extended period
+  DISSOLVED // Permanently closed
+  MERGED // Combined with another group
 }
 
 enum GroupRole {
-  MEMBER       // Regular member
-  LEADER       // Group leader/chairperson
-  TREASURER    // Financial manager
-  SECRETARY    // Records keeper
-  AUDITOR      // Financial oversight
-  FACILITATOR  // Meeting coordinator
-  MENTOR       // Advisor role
-  MODERATOR    // Content/discussion moderator
+  MEMBER // Regular member
+  LEADER // Group leader/chairperson
+  TREASURER // Financial manager
+  SECRETARY // Records keeper
+  AUDITOR // Financial oversight
+  FACILITATOR // Meeting coordinator
+  MENTOR // Advisor role
+  MODERATOR // Content/discussion moderator
 }
 
 enum HolderType {
@@ -57,23 +57,23 @@ model County {
   wards          Ward[]
 
   // Community module back-relation
-  groups         Group[]        @relation("CountyGroups")
+  groups Group[] @relation("CountyGroups")
 
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("counties")
 }
 
 model Constituency {
-  id        String   @id @default(uuid()) @db.Uuid
-  name      String
-  countyId  String   @db.Uuid
-  county    County   @relation(fields: [countyId], references: [id], onDelete: Cascade)
-  wards     Ward[]
+  id       String @id @default(uuid()) @db.Uuid
+  name     String
+  countyId String @db.Uuid
+  county   County @relation(fields: [countyId], references: [id], onDelete: Cascade)
+  wards    Ward[]
 
   // Community module back-relation
-  groups    Group[]
+  groups Group[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -93,17 +93,17 @@ model Ward {
   county         County       @relation(fields: [countyId], references: [id], onDelete: Cascade)
 
   // User module — primary/secondary/current ward
-  usersPrimary   User[]       @relation("PrimaryWard")
-  usersSecondary User[]       @relation("SecondaryWard")
-  usersCurrent   User[]       @relation("CurrentWard")
+  usersPrimary   User[] @relation("PrimaryWard")
+  usersSecondary User[] @relation("SecondaryWard")
+  usersCurrent   User[] @relation("CurrentWard")
 
   // User module — residence change requests
   newWardRequests ResidenceChangeRequest[] @relation("NewWardRequests")
   oldWardRequests ResidenceChangeRequest[] @relation("OldWardRequests")
 
   // Community module
-  groups          Group[]          @relation("GroupWard")
-  communityAssets CommunityAsset[]
+  groups           Group[]          @relation("GroupWard")
+  communityAssets  CommunityAsset[]
   communityVouches CommunityVouch[]
 
   // Marketplace module
@@ -136,14 +136,14 @@ model Industry {
 }
 
 model GoodsService {
-  id                String             @id @default(uuid()) @db.Uuid
-  name              String
-  description       String?
-  industryId        String             @db.Uuid
-  category          String?
-  active            Boolean            @default(true)
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+  industryId  String   @db.Uuid
+  category    String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   industry          Industry           @relation(fields: [industryId], references: [id], onDelete: Cascade)
   userGoodsServices UserGoodsService[]
@@ -161,13 +161,13 @@ model GoodsService {
 // ============================================================================
 
 model User {
-  id                   String    @id @default(uuid()) @db.Uuid
-  email                String?   @unique
-  name                 String?
-  phoneNumber          String?
-  walletAddress        String?   @unique
-  passwordHash         String?   @db.Text // For admin accounts only
-  avatarUrl            String?
+  id            String  @id @default(uuid()) @db.Uuid
+  email         String? @unique
+  name          String?
+  phoneNumber   String?
+  walletAddress String? @unique
+  passwordHash  String? @db.Text // For admin accounts only
+  avatarUrl     String?
 
   // Ward assignments
   primaryWardId        String?   @db.Uuid
@@ -175,47 +175,47 @@ model User {
   currentLocationId    String?   @db.Uuid
   currentLocationUntil DateTime?
 
-  primaryWard          Ward?     @relation("PrimaryWard", fields: [primaryWardId], references: [id], onDelete: SetNull)
-  secondaryWard        Ward?     @relation("SecondaryWard", fields: [secondaryWardId], references: [id], onDelete: SetNull)
-  currentWard          Ward?     @relation("CurrentWard", fields: [currentLocationId], references: [id], onDelete: SetNull)
+  primaryWard   Ward? @relation("PrimaryWard", fields: [primaryWardId], references: [id], onDelete: SetNull)
+  secondaryWard Ward? @relation("SecondaryWard", fields: [secondaryWardId], references: [id], onDelete: SetNull)
+  currentWard   Ward? @relation("CurrentWard", fields: [currentLocationId], references: [id], onDelete: SetNull)
 
   // Verification status
-  verificationLevel    String    @default("UNVERIFIED")
-  emailVerified        Boolean   @default(false)
-  phoneVerified        Boolean   @default(false)
-  communityVerified    Boolean   @default(false)
-  locationVerified     Boolean   @default(false)
+  verificationLevel String  @default("UNVERIFIED")
+  emailVerified     Boolean @default(false)
+  phoneVerified     Boolean @default(false)
+  communityVerified Boolean @default(false)
+  locationVerified  Boolean @default(false)
 
   // Economy
-  participationRights  Int       @default(0)
-  utilityTokens        Int       @default(0)
-  globalImpactPoints   Int       @default(0)
+  participationRights Int @default(0)
+  utilityTokens       Int @default(0)
+  globalImpactPoints  Int @default(0)
 
   // Account status
-  status               String    @default("ACTIVE") // ACTIVE, SUSPENDED, BANNED
+  status String @default("ACTIVE") // ACTIVE, SUSPENDED, BANNED
 
   // Roles (convenience array — authoritative source is UserRole table)
-  roles                String[]  @default([])
+  roles String[] @default([])
 
   // Timestamps
-  onboardingCompletedAt  DateTime?
-  lastResidenceChangeAt  DateTime?
-  lastLoginAt            DateTime?
-  createdAt              DateTime  @default(now())
-  updatedAt              DateTime  @updatedAt
+  onboardingCompletedAt DateTime?
+  lastResidenceChangeAt DateTime?
+  lastLoginAt           DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   // ---- Auth module ----
-  sessions              Session[]
-  loginEvents           LoginEvent[]
-  verificationTokens    EmailVerificationToken[]
-  accounts              Account[]
-  recoveryRequests      RecoveryRequest[]
-  phoneVerifications    PhoneVerification[]
-  passwordResets        PasswordReset[]
-  twoFactorAuth         TwoFactorAuth?
-  webauthnCredentials   WebAuthnCredential[]
-  accountRecovery       AccountRecovery?
-  securityEvents        SecurityEvent[]
+  sessions            Session[]
+  loginEvents         LoginEvent[]
+  verificationTokens  EmailVerificationToken[]
+  accounts            Account[]
+  recoveryRequests    RecoveryRequest[]
+  phoneVerifications  PhoneVerification[]
+  passwordResets      PasswordReset[]
+  twoFactorAuth       TwoFactorAuth?
+  webauthnCredentials WebAuthnCredential[]
+  accountRecovery     AccountRecovery?
+  securityEvents      SecurityEvent[]
 
   // ---- User module ----
   userIndustries            UserIndustry[]
@@ -230,71 +230,71 @@ model User {
   onboardingMilestones      OnboardingMilestone[]
 
   // ---- Roles (base) ----
-  userRoles                 UserRole[]
+  userRoles UserRole[]
 
   // ---- Community module ----
-  groupMemberships          GroupMember[]
-  complainantCases          ConflictCase[]         @relation("Complainant")
-  respondentCases           ConflictCase[]         @relation("Respondent")
-  comments                  Comment[]
-  organizedEvents           Event[]
-  eventAttendances          EventAttendee[]
-  engagementMetrics         UserEngagementMetric[]
-  verificationRequests      VerificationRequest[]
-  vouchedFor                CommunityVouch[]       @relation("VouchedFor")
-  vouchesGiven              CommunityVouch[]       @relation("VouchesGiven")
+  groupMemberships     GroupMember[]
+  complainantCases     ConflictCase[]         @relation("Complainant")
+  respondentCases      ConflictCase[]         @relation("Respondent")
+  comments             Comment[]
+  organizedEvents      Event[]
+  eventAttendances     EventAttendee[]
+  engagementMetrics    UserEngagementMetric[]
+  verificationRequests VerificationRequest[]
+  vouchedFor           CommunityVouch[]       @relation("VouchedFor")
+  vouchesGiven         CommunityVouch[]       @relation("VouchesGiven")
 
   // ---- Governance module ----
-  proposals                 Proposal[]             @relation("UserProposals")
-  votes                     GroupMemberVote[]      @relation("UserVotes")
+  proposals Proposal[]        @relation("UserProposals")
+  votes     GroupMemberVote[] @relation("UserVotes")
 
   // ---- Projects module ----
-  ownedProjects             Project[]              @relation("UserProjects")
-  projectMemberships        ProjectMember[]
-  assignedTasks             Task[]
-  verifierAssignments       MilestoneVerifier[]    @relation("MilestoneVerifier_Verifier")
-  assignedVerifications     MilestoneVerifier[]    @relation("MilestoneVerifier_AssignedBy")
+  ownedProjects         Project[]           @relation("UserProjects")
+  projectMemberships    ProjectMember[]
+  assignedTasks         Task[]
+  verifierAssignments   MilestoneVerifier[] @relation("MilestoneVerifier_Verifier")
+  assignedVerifications MilestoneVerifier[] @relation("MilestoneVerifier_AssignedBy")
 
   // ---- Economy module ----
-  duesPayments              DuesPayment[]
-  physicalWorkLogs          PhysicalWorkLog[]
-  workVerifications         WorkVerification[]     @relation("WorkVerifier")
-  commitments               Commitment[]
+  duesPayments      DuesPayment[]
+  physicalWorkLogs  PhysicalWorkLog[]
+  workVerifications WorkVerification[] @relation("WorkVerifier")
+  commitments       Commitment[]
 
   // ---- Treasury module ----
-  createdEscrows            Escrow[]
-  escrowReleases            EscrowRelease[]
-  treasuryAudits            TreasuryAudit[]
+  createdEscrows Escrow[]
+  escrowReleases EscrowRelease[]
+  treasuryAudits TreasuryAudit[]
 
   // ---- Marketplace module ----
-  marketplaceListings       MarketplaceListing[]   @relation("UserListings")
-  marketplacePurchases      MarketplaceTransaction[] @relation("Buyer")
-  marketplaceSales          MarketplaceTransaction[] @relation("Seller")
-  marketplaceReviews        MarketplaceReview[]    @relation("Reviewer")
+  marketplaceListings  MarketplaceListing[]     @relation("UserListings")
+  marketplacePurchases MarketplaceTransaction[] @relation("Buyer")
+  marketplaceSales     MarketplaceTransaction[] @relation("Seller")
+  marketplaceReviews   MarketplaceReview[]      @relation("Reviewer")
 
   // ---- Notifications module ----
-  notifications             Notification[]
-  notificationPreferences   NotificationPreference[]
-  auditLogs                 UserAudit[]
-  auditLogEntries           AuditLog[]                 @relation("UserAuditLog")
-  consents                  UserConsent[]
-  feedback                  PlatformFeedback[]
+  notifications           Notification[]
+  notificationPreferences NotificationPreference[]
+  auditLogs               UserAudit[]
+  auditLogEntries         AuditLog[]               @relation("UserAuditLog")
+  consents                UserConsent[]
+  feedback                PlatformFeedback[]
 
   // ---- Education module ----
-  educationalModules        EducationalModule[]
-  educationalProgress       UserEducationalProgress[]
-  educationalReviews        EducationalReview[]
+  educationalModules  EducationalModule[]
+  educationalProgress UserEducationalProgress[]
+  educationalReviews  EducationalReview[]
 
   // ---- Emergency module ----
-  emergencyAlerts           EmergencyAlert[]
-  emergencyResponses        EmergencyResponse[]
+  emergencyAlerts    EmergencyAlert[]
+  emergencyResponses EmergencyResponse[]
 
   // ---- Reputation module ----
-  impactPointLogs           ImpactPointLog[]       @relation("UserImpactPointLogs")
-  locationImpacts           UserLocationImpact[]   @relation("UserLocationImpacts")
+  impactPointLogs ImpactPointLog[]     @relation("UserImpactPointLogs")
+  locationImpacts UserLocationImpact[] @relation("UserLocationImpacts")
 
   // ---- System ----
-  updatedConfigs            SystemConfiguration[]  @relation("ConfigUpdater")
+  updatedConfigs SystemConfiguration[] @relation("ConfigUpdater")
 
   @@index([email])
   @@index([walletAddress])
@@ -310,30 +310,30 @@ model User {
 // ============================================================================
 
 model Role {
-  id          String     @id @default(uuid()) @db.Uuid
-  name        String     @unique // ADMIN, SUPER_ADMIN, MODERATOR, etc.
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique // ADMIN, SUPER_ADMIN, MODERATOR, etc.
   description String?
-  permissions String[]   @default([])
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  permissions String[] @default([])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  userRoles   UserRole[]
+  userRoles UserRole[]
 
   @@map("roles")
 }
 
 model UserRole {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @db.Uuid
-  roleId    String   @db.Uuid
-  active    Boolean  @default(true)
-  grantedAt DateTime @default(now())
-  grantedBy String?  @db.Uuid
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  roleId    String    @db.Uuid
+  active    Boolean   @default(true)
+  grantedAt DateTime  @default(now())
+  grantedBy String?   @db.Uuid
   revokedAt DateTime?
-  revokedBy String?  @db.Uuid
+  revokedBy String?   @db.Uuid
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   @@unique([userId, roleId])
   @@index([userId, active])
@@ -346,19 +346,19 @@ model UserRole {
 // ============================================================================
 
 model SystemConfiguration {
-  id          String   @id @default(uuid()) @db.Uuid
-  key         String   @unique
+  id          String  @id @default(uuid()) @db.Uuid
+  key         String  @unique
   value       Json
   category    String
   description String?
   dataType    String
-  isPublic    Boolean  @default(false)
+  isPublic    Boolean @default(false)
 
-  updatedBy   String?  @db.Uuid
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  updatedBy String?  @db.Uuid
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  updater     User?    @relation("ConfigUpdater", fields: [updatedBy], references: [id], onDelete: SetNull)
+  updater User? @relation("ConfigUpdater", fields: [updatedBy], references: [id], onDelete: SetNull)
 
   @@index([category])
   @@index([isPublic])
@@ -389,19 +389,19 @@ model EmailVerificationToken {
 }
 
 model Session {
-  id           String    @id @default(uuid()) @db.Uuid
-  userId       String    @db.Uuid
-  token        String    @unique
-  deviceName   String?   @db.VarChar(100)
-  deviceInfo   String?   @db.VarChar(500)
-  ipAddress    String?   @db.VarChar(45)
-  userAgent    String?   @db.Text
-  isTrusted    Boolean   @default(false)
-  lastActive   DateTime  @default(now())
-  expiresAt    DateTime
-  revoked      Boolean   @default(false)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  token      String   @unique
+  deviceName String?  @db.VarChar(100)
+  deviceInfo String?  @db.VarChar(500)
+  ipAddress  String?  @db.VarChar(45)
+  userAgent  String?  @db.Text
+  isTrusted  Boolean  @default(false)
+  lastActive DateTime @default(now())
+  expiresAt  DateTime
+  revoked    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -416,7 +416,7 @@ model Session {
 model Account {
   id                String    @id @default(uuid()) @db.Uuid
   userId            String    @db.Uuid
-  provider          String    // "google", "twitter", "facebook", etc.
+  provider          String // "google", "twitter", "facebook", etc.
   providerAccountId String
   accessToken       String?   @db.Text
   refreshToken      String?   @db.Text
@@ -435,16 +435,16 @@ model Account {
 }
 
 model RecoveryRequest {
-  id               String   @id @default(uuid()) @db.Uuid
-  userId           String   @db.Uuid
-  recoveryMethod   String   // "EMAIL", "WALLET", "RECOVERY_WALLET"
-  verificationCode String   @unique
-  status           String   @default("PENDING")
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @db.Uuid
+  recoveryMethod   String // "EMAIL", "WALLET", "RECOVERY_WALLET"
+  verificationCode String    @unique
+  status           String    @default("PENDING")
   expiresAt        DateTime
   completedAt      DateTime?
   ipAddress        String?
   userAgent        String?
-  createdAt        DateTime @default(now())
+  createdAt        DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -456,15 +456,15 @@ model RecoveryRequest {
 }
 
 model LoginEvent {
-  id            String    @id @default(uuid()) @db.Uuid
-  userId        String    @db.Uuid
-  method        String    // "MAGIC_LINK", "WALLET", "OAUTH"
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @db.Uuid
+  method        String // "MAGIC_LINK", "WALLET", "OAUTH"
   ipAddress     String?
   userAgent     String?
   location      String?
   successful    Boolean
   failureReason String?
-  createdAt     DateTime  @default(now())
+  createdAt     DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -501,18 +501,18 @@ model PhoneVerification {
 // ============================================================================
 
 model PasswordReset {
-  id        String   @id @default(cuid())
+  id String @id @default(cuid())
 
-  userId    String   @db.Uuid
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  tokenHash String   @db.Text  // Hashed token (never store plaintext)
-  
-  used      Boolean  @default(false)
-  usedAt    DateTime?
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  ipAddress String?  @db.VarChar(45)
-  userAgent String?  @db.Text
+  tokenHash String @db.Text // Hashed token (never store plaintext)
+
+  used   Boolean   @default(false)
+  usedAt DateTime?
+
+  ipAddress String? @db.VarChar(45)
+  userAgent String? @db.Text
 
   expiresAt DateTime
   createdAt DateTime @default(now())
@@ -528,26 +528,26 @@ model PasswordReset {
 // ============================================================================
 
 model TwoFactorAuth {
-  id                      String   @id @default(cuid())
-  
-  userId                  String   @unique @db.Uuid
-  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id String @id @default(cuid())
+
+  userId String @unique @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // TOTP secret (encrypted)
-  secretEncrypted         String   @db.Text
-  
+  secretEncrypted String @db.Text
+
   // Backup codes (encrypted array)
-  backupCodesEncrypted    String[] // Each is an encrypted backup code
-  
-  enabled                 Boolean  @default(false)
-  enabledAt               DateTime?
-  disabledAt              DateTime?
+  backupCodesEncrypted String[] // Each is an encrypted backup code
 
-  failedAttempts          Int      @default(0)
-  lastFailedAttempt       DateTime?
+  enabled    Boolean   @default(false)
+  enabledAt  DateTime?
+  disabledAt DateTime?
 
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
+  failedAttempts    Int       @default(0)
+  lastFailedAttempt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId, enabled])
   @@map("two_factor_auth")
@@ -558,27 +558,27 @@ model TwoFactorAuth {
 // ============================================================================
 
 model WebAuthnCredential {
-  id            String   @id @default(cuid())
-  
-  userId        String   @db.Uuid
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id String @id @default(cuid())
+
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // WebAuthn credential data
-  credentialId  String   @unique  // Base64url encoded credential ID
-  publicKey     String   @db.Text // Base64url encoded public key
-  counter       BigInt   @default(0) // Signature counter for replay protection
-  
+  credentialId String @unique // Base64url encoded credential ID
+  publicKey    String @db.Text // Base64url encoded public key
+  counter      BigInt @default(0) // Signature counter for replay protection
+
   // Credential metadata
-  credentialName String?  @db.VarChar(100) // User-friendly name "Touch ID", "YubiKey"
-  aaguid        String?  @db.VarChar(36)  // Authenticator GUID
-  
+  credentialName String? @db.VarChar(100) // User-friendly name "Touch ID", "YubiKey"
+  aaguid         String? @db.VarChar(36) // Authenticator GUID
+
   // Device info
-  transports    String[] // ["usb", "nfc", "ble", "internal"]
-  
+  transports String[] // ["usb", "nfc", "ble", "internal"]
+
   // Timestamps
-  createdAt     DateTime @default(now())
-  lastUsedAt    DateTime @default(now())
-  
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+
   @@index([userId])
   @@index([credentialId])
   @@map("webauthn_credentials")
@@ -589,19 +589,19 @@ model WebAuthnCredential {
 // ============================================================================
 
 model MagicLinkToken {
-  id        String   @id @default(cuid())
-  
-  email     String   @db.VarChar(255)
-  tokenHash String   @unique @db.Text // Hashed token
-  
-  type      String   @db.VarChar(20) // "verification" or "login"
-  
-  used      Boolean  @default(false)
-  usedAt    DateTime?
-  
+  id String @id @default(cuid())
+
+  email     String @db.VarChar(255)
+  tokenHash String @unique @db.Text // Hashed token
+
+  type String @db.VarChar(20) // "verification" or "login"
+
+  used   Boolean   @default(false)
+  usedAt DateTime?
+
   expiresAt DateTime
   createdAt DateTime @default(now())
-  
+
   @@index([tokenHash, used, expiresAt])
   @@index([email])
   @@index([expiresAt]) // For cleanup
@@ -613,24 +613,24 @@ model MagicLinkToken {
 // ============================================================================
 
 model AccountRecovery {
-  id                  String   @id @default(cuid())
-  
-  userId              String   @unique @db.Uuid
-  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id String @id @default(cuid())
+
+  userId String @unique @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Recovery codes (encrypted, like 2FA backup codes but more)
   recoveryCodesEncrypted String[] // 20 codes for account recovery
-  
+
   // Trusted contacts (email addresses that can help recover account)
-  trustedContactEmails   String[] // Up to 3 trusted contacts
-  
+  trustedContactEmails String[] // Up to 3 trusted contacts
+
   // Recovery email (different from primary)
-  recoveryEmail       String?  @db.VarChar(255)
+  recoveryEmail         String? @db.VarChar(255)
   recoveryEmailVerified Boolean @default(false)
-  
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-  
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([userId])
   @@map("account_recovery")
 }
@@ -640,35 +640,33 @@ model AccountRecovery {
 // ============================================================================
 
 model SecurityEvent {
-  id          String   @id @default(cuid())
-  
-  userId      String?  @db.Uuid // Nullable for failed login attempts
-  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  
-  eventType       String   @db.VarChar(50) // "login_failed", "password_reset", "2fa_disabled", etc.
-  severity        String   @db.VarChar(20) // "low", "medium", "high", "critical"
-  description     String?  @db.Text
+  id String @id @default(cuid())
 
-  ipAddress       String?  @db.VarChar(45)
-  userAgent       String?  @db.Text
-  location        String?  @db.VarChar(100) // City, Country
+  userId String? @db.Uuid // Nullable for failed login attempts
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-  metadata        Json?    // Additional context
+  eventType   String  @db.VarChar(50) // "login_failed", "password_reset", "2fa_disabled", etc.
+  severity    String  @db.VarChar(20) // "low", "medium", "high", "critical"
+  description String? @db.Text
 
-  resolved        Boolean  @default(false)
+  ipAddress String? @db.VarChar(45)
+  userAgent String? @db.Text
+  location  String? @db.VarChar(100) // City, Country
+
+  metadata Json? // Additional context
+
+  resolved        Boolean   @default(false)
   resolvedAt      DateTime?
-  resolvedBy      String?  @db.Uuid // Admin user ID
-  resolutionNotes String?  @db.Text
+  resolvedBy      String?   @db.Uuid // Admin user ID
+  resolutionNotes String?   @db.Text
 
-  createdAt       DateTime @default(now())
-  
+  createdAt DateTime @default(now())
+
   @@index([userId, createdAt])
   @@index([eventType, severity])
   @@index([createdAt])
   @@map("security_events")
 }
-
-
 
 // ============================================================================
 // MODULE: USER
@@ -678,19 +676,19 @@ model SecurityEvent {
 // ============================================================================
 
 model ResidenceChangeRequest {
-  id               String                 @id @default(uuid()) @db.Uuid
-  userId           String                 @db.Uuid
-  oldWardId        String?                @db.Uuid
-  newPrimaryWardId String                 @db.Uuid
-  reason           String?                 
+  id               String                @id @default(uuid()) @db.Uuid
+  userId           String                @db.Uuid
+  oldWardId        String?               @db.Uuid
+  newPrimaryWardId String                @db.Uuid
+  reason           String?
   proofUrl         String
-  status           ResidenceChangeStatus  @default(PENDING)
-  reviewedBy       String?                @db.Uuid
+  status           ResidenceChangeStatus @default(PENDING)
+  reviewedBy       String?               @db.Uuid
   reviewedAt       DateTime?
   rejectionReason  String?
   expiresAt        DateTime // Auto-reject after 7 days
-  createdAt        DateTime               @default(now())
-  updatedAt        DateTime               @updatedAt
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
 
   user     User  @relation("UserResidenceRequests", fields: [userId], references: [id], onDelete: Cascade)
   reviewer User? @relation("ResidenceRequestReviewer", fields: [reviewedBy], references: [id], onDelete: SetNull)
@@ -872,9 +870,9 @@ model OnboardingTutorial {
 }
 
 model UserTutorialCompletion {
-  id         String   @id @default(uuid()) @db.Uuid
-  userId     String   @db.Uuid
-  tutorialId String   @db.Uuid
+  id         String @id @default(uuid()) @db.Uuid
+  userId     String @db.Uuid
+  tutorialId String @db.Uuid
 
   completed Boolean @default(false)
   progress  Int     @default(0) // Percentage (0-100)
@@ -896,8 +894,8 @@ model UserTutorialCompletion {
 }
 
 model OnboardingMilestone {
-  id           String   @id @default(uuid()) @db.Uuid
-  userId       String   @db.Uuid
+  id           String @id @default(uuid()) @db.Uuid
+  userId       String @db.Uuid
   milestoneKey String // "FIRST_VOTE", "FIRST_PROPOSAL", "FIRST_LISTING"
 
   achieved   Boolean  @default(true)
@@ -912,8 +910,6 @@ model OnboardingMilestone {
   @@index([userId, achievedAt])
   @@index([milestoneKey])
 }
-
-
 
 // ============================================================================
 // MODULE: ECONOMY
@@ -951,23 +947,23 @@ enum DuesTier {
 }
 
 model DuesPayment {
-  id            String        @id @default(uuid()) @db.Uuid
-  userId        String        @db.Uuid
-  totalAmount   Decimal       @db.Decimal(10, 2)
-  tier          DuesTier
-  period        String        // "2025-01" (YYYY-MM format)
-  
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @db.Uuid
+  totalAmount Decimal  @db.Decimal(10, 2)
+  tier        DuesTier
+  period      String // "2025-01" (YYYY-MM format)
+
   // Payment details
-  paymentMethod String        // MPESA, BANK_TRANSFER, WALLET
+  paymentMethod String // MPESA, BANK_TRANSFER, WALLET
   mpesaReceipt  String?
   status        PaymentStatus @default(PENDING)
   paidAt        DateTime?
-  
+
   // NEW: Flexible allocation to multiple groups
-  allocations   DuesAllocation[]
-  
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  allocations DuesAllocation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -977,23 +973,22 @@ model DuesPayment {
   @@index([paidAt])
 }
 
-
 model DuesAllocation {
-  id             String      @id @default(uuid()) @db.Uuid
-  duesPaymentId  String      @db.Uuid
-  groupId        String      @db.Uuid
-  amount         Decimal     @db.Decimal(10, 2)
-  percentage     Decimal     @db.Decimal(5, 2)  // What % of total payment
-  
+  id            String  @id @default(uuid()) @db.Uuid
+  duesPaymentId String  @db.Uuid
+  groupId       String  @db.Uuid
+  amount        Decimal @db.Decimal(10, 2)
+  percentage    Decimal @db.Decimal(5, 2) // What % of total payment
+
   // Track which treasury received it
-  treasuryId     String      @db.Uuid
-  
-  createdAt      DateTime    @default(now())
-  
-  duesPayment    DuesPayment    @relation(fields: [duesPaymentId], references: [id], onDelete: Cascade)
-  group          Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  treasury       GroupTreasury  @relation(fields: [treasuryId], references: [id], onDelete: Cascade)
-  
+  treasuryId String @db.Uuid
+
+  createdAt DateTime @default(now())
+
+  duesPayment DuesPayment   @relation(fields: [duesPaymentId], references: [id], onDelete: Cascade)
+  group       Group         @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  treasury    GroupTreasury @relation(fields: [treasuryId], references: [id], onDelete: Cascade)
+
   @@index([duesPaymentId])
   @@index([groupId])
   @@index([treasuryId])
@@ -1001,48 +996,47 @@ model DuesAllocation {
 
 // NEW: Track national contributions from system groups
 model NationalContribution {
-  id              String   @id @default(uuid()) @db.Uuid
-  fromGroupId     String   @db.Uuid
-  toNationalId    String   @db.Uuid
-  amount          Decimal  @db.Decimal(20, 2)
-  sourceType      String   // DUES_PAYMENT, TREASURY_ALLOCATION, PROJECT_SURPLUS
-  period          String?  // "2025-01" for monthly tracking
-  metadata        Json?
-  createdAt       DateTime @default(now())
-  
-  fromGroup       Group    @relation(fields: [fromGroupId], references: [id], onDelete: Cascade)
-  
+  id           String   @id @default(uuid()) @db.Uuid
+  fromGroupId  String   @db.Uuid
+  toNationalId String   @db.Uuid
+  amount       Decimal  @db.Decimal(20, 2)
+  sourceType   String // DUES_PAYMENT, TREASURY_ALLOCATION, PROJECT_SURPLUS
+  period       String? // "2025-01" for monthly tracking
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  fromGroup Group @relation(fields: [fromGroupId], references: [id], onDelete: Cascade)
+
   @@index([fromGroupId])
   @@index([period])
   @@index([createdAt])
 }
-
 
 // ============================================================================
 // PHYSICAL WORK & VERIFICATION
 // ============================================================================
 
 model PhysicalWorkLog {
-  id                String   @id @default(uuid()) @db.Uuid
-  userId            String   @db.Uuid
-  projectId         String?  @db.Uuid
-  milestoneId       String?  @db.Uuid
+  id                String    @id @default(uuid()) @db.Uuid
+  userId            String    @db.Uuid
+  projectId         String?   @db.Uuid
+  milestoneId       String?   @db.Uuid
   workType          String // MANUAL_LABOR, SKILLED_WORK, SUPERVISION
   description       String
-  hours             Decimal  @db.Decimal(5, 2)
+  hours             Decimal   @db.Decimal(5, 2)
   location          Json? // Lat/lng, address
   photoUrls         String[]
-  witnessIds        String[] @db.Uuid
-  baseIP            Int      @default(0)
-  qualityMultiplier Decimal  @db.Decimal(3, 2) @default(1.0)
-  totalIPEarned     Int      @default(0)
+  witnessIds        String[]  @db.Uuid
+  baseIP            Int       @default(0)
+  qualityMultiplier Decimal   @default(1.0) @db.Decimal(3, 2)
+  totalIPEarned     Int       @default(0)
   verifiedAt        DateTime?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project       Project?             @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  milestone     Milestone?           @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project       Project?           @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  milestone     Milestone?         @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
   verifications WorkVerification[]
 
   @@index([userId, createdAt])
@@ -1076,30 +1070,28 @@ model WorkVerification {
 // ============================================================================
 
 model Commitment {
-  id           String   @id @default(uuid()) @db.Uuid
-  userId       String   @db.Uuid
-  type         String   // "DUES", "PROJECT_CONTRIBUTION", "GROUP_ROLE", "EVENT_ATTENDANCE"
-  targetId     String?  @db.Uuid // Group ID, Project ID, etc.
-  amountKes    Int?     // For monetary commitments
-  amountPR     Int?     // For PR commitments
-  frequency    String?  // "MONTHLY", "ONE_TIME", "WEEKLY"
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @db.Uuid
+  type         String // "DUES", "PROJECT_CONTRIBUTION", "GROUP_ROLE", "EVENT_ATTENDANCE"
+  targetId     String?   @db.Uuid // Group ID, Project ID, etc.
+  amountKes    Int? // For monetary commitments
+  amountPR     Int? // For PR commitments
+  frequency    String? // "MONTHLY", "ONE_TIME", "WEEKLY"
   startDate    DateTime
   endDate      DateTime?
-  status       String   // "ACTIVE", "BREACHED", "COMPLETED", "CANCELLED"
-  missedCount  Int      @default(0)
-  totalPaidKes Int      @default(0)
-  totalPaidPR  Int      @default(0)
+  status       String // "ACTIVE", "BREACHED", "COMPLETED", "CANCELLED"
+  missedCount  Int       @default(0)
+  totalPaidKes Int       @default(0)
+  totalPaidPR  Int       @default(0)
   breachReason String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, type, status])
   @@map("commitments")
 }
-
-
 
 // ============================================================================
 // MODULE: COMMUNITY
@@ -1204,7 +1196,7 @@ model Group {
   memberCount     Int         @default(0)
   treasuryBalance Decimal     @default(0) @db.Decimal(20, 2)
   lastActivity    DateTime    @default(now())
-  
+
   contributesToNational    Boolean @default(false)
   nationalContributionRate Decimal @default(0.01) @db.Decimal(3, 2)
 
@@ -1215,17 +1207,17 @@ model Group {
   constituency Constituency? @relation(fields: [constituencyId], references: [id], onDelete: SetNull)
   county       County?       @relation("CountyGroups", fields: [countyId], references: [id], onDelete: SetNull)
 
-  members             GroupMember[]
-  proposals           Proposal[]              @relation("GroupProposals")
-  votes               GroupMemberVote[]       @relation("GroupVotes")
-  emergencyAlerts     EmergencyAlert[]
-  marketplaceListings MarketplaceListing[]    @relation("GroupListings")
-  communityAssets     CommunityAsset[]        @relation("GroupAssets")
-  duesAllocations     DuesAllocation[]
-  events              Event[]
-  treasury            GroupTreasury[]
-  treasuryPolicies    TreasuryPolicy[]
-  ownedProjects       Project[]               @relation("GroupProjects") // UPDATED relation name
+  members               GroupMember[]
+  proposals             Proposal[]             @relation("GroupProposals")
+  votes                 GroupMemberVote[]      @relation("GroupVotes")
+  emergencyAlerts       EmergencyAlert[]
+  marketplaceListings   MarketplaceListing[]   @relation("GroupListings")
+  communityAssets       CommunityAsset[]       @relation("GroupAssets")
+  duesAllocations       DuesAllocation[]
+  events                Event[]
+  treasury              GroupTreasury[]
+  treasuryPolicies      TreasuryPolicy[]
+  ownedProjects         Project[]              @relation("GroupProjects") // UPDATED relation name
   // elections Election[] // TODO: define Election model when governance elections are implemented
   nationalContributions NationalContribution[]
 
@@ -1237,10 +1229,10 @@ model Group {
 }
 
 model GroupMember {
-  id   String    @id @default(uuid()) @db.Uuid
-  userId   String    @db.Uuid
-  groupId  String    @db.Uuid
-  role     GroupRole @default(MEMBER)
+  id      String    @id @default(uuid()) @db.Uuid
+  userId  String    @db.Uuid
+  groupId String    @db.Uuid
+  role    GroupRole @default(MEMBER)
 
   // System membership tracking
   autoEnrolled Boolean @default(false)
@@ -1327,7 +1319,7 @@ model Activity {
 model Comment {
   id         String   @id @default(uuid()) @db.Uuid
   authorId   String   @db.Uuid
-  entityType String   // "PROPOSAL", "PROJECT", "MILESTONE", "LISTING", etc.
+  entityType String // "PROPOSAL", "PROJECT", "MILESTONE", "LISTING", etc.
   entityId   String   @db.Uuid
   content    String   @db.Text
   parentId   String?  @db.Uuid
@@ -1339,14 +1331,14 @@ model Comment {
   updatedAt  DateTime @updatedAt
 
   // RELATIONS
-  author     User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  parent     Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
-  replies    Comment[] @relation("CommentReplies")
-  
+  author  User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parent  Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies Comment[] @relation("CommentReplies")
+
   // NEW: Polymorphic relations (use entityType to determine which)
-  proposal   Proposal? @relation("ProposalComments", fields: [entityId], references: [id], onDelete: Cascade, map: "comment_proposal_fk")
-  project    Project?  @relation("ProjectComments", fields: [entityId], references: [id], onDelete: Cascade, map: "comment_project_fk")
-  milestone  Milestone? @relation("MilestoneComments", fields: [entityId], references: [id], onDelete: Cascade, map: "comment_milestone_fk")
+  proposal  Proposal?  @relation("ProposalComments", fields: [entityId], references: [id], onDelete: Cascade, map: "comment_proposal_fk")
+  project   Project?   @relation("ProjectComments", fields: [entityId], references: [id], onDelete: Cascade, map: "comment_project_fk")
+  milestone Milestone? @relation("MilestoneComments", fields: [entityId], references: [id], onDelete: Cascade, map: "comment_milestone_fk")
 
   @@index([entityType, entityId, createdAt])
   @@index([authorId])
@@ -1354,27 +1346,27 @@ model Comment {
 }
 
 model Event {
-  id          String        @id @default(uuid()) @db.Uuid
-  title       String
-  description String
-  eventType   String
-  organizerId String        @db.Uuid
-  groupId     String?       @db.Uuid
-  scope       LocationScope
-  locationId  String        @db.Uuid
-  venue       String?
-  virtualUrl  String?
-  startTime   DateTime
-  endTime     DateTime
-  capacity    Int?
-  attendeeCount Int         @default(0)
-  status      String        @default("SCHEDULED")
-  metadata    Json?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id            String        @id @default(uuid()) @db.Uuid
+  title         String
+  description   String
+  eventType     String
+  organizerId   String        @db.Uuid
+  groupId       String?       @db.Uuid
+  scope         LocationScope
+  locationId    String        @db.Uuid
+  venue         String?
+  virtualUrl    String?
+  startTime     DateTime
+  endTime       DateTime
+  capacity      Int?
+  attendeeCount Int           @default(0)
+  status        String        @default("SCHEDULED")
+  metadata      Json?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
-  organizer User   @relation(fields: [organizerId], references: [id], onDelete: Cascade)
-  group     Group? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  organizer User            @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  group     Group?          @relation(fields: [groupId], references: [id], onDelete: SetNull)
   attendees EventAttendee[]
 
   @@index([scope, locationId, startTime])
@@ -1421,8 +1413,8 @@ model UserEngagementMetric {
 model VerificationRequest {
   id              String    @id @default(uuid()) @db.Uuid
   userId          String    @db.Uuid
-  type            String    // "COMMUNITY"
-  status          String    // "PENDING", "VOUCHING", "PAYMENT_PENDING", "APPROVED", "REJECTED", "EXPIRED"
+  type            String // "COMMUNITY"
+  status          String // "PENDING", "VOUCHING", "PAYMENT_PENDING", "APPROVED", "REJECTED", "EXPIRED"
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   expiresAt       DateTime?
@@ -1430,7 +1422,7 @@ model VerificationRequest {
   reviewedBy      String?   @db.Uuid // Admin user ID
   reviewedAt      DateTime?
 
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, type])
   @@index([userId, status])
@@ -1456,8 +1448,6 @@ model CommunityVouch {
   @@map("community_vouches")
 }
 
-
-
 // ============================================================================
 // MODULE: GOVERNANCE
 // ============================================================================
@@ -1482,55 +1472,54 @@ enum ProposalStatus {
   CANCELLED
 }
 
-
 // ============================================================================
 // UPDATED PROPOSAL MODEL - With Lean Canvas & Milestones
 // ============================================================================
 
 model Proposal {
-  id                String         @id @default(uuid()) @db.Uuid
-  title             String
-  description       String         @db.Text
-  proposalType      ProposalType
-  status            ProposalStatus @default(DRAFT)
-  groupId           String?        @db.Uuid
-  creatorId         String         @db.Uuid
-  
+  id           String         @id @default(uuid()) @db.Uuid
+  title        String
+  description  String         @db.Text
+  proposalType ProposalType
+  status       ProposalStatus @default(DRAFT)
+  groupId      String?        @db.Uuid
+  creatorId    String         @db.Uuid
+
   // FINANCIAL
-  budget            Decimal?       @db.Decimal(20, 2)
-  fundingSource     String?        // GROUP_TREASURY, EXTERNAL_GRANT, MEMBER_CONTRIBUTIONS
-  
+  budget        Decimal? @db.Decimal(20, 2)
+  fundingSource String? // GROUP_TREASURY, EXTERNAL_GRANT, MEMBER_CONTRIBUTIONS
+
   // LEAN CANVAS (All optional but recommended)
-  problem           String?        @db.Text
-  solution          String?        @db.Text
-  keyMetrics        Json?          // [{ name, target, unit }]
-  uniqueValue       String?        @db.Text
-  unfairAdvantage   String?        @db.Text
-  customerSegments  Json?          // [{ segment, size, description }]
-  channels          Json?          // [{ name, description, reach }]
-  costStructure     Json?          // [{ category, item, amount, description }]
-  revenueStreams    Json?          // [{ source, amount, frequency, description }]
-  
+  problem          String? @db.Text
+  solution         String? @db.Text
+  keyMetrics       Json? // [{ name, target, unit }]
+  uniqueValue      String? @db.Text
+  unfairAdvantage  String? @db.Text
+  customerSegments Json? // [{ segment, size, description }]
+  channels         Json? // [{ name, description, reach }]
+  costStructure    Json? // [{ category, item, amount, description }]
+  revenueStreams   Json? // [{ source, amount, frequency, description }]
+
   // EXECUTION PLAN
-  timeline          Json?          // Overall timeline with phases
-  team              Json?          // [{ userId, role, commitment }]
-  dependencies      Json?          // [{ name, description, status }]
-  risks             Json?          // [{ risk, impact, mitigation }]
-  
+  timeline     Json? // Overall timeline with phases
+  team         Json? // [{ userId, role, commitment }]
+  dependencies Json? // [{ name, description, status }]
+  risks        Json? // [{ risk, impact, mitigation }]
+
   // VOTING
-  votesFor          Int            @default(0)
-  votesAgainst      Int            @default(0)
-  quorum            Int            @default(0)
-  approvalThreshold Int            @default(0)
+  votesFor          Int       @default(0)
+  votesAgainst      Int       @default(0)
+  quorum            Int       @default(0)
+  approvalThreshold Int       @default(0)
   votingStartsAt    DateTime?
   votingEndsAt      DateTime?
-  
+
   // ATTACHMENTS
-  documents         String[]       // URLs to supporting docs
-  images            String[]       // Proposal images
-  
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
+  documents String[] // URLs to supporting docs
+  images    String[] // Proposal images
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // RELATIONS
   group              Group?              @relation("GroupProposals", fields: [groupId], references: [id], onDelete: SetNull)
@@ -1553,62 +1542,60 @@ model Proposal {
 // ============================================================================
 
 model ProposalMilestone {
-  id             String   @id @default(uuid()) @db.Uuid
-  proposalId     String   @db.Uuid
-  title          String
-  description    String   @db.Text
-  
+  id          String @id @default(uuid()) @db.Uuid
+  proposalId  String @db.Uuid
+  title       String
+  description String @db.Text
+
   // Deliverables
-  deliverables   Json     // [{ description, quantity, unit }]
-  
+  deliverables Json // [{ description, quantity, unit }]
+
   // Resources needed
-  budgetAmount   Decimal  @db.Decimal(20, 2)
-  laborHours     Int?
-  materials      Json?    // [{ item, quantity, cost, unit }]
-  
+  budgetAmount Decimal @db.Decimal(20, 2)
+  laborHours   Int?
+  materials    Json? // [{ item, quantity, cost, unit }]
+
   // Timeline
-  startOffset    Int      // Days from project start
-  duration       Int      // Days to complete
-  dependencies   String[] @db.Uuid  // IDs of previous milestones in this proposal
-  
+  startOffset  Int // Days from project start
+  duration     Int // Days to complete
+  dependencies String[] @db.Uuid // IDs of previous milestones in this proposal
+
   // Verification requirements
-  verificationMethod   String  // PEER, SUPERVISOR, COMMUNITY_WITNESS, PHOTO_EVIDENCE
-  verifiersNeeded      Int     @default(1)
-  verificationCriteria Json    // [{ criterion, description, required }]
-  
+  verificationMethod   String // PEER, SUPERVISOR, COMMUNITY_WITNESS, PHOTO_EVIDENCE
+  verifiersNeeded      Int    @default(1)
+  verificationCriteria Json // [{ criterion, description, required }]
+
   // Order
-  orderIndex     Int      @default(0)
-  
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  
+  orderIndex Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   // RELATIONS
   proposal         Proposal   @relation(fields: [proposalId], references: [id], onDelete: Cascade)
   projectMilestone Milestone? @relation("ProposalToProjectMilestone")
-  
+
   @@index([proposalId])
   @@index([orderIndex])
 }
 
-
 model GroupMemberVote {
- id         String   @id @default(uuid()) @db.Uuid
- groupId    String   @db.Uuid
- memberId   String   @db.Uuid
- proposalId String   @db.Uuid
- vote       Boolean
- voteWeight Int      @default(1)
- comment    String?
- createdAt  DateTime @default(now())
- group    Group    @relation("GroupVotes", fields: [groupId], references: [id], onDelete: Cascade)
- member   User     @relation("UserVotes", fields: [memberId], references: [id], onDelete: Cascade)
- proposal Proposal @relation("ProposalVotes", fields: [proposalId], references: [id], onDelete: Cascade)
- @@unique([groupId, memberId, proposalId])
- @@index([proposalId])
- @@index([memberId])
+  id         String   @id @default(uuid()) @db.Uuid
+  groupId    String   @db.Uuid
+  memberId   String   @db.Uuid
+  proposalId String   @db.Uuid
+  vote       Boolean
+  voteWeight Int      @default(1)
+  comment    String?
+  createdAt  DateTime @default(now())
+  group      Group    @relation("GroupVotes", fields: [groupId], references: [id], onDelete: Cascade)
+  member     User     @relation("UserVotes", fields: [memberId], references: [id], onDelete: Cascade)
+  proposal   Proposal @relation("ProposalVotes", fields: [proposalId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, memberId, proposalId])
+  @@index([proposalId])
+  @@index([memberId])
 }
-
-
 
 // ============================================================================
 // MODULE: PROJECTS
@@ -1647,25 +1634,24 @@ enum TaskStatus {
   BLOCKED
 }
 
-
 model Project {
-  id           String        @id @default(uuid()) @db.Uuid
-  title        String
-  description  String?       @db.Text
-  coverImage   String?
-  status       ProjectStatus @default(PLANNING)
+  id          String        @id @default(uuid()) @db.Uuid
+  title       String
+  description String?       @db.Text
+  coverImage  String?
+  status      ProjectStatus @default(PLANNING)
 
   ownerGroupId String? @db.Uuid
   ownerUserId  String? @db.Uuid
 
   // NEW: Link to original proposal
-  proposalId   String?  @unique @db.Uuid
+  proposalId String? @unique @db.Uuid
 
   // RELATIONS
-  ownerGroup         Group?              @relation("GroupProjects", fields: [ownerGroupId], references: [id])
-  ownerUser          User?               @relation("UserProjects", fields: [ownerUserId], references: [id])
-  proposal           Proposal?           @relation("ProposalToProject", fields: [proposalId], references: [id]) // NEW
-  
+  ownerGroup Group?    @relation("GroupProjects", fields: [ownerGroupId], references: [id])
+  ownerUser  User?     @relation("UserProjects", fields: [ownerUserId], references: [id])
+  proposal   Proposal? @relation("ProposalToProject", fields: [proposalId], references: [id]) // NEW
+
   members            ProjectMember[]
   milestones         Milestone[]
   tasks              Task[]
@@ -1688,21 +1674,21 @@ model Project {
 // ============================================================================
 
 model Milestone {
-  id          String          @id @default(uuid())  @db.Uuid
+  id          String          @id @default(uuid()) @db.Uuid
   projectId   String          @db.Uuid
   title       String
   description String?         @db.Text
   status      MilestoneStatus @default(PENDING)
   dueDate     DateTime?
   orderIndex  Int             @default(0)
-  
+
   // NEW: Link to original proposal milestone
-  proposalMilestoneId String?           @unique @db.Uuid
+  proposalMilestoneId String? @unique @db.Uuid
 
   // RELATIONS
-  project           Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  proposalMilestone ProposalMilestone?  @relation("ProposalToProjectMilestone", fields: [proposalMilestoneId], references: [id]) // NEW
-  
+  project           Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  proposalMilestone ProposalMilestone? @relation("ProposalToProjectMilestone", fields: [proposalMilestoneId], references: [id]) // NEW
+
   tasks     Task[]
   verifiers MilestoneVerifier[]
   workLogs  PhysicalWorkLog[]
@@ -1717,65 +1703,62 @@ model Milestone {
 }
 
 model ProjectMember {
-  id         String      @id @default(cuid())
-  projectId  String      @db.Uuid
-  userId     String      @db.Uuid
-  role       ProjectRole @default(CONTRIBUTOR)
+  id        String      @id @default(cuid())
+  projectId String      @db.Uuid
+  userId    String      @db.Uuid
+  role      ProjectRole @default(CONTRIBUTOR)
 
-  project    Project     @relation(fields: [projectId], references: [id])
-  user       User        @relation(fields: [userId], references: [id])
+  project Project @relation(fields: [projectId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
 
-  joinedAt   DateTime    @default(now())
+  joinedAt DateTime @default(now())
 
   @@unique([projectId, userId])
 }
 
-
 model Task {
-  id            String         @id @default(cuid())
-  projectId     String?        @db.Uuid
-  milestoneId   String         @db.Uuid
-  assignedToId  String?        @db.Uuid // a project member (User)
-  title         String
-  description   String?
-  status        TaskStatus     @default(TODO)
-  dueDate       DateTime?
+  id           String     @id @default(cuid())
+  projectId    String?    @db.Uuid
+  milestoneId  String     @db.Uuid
+  assignedToId String?    @db.Uuid // a project member (User)
+  title        String
+  description  String?
+  status       TaskStatus @default(TODO)
+  dueDate      DateTime?
 
-  milestone     Milestone      @relation(fields: [milestoneId], references: [id])
-  assignedTo    User?          @relation(fields: [assignedToId], references: [id])
+  milestone  Milestone @relation(fields: [milestoneId], references: [id])
+  assignedTo User?     @relation(fields: [assignedToId], references: [id])
 
-  project   Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model MilestoneVerifier {
-  id            String             @id @default(cuid())
-  milestoneId   String             @db.Uuid
-  projectId     String?            @db.Uuid
-  verifierId    String             @db.Uuid // a User OR a Group-appointed verifier
-  assignedById  String             @db.Uuid // group admin or project lead
-  status        VerificationStatus @default(PENDING)
-  notes         String?
+  id           String             @id @default(cuid())
+  milestoneId  String             @db.Uuid
+  projectId    String?            @db.Uuid
+  verifierId   String             @db.Uuid // a User OR a Group-appointed verifier
+  assignedById String             @db.Uuid // group admin or project lead
+  status       VerificationStatus @default(PENDING)
+  notes        String?
 
-  milestone     Milestone          @relation(fields: [milestoneId], references: [id])
-  verifier      User               @relation("MilestoneVerifier_Verifier", fields: [verifierId], references: [id])
-  assignedBy    User               @relation("MilestoneVerifier_AssignedBy", fields: [assignedById], references: [id])
+  milestone  Milestone @relation(fields: [milestoneId], references: [id])
+  verifier   User      @relation("MilestoneVerifier_Verifier", fields: [verifierId], references: [id])
+  assignedBy User      @relation("MilestoneVerifier_AssignedBy", fields: [assignedById], references: [id])
 
-  project   Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
-  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@unique([milestoneId, verifierId])
   @@index([milestoneId])
   @@index([verifierId])
   @@index([assignedById])
   @@index([status])
 }
-
-
 
 // ============================================================================
 // MODULE: TREASURY
@@ -1800,39 +1783,40 @@ enum EscrowStatus {
 }
 
 enum TreasuryAction {
-  ALLOCATE        // allocate money to a budget line
-  FUND_RELEASE    // release funds for a project/milestone
-  REFUND          // refund to payer
-  ADJUSTMENT      // manual adjustment by admin
-  FEE             // system fee
+  ALLOCATE // allocate money to a budget line
+  FUND_RELEASE // release funds for a project/milestone
+  REFUND // refund to payer
+  ADJUSTMENT // manual adjustment by admin
+  FEE // system fee
 }
 
 /// WALLET LEDGER / TREASURY CONTROLS
 
-/** GroupTreasury
+/**
+ * GroupTreasury
  * - One per Group (for group treasuries). System-wide treasuries (national) are represented
- *   by Group records for system groups (e.g. groupType = NATIONAL_CAMPAIGN).
+ * by Group records for system groups (e.g. groupType = NATIONAL_CAMPAIGN).
  */
 model GroupTreasury {
-  id            String   @id @default(uuid()) @db.Uuid
-  groupId       String   @db.Uuid
-  group         Group    @relation(fields: [groupId], references: [id])
+  id      String @id @default(uuid()) @db.Uuid
+  groupId String @db.Uuid
+  group   Group  @relation(fields: [groupId], references: [id])
 
   // current on-ledger fiat balance (KES), kept for quick queries; authoritative ledger is transactions
-  balance       Decimal  @db.Decimal(20, 2) @default(0)
+  balance Decimal @default(0) @db.Decimal(20, 2)
 
   // optional: logical utility token balance (if group holds tokens separate from TokenBalance)
-  tokenBalance  Int?     @default(0)
+  tokenBalance Int? @default(0)
 
   // Multi-sig / governance rules
-  multiSigPolicy Json?   // e.g. { thresholds: { small:1, medium:2, large:3 }, signers: [...] }
-  spendingLimits Json?   // e.g. { daily: 10000, monthly: 100000 }
+  multiSigPolicy Json? // e.g. { thresholds: { small:1, medium:2, large:3 }, signers: [...] }
+  spendingLimits Json? // e.g. { daily: 10000, monthly: 100000 }
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  walletTransactions WalletTransaction[]    @relation("GroupTreasuryTransactions")
-  escrows            Escrow[]               @relation("GroupTreasuryEscrows")
+  walletTransactions WalletTransaction[] @relation("GroupTreasuryTransactions")
+  escrows            Escrow[]            @relation("GroupTreasuryEscrows")
 
   duesAllocations DuesAllocation[]
 
@@ -1840,23 +1824,22 @@ model GroupTreasury {
   @@index([groupId])
 }
 
-
 // ============================================================================
 // UPDATED ESCROW - Add proposal relation
 // ============================================================================
 
 model Escrow {
-  id                String        @id @default(uuid()) @db.Uuid
-  treasuryId        String?       @db.Uuid
-  amount            Decimal       @db.Decimal(20, 2)
-  currency          String        @default("KES")
-  status            EscrowStatus  @default(PENDING)
-  createdById       String?       @db.Uuid
-  releaseToId       String?       @db.Uuid
+  id                String       @id @default(uuid()) @db.Uuid
+  treasuryId        String?      @db.Uuid
+  amount            Decimal      @db.Decimal(20, 2)
+  currency          String       @default("KES")
+  status            EscrowStatus @default(PENDING)
+  createdById       String?      @db.Uuid
+  releaseToId       String?      @db.Uuid
   releaseToType     HolderType?
   releaseReason     String?
-  relatedProposalId String?       @db.Uuid
-  createdAt         DateTime      @default(now())
+  relatedProposalId String?      @db.Uuid
+  createdAt         DateTime     @default(now())
   releasedAt        DateTime?
   disputeNotes      String?
 
@@ -1871,33 +1854,32 @@ model Escrow {
   @@index([status])
 }
 
-
 /// EscrowRelease (audit trail for escrow movements)
 model EscrowRelease {
-  id         String    @id @default(uuid()) @db.Uuid
-  escrowId   String    @db.Uuid
-  escrow     Escrow    @relation(fields: [escrowId], references: [id])
-  amount     Decimal   @db.Decimal(20, 2)
-  releasedById String? @db.Uuid
-  releasedBy User?     @relation(fields: [releasedById], references: [id])
-  recipientId String?  @db.Uuid
+  id            String      @id @default(uuid()) @db.Uuid
+  escrowId      String      @db.Uuid
+  escrow        Escrow      @relation(fields: [escrowId], references: [id])
+  amount        Decimal     @db.Decimal(20, 2)
+  releasedById  String?     @db.Uuid
+  releasedBy    User?       @relation(fields: [releasedById], references: [id])
+  recipientId   String?     @db.Uuid
   recipientType HolderType?
-  note       String?
-  createdAt  DateTime  @default(now())
+  note          String?
+  createdAt     DateTime    @default(now())
 
   @@index([escrowId])
 }
 
 /// TreasuryPolicy: group / system policies about fees, limits, quotas
 model TreasuryPolicy {
-  id         String   @id @default(uuid()) @db.Uuid
-  groupId    String?  @db.Uuid   // null => system/global policy
-  group      Group?   @relation(fields: [groupId], references: [id])
-  key        String   // e.g. "fee.fixed_pct", "spend.limit_daily"
-  value      String   // JSON/text
+  id          String   @id @default(uuid()) @db.Uuid
+  groupId     String?  @db.Uuid // null => system/global policy
+  group       Group?   @relation(fields: [groupId], references: [id])
+  key         String // e.g. "fee.fixed_pct", "spend.limit_daily"
+  value       String // JSON/text
   description String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@unique([groupId, key])
 }
@@ -1924,18 +1906,18 @@ model TreasuryAudit {
 // ============================================================================
 
 model WalletTransaction {
-  id              String        @id @default(uuid()) @db.Uuid
-  treasuryId      String        @db.Uuid
-  amount          Decimal       @db.Decimal(20, 2)
-  currency        String        @default("KES")
-  transactionType String        // "CREDIT", "DEBIT"
+  id              String   @id @default(uuid()) @db.Uuid
+  treasuryId      String   @db.Uuid
+  amount          Decimal  @db.Decimal(20, 2)
+  currency        String   @default("KES")
+  transactionType String // "CREDIT", "DEBIT"
   description     String?
-  referenceType   String?       // "PROPOSAL", "PROJECT", "DUES", "ESCROW", "MANUAL"
-  proposalId      String?       @db.Uuid
-  projectId       String?       @db.Uuid
-  initiatedById   String?       @db.Uuid
+  referenceType   String? // "PROPOSAL", "PROJECT", "DUES", "ESCROW", "MANUAL"
+  proposalId      String?  @db.Uuid
+  projectId       String?  @db.Uuid
+  initiatedById   String?  @db.Uuid
   metadata        Json?
-  createdAt       DateTime      @default(now())
+  createdAt       DateTime @default(now())
 
   treasury GroupTreasury @relation("GroupTreasuryTransactions", fields: [treasuryId], references: [id], onDelete: Cascade)
   proposal Proposal?     @relation("ProposalTransactions", fields: [proposalId], references: [id], onDelete: SetNull)
@@ -1947,8 +1929,6 @@ model WalletTransaction {
   @@index([createdAt])
   @@map("wallet_transactions")
 }
-
-
 
 // ============================================================================
 // MODULE: MARKETPLACE
@@ -1991,11 +1971,11 @@ model MarketplaceListing {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
-  ward        Ward?                    @relation(fields: [wardId], references: [id], onDelete: SetNull)
-  sellerUser  User?                    @relation("UserListings", fields: [sellerUserId], references: [id], onDelete: SetNull)
-  sellerGroup Group?                   @relation("GroupListings", fields: [sellerGroupId], references: [id], onDelete: SetNull)
+  ward         Ward?                    @relation(fields: [wardId], references: [id], onDelete: SetNull)
+  sellerUser   User?                    @relation("UserListings", fields: [sellerUserId], references: [id], onDelete: SetNull)
+  sellerGroup  Group?                   @relation("GroupListings", fields: [sellerGroupId], references: [id], onDelete: SetNull)
   transactions MarketplaceTransaction[]
-  reviews     MarketplaceReview[]
+  reviews      MarketplaceReview[]
 
   @@index([wardId, status])
   @@index([sellerUserId])
@@ -2018,9 +1998,9 @@ model MarketplaceTransaction {
   createdAt       DateTime                     @default(now())
   updatedAt       DateTime                     @updatedAt
 
-  listing    MarketplaceListing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
-  buyer      User                @relation("Buyer", fields: [buyerId], references: [id], onDelete: Cascade)
-  sellerUser User?               @relation("Seller", fields: [sellerId], references: [id], onDelete: SetNull)
+  listing    MarketplaceListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  buyer      User               @relation("Buyer", fields: [buyerId], references: [id], onDelete: Cascade)
+  sellerUser User?              @relation("Seller", fields: [sellerId], references: [id], onDelete: SetNull)
   review     MarketplaceReview?
 
   @@index([buyerId])
@@ -2029,16 +2009,16 @@ model MarketplaceTransaction {
 }
 
 model MarketplaceReview {
-  id               String                 @id @default(uuid()) @db.Uuid
-  transactionId    String                 @unique @db.Uuid
-  listingId        String                 @db.Uuid
-  reviewerId       String                 @db.Uuid
-  reviewedId       String                 @db.Uuid
+  id               String     @id @default(uuid()) @db.Uuid
+  transactionId    String     @unique @db.Uuid
+  listingId        String     @db.Uuid
+  reviewerId       String     @db.Uuid
+  reviewedId       String     @db.Uuid
   reviewedType     HolderType
   rating           Int
   comment          String?
-  verifiedPurchase Boolean                @default(true)
-  createdAt        DateTime               @default(now())
+  verifiedPurchase Boolean    @default(true)
+  createdAt        DateTime   @default(now())
 
   transaction MarketplaceTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
   listing     MarketplaceListing     @relation(fields: [listingId], references: [id], onDelete: Cascade)
@@ -2048,8 +2028,6 @@ model MarketplaceReview {
   @@index([reviewerId])
   @@index([listingId])
 }
-
-
 
 // ============================================================================
 // MODULE: EDUCATION
@@ -2142,8 +2120,6 @@ model EducationalReview {
   @@index([userId])
 }
 
-
-
 // ============================================================================
 // MODULE: EMERGENCY
 // ============================================================================
@@ -2181,8 +2157,8 @@ model EmergencyAlert {
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
 
-  reporter  User               @relation(fields: [reporterId], references: [id], onDelete: Cascade)
-  group     Group?             @relation(fields: [assignedGroupId], references: [id], onDelete: SetNull)
+  reporter  User                @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  group     Group?              @relation(fields: [assignedGroupId], references: [id], onDelete: SetNull)
   responses EmergencyResponse[]
 
   @@index([reporterId])
@@ -2209,8 +2185,6 @@ model EmergencyResponse {
   @@index([emergencyId, status])
 }
 
-
-
 // ============================================================================
 // MODULE: REPUTATION
 // ============================================================================
@@ -2223,8 +2197,8 @@ model ImpactPointLog {
   userId    String   @db.Uuid
   amount    Int
   reason    String   @db.VarChar(100)
-  scope     String   @db.VarChar(50)  // "GLOBAL" | "WARD" | "CONSTITUENCY" | "COUNTY"
-  scopedId  String?  @db.Uuid         // Ward/Constituency/County ID when scope != GLOBAL
+  scope     String   @db.VarChar(50) // "GLOBAL" | "WARD" | "CONSTITUENCY" | "COUNTY"
+  scopedId  String?  @db.Uuid // Ward/Constituency/County ID when scope != GLOBAL
   metadata  Json?
   createdAt DateTime @default(now())
 
@@ -2240,7 +2214,7 @@ model UserLocationImpact {
   userId       String   @db.Uuid
   wardId       String   @db.Uuid
   impactPoints Int      @default(0)
-  tier         String   @default("NONE")  // NONE | BRONZE | SILVER | GOLD | PLATINUM
+  tier         String   @default("NONE") // NONE | BRONZE | SILVER | GOLD | PLATINUM
   type         String   @default("LOCATION_BASED")
   lastActivity DateTime @default(now())
   createdAt    DateTime @default(now())
@@ -2254,8 +2228,6 @@ model UserLocationImpact {
   @@index([wardId])
   @@map("user_location_impacts")
 }
-
-
 
 // ============================================================================
 // MODULE: NOTIFICATIONS
@@ -2372,8 +2344,6 @@ model SystemLog {
   @@index([level, createdAt])
 }
 
-
-
 // ============================================================================
 // MODULE: AUDIT
 // ============================================================================
@@ -2383,14 +2353,14 @@ model SystemLog {
 // ============================================================================
 
 model AuditLog {
-  id         String   @id @default(uuid()) @db.Uuid
-  userId     String?  @db.Uuid
-  action     String   @db.VarChar(100)
-  entityType String   @db.VarChar(100)
-  entityId   String?  @db.Uuid
+  id         String  @id @default(uuid()) @db.Uuid
+  userId     String? @db.Uuid
+  action     String  @db.VarChar(100)
+  entityType String  @db.VarChar(100)
+  entityId   String? @db.Uuid
   metadata   Json?
 
-  createdAt  DateTime @default(now())
+  createdAt DateTime @default(now())
 
   user User? @relation("UserAuditLog", fields: [userId], references: [id], onDelete: SetNull)
 

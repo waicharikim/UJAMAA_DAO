@@ -314,7 +314,11 @@ export const validateRequest = (options: UjamaadaoValidationOptions) => {
       if (target === 'body') {
         req.body = result.data;
       } else if (target === 'query') {
-        (req.query as any) = result.data;
+        Object.defineProperty(req, 'query', {
+          value: result.data,
+          writable: true,
+          configurable: true,
+        });
       } else if (target === 'params') {
         (req.params as any) = result.data;
       }
