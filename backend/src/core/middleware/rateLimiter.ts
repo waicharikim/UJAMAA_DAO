@@ -19,7 +19,7 @@ import rateLimit from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
 import { createClient, RedisClientType } from 'redis';
 import crypto from 'crypto';
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import { logSecurityEvent } from '../logger/logger.js';
 import { ApiError } from '../errors/ApiError.js';
 import { env } from '../utils/env.js';
@@ -163,6 +163,11 @@ interface RateLimiterConfig {
  * Build a rate limiter with custom configuration
  */
 export function buildRateLimiter(config: RateLimiterConfig) {
+  // In test environment, return a no-op middleware to prevent rate-limit interference
+  if (process.env.NODE_ENV === 'test') {
+    return (_req: Request, _res: Response, next: NextFunction) => next();
+  }
+
   if (!redisReady) {
     console.warn(
       '[RateLimit] Building limiter before Redis ready - will use in-memory store'

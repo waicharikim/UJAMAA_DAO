@@ -75,6 +75,7 @@ export class BaseError extends Error {
    */
   toJSON() {
     const json: Record<string, any> = {
+      success: false,
       message: this.message,
       code: this.code,
       statusCode: this.statusCode,

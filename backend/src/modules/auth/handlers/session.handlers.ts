@@ -109,7 +109,9 @@ export async function logout(req: AuthRequest, res: Response) {
     const payload = verifyJwtToken<JwtPayload>(token);
 
     if (!payload.sessionId) {
-      throw ApiError.authenticationError('Invalid session');
+      // Token has no session binding (e.g. permanent token) — acknowledge logout
+      sendSuccess(res, { success: true }, 'Logged out successfully', 200);
+      return;
     }
 
     await sessionService.revokeSession(

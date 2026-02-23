@@ -379,3 +379,42 @@ Merge PR #3 → develop once CI passes, then write user module tests (GET /users
 
 **Token usage:**
 Sonnet 4.6 — medium session (TypeScript error audit + test writing across 10+ files)
+
+---
+
+## [2026-02-23] — SMS integration, auth-cleanup BullMQ job, dead scheduling code removed, 2 PRs merged, docs audit
+
+**What was built:**
+- Wired Africa's Talking SMS SDK into `backend/src/modules/auth/services/phone-verification.service.ts` — replaced stub with real AT SDK dynamic import + `@ts-ignore` (no TypeScript types available for `africastalking` npm package)
+- Added phone verification routes to `backend/src/modules/auth/routes/auth.routes.ts` (POST `/phone/send-code`, POST `/phone/verify-code`) — handlers and validators already existed but routes were never wired
+- Added SMS env vars to `docker/docker-compose.yml` web service: `ENABLE_SMS`, `SMS_PROVIDER`, `AT_API_KEY`, `AT_USERNAME`, `AT_SENDER_ID`
+- Created `backend/src/modules/auth/jobs/auth-cleanup.jobs.ts` — new BullMQ job processor. Cleans: expired email verification tokens, expired password reset tokens, and resolved security events older than 90 days (via `securityEventsService.cleanupOldEvents()`)
+- Registered auth-cleanup job in `backend/src/core/jobs/register.ts` — daily at 03:00, runs on the `user-cleanup` queue
+- Wired auth-cleanup processor into `backend/src/workers.ts` alongside the existing user-cleanup processor
+- Deleted 3 dead scheduling files that were never imported anywhere:
+  - `backend/src/core/jobs/auth-cleanup.jobs.ts` — node-cron based, 0 imports
+  - `backend/src/modules/economy/jobs/economy.jobs.ts` — setInterval based, 0 imports
+  - `backend/src/core/jobs/economy-cron.jobs.ts` — empty 1-line placeholder
+- Fixed PR #3 CI failures: added `DATABASE_URL` to `ci.yml` job env (Prisma v7 reads it at config-load time even for `generate`), rewrote `backend/eslint.config.js` (old config imported non-existent path `@eslint/js/dist/configs/typescript.js`), ran `lint:fix` on 133 files
+- Merged PR #3 (`chore/fix-ci` → `develop`) ✅ — 0 TypeScript errors, 11 auth tests passing, clean ESLint config
+- Merged PR #4 (`feature/sms-auth-cleanup` → `develop`) ✅ — SMS wiring, auth-cleanup BullMQ job, 3 dead files deleted
+- Full `audit-docs` run: read `app.ts`, `index.ts`, `workers.ts`, `auth.service.ts`, `prisma/schema.prisma`, `docker-compose.yml`, `CLAUDE.md`, `DECISIONS.md` — findings logged, doc fixes applied this session
+
+**Decisions made:**
+- BullMQ is the sole scheduling system — node-cron and setInterval dead code removed from `core/jobs/`. The one remaining setInterval (nonce cleanup in `wallet.service.ts`) stays per ADR-006 exception; all other recurring logic must use BullMQ (see ADR-017)
+- `securityEventsService.cleanupOldEvents()` coverage was only in the deleted node-cron file — migrated into the BullMQ auth-cleanup job to preserve the cleanup behavior
+- Scaffold rule established as workflow convention: always list and read ALL existing files in a target directory before editing or creating anything — prevents dead code duplication
+- ESLint flat config must use `@typescript-eslint/eslint-plugin` + `@typescript-eslint/parser` + `globals` package directly, not `@eslint/js` subpaths that don't exist
+
+**What's still broken or incomplete:**
+- `BASE_URL`, `SMTP_*`, `ENCRYPTION_KEY`, `ALLOWED_ORIGINS` absent from `docker/docker-compose.yml` web service (identified in audit, queued for next session)
+- Bull Board auth in `app.ts:296` uses plain `===` string comparison — timing-safe comparison not yet implemented
+- `backend/src/workers.ts` `@file` comment and `Run with:` instruction say `worker.ts` (singular) — wrong filename
+- User module tests: zero (GET /users/me, PATCH profile not covered)
+- `// @ts-nocheck` in 3 scaffold service files (`project.service.ts`, `impactPoint.service.ts`, `locationImpact.service.ts`) needs proper schema alignment when those modules are actively built
+
+**Next milestone:**
+Apply queued docker-compose.yml env var fixes (`BASE_URL`, `SMTP_*`, etc.), then write user module unit tests (GET /users/me, PATCH /users/me/profile).
+
+**Token usage:**
+Sonnet 4.6 — heavy session (CI fixes, 2 PRs merged including a rebase with conflicts, full docs audit across 8 files)

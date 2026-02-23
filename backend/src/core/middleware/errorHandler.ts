@@ -409,6 +409,7 @@ export const errorHandler = (
 
   // Send error response (never expose stack traces to client)
   const responseBody = {
+    success: false,
     message: apiError.message,
     code: apiError.code,
     correlationId: apiError.correlationId,

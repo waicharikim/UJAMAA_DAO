@@ -1,6 +1,13 @@
 import { defineConfig } from 'vitest/config';
+import { resolve } from 'path';
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      '@core': resolve(__dirname, 'src/core'),
+      '@modules': resolve(__dirname, 'src/modules'),
+    },
+  },
   test: {
     globals: true,
     setupFiles: ['./tests/testSetup.ts'],

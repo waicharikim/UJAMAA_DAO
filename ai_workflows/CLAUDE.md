@@ -54,7 +54,7 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 
 | Module | Status | Notes |
 |---|---|---|
-| auth | partial | 10+ handlers, 10+ services, routes, validators, prisma schema. Most complete module. |
+| auth | partial | 10+ handlers, 10+ services, routes, validators, prisma schema. SMS phone verification wired (AT SDK). Auth-cleanup BullMQ job added. 11 green unit tests. Most complete module. |
 | user | partial | 7 handlers, services, routes, validators, prisma schema, cleanup job |
 | economy | partial | Cron jobs (dues penalties, monthly regen), PR award logic, BullMQ jobs, event listeners |
 | community | partial | Group management: controllers, services, routes, member event listeners |
@@ -78,7 +78,10 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 - `make dev` → `/ready` ✅ verified 2026-02-22 — Prisma connected, migration applied
 - Worker container: `redischeck.sh` needs `chmod +x docker/*.sh` on host after fresh clone
 - All 12 module routes mounted in `app.ts` ✅ (auth, user, admin, economy, community, governance, projects, marketplace, notifications, emergency, audit, onboarding)
-- TypeScript: `npx tsc --noEmit` returns **0 errors** ✅ (as of `chore/fix-ci` branch, PR #3 open)
+- TypeScript: `npx tsc --noEmit` returns **0 errors** ✅ (`develop` branch — PR #3 merged 2026-02-23)
+- ESLint: `npm run lint` passes clean ✅ (`develop` branch — ESLint config rewritten 2026-02-23, 133 files formatted)
+- BullMQ scheduling: 4 active jobs registered — user-cleanup (4h), auth-cleanup (03:00), monthly-pr-regen (1st of month), daily-commitment-penalties (02:00)
+- `BASE_URL`, `SMTP_*`, `ENCRYPTION_KEY`, `ALLOWED_ORIGINS` ⚠️ not in docker-compose.yml web env — magic links and emails broken without them
 - M-Pesa: not started
 - On-chain PR/UT (Base Sepolia): not started
 - Frontend (Next.js): not started
@@ -99,6 +102,7 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 - Express — `backend/src/app.ts` (REST API, middleware chain)
 - Prisma — each module owns its schema at `backend/src/modules/[name]/prisma/schema.prisma`
 - BullMQ + Redis — queues registered in `backend/src/core/jobs/register.ts`
+- Bull Board — queue monitoring dashboard at `/admin/queues` (HTTP basic auth: login=`admin`, password=`DASHBOARD_PASSWORD` env var, default `admin123` in dev). Shows economy, user-cleanup, dead-letter queues.
 - Event bus — `backend/src/core/utils/eventBus.ts` (e.g. `eventBus.publish("user.email.verified")`)
 - Structured logging — `backend/src/core/logger/logger.ts` with `operationType`
 - Error handling — `ApiError` class (`backend/src/core/errors/ApiError.ts`)
@@ -131,7 +135,7 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 
 - TypeScript strict mode everywhere
 - Prisma for all DB access — no raw SQL
-- BullMQ for all async/scheduled work — no `setTimeout` for jobs
+- BullMQ for all async/scheduled work — no node-cron, no setInterval for recurring jobs (exception: ephemeral in-memory cleanup that does not need to survive restarts, per ADR-006 amendment)
 - Event bus for cross-module decoupling — emit, don't import
 - `ApiError` for all error responses — no raw `res.status(500).json(...)`
 - Naming: camelCase, descriptive, no abbreviations
@@ -184,6 +188,12 @@ A module is **production-ready** when ALL of these are true:
 | `signMagicLinkToken` token fails immediately in tests ("jwt not active") | `signMagicLinkToken` adds a 30-second `notBefore` anti-replay delay. In tests use `signJwtToken(payload, '15m', 0)` directly — the third argument `0` means valid immediately. |
 | `verifyEmailToken` test throws "Record to update not found" for UNVERIFIED user | `completeEmailVerificationAndCreateSession` calls `tx.onboardingProgress.update()` on first-time login. Test must create an `OnboardingProgress` row for the user before calling `verifyEmailToken`. |
 | TypeScript errors in scaffold services that reference unmapped Prisma models | Add `// @ts-nocheck` at the top of the service file and a note like `scaffold: <ModelName> alignment in progress`. Do not attempt full schema fixes on scaffold modules — defer until that module is actively being built. |
+| Magic links produce `undefined/auth/verify-email?...` in emails | `BASE_URL` env var is not set. Add `BASE_URL=http://localhost:4000` to the web service environment in `docker/docker-compose.yml`. |
+| Emails not sending at all (magic links, verification) | SMTP credentials not configured. Add `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` to web service environment in `docker/docker-compose.yml`. Startup logs show "Email service NOT configured" warning when missing. |
+| `/admin/queues` Bull Board returns 401 with correct password | Username is always `admin`. Password is `DASHBOARD_PASSWORD` env var (default `admin123` in dev docker-compose). Change before any shared or production deployment. |
+| CI fails: `PrismaConfigEnvError: Cannot resolve environment variable: DATABASE_URL` | Prisma v7 `prisma.config.ts` calls `env('DATABASE_URL')` at config-load time, even during `prisma generate`. Add `DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ci_db` to the job-level `env:` block in `.github/workflows/ci.yml`. |
+| ESLint error: `Cannot find module '@eslint/js/dist/configs/typescript.js'` | That subpath does not exist in `@eslint/js`. Rewrite `eslint.config.js` to import `@typescript-eslint/eslint-plugin`, `@typescript-eslint/parser`, and `globals` directly — do not rely on `@eslint/js` TypeScript re-exports. |
+| JWT `jti` claim does not match session ID | `signJwtToken` generates a new random hex `jti` regardless of the payload's `jti` field. The actual session ID travels in the JWT `sessionId` field (not `jti`). Token revocation checks must use `sessionId`, not `jti`. |
 
 ---
 
@@ -202,3 +212,4 @@ A module is **production-ready** when ALL of these are true:
 | v2.3 | Updated cross-cutting gaps: `/health` verified ✅, worker permission issue, unmounted routes. Added 6 new common issues from first `make dev` session. |
 | v2.4 | All 12 routes mounted ✅, `/ready` ✅, 2 auth tests green. Updated cross-cutting gaps. JWT jti fix documented. |
 | v2.5 | TypeScript CI: 134 → 0 errors ✅. Reputation schema added (80 models). Auth tests: 2 → 11. 4 new common issues. `fileParallelism: false` note added. |
+| v2.6 | SMS wired (AT SDK). Auth-cleanup BullMQ job. Dead scheduling code deleted. ESLint fixed. PR #3 + PR #4 merged to develop. Bull Board added to tech stack. 7 new common issues. Scheduling convention tightened (BullMQ-only). |
