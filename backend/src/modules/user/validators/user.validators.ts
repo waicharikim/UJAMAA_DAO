@@ -100,7 +100,7 @@ export const selectGoodsServicesSchema = z
 export const requestResidenceChangeSchema = z.object({
   newPrimaryWardId: z.string().uuid(),
   reason: z.string().max(500).optional(),
-  proofUrl: z.string().url('Must be a valid URL (e.g., image/document link)'),
+  proofUrl: z.string().url('Must be a valid URL (e.g., image/document link)').optional(),
 });
 
 /**

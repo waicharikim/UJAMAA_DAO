@@ -159,8 +159,7 @@ router.post(
   '/wallet/link',
   authenticate,
   authorize({
-    verificationLevel: 'FULL_VERIFIED',
-    requiresWalletAuth: true,
+    verificationLevel: 'COMMUNITY_VERIFIED',
   }),
   buildRateLimiter({ windowMs: 60 * 1000, max: 5 }),
   buildRateLimiter({
@@ -176,7 +175,7 @@ router.delete(
   '/wallet/disconnect',
   authenticate,
   authorize({
-    verificationLevel: 'FULL_VERIFIED',
+    verificationLevel: 'COMMUNITY_VERIFIED',
     requiresWalletAuth: true,
   }),
   buildRateLimiter({ windowMs: 60 * 1000, max: 5 }),

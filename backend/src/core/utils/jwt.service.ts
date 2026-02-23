@@ -30,7 +30,6 @@ const VALID_VERIFICATION_LEVELS: VerificationLevel[] = [
   'EMAIL_VERIFIED',
   'PHONE_VERIFIED',
   'COMMUNITY_VERIFIED',
-  'LOCATION_VERIFIED',
   'FULL_VERIFIED',
 ];
 
@@ -51,7 +50,6 @@ export interface JwtPayload {
   emailVerified?: boolean;
   phoneVerified?: boolean;
   communityVerified?: boolean;
-  locationVerified?: boolean;
   roles?: string[];
   globalImpactPoints?: number;
   utilityTokens?: number;
@@ -187,7 +185,6 @@ export function jwtPayloadToAuthUser(payload: JwtPayload): AuthUser {
     emailVerified: payload.emailVerified ?? false,
     phoneVerified: payload.phoneVerified ?? false,
     communityVerified: payload.communityVerified ?? false,
-    locationVerified: payload.locationVerified ?? false,
     roles,
     globalImpactPoints: safeNumericValue(payload.globalImpactPoints),
     utilityTokens: safeNumericValue(payload.utilityTokens),

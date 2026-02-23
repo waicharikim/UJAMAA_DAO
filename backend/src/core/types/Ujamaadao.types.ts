@@ -25,7 +25,6 @@ export type VerificationLevel =
   | 'EMAIL_VERIFIED'
   | 'PHONE_VERIFIED'
   | 'COMMUNITY_VERIFIED'
-  | 'LOCATION_VERIFIED'
   | 'FULL_VERIFIED';
 
 export interface RoleScope {
@@ -82,7 +81,6 @@ export interface AuthUser {
   emailVerified: boolean;
   phoneVerified: boolean;
   communityVerified: boolean;
-  locationVerified: boolean;
   roles: string[];
   globalImpactPoints: number;
   utilityTokens: number;
@@ -425,7 +423,6 @@ export interface UserResponse {
   emailVerified: boolean;
   phoneVerified: boolean;
   communityVerified: boolean;
-  locationVerified: boolean;
   globalImpactPoints: number;
   utilityTokens: number;
   participationRights: number;

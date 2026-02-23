@@ -433,7 +433,6 @@ class AuthService {
       emailVerified: user.emailVerified,
       phoneVerified: user.phoneVerified,
       communityVerified: user.communityVerified,
-      locationVerified: user.locationVerified,
       roles,
       globalImpactPoints: user.globalImpactPoints,
       utilityTokens: user.utilityTokens,

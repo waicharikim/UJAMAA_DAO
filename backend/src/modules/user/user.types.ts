@@ -148,7 +148,6 @@ export interface UserProfileResponse {
     emailVerified: boolean;
     phoneVerified: boolean;
     communityVerified: boolean;
-    locationVerified: boolean;
   };
 
   impact: {
