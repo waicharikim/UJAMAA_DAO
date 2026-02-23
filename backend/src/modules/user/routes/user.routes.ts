@@ -154,7 +154,6 @@ router.get(
 
 router.post(
   '/me/request-residence-change',
-  authenticate,
   buildRateLimiter({ windowMs: 24 * 60 * 60 * 1000, max: 1 }), // global IP limit
   buildRateLimiter({
     windowMs: 24 * 60 * 60 * 1000,
@@ -171,7 +170,6 @@ router.post(
 
 router.post(
   '/me/temporary-location',
-  authenticate,
   buildRateLimiter({ windowMs: 60 * 60 * 1000, max: 10 }), // global IP limit
   buildRateLimiter({
     windowMs: 60 * 60 * 1000,
@@ -185,7 +183,6 @@ router.post(
 
 router.delete(
   '/me/temporary-location',
-  authenticate,
   buildRateLimiter({ windowMs: 60 * 60 * 1000, max: 10 }), // global IP limit
   buildRateLimiter({
     windowMs: 60 * 60 * 1000,
@@ -218,7 +215,6 @@ router.get(
 
 router.post(
   '/verify-community/request',
-  authenticate,
   buildRateLimiter({ windowMs: 30 * 24 * 60 * 60 * 1000, max: 3 }), // global IP limit
   buildRateLimiter({
     windowMs: 30 * 24 * 60 * 60 * 1000,
@@ -231,7 +227,6 @@ router.post(
 
 router.post(
   '/verify-community/vouch',
-  authenticate,
   buildRateLimiter({ windowMs: 24 * 60 * 60 * 1000, max: 5 }), // global IP limit
   buildRateLimiter({
     windowMs: 24 * 60 * 60 * 1000,
@@ -245,7 +240,6 @@ router.post(
 
 router.post(
   '/verify-community/payment',
-  authenticate,
   buildRateLimiter({ windowMs: 24 * 60 * 60 * 1000, max: 3 }), // global IP limit
   buildRateLimiter({
     windowMs: 24 * 60 * 60 * 1000,

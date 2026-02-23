@@ -504,7 +504,7 @@ class UserService {
         oldWardId: user.primaryWardId,
         newPrimaryWardId: dto.newPrimaryWardId,
         reason: dto.reason,
-        proofUrl: dto.proofUrl ?? '',
+        proofUrl: dto.proofUrl || null,
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
@@ -731,19 +731,18 @@ class UserService {
       throw ApiError.conflict('No active vouching request');
     }
 
-    const existing = await prisma.communityVouch.findUnique({
-      where: { userId_voucherId: { userId: targetUserId, voucherId } },
-    });
-
-    if (existing) throw ApiError.conflict('Already vouched');
-
-    await prisma.communityVouch.create({
-      data: {
-        userId: targetUserId,
-        voucherId,
-        wardId,
-      },
-    });
+    try {
+      await prisma.communityVouch.create({
+        data: {
+          userId: targetUserId,
+          voucherId,
+          wardId,
+        },
+      });
+    } catch (e: any) {
+      if (e.code === 'P2002') throw ApiError.conflict('Already vouched for this user');
+      throw e;
+    }
 
     logger.info({ voucherId, targetUserId, wardId }, 'Vouch added');
 
@@ -1118,7 +1117,6 @@ class UserService {
         data: {
           status: 'PAYMENT_PENDING',
           reviewedAt: new Date(),
-          rejectionReason: 'Vouching period expired',
         },
       });
 

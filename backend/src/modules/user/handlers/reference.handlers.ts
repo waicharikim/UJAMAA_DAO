@@ -10,7 +10,6 @@ import { Response } from 'express';
 import { AuthRequest } from '../../../core/types/Ujamaadao.types.js';
 import { userService } from '../services/user.service.js';
 import { sendSuccess } from '../../../core/utils/response.js';
-import { ApiError } from '../../../core/errors/ApiError.js';
 
 /**
  * GET /users/reference/counties
@@ -70,8 +69,6 @@ export async function getGoodsServices(req: AuthRequest, res: Response) {
 export async function getWardMembers(req: AuthRequest, res: Response) {
   const { wardId } = req.params;
   const requesterId = req.user!.userId;
-
-  if (!wardId) throw ApiError.badRequest('wardId is required');
 
   const members = await userService.getWardMembers(wardId, requesterId);
   sendSuccess(res, members, 'Ward members retrieved', 200);
