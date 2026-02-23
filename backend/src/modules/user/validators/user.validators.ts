@@ -126,3 +126,24 @@ export const adminApproveSchema = z.object({
   approved: z.boolean(),
   reason: z.string().optional(),
 });
+
+// ============================================================================
+// REFERENCE DATA QUERY PARAMS
+// ============================================================================
+
+export const constituencyQuerySchema = z.object({
+  countyId: z.string().uuid().optional(),
+});
+
+export const wardQuerySchema = z.object({
+  constituencyId: z.string().uuid().optional(),
+  countyId: z.string().uuid().optional(),
+});
+
+export const goodsServicesQuerySchema = z.object({
+  industryId: z.string().uuid().optional(),
+});
+
+export const wardIdParamSchema = z.object({
+  wardId: z.string().uuid(),
+});

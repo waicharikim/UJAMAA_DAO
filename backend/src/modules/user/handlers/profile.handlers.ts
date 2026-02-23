@@ -20,7 +20,7 @@ export async function getMyProfile(req: AuthRequest, res: Response) {
   const userId = req.user!.userId;
 
   try {
-    const profile = await userService.getProfile(userId);
+    const { _privacySettings: _ps, ...profile } = await userService.getProfile(userId);
 
     sendSuccess(res, profile, 'Profile retrieved successfully', 200);
   } catch (error) {
@@ -38,7 +38,7 @@ export async function getMyProfile(req: AuthRequest, res: Response) {
 
 /**
  * GET /users/:userId
- * Get another user's profile (respects privacy settings)
+ * Get another user's profile — privacy settings applied
  */
 export async function getUserProfile(req: AuthRequest, res: Response) {
   const { userId } = req.params;
@@ -47,10 +47,19 @@ export async function getUserProfile(req: AuthRequest, res: Response) {
   try {
     const profile = await userService.getProfile(userId);
 
-    // TODO: Apply privacy filters based on requesterId & profile privacy settings
-    // For now returning full profile if authenticated (as per original)
+    // Owner sees their own full profile unfiltered
+    if (requesterId === userId) {
+      sendSuccess(res, profile, 'Profile retrieved successfully', 200);
+      return;
+    }
 
-    sendSuccess(res, profile, 'Profile retrieved successfully', 200);
+    // Apply privacy filters for other viewers
+    const filtered = userService.applyPrivacyFilters(
+      profile,
+      (profile as any)._privacySettings ?? null
+    );
+
+    sendSuccess(res, filtered, 'Profile retrieved successfully', 200);
   } catch (error) {
     logger.error(
       {
@@ -60,6 +69,29 @@ export async function getUserProfile(req: AuthRequest, res: Response) {
         error: error instanceof Error ? error.message : String(error),
       },
       'Failed to retrieve public profile'
+    );
+    throw error;
+  }
+}
+
+/**
+ * DELETE /users/me
+ * Soft-delete own account — clears PII, revokes sessions
+ */
+export async function deleteMyAccount(req: AuthRequest, res: Response) {
+  const userId = req.user!.userId;
+
+  try {
+    await userService.deleteAccount(userId);
+    sendSuccess(res, null, 'Account deleted successfully', 200);
+  } catch (error) {
+    logger.error(
+      {
+        operationType: 'USER_PROFILE',
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      'Failed to delete account'
     );
     throw error;
   }

@@ -35,6 +35,12 @@ import {
   ResidenceChangeRequestResponse,
   TemporaryLocationResponse,
   VerificationStatusResponse,
+  CountyResponse,
+  ConstituencyResponse,
+  WardResponse,
+  IndustryResponse,
+  GoodsServiceResponse,
+  WardMemberResponse,
 } from '../user.types.js';
 
 const RESIDENCE_CHANGE_COOLDOWN_MONTHS = 6;
@@ -76,6 +82,11 @@ class UserService {
         },
         secondaryWard: { select: { id: true, name: true } },
         currentWard: { select: { id: true, name: true } },
+        privacySettings: true,
+        userIndustries: {
+          include: { industry: { select: { id: true, name: true } } },
+          orderBy: { isPrimary: 'desc' },
+        },
       },
     });
 
@@ -145,10 +156,93 @@ class UserService {
         participationRights: user.participationRights,
       },
 
+      industries: user.userIndustries.map((ui) => ({
+        id: ui.industry.id,
+        name: ui.industry.name,
+        isPrimary: ui.isPrimary,
+      })),
+
       metadata: {
         createdAt: user.createdAt,
         lastLoginAt: user.lastLoginAt,
       },
+
+      _privacySettings: user.privacySettings
+        ? {
+            profileVisibility: user.privacySettings.profileVisibility,
+            showEmail: user.privacySettings.showEmail,
+            showPhone: user.privacySettings.showPhone,
+            showWallet: user.privacySettings.showWallet,
+            showImpactPoints: user.privacySettings.showImpactPoints,
+          }
+        : null,
+    };
+  }
+
+  /**
+   * Apply privacy filters to a profile when viewed by another user.
+   * Returns a redacted copy — never mutates the original.
+   */
+  applyPrivacyFilters(
+    profile: UserProfileResponse,
+    privacySettings: {
+      profileVisibility: string;
+      showEmail: boolean;
+      showPhone: boolean;
+      showWallet: boolean;
+      showImpactPoints: boolean;
+    } | null
+  ): UserProfileResponse {
+    const settings = privacySettings ?? {
+      profileVisibility: 'PUBLIC',
+      showEmail: false,
+      showPhone: false,
+      showWallet: false,
+      showImpactPoints: true,
+    };
+
+    // PRIVATE (or FRIENDS — friends system not yet built, treat same as PRIVATE)
+    if (
+      settings.profileVisibility === 'PRIVATE' ||
+      settings.profileVisibility === 'FRIENDS'
+    ) {
+      return {
+        id: profile.id,
+        name: profile.name,
+        avatarUrl: profile.avatarUrl,
+        email: null,
+        phoneNumber: null,
+        walletAddress: null,
+        geographic: {
+          primaryWard: profile.geographic.primaryWard,
+          primaryConstituency: null,
+          primaryCounty: null,
+          secondaryWard: null,
+          currentLocation: null,
+        },
+        verification: {
+          level: profile.verification.level,
+          emailVerified: false,
+          phoneVerified: false,
+          communityVerified: profile.verification.communityVerified,
+        },
+        impact: { global: 0, primary: null, allLocations: [], totals: {} },
+        economic: { utilityTokens: 0, participationRights: 0 },
+        industries: profile.industries,
+        metadata: { createdAt: profile.metadata.createdAt, lastLoginAt: null },
+      };
+    }
+
+    // PUBLIC — apply per-field flags
+    const { _privacySettings: _ps, ...rest } = profile;
+    return {
+      ...rest,
+      email: settings.showEmail ? profile.email : null,
+      phoneNumber: settings.showPhone ? profile.phoneNumber : null,
+      walletAddress: settings.showWallet ? profile.walletAddress : null,
+      impact: settings.showImpactPoints
+        ? profile.impact
+        : { global: 0, primary: null, allLocations: [], totals: {} },
     };
   }
 
@@ -802,6 +896,130 @@ class UserService {
       expiresAt: request.expiresAt,
       rejectionReason: request.rejectionReason,
     };
+  }
+
+  // ─────────────────────────────────────────────
+  // REFERENCE DATA
+  // ─────────────────────────────────────────────
+
+  async getCounties(): Promise<CountyResponse[]> {
+    const counties = await prisma.county.findMany({
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, code: true },
+    });
+    return counties;
+  }
+
+  async getConstituencies(countyId?: string): Promise<ConstituencyResponse[]> {
+    const constituencies = await prisma.constituency.findMany({
+      where: countyId ? { countyId } : undefined,
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, countyId: true },
+    });
+    return constituencies;
+  }
+
+  async getWards(
+    constituencyId?: string,
+    countyId?: string
+  ): Promise<WardResponse[]> {
+    const wards = await prisma.ward.findMany({
+      where: {
+        ...(constituencyId ? { constituencyId } : {}),
+        ...(countyId ? { countyId } : {}),
+      },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, constituencyId: true, countyId: true },
+    });
+    return wards;
+  }
+
+  async getIndustries(): Promise<IndustryResponse[]> {
+    const industries = await prisma.industry.findMany({
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true },
+    });
+    return industries;
+  }
+
+  async getGoodsServices(industryId?: string): Promise<GoodsServiceResponse[]> {
+    const goods = await prisma.goodsService.findMany({
+      where: {
+        ...(industryId ? { industryId } : {}),
+        active: true,
+      },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, industryId: true, category: true },
+    });
+    return goods;
+  }
+
+  /**
+   * Browse COMMUNITY_VERIFIED users in a ward for the vouching flow.
+   * Excludes the requesting user and already-deactivated accounts.
+   */
+  async getWardMembers(
+    wardId: string,
+    requesterId: string
+  ): Promise<WardMemberResponse[]> {
+    const members = await prisma.user.findMany({
+      where: {
+        primaryWardId: wardId,
+        id: { not: requesterId },
+        status: 'ACTIVE',
+        verificationLevel: {
+          in: ['COMMUNITY_VERIFIED', 'FULL_VERIFIED'],
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        avatarUrl: true,
+        verificationLevel: true,
+        primaryWardId: true,
+      },
+      orderBy: { name: 'asc' },
+    });
+    return members;
+  }
+
+  // ─────────────────────────────────────────────
+  // ACCOUNT MANAGEMENT
+  // ─────────────────────────────────────────────
+
+  /**
+   * Soft-delete an account: clears PII, revokes sessions, marks DELETED.
+   * The row is retained for audit integrity.
+   */
+  async deleteAccount(userId: string): Promise<void> {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      // Clear PII
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          email: null,
+          phoneNumber: null,
+          name: null,
+          avatarUrl: null,
+          walletAddress: null,
+          status: 'DELETED',
+          verificationLevel: 'UNVERIFIED',
+        },
+      });
+
+      // Revoke all sessions
+      await tx.session.updateMany({
+        where: { userId },
+        data: { revoked: true },
+      });
+    });
+
+    logger.info(
+      { operationType: 'SECURITY', userId },
+      'Account deleted — PII cleared, sessions revoked'
+    );
+
+    eventBus.publish('user.account.deleted', { userId });
   }
 
   // ─────────────────────────────────────────────

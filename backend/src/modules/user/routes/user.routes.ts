@@ -26,6 +26,10 @@ import {
   setTemporaryLocationSchema,
   vouchRequestSchema,
   paymentVerificationSchema,
+  constituencyQuerySchema,
+  wardQuerySchema,
+  goodsServicesQuerySchema,
+  wardIdParamSchema,
 } from '../validators/user.validators.js';
 
 // Handlers (split by domain)
@@ -33,7 +37,16 @@ import {
   getMyProfile,
   getUserProfile,
   updateProfile,
+  deleteMyAccount,
 } from '../handlers/profile.handlers.js';
+import {
+  getCounties,
+  getConstituencies,
+  getWards,
+  getIndustries,
+  getGoodsServices,
+  getWardMembers,
+} from '../handlers/reference.handlers.js';
 import {
   selectIndustries,
   getMyIndustries,
@@ -251,12 +264,75 @@ router.get(
 );
 
 // ============================================================================
-// PUBLIC PROFILE (last to avoid conflicts)
+// ACCOUNT MANAGEMENT
+// ============================================================================
+
+router.delete(
+  '/me',
+  buildRateLimiter({ windowMs: 60 * 60 * 1000, max: 3 }),
+  buildRateLimiter({
+    windowMs: 60 * 60 * 1000,
+    max: 1,
+    keyGenerator: (req: any) => req.user?.userId || req.ip,
+  }),
+  authorize({ verificationLevel: 'EMAIL_VERIFIED' }),
+  asyncHandler(deleteMyAccount)
+);
+
+// ============================================================================
+// REFERENCE DATA (geography + industries — no strict auth needed, EMAIL_VERIFIED)
+// ============================================================================
+
+router.get(
+  '/reference/counties',
+  authorize({ verificationLevel: 'EMAIL_VERIFIED' }),
+  asyncHandler(getCounties)
+);
+
+router.get(
+  '/reference/constituencies',
+  authorize({ verificationLevel: 'EMAIL_VERIFIED' }),
+  validateRequest({ schema: constituencyQuerySchema, target: 'query' }),
+  asyncHandler(getConstituencies)
+);
+
+router.get(
+  '/reference/wards',
+  authorize({ verificationLevel: 'EMAIL_VERIFIED' }),
+  validateRequest({ schema: wardQuerySchema, target: 'query' }),
+  asyncHandler(getWards)
+);
+
+router.get(
+  '/reference/industries',
+  authorize({ verificationLevel: 'EMAIL_VERIFIED' }),
+  asyncHandler(getIndustries)
+);
+
+router.get(
+  '/reference/goods-services',
+  authorize({ verificationLevel: 'EMAIL_VERIFIED' }),
+  validateRequest({ schema: goodsServicesQuerySchema, target: 'query' }),
+  asyncHandler(getGoodsServices)
+);
+
+// ============================================================================
+// WARD MEMBERS (for vouching discovery)
+// ============================================================================
+
+router.get(
+  '/wards/:wardId/members',
+  authorize({ verificationLevel: 'PHONE_VERIFIED' }),
+  validateRequest({ schema: wardIdParamSchema, target: 'params' }),
+  asyncHandler(getWardMembers)
+);
+
+// ============================================================================
+// PUBLIC PROFILE (last to avoid conflicts with named routes above)
 // ============================================================================
 
 router.get(
   '/:userId',
-  authenticate,
   authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
   validateRequest({ schema: userIdParamSchema, target: 'params' }),
   asyncHandler(getUserProfile)
