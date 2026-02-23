@@ -108,7 +108,18 @@ class RefreshTokenService {
         throw ApiError.authenticationError('Account is not active');
       }
 
-      // 6. Detect suspicious activity (IP/device change)
+      // 6. Validate that the session is still active in the DB
+      if (payload.sessionId) {
+        const sessionValid = await prisma.session.findUnique({
+          where: { id: payload.sessionId },
+          select: { revoked: true },
+        });
+        if (!sessionValid || sessionValid.revoked) {
+          throw ApiError.tokenInvalid('Session has been revoked');
+        }
+      }
+
+      // 6b. Detect suspicious activity (IP/device change)
       if (payload.sessionId) {
         await this.checkSuspiciousActivity(payload.sessionId, context);
       }
