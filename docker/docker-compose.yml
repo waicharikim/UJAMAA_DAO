@@ -74,6 +74,14 @@ services:
       - JWT_SECRET=${JWT_SECRET:-6e603cfa9affb7677020ad6a930bd3f076867ff38d100586dc5d985bed845ad0}
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
       - DASHBOARD_PASSWORD=${DASHBOARD_PASSWORD:-admin123}
+      - BASE_URL=${BASE_URL:-http://localhost:4000}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3001}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM=${SMTP_FROM:-noreply@ujamaadao.org}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
       - ENABLE_SMS=${ENABLE_SMS:-false}
       - SMS_PROVIDER=${SMS_PROVIDER:-africastalking}
       - AT_API_KEY=${AT_API_KEY:-}

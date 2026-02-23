@@ -1,13 +1,13 @@
 /**
- * @file src/worker.ts
+ * @file src/workers.ts
  * @description
  * Dedicated BullMQ worker process — processes all background queues
  *
  * This process should run separately from the web server.
  *
  * Run with:
- *   node dist/worker.js           (production)
- *   tsx src/worker.ts             (development)
+ *   node dist/workers.js           (production)
+ *   tsx src/workers.ts             (development)
  *
  * Version: 1.4 — February 2026
  * Features: graceful shutdown, full error handling, failed job alerts, dead-letter queue

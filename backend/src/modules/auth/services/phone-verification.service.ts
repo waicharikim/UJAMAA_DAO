@@ -262,8 +262,8 @@ class PhoneVerificationService {
   }
 
   private generateCode(): string {
-    const randomBytes = generateRandomHex(3);
-    const number = parseInt(randomBytes, 16) % 1000000;
+    const randomBytes = generateRandomHex(8);
+    const number = parseInt(randomBytes.slice(0, 8), 16) % 1000000;
     return number.toString().padStart(6, '0');
   }
 
