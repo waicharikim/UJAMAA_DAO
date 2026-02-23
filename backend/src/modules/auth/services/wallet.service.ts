@@ -399,7 +399,6 @@ class WalletService {
       emailVerified: user.emailVerified,
       phoneVerified: user.phoneVerified,
       communityVerified: user.communityVerified,
-      locationVerified: user.locationVerified,
       roles,
       globalImpactPoints: user.globalImpactPoints,
       utilityTokens: user.utilityTokens,
@@ -541,10 +540,23 @@ class WalletService {
     // Remove used nonce
     nonceStore.delete(normalizedAddress);
 
-    // Link wallet to user
+    // Link wallet to user and check for FULL_VERIFIED promotion
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { verificationLevel: true },
+    });
+
+    const newVerificationLevel: VerificationLevel =
+      currentUser?.verificationLevel === 'COMMUNITY_VERIFIED'
+        ? 'FULL_VERIFIED'
+        : (currentUser?.verificationLevel as VerificationLevel) || 'UNVERIFIED';
+
     const user = await prisma.user.update({
       where: { id: userId },
-      data: { walletAddress: normalizedAddress },
+      data: {
+        walletAddress: normalizedAddress,
+        verificationLevel: newVerificationLevel,
+      },
       select: { id: true, email: true, name: true, walletAddress: true },
     });
 
@@ -552,7 +564,7 @@ class WalletService {
       {
         operationType: 'AUTH',
         userId,
-        metadata: { walletAddress: normalizedAddress },
+        metadata: { walletAddress: normalizedAddress, verificationLevel: newVerificationLevel },
       },
       'Wallet linked to account'
     );
@@ -576,6 +588,13 @@ class WalletService {
       userId,
       walletAddress: normalizedAddress,
     });
+
+    if (newVerificationLevel === 'FULL_VERIFIED') {
+      eventBus.publish('user.verification.completed', {
+        userId,
+        level: 'FULL_VERIFIED',
+      });
+    }
 
     return user;
   }

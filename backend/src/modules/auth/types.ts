@@ -106,7 +106,6 @@ export interface AuthUserResponse {
   emailVerified: boolean;
   phoneVerified: boolean;
   communityVerified: boolean;
-  locationVerified: boolean;
   globalImpactPoints: number;
   utilityTokens: number;
   participationRights: number;
@@ -229,7 +228,6 @@ export function toUserResponse(user: any): AuthUserResponse {
     emailVerified: user.emailVerified,
     phoneVerified: user.phoneVerified,
     communityVerified: user.communityVerified,
-    locationVerified: user.locationVerified,
     globalImpactPoints: user.globalImpactPoints,
     utilityTokens: user.utilityTokens,
     participationRights: user.participationRights,

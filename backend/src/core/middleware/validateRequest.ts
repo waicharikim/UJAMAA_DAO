@@ -152,7 +152,6 @@ function validateVerificationLevel(
     'EMAIL_VERIFIED',
     'PHONE_VERIFIED',
     'COMMUNITY_VERIFIED',
-    'LOCATION_VERIFIED',
     'FULL_VERIFIED',
   ];
 

@@ -21,6 +21,7 @@ import { Prisma } from '@prisma/client';
 import { ApiError } from '../../../core/errors/ApiError.js';
 import { logger } from '../../../core/logger/logger.js';
 import { eventBus } from '../../../core/utils/eventBus.js';
+import { VerificationLevel } from '../../../core/types/Ujamaadao.types.js';
 import {
   UpdateProfileDto,
   SelectIndustriesDto,
@@ -41,6 +42,14 @@ const TEMPORARY_LOCATION_MAX_MONTHS = 6;
 const VOUCH_THRESHOLD = 3;
 const VOUCH_WINDOW_DAYS = 7;
 const PAYMENT_AMOUNT_KES = 100;
+
+const VERIFICATION_LEVEL_ORDER: VerificationLevel[] = [
+  'UNVERIFIED',
+  'EMAIL_VERIFIED',
+  'PHONE_VERIFIED',
+  'COMMUNITY_VERIFIED',
+  'FULL_VERIFIED',
+];
 
 class UserService {
   /**
@@ -122,7 +131,6 @@ class UserService {
         emailVerified: user.emailVerified,
         phoneVerified: user.phoneVerified,
         communityVerified: user.communityVerified,
-        locationVerified: user.locationVerified,
       },
 
       impact: {
@@ -600,7 +608,11 @@ class UserService {
     });
 
     if (!voucher) throw ApiError.notFound('Voucher user');
-    if (voucher.verificationLevel < 'COMMUNITY_VERIFIED') {
+    const voucherLevelIndex = VERIFICATION_LEVEL_ORDER.indexOf(
+      voucher.verificationLevel as VerificationLevel
+    );
+    const communityLevelIndex = VERIFICATION_LEVEL_ORDER.indexOf('COMMUNITY_VERIFIED');
+    if (voucherLevelIndex < communityLevelIndex) {
       throw ApiError.insufficientVerification(
         'Only community-verified users can vouch'
       );
@@ -693,11 +705,19 @@ class UserService {
   }
 
   async completeCommunityVerification(userId: string) {
+    // Check if user already has a wallet — if so, promote directly to FULL_VERIFIED
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { walletAddress: true },
+    });
+
+    const newLevel = user?.walletAddress ? 'FULL_VERIFIED' : 'COMMUNITY_VERIFIED';
+
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.user.update({
         where: { id: userId },
         data: {
-          verificationLevel: 'COMMUNITY_VERIFIED',
+          verificationLevel: newLevel,
           communityVerified: true,
         },
       });
@@ -711,11 +731,11 @@ class UserService {
       });
     });
 
-    logger.info({ userId }, 'Community verification completed');
+    logger.info({ userId, verificationLevel: newLevel }, 'Community verification completed');
 
     eventBus.publish('user.verification.completed', {
       userId,
-      level: 'COMMUNITY_VERIFIED',
+      level: newLevel,
     });
   }
 

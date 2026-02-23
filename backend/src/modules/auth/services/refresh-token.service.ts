@@ -147,7 +147,6 @@ class RefreshTokenService {
         emailVerified: user.emailVerified,
         phoneVerified: user.phoneVerified,
         communityVerified: user.communityVerified,
-        locationVerified: user.locationVerified,
         roles: user.roles || [],
         globalImpactPoints: user.globalImpactPoints,
         utilityTokens: user.utilityTokens,

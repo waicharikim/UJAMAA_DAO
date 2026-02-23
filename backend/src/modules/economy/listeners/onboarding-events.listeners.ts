@@ -195,34 +195,38 @@ export async function registerOnboardingListeners(): Promise<void> {
     }
   });
 
-  // Location verified - Award PR
-  eventBus.on('user.location.verified', async (data: { userId: string }) => {
-    try {
-      await participationRightsService.award(
-        data.userId,
-        PR_CONFIG.LOCATION_VERIFIED, // 75 points
-        ParticipationRightsReason.LOCATION_VERIFIED,
-        {
-          event: 'location_verified',
-          timestamp: new Date().toISOString(),
-        }
-      );
+  // Full verified (community + wallet connected) - Award PR
+  eventBus.on(
+    'user.verification.completed',
+    async (data: { userId: string; level: string }) => {
+      if (data.level !== 'FULL_VERIFIED') return;
+      try {
+        await participationRightsService.award(
+          data.userId,
+          PR_CONFIG.FULL_VERIFIED, // 75 points
+          ParticipationRightsReason.WALLET_CONNECTED,
+          {
+            event: 'full_verified',
+            timestamp: new Date().toISOString(),
+          }
+        );
 
-      logger.info(
-        { operationType: 'ECONOMY', userId: data.userId },
-        'PR awarded for location verification'
-      );
-    } catch (error) {
-      logger.error(
-        {
-          operationType: 'ECONOMY',
-          userId: data.userId,
-          error: error instanceof Error ? error.message : String(error),
-        },
-        'Failed to award PR for location verification'
-      );
+        logger.info(
+          { operationType: 'ECONOMY', userId: data.userId },
+          'PR awarded for full verification'
+        );
+      } catch (error) {
+        logger.error(
+          {
+            operationType: 'ECONOMY',
+            userId: data.userId,
+            error: error instanceof Error ? error.message : String(error),
+          },
+          'Failed to award PR for full verification'
+        );
+      }
     }
-  });
+  );
 
   // Full onboarding complete - Award remaining PR
   eventBus.on('user.onboarding.complete', async (data: { userId: string }) => {

@@ -30,8 +30,8 @@ export function registerWorkerListeners() {
         case 'COMMUNITY_VERIFIED':
           amount = PR_CONFIG.COMMUNITY_VERIFIED;
           break;
-        case 'LOCATION_VERIFIED':
-          amount = PR_CONFIG.LOCATION_VERIFIED;
+        case 'FULL_VERIFIED':
+          amount = PR_CONFIG.FULL_VERIFIED;
           break;
       }
 
