@@ -164,10 +164,21 @@ export interface UserProfileResponse {
     participationRights: number;
   };
 
+  industries: { id: string; name: string; isPrimary: boolean }[];
+
   metadata: {
     createdAt: Date;
     lastLoginAt: Date | null;
   };
+
+  /** Included internally for privacy filtering — stripped before sending to other users */
+  _privacySettings?: {
+    profileVisibility: string;
+    showEmail: boolean;
+    showPhone: boolean;
+    showWallet: boolean;
+    showImpactPoints: boolean;
+  } | null;
 }
 
 export interface UserIndustryResponse {
@@ -219,4 +230,44 @@ export interface VerificationStatusResponse {
   vouchesNeeded: number;
   expiresAt?: Date | null;
   rejectionReason?: string | null;
+}
+
+// Reference data responses
+export interface CountyResponse {
+  id: string;
+  name: string;
+  code: string;
+}
+
+export interface ConstituencyResponse {
+  id: string;
+  name: string;
+  countyId: string;
+}
+
+export interface WardResponse {
+  id: string;
+  name: string;
+  constituencyId: string;
+  countyId: string;
+}
+
+export interface IndustryResponse {
+  id: string;
+  name: string;
+}
+
+export interface GoodsServiceResponse {
+  id: string;
+  name: string;
+  industryId: string;
+  category: string | null;
+}
+
+export interface WardMemberResponse {
+  id: string;
+  name: string | null;
+  avatarUrl: string | null;
+  verificationLevel: string;
+  primaryWardId: string | null;
 }
