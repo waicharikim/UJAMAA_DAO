@@ -20,13 +20,18 @@ export default defineConfig({
     // so they never reach env.ts validation. Keep all required vars here.
     env: {
       NODE_ENV: 'test',
-      DATABASE_URL: 'postgresql://ujamaa_user:ujamaa_pass@postgres_test:5432/ujamaa_test_db',
+      DATABASE_URL: 'postgresql://ujamaa_user:ujamaa_pass@localhost:5433/ujamaa_test_db',
       JWT_SECRET: '6e603cfa9affb7677020ad6a930bd3f076867ff38d100586dc5d985bed845ad0',
       BASE_URL: 'http://localhost:4000',
       FRONTEND_URL: 'http://localhost:3000',
       ENABLE_EMAILS: 'false',
       LOG_LEVEL: 'error',
       PORT: '4000',
+      // Explicitly blank — prevents dotenv loading .env's redis://redis:6379 (Docker hostname)
+      // which causes createClient().connect() to retry indefinitely and block servicesReady.
+      REDIS_URL: '',
+      REDIS_HOST: 'localhost',
+      REDIS_PORT: '6380',
     },
     include: ['tests/**/*.test.{ts,js}', 'src/**/*.test.{ts,js}'],
     exclude: [
