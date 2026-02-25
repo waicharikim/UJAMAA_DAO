@@ -228,9 +228,12 @@ describe('User Routes', () => {
       await seedLocation();
     });
 
-    it('returns 401 with no token', async () => {
+    it('returns 200 with no token (public endpoint — needed during registration)', async () => {
+      await seedLocation();
       const res = await request(app).get(`${BASE}/reference/counties`);
-      expect(res.status).toBe(401);
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(Array.isArray(res.body.data)).toBe(true);
     });
 
     it('returns county list for EMAIL_VERIFIED user', async () => {
