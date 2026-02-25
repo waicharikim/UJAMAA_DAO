@@ -455,3 +455,92 @@ Write user module unit + integration tests (GET /users/me, PATCH /users/me/profi
 
 **Token usage:**
 Sonnet 4.6 — heavy session (schema migration, 10 test files, 5 service bugs, 4 infra fixes)
+
+---
+
+## [2026-02-24] — User module: 5 service bugs fixed, seed repaired, 35/35 route tests green
+
+**What was built:**
+- **User module bug fixes** (found by test-driven discovery):
+  1. `user.service.ts` — `proofUrl: dto.proofUrl ?? ''` changed to `proofUrl: dto.proofUrl || null` (empty string is never a valid URL; field must be nullable)
+  2. `user.service.ts` — `vouchForUser()` had a check-then-create race condition; replaced with try/catch on Prisma P2002 unique violation
+  3. `user.service.ts` — `checkVouchingTimeouts()` incorrectly set `rejectionReason` on `PAYMENT_PENDING` status transitions (a timeout is not a rejection); removed
+  4. `user.routes.ts` — 5 redundant `authenticate` middleware calls removed from individual routes (global `router.use(authenticate)` at top of router already covers all routes)
+  5. `reference.handlers.ts` — dead code null check `if (!wardId)` removed from `getWardMembers` (Zod validator guarantees wardId is always present)
+- **New Prisma migration** (`20260223214449_make_proof_url_nullable`): `ResidenceChangeRequest.proofUrl String` → `String?` to match nullable service usage
+- **Dev seed repaired** (`backend/src/core/database/seed.ts`):
+  1. `seedSystemGroups()` — upsert `where: { systemType: 'NATIONAL' }` → `where: { name: 'Kenya National Community' }` (systemType is not a unique field)
+  2. `seedRoles()` — stripped `namespace` and `builtin` fields from `create` block (Role schema only has `name` and `description`)
+  - Seed now runs cleanly: 47 counties, 1578 wards, 1909 system groups, 12 roles
+- **Auth helpers refactored** (`backend/tests/auth/helpers.ts`):
+  - `seedLocation()` `create()` calls changed to `upsert()` — idempotent across multiple test runs against the same DB
+  - Removed stale `locationVerified` field references (field removed from TS types in previous session)
+- **New test helper file**: `backend/tests/user/helpers.ts` — `seedIndustries()`, `seedGoodsServices()`, `makeUserToken()`, `createCommunityVerifiedUser()`, `createFullyVerifiedUser()`, re-exports location constants from `../auth/helpers.js`
+- **35 user route integration tests** in `backend/tests/user/user.routes.test.ts` — covers all user routes: `GET /me`, `PATCH /me/profile`, `DELETE /me`, `GET /reference/*` (counties, constituencies, wards, industries, goods-services), `POST /me/industries`, `GET /me/industries`, `POST /me/goods-services`, `GET /wards/:wardId/members`, `GET /verify-community/status`, `POST /verify-community/request`, `GET /:userId`
+- **Total test count: 139/139 green** (104 auth + 35 user)
+- **Cross-module dependency analysis**: auth imports economy (participationRightsService), community (groupMembershipService), user (checkFullVerification) directly; user imports auth (session/phone cleanup); economy and community react via eventBus listeners on auth/user events
+- Committed and pushed to `develop` ✅
+
+**Decisions made:**
+- No new architectural decisions — all changes were implementation bug fixes
+
+**What's still broken or incomplete:**
+- Economy and community modules (directly imported by auth, mocked in current tests) — zero tests
+- `BASE_URL`, `SMTP_*`, `ENCRYPTION_KEY`, `ALLOWED_ORIGINS` env vars still absent from `docker/docker-compose.yml` web service
+- M-Pesa: not started
+- On-chain PR/UT (Base Sepolia): not started
+- `auth.onboarding.test.ts` full E2E integration test still in `tests/old/`
+- `// @ts-nocheck` in 3 scaffold service files (`project.service.ts`, `impactPoint.service.ts`, `locationImpact.service.ts`) deferred
+
+**Next milestone:**
+Write economy and community module tests — both are directly called by auth and are mocked in current tests, making them the highest-priority modules to bring to `tested` status.
+
+**Token usage:**
+Sonnet 4.6 — heavy session (5 service bugs, schema migration, seed fixes, 2 new test files, 3 rounds of test failure fixes)
+
+---
+
+## [2026-02-24] — ADR-009 closed (Privy), blockchain scaffold, frontend wired, economy tests green
+
+**What was built:**
+
+- **ADR-009 closed — Privy chosen** (`ai_workflows/DECISIONS.md`): Full comparison vs Dynamic documented. Privy wins on phone-primary identity, zero-crypto-experience UX, gasless-first Pimlico integration, lighter SDK for rural/3G users.
+- **Three new ADRs added**:
+  - ADR-018: Foundry as smart contract toolchain (over Hardhat) — Rust-based, Solidity-native tests, gas snapshots, `forge test`/`forge script`
+  - ADR-019: `contracts/` at repo root (not inside `backend/`) — separate deployable artifact, independent build lifecycle
+  - ADR-020: Backend minter wallet pattern — dedicated EOA (`MINTER_PRIVATE_KEY` env var) holds `PR_MINTER_ROLE`/`UT_MINTER_ROLE`, separate from Privy user wallets
+- **`contracts/` scaffold created** (no Solidity yet): `foundry.toml` (solc 0.8.24, optimizer on, Base Sepolia + Mainnet RPC endpoints), `src/`, `test/`, `script/`, `out/` directories, `README.md` with full architecture doc (on-chain vs off-chain split, contract specs, minter wallet pattern, directory structure, env vars table), `.gitignore`
+- **Frontend Phase 1 — real API wiring**:
+  - `frontend/lib/api.ts` — replaced all mock API responses with real `fetch()` calls to backend at `NEXT_PUBLIC_API_URL`. Added JWT injection, 401 auto-refresh via refresh token (with race-condition deduplication), typed `apiFetch()` wrapper. Exported `authApi`, `userApi`, `economyApi` namespaced clients. Legacy `apiClient` compat shim preserved.
+  - `frontend/contexts/auth-context.tsx` — replaced wallet-based auth (wagmi signMessageAsync) with magic link flow: `requestMagicLink(email)` → `verifyMagicLink(token)`. Added `mapBackendUser()` to bridge backend ↔ frontend User type. Auto-hydrate from localStorage tokens on mount. Deprecated `login(walletAddress)` shim kept for compat.
+  - `frontend/components/auth/connect-wallet.tsx` — replaced wallet connect dropdown with magic link dialog (email input + "Send Login Link" → sent confirmation). Shows profile dropdown when authenticated.
+  - `frontend/app/auth/callback/page.tsx` — new page: handles `?token=...` from magic link email, calls `verifyMagicLink()`, redirects to `/dashboard` on success.
+  - `frontend/.env.local` — `NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1`
+  - `frontend/components/dashboard/dashboard-content.tsx` — made client component, wired `user.impactPoints.global` and `user.tokenBalance` (participationRights) to real auth context.
+- **Economy module tested** (`backend/tests/economy/`):
+  - `helpers.ts` — `createEconomyTestUser()`, `makeEconomyToken()`, re-exports `seedLocation`
+  - `participationRights.service.test.ts` — **18 tests**: `getBalance()` (0 for new user, positive sum, net with negatives), `award()` (creates log + updates denorm field, caps at MAX_BALANCE=500, throws on ≤0, accumulates, stores metadata), `spend()` (negative log, throws 403 when insufficient, throws on ≤0, rejects over-balance, allows exact balance spend), `hasSufficient()` (false/true matrix)
+  - `economy.routes.test.ts` — **16 tests**: auth (401 without token), authorization (403 for EMAIL_VERIFIED on all routes), happy paths (GET /pr returns balance+history, GET /dues/history empty array, GET /commitments empty + with seeded data, POST /commitments/dues validation + 201 creation)
+- **Bug fix — economy validator/handler mismatch**: `POST /economy/commitments/dues` route used `createCommitmentSchema` (validated `type: CommitmentType`) but handler read `tier: DuesTier`. Added `duesOptInSchema` (`tier: ORDINARY|SUPPORTER|SPONSOR`, `startPeriod: YYYY-MM`, `durationMonths`). Updated route to use correct schema.
+- **`ParticipationRightsService` class exported** (named export added) — allows test-time instantiation with custom Prisma client if needed.
+- **Total test count: 173/173 green** (104 auth + 35 user + 34 economy)
+
+**Decisions made:**
+- ADR-009: Privy (closed, see above)
+- ADR-018: Foundry toolchain
+- ADR-019: contracts/ at root
+- ADR-020: Minter wallet pattern
+
+**What's still broken or incomplete:**
+- Community module tests: zero tests (directly imported by auth — same priority as economy was)
+- Frontend: proposals/groups/governance pages still have stub data (Phase 2: after community + governance backends are hardened)
+- Frontend: Privy integration not yet done (Phase 3: after ADR-009 is closed — it is now ✅, so unblocked)
+- Blockchain: `PrToken.sol` + `UtToken.sol` not written yet (dedicated blockchain session needed)
+- Economy `duesService.applyCommitmentPenalties()` and `commitmentService.checkForBreaches()` not tested
+- `BASE_URL`, `SMTP_*`, `ENCRYPTION_KEY`, `ALLOWED_ORIGINS` env vars still absent from `docker/docker-compose.yml` web service
+
+**Next milestone:**
+Write community module tests → move community status from `partial` → `tested`. Then wire frontend Phase 2 (PR/UT balance display) once economy tests are merged.
+
+**Token usage:**
+Sonnet 4.6 — heavy session (4 concurrent tasks: ADR decisions, contracts scaffold, frontend wiring, economy tests)

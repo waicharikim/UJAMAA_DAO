@@ -43,7 +43,7 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 
 ---
 
-## 3. Current Progress (Updated: Feb 2026)
+## 3. Current Progress (Updated: 2026-02-24)
 
 > **How to read this table:**
 > - `scaffold` = directory + schema only, no working logic
@@ -56,8 +56,8 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 | Module | Status | Notes |
 |---|---|---|
 | auth | tested | 10+ handlers, 10+ services, routes, validators, prisma schema. SMS wired (AT SDK). Auth-cleanup BullMQ job. **104 green tests** across 11 files (service units + 34 HTTP route integration tests). Schema fully aligned (2FA + security_events migration applied). |
-| user | partial | 7 handlers, services, routes, validators, prisma schema, cleanup job |
-| economy | partial | Cron jobs (dues penalties, monthly regen), PR award logic, BullMQ jobs, event listeners |
+| user | tested | 7 handlers, services, routes, validators, prisma schema, cleanup job. **35 green tests** (1 helper file + 34 route integration tests). 5 service bugs fixed: proofUrl nullable, vouch P2002 race, timeout semantic, redundant middleware, dead code. Migration `20260223214449_make_proof_url_nullable` applied. |
+| economy | tested | PR service (award/spend/balance/hasSufficient), dues history, commitments. **34 green tests** (2 files: 18 service unit + 16 route integration). Bug fixed: duesOptInSchema added (validator/handler mismatch on POST /commitments/dues). |
 | community | partial | Group management: controllers, services, routes, member event listeners |
 | governance | partial | Proposal controllers, services, routes, prisma schema |
 | projects | partial | Project lifecycle: controllers, services, routes, prisma schema |
@@ -74,7 +74,7 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 | verification | scaffold | Empty directory |
 
 **Cross-cutting gaps (apply to all modules):**
-- Tests: auth module has **104 green tests** across 11 files (full service units + 34 HTTP route integration tests). All other modules: zero tests.
+- Tests: auth **104 green** (11 files), user **35 green** (2 files), economy **34 green** (3 files). All other modules: zero tests. Total: **173 green tests**.
 - `make dev` → `/health` ✅ verified 2026-02-22 — server responds `{"success":true,"status":"ok"}`
 - `make dev` → `/ready` ✅ verified 2026-02-22 — Prisma connected, migration applied
 - Worker container: `redischeck.sh` needs `chmod +x docker/*.sh` on host after fresh clone
@@ -82,7 +82,7 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 - TypeScript: `npx tsc --noEmit` returns **0 errors** ✅ (`develop` branch — PR #3 merged 2026-02-23)
 - ESLint: `npm run lint` passes clean ✅ (`develop` branch — ESLint config rewritten 2026-02-23, 133 files formatted)
 - BullMQ scheduling: 4 active jobs registered — user-cleanup (4h), auth-cleanup (03:00), monthly-pr-regen (1st of month), daily-commitment-penalties (02:00)
-- `BASE_URL`, `SMTP_*`, `ENCRYPTION_KEY`, `ALLOWED_ORIGINS` ⚠️ not in docker-compose.yml web env — magic links and emails broken without them
+- `BASE_URL`, `SMTP_*`, `ENCRYPTION_KEY`, `ALLOWED_ORIGINS` ✅ now in `docker/docker-compose.yml` web env. `ENCRYPTION_KEY` defaults to empty string — set it with `openssl rand -hex 32` before enabling TOTP/2FA or encrypted fields.
 - M-Pesa: not started
 - On-chain PR/UT (Base Sepolia): not started
 - Frontend (Next.js): not started
@@ -108,25 +108,33 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 - Structured logging — `backend/src/core/logger/logger.ts` with `operationType`
 - Error handling — `ApiError` class (`backend/src/core/errors/ApiError.ts`)
 - RBAC — `backend/src/core/rbac/` (roles, authorize middleware, integration)
-- Testing — Vitest + Supertest (`backend/vitest.config.ts`) — 104 auth tests passing across 11 files; `fileParallelism: false` required (shared test DB); `resolve.alias` for `@core/*` and `@modules/*` required in vitest config
+- Testing — Vitest + Supertest (`backend/vitest.config.ts`) — **173 tests green** (104 auth across 11 files + 35 user across 2 files + 34 economy across 3 files); `fileParallelism: false` required (shared test DB); `resolve.alias` for `@core/*` and `@modules/*` required in vitest config
 
 ### Infrastructure (active)
-- Docker Compose: `docker/docker-compose.yml` — services: `traefik`, `web`, `worker`, `postgres`, `postgres_test`, `redis`
+- Docker Compose: `docker/docker-compose.yml` — services: `traefik`, `web`, `worker`, `postgres`, `postgres_test`, `redis`, `frontend`
 - Makefile: `backend/Makefile` — commands: `make dev`, `make logs`, `make db-migrate`, `make db-shell`, `make down`, `make clean`
 - Entry points: `backend/src/index.ts` (web), `backend/src/workers.ts` (worker), `backend/src/worker-events.ts`
 - Graceful shutdown in `backend/src/index.ts`: SIGTERM/SIGINT → close server → disconnect Prisma/Redis
 - Observability (disabled by default): Prometheus, Grafana, Loki, Jaeger
 
-### Frontend (planned)
-- Next.js 14+ App Router, TypeScript, Tailwind CSS, shadcn/ui
-- TanStack Query, Wagmi + RainbowKit, Zustand
+### Frontend (Phase 1 — auth/user APIs wired)
+- Next.js 15 + React 18 + TypeScript + Tailwind CSS + shadcn/ui (installed)
+- `frontend/lib/api.ts` — real HTTP client with JWT injection + auto-refresh (`authApi`, `userApi`, `economyApi`)
+- `frontend/contexts/auth-context.tsx` — magic link flow (`requestMagicLink`, `verifyMagicLink`, auto-hydrate from localStorage)
+- `frontend/app/auth/callback/page.tsx` — handles magic link token from URL
+- `frontend/.env.local` — `NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1`
+- TanStack Query, Wagmi (mock — to be replaced by Privy in Phase 3), Zustand
 
-### Blockchain (planned)
-- Base L2 (Sepolia testnet → Mainnet)
-- PR: soulbound ERC-20, UT: standard ERC-20
-- Embedded wallets via Privy or Dynamic
+### Blockchain (scaffold — no code yet)
+- Base L2 (Sepolia testnet → Mainnet) — ADR-008
+- PR: soulbound ERC-20 (`PrToken.sol`), UT: standard ERC-20 (`UtToken.sol`) — to write in dedicated session
+- Toolchain: Foundry (`forge`/`cast`/`anvil`) — ADR-018
+- `contracts/` at repo root — ADR-019
+- Embedded wallets: **Privy** (ADR-009, decided 2026-02-24) — `@privy-io/react-auth` to install in Phase 3
+- Backend minter wallet: `MINTER_PRIVATE_KEY` env var on worker — ADR-020
 - Gas sponsorship via Pimlico paymaster
 - Local dev: Anvil fork of Base Sepolia
+- `docker-compose.yml` `anvil` service to add in blockchain session
 
 ---
 
@@ -191,17 +199,28 @@ A module is **production-ready** when ALL of these are true:
 | TypeScript errors in scaffold services that reference unmapped Prisma models | Add `// @ts-nocheck` at the top of the service file and a note like `scaffold: <ModelName> alignment in progress`. Do not attempt full schema fixes on scaffold modules — defer until that module is actively being built. |
 | Magic links produce `undefined/auth/verify-email?...` in emails | `BASE_URL` env var is not set. Add `BASE_URL=http://localhost:4000` to the web service environment in `docker/docker-compose.yml`. |
 | Emails not sending at all (magic links, verification) | SMTP credentials not configured. Add `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` to web service environment in `docker/docker-compose.yml`. Startup logs show "Email service NOT configured" warning when missing. |
-| `/admin/queues` Bull Board returns 401 with correct password | Username is always `admin`. Password is `DASHBOARD_PASSWORD` env var (default `admin123` in dev docker-compose). Change before any shared or production deployment. |
+| `/admin/queues` Bull Board returns 401 with correct password | Username is always `admin`. Password is `DASHBOARD_PASSWORD` env var (default `admin123` in dev docker-compose). Change before any shared or production deployment. Auth uses `timingSafeEqual` via SHA-256 hash — timing-safe as of `app.ts:287`. |
 | CI fails: `PrismaConfigEnvError: Cannot resolve environment variable: DATABASE_URL` | Prisma v7 `prisma.config.ts` calls `env('DATABASE_URL')` at config-load time, even during `prisma generate`. Add `DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ci_db` to the job-level `env:` block in `.github/workflows/ci.yml`. |
 | ESLint error: `Cannot find module '@eslint/js/dist/configs/typescript.js'` | That subpath does not exist in `@eslint/js`. Rewrite `eslint.config.js` to import `@typescript-eslint/eslint-plugin`, `@typescript-eslint/parser`, and `globals` directly — do not rely on `@eslint/js` TypeScript re-exports. |
 | JWT `jti` claim does not match session ID | `signJwtToken` generates a new random hex `jti` regardless of the payload's `jti` field. The actual session ID travels in the JWT `sessionId` field (not `jti`). Token revocation checks must use `sessionId`, not `jti`. |
 | Prisma migration SQL files not committed (silently gitignored) | `backend/.gitignore` has a `*.sql` rule. Add `!prisma/migrations/**/*.sql` directly after it to exempt migration files. Without this, migration files are invisible to git and teammates can't reproduce the schema history. |
+| `sendJobFailureAlert` fires but no alert is actually sent | `workers.ts:236-305` — the function only calls `logger.error`. Email and Slack blocks are commented out. Job failures reach the dead-letter queue and appear in logs, but no human is notified. Wire Slack webhook or email before any production deployment. |
+| Access token is valid for 7 days — 401 auto-refresh rarely fires | `auth.service.ts:448` issues 7-day access tokens (intentional for magic-link UX — see ADR-022). The `frontend/lib/api.ts` 401-refresh path exists as a safety net but will rarely trigger. Revocation requires explicit `DELETE /auth/sessions/:id`. |
+| `ENCRYPTION_KEY` defaults to empty string, not a crash | `docker/docker-compose.yml` sets `ENCRYPTION_KEY=${ENCRYPTION_KEY:-}` — silently empty if the host env var is not set. TOTP and encrypted fields will fail at runtime without a startup crash. Always set a 64-char hex value (`openssl rand -hex 32`) before enabling 2FA or any feature that calls the encryption utility. |
 | `TypeError: Cannot set property query of #<IncomingMessage> which has only a getter` | Express `req.query` is a getter-only property on `IncomingMessage`. Assigning `(req.query as any) = data` throws at runtime. Use `Object.defineProperty(req, 'query', { value: data, writable: true, configurable: true })` instead. |
 | Rate limiter blocks tests (`strictRateLimit` 5 req/15min exceeded) | Add a `NODE_ENV === 'test'` guard at the top of `buildRateLimiter` that returns a no-op middleware. Rate limiters share in-memory (or Redis) state across test cases hitting the same endpoint in the same run. |
 | `generateRandomHex(n)` throws "Must generate at least 8 bytes" | The crypto utility enforces a minimum of 8 bytes. Never pass a value less than 8. If you need fewer output characters, generate 8 bytes and slice: `generateRandomHex(8).slice(0, desiredLength)`. |
 | Routes integration test returns 400 for a valid request | The endpoint queries the DB and the required row doesn't exist (user, ward, industry, etc.). Routes tests need a `beforeEach` that seeds the DB — the global `testSetup.ts` truncates all 81 tables before each test, so `beforeAll` seeding is wiped before the first test runs. Always seed in `beforeEach` for routes tests. |
 | Refresh token issues new tokens for a revoked session | `refresh-token.service.ts` must check `prisma.session.findUnique({ select: { revoked: true } })` after decoding the refresh JWT and before issuing new tokens. Without this check, a revoked session can keep refreshing indefinitely. |
 | Error response body has `success: undefined` | `BaseError.toJSON()` and `errorHandler.ts` `responseBody` must include `success: false` explicitly. Tests checking `res.body.success === false` will fail silently if `success` is omitted from the serialized error object. |
+| `seedLocation()` throws unique constraint error on re-runs | `prisma.county/constituency/ward.create()` fails if the test DB still holds rows from a previous run (e.g. the TRUNCATE didn't fire yet). Use `upsert()` with `where: { id }` and `update: {}` for all fixed-UUID seed helpers — this makes them idempotent regardless of DB state. |
+| `prisma.industry.create` throws `Unknown argument 'active'` | The `Industry` model has NO `active` field. Only `GoodsService` has `active: Boolean`. Omit `active` from any `Industry` create/upsert call. |
+| `updateProfile()` and `selectIndustries()` responses don't contain profile data | Both handlers return `{ success: true }` — they do not echo back the updated entity. Tests must verify side effects by querying the DB directly: `prisma.user.findUnique(...)` / `prisma.userIndustry.findMany(...)`. |
+| Validation errors return 400, not 422 | `validateRequest.ts` calls `ApiError.badRequest()` which sets HTTP status 400. Route tests checking for validation rejection must `expect(res.status).toBe(400)`, not 422. |
+| `getVerificationStatus()` returns `'PENDING'` when no request exists | When no `VerificationRequest` row exists for the user, the handler returns `{ status: 'PENDING', vouchesReceived: 0, vouchesNeeded: 3 }`. Do not assert `'NOT_STARTED'` — that status does not exist in the implementation. |
+| Prisma `upsert` where clause must reference a `@unique` field | `seedSystemGroups()` used `where: { systemType: 'NATIONAL' }` but `systemType` is not unique on `Group`. Prisma throws `Argument 'where' needs at least one of '...'`. Always use a `@unique` or `@@unique` field (e.g. `name`) in `upsert` where clauses. |
+| Seed `create` block spreads non-schema fields | `seedRoles()` spread `{ name, namespace, description, builtin }` into Prisma `create` — `namespace` and `builtin` do not exist on the `Role` model, causing `Unknown argument` errors. Always destructure only schema-mapped fields in seed `create` blocks. |
+| `proofUrl` on `ResidenceChangeRequest` was non-nullable | `ResidenceChangeRequest.proofUrl` was `String` in schema, but `requestResidenceChange()` correctly accepts `proofUrl` as optional. TypeScript error `Type 'string | null' is not assignable to type 'string'` signals a schema mismatch — apply `String?` migration before setting `null`. |
 
 ---
 
@@ -222,3 +241,6 @@ A module is **production-ready** when ALL of these are true:
 | v2.5 | TypeScript CI: 134 → 0 errors ✅. Reputation schema added (80 models). Auth tests: 2 → 11. 4 new common issues. `fileParallelism: false` note added. |
 | v2.6 | SMS wired (AT SDK). Auth-cleanup BullMQ job. Dead scheduling code deleted. ESLint fixed. PR #3 + PR #4 merged to develop. Bull Board added to tech stack. 7 new common issues. Scheduling convention tightened (BullMQ-only). |
 | v2.7 | Auth module: 104 tests green (11 files). Auth status upgraded partial → tested. `tested` tier added to status legend. 5 service bugs fixed (phone-verification, refresh-token, logout, BaseError, errorHandler). 8 new common issues (gitignore SQL, req.query setter, rate limiter, generateRandomHex, routes seeding, refresh revocation, success field). vitest alias note added. PR #6 merged. |
+| v2.8 | User module: 35 tests green (35 route integration tests). User status upgraded partial → tested. 5 service bugs fixed (proofUrl null, vouch P2002 race, timeout semantic, redundant middleware x5, dead code). Schema migration `20260223214449_make_proof_url_nullable`. Dev seed repaired (systemType uniqueness, Role schema fields). Auth helpers upsert-refactored. 8 new common issues added (upsert idempotency, Industry.active, response shapes, 400 vs 422, PENDING status, unique where clause, non-schema fields, proofUrl nullable). Total tests: 139 green. |
+| v2.9 | ADR-009 closed (Privy chosen). ADR-018/019/020 added (Foundry, contracts/ at root, minter wallet). `contracts/` scaffold created (foundry.toml, README with architecture). Frontend Phase 1: api.ts real HTTP client, auth-context magic link flow, connect-wallet.tsx email dialog, auth/callback page, .env.local. Dashboard wired to real user data. Economy module: 34 new tests green (18 service unit + 16 route integration). Bug fixed: duesOptInSchema added. ParticipationRightsService class exported. Total: 173 green tests. |
+| v3.0 | Audit pass (2026-02-24): removed stale Bull Board timing-safe issue (fixed in app.ts:287), updated env-var gap note (BASE_URL/SMTP_*/ENCRYPTION_KEY/ALLOWED_ORIGINS now in docker-compose), added `frontend` service to infrastructure list, added 3 new common issues (sendJobFailureAlert stub, 7-day token, ENCRYPTION_KEY empty default). ADR-021 (auth→user direct import exception) and ADR-022 (7-day token) added to DECISIONS.md. |

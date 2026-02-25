@@ -76,12 +76,12 @@ services:
       - DASHBOARD_PASSWORD=${DASHBOARD_PASSWORD:-admin123}
       - BASE_URL=${BASE_URL:-http://localhost:4000}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3001}
-      - SMTP_HOST=${SMTP_HOST:-}
-      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_HOST=${SMTP_HOST:-172.19.0.1}
+      - SMTP_PORT=${SMTP_PORT:-1025}
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASSWORD=${SMTP_PASSWORD:-}
       - SMTP_FROM=${SMTP_FROM:-noreply@ujamaadao.org}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
       - ENABLE_SMS=${ENABLE_SMS:-false}
       - SMS_PROVIDER=${SMS_PROVIDER:-africastalking}
       - AT_API_KEY=${AT_API_KEY:-}
@@ -192,6 +192,53 @@ services:
       web:
         condition: service_started
     command: ["sh", "./docker/start-worker.sh"] # ← Use startup script
+
+  # ═════════════════════════════════════════════════════════════════════════
+  # FRONTEND (Next.js 15 — dev with hot reload)
+  # ═════════════════════════════════════════════════════════════════════════
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      target: dev
+    container_name: ujamaa_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - NEXT_TELEMETRY_DISABLED=1
+      # NEXT_PUBLIC_* vars are inlined at build time by Next.js, but in dev
+      # mode with hot reload they are read at runtime from the environment.
+      # The browser calls this URL directly, so it must be reachable from
+      # the host (localhost:4000), not via the Docker internal network.
+      - NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1
+    volumes:
+      - ../frontend:/app               # Mount source for hot reload
+      - /app/node_modules              # Preserve container node_modules
+      - /app/.next                     # Preserve Next.js build cache
+    networks:
+      - backend
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`app.localhost`)"
+      - "traefik.http.routers.frontend.entrypoints=web"
+      - "traefik.http.services.frontend.loadbalancer.server.port=3000"
+
+  # ═════════════════════════════════════════════════════════════════════════
+  # MAILHOG (Local SMTP catcher — dev only)
+  # Catches all outgoing emails. Web UI: http://localhost:8025
+  # SMTP: mailhog:1025 (no auth required)
+  # ═════════════════════════════════════════════════════════════════════════
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: ujamaa_mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"   # SMTP — web service sends here
+      - "8025:8025"   # Web UI — view caught emails in browser
+    networks:
+      - backend
 
   # ═════════════════════════════════════════════════════════════════════════
   # VERSION B: WORKER POD WITH SIDECARS (COMMENTED OUT)

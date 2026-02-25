@@ -104,13 +104,69 @@
 
 ---
 
-## [ADR-009] — Embedded wallets via Privy or Dynamic
+## [ADR-009] — Embedded wallets: Privy chosen over Dynamic
 
-**Date:** 2026-02-19
-**Status:** Under Review (Privy vs Dynamic decision pending)
-**Decision:** Use embedded wallet SDK (Privy or Dynamic) rather than requiring users to install MetaMask or manage seed phrases.
-**Why:** Target users are ward members in Kenya, many of whom have never used blockchain. Requiring MetaMask installation and seed phrase management would kill adoption. Embedded wallets abstract the complexity while still giving users real wallet ownership.
-**Consequences:** Whichever SDK is chosen, it must support Base, allow social login (phone number primary), and support Pimlico paymaster for gasless transactions. Final choice (Privy vs Dynamic) to be made during blockchain module implementation.
+**Date:** 2026-02-19 (closed 2026-02-24)
+**Status:** Decided (Privy)
+**Decision:** Use Privy for embedded wallet creation and social login. Dynamic was rejected.
+**Why:** Privy wins on the factors that matter most for UjamaaDAO:
+- Phone number is the primary Kenyan identity (Safaricom/M-Pesa number = the user's financial identity). Privy treats phone as a first-class login method; Dynamic treats it as secondary behind email/wallet.
+- Target users have zero crypto experience. Privy hides seed phrases and shows no gas costs by default — designed for this use case. Dynamic's UX assumes some wallet familiarity (MetaMask users).
+- Gasless-first via Pimlico paymaster is a first-class pattern in the Privy ecosystem (permissionless.js / viem account abstraction).
+- Privy's SDK is lighter — suits low-data mobile users on 3G in rural wards.
+- Dynamic is better for DeFi products where users arrive with existing MetaMask wallets. That is not UjamaaDAO's user.
+- Cost: Privy has a generous free tier (usage-based). Dynamic is more expensive per MAU at scale.
+**Consequences:** Install `@privy-io/react-auth` in the frontend (Phase 3, after economy/community backends are hardened). Replace `frontend/components/auth/connect-wallet.tsx` with `usePrivy()` hook. Primary login flow: `loginWithPhone()`. On wallet creation: `PATCH /api/v1/users/me/profile` with `walletAddress`. Gate on-chain features behind `user.walletAddress !== null`.
+
+---
+
+## [ADR-018] — Foundry as smart contract toolchain (over Hardhat)
+
+**Date:** 2026-02-24
+**Status:** Decided
+**Decision:** Use Foundry (forge/cast/anvil) for all smart contract development, testing, and deployment. Hardhat rejected.
+**Why:** Foundry is faster than Hardhat (Rust-based, no Node.js overhead), tests are written in Solidity (not JavaScript), has gas snapshots built in, and `anvil` provides a local EVM node with `--fork-url` for Base Sepolia forking. The `forge test` / `forge script` workflow is simpler and better matches a Solidity-native development style. Hardhat's advantage (extensive JavaScript integration) is unnecessary — we already have the TypeScript backend for off-chain logic.
+**Consequences:** Smart contract source lives in `contracts/src/`. Tests in `contracts/test/` (Solidity `.t.sol` files). Deployment scripts in `contracts/script/`. Generated ABIs in `contracts/out/`. TypeScript bindings for the backend use `typechain` or `wagmi generate` against the ABI files. CI runs `forge build && forge test`.
+
+---
+
+## [ADR-019] — `contracts/` at repo root, not inside `backend/`
+
+**Date:** 2026-02-24
+**Status:** Decided
+**Decision:** All smart contract code lives at `contracts/` (repo root), not under `backend/src/` or `backend/contracts/`.
+**Why:** Smart contracts are a separate deployable artifact from the backend. They have their own build tool (Foundry), their own CI pipeline (`forge build`), and their own versioning / deployment lifecycle. Placing them inside `backend/` would create a dependency confusion (Foundry is not a Node.js tool). Placing them at root makes the monorepo structure explicit: `backend/` (TypeScript API), `frontend/` (Next.js), `contracts/` (Solidity), `docker/` (infrastructure).
+**Consequences:** `contracts/` is a Foundry project. `backend/` imports compiled ABIs from `contracts/out/` for TypeScript bindings — ABI files are committed so the backend can compile without running `forge build`. ABI paths in backend: `contracts/out/PrToken.sol/PrToken.json` (relative path from repo root).
+
+---
+
+## [ADR-020] — Backend minter wallet pattern (hot wallet, separate from user wallets)
+
+**Date:** 2026-02-24
+**Status:** Decided
+**Decision:** The backend uses a dedicated minter wallet (private key in `MINTER_PRIVATE_KEY` env var) to call `mint()` on the PR and UT contracts. This is entirely separate from user wallets (managed by Privy).
+**Why:** On-chain PR and UT mint events must be signed by a trusted backend key, not by users. The minter wallet is a standard Ethereum EOA held by the platform. User wallets are created and managed by Privy (embedded wallets) — they receive minted tokens but cannot call `mint()` themselves (no `PR_MINTER_ROLE` or `UT_MINTER_ROLE`). Separating the minter wallet from Privy avoids coupling the platform's on-chain authority to a third-party SDK.
+**Consequences:** `MINTER_PRIVATE_KEY` is a required env var for the backend worker (never the web process). The minter wallet address is stored in contract storage as the holder of `PR_MINTER_ROLE` / `UT_MINTER_ROLE`. Key rotation requires a `grantRole` / `revokeRole` transaction on both contracts. Backend `participationRights.service.ts` `award()` method will gain an `onChainMint()` call — skipped if `user.walletAddress` is null (unlinked wallet). Never commit `MINTER_PRIVATE_KEY` to git. Use a hardware wallet or KMS for production.
+
+---
+
+## [ADR-021] — Direct import exception: auth → user (`checkFullVerification`)
+
+**Date:** 2026-02-24
+**Status:** Decided (exception to ADR-007)
+**Decision:** `auth.service.ts` directly imports `userService.checkFullVerification()` rather than publishing an event.
+**Why:** `checkFullVerification` must run synchronously within the same request that completes email verification — the caller needs the updated verification level before issuing the JWT. An event would be fire-and-forget; the JWT could be issued before the FULL_VERIFIED promotion runs.
+**Consequences:** This is the only permitted direct cross-module import in auth. All other cross-module side effects (PR award via `user.email.verified`, group enrollment) remain event-driven. Do not add further direct cross-module imports to auth without a new ADR.
+
+---
+
+## [ADR-022] — 7-day access token lifetime (no short-lived + refresh rotation)
+
+**Date:** 2026-02-24
+**Status:** Decided
+**Decision:** Access tokens are valid for 7 days. There is no short-lived (15min) + refresh-token rotation pattern for the primary session flow.
+**Why:** Magic link auth has no password. Re-authentication is low-friction — users just request a new link. A 7-day token prevents silent logout on mobile while users are in the field (variable connectivity). The `frontend/lib/api.ts` 401-refresh path exists as a safety net for edge cases but is not the primary session management strategy.
+**Consequences:** Compromised sessions remain valid for up to 7 days unless explicitly revoked via `DELETE /auth/sessions/:id`. Revocation checks use `sessionId` in the JWT payload (see ADR-016, not `jti`). Revisit this decision if session revocation latency becomes a security concern at scale.
 
 ---
 

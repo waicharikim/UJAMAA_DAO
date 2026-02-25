@@ -20,7 +20,7 @@ import { authorize } from '../../../core/middleware/authorize.js';
 import { buildRateLimiter } from '../../../core/middleware/rateLimiter.js';
 
 // Validators
-import { createCommitmentSchema } from '../validators/economy.validators.js';
+import { duesOptInSchema } from '../validators/economy.validators.js';
 
 // Handlers
 import {
@@ -90,7 +90,7 @@ router.post(
   '/commitments/dues',
   authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
   buildRateLimiter({ windowMs: 30 * 24 * 60 * 60 * 1000, max: 1 }), // 1 per month
-  validateRequest({ schema: createCommitmentSchema, target: 'body' }),
+  validateRequest({ schema: duesOptInSchema, target: 'body' }),
   asyncHandler(optInDuesCommitment)
 );
 

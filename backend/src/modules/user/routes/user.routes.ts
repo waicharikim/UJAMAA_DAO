@@ -74,7 +74,35 @@ import {
 
 const router = Router();
 
-// All user routes require authentication
+// ============================================================================
+// PUBLIC REFERENCE DATA (no auth required — needed during registration)
+// Counties, constituencies, wards, industries, goods-services are public info.
+// These routes are intentionally defined BEFORE router.use(authenticate).
+// ============================================================================
+
+router.get('/reference/counties', asyncHandler(getCounties));
+
+router.get(
+  '/reference/constituencies',
+  validateRequest({ schema: constituencyQuerySchema, target: 'query' }),
+  asyncHandler(getConstituencies)
+);
+
+router.get(
+  '/reference/wards',
+  validateRequest({ schema: wardQuerySchema, target: 'query' }),
+  asyncHandler(getWards)
+);
+
+router.get('/reference/industries', asyncHandler(getIndustries));
+
+router.get(
+  '/reference/goods-services',
+  validateRequest({ schema: goodsServicesQuerySchema, target: 'query' }),
+  asyncHandler(getGoodsServices)
+);
+
+// All routes below require authentication
 router.use(authenticate);
 
 // ============================================================================
@@ -271,43 +299,6 @@ router.delete(
   }),
   authorize({ verificationLevel: 'EMAIL_VERIFIED' }),
   asyncHandler(deleteMyAccount)
-);
-
-// ============================================================================
-// REFERENCE DATA (geography + industries — no strict auth needed, EMAIL_VERIFIED)
-// ============================================================================
-
-router.get(
-  '/reference/counties',
-  authorize({ verificationLevel: 'EMAIL_VERIFIED' }),
-  asyncHandler(getCounties)
-);
-
-router.get(
-  '/reference/constituencies',
-  authorize({ verificationLevel: 'EMAIL_VERIFIED' }),
-  validateRequest({ schema: constituencyQuerySchema, target: 'query' }),
-  asyncHandler(getConstituencies)
-);
-
-router.get(
-  '/reference/wards',
-  authorize({ verificationLevel: 'EMAIL_VERIFIED' }),
-  validateRequest({ schema: wardQuerySchema, target: 'query' }),
-  asyncHandler(getWards)
-);
-
-router.get(
-  '/reference/industries',
-  authorize({ verificationLevel: 'EMAIL_VERIFIED' }),
-  asyncHandler(getIndustries)
-);
-
-router.get(
-  '/reference/goods-services',
-  authorize({ verificationLevel: 'EMAIL_VERIFIED' }),
-  validateRequest({ schema: goodsServicesQuerySchema, target: 'query' }),
-  asyncHandler(getGoodsServices)
 );
 
 // ============================================================================

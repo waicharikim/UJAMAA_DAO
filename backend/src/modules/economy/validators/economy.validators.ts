@@ -55,6 +55,24 @@ export const createCommitmentSchema = z.object({
 });
 
 // ============================================================================
+// DUES OPT-IN (POST /economy/commitments/dues)
+// Uses DuesTier (ORDINARY|SUPPORTER|SPONSOR), not the generic CommitmentType.
+// ============================================================================
+
+/**
+ * Dues Opt-In Schema
+ * Validates body for POST /economy/commitments/dues
+ */
+export const duesOptInSchema = z.object({
+  tier: z.enum(['ORDINARY', 'SUPPORTER', 'SPONSOR'], { message: 'tier must be ORDINARY, SUPPORTER, or SPONSOR' }),
+  startPeriod: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/, 'startPeriod must be YYYY-MM format')
+    .optional(),
+  durationMonths: z.number().int().positive().optional(),
+});
+
+// ============================================================================
 // COMMITMENT STATUS RESPONSE (for profile/dashboard)
 // ============================================================================
 

@@ -19,17 +19,19 @@ import { logger } from '../logger/logger.js';
 import { ApiError } from '../errors/ApiError.js';
 
 // Email configuration from environment variables
-const EMAIL_CONFIG = {
+const smtpUser = process.env.SMTP_USER;
+const smtpPass = process.env.SMTP_PASSWORD;
+const hasAuth = !!(smtpUser && smtpPass);
+
+const EMAIL_CONFIG: nodemailer.TransportOptions = {
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
   port: parseInt(process.env.SMTP_PORT || '587'),
   secure: process.env.SMTP_SECURE === 'true',
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASSWORD,
-  },
-};
+  ...(hasAuth ? { auth: { user: smtpUser, pass: smtpPass } } : {}),
+} as nodemailer.TransportOptions;
 
-const FROM_EMAIL = process.env.FROM_EMAIL || 'noreply@ujamaadao.org';
+const FROM_EMAIL =
+  process.env.FROM_EMAIL || process.env.SMTP_FROM || 'noreply@ujamaadao.org';
 const FROM_NAME = process.env.FROM_NAME || 'UjamaaDAO';
 
 // Reusable transporter
@@ -37,9 +39,11 @@ let transporter: nodemailer.Transporter | null = null;
 
 function getTransporter(): nodemailer.Transporter {
   if (!transporter) {
-    if (!EMAIL_CONFIG.auth.user || !EMAIL_CONFIG.auth.pass) {
-      throw new Error(
-        'Email configuration missing. Set SMTP_USER and SMTP_PASSWORD in .env'
+    if (!hasAuth) {
+      // No-auth SMTP (e.g. MailHog in dev). Log a warning but proceed.
+      logger.warn(
+        { operationType: 'GENERAL' },
+        'Email service running without SMTP auth — suitable for dev/MailHog only'
       );
     }
     transporter = nodemailer.createTransport(EMAIL_CONFIG);

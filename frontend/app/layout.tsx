@@ -1,17 +1,28 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
+import { Outfit, Cormorant_Garamond } from "next/font/google"
 import "../styles/globals.css"
 import { Providers } from "@/components/providers"
-import { Navigation } from "@/components/layout/navigation"
+import { AppShell } from "@/components/layout/app-shell"
 import { Toaster } from "@/components/ui/toaster"
 
-const inter = Inter({ subsets: ["latin"] })
+const outfit = Outfit({
+  subsets: ["latin"],
+  variable: "--font-outfit",
+  display: "swap",
+})
+
+const cormorant = Cormorant_Garamond({
+  subsets: ["latin"],
+  weight: ["400", "600", "700"],
+  style: ["normal", "italic"],
+  variable: "--font-cormorant",
+  display: "swap",
+})
 
 export const metadata: Metadata = {
-  title: "Web3 Governance Platform",
-  description: "Decentralized governance and community management platform",
-    generator: 'v0.dev'
+  title: "UjamaaDAO — Ward Sovereignty Platform",
+  description: "Cooperative governance, community projects, and economic sovereignty for Kenyan wards.",
 }
 
 export default function RootLayout({
@@ -20,13 +31,10 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <body className={inter.className}>
+    <html lang="en" className={`${outfit.variable} ${cormorant.variable}`}>
+      <body className="font-sans bg-background text-foreground antialiased">
         <Providers>
-          <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
-            <Navigation />
-            <main className="pt-16">{children}</main>
-          </div>
+          <AppShell>{children}</AppShell>
           <Toaster />
         </Providers>
       </body>
