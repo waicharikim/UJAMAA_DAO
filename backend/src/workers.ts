@@ -45,21 +45,28 @@ import {
 // Graceful shutdown & error handling
 // ─────────────────────────────────────────────
 
-process.on('SIGINT', () => {
+async function shutdownWorkers(signal: string): Promise<void> {
   logger.info(
-    { operationType: 'WORKER' },
-    'SIGINT received — shutting down worker'
+    { operationType: 'WORKER', signal },
+    `${signal} received — draining and closing workers`
   );
+  try {
+    await Promise.all([
+      economyWorker.close(),
+      userCleanupWorker.close(),
+    ]);
+    logger.info({ operationType: 'WORKER' }, 'All workers drained and closed');
+  } catch (err) {
+    logger.error(
+      { operationType: 'WORKER', error: String(err) },
+      'Error closing workers during shutdown'
+    );
+  }
   process.exit(0);
-});
+}
 
-process.on('SIGTERM', () => {
-  logger.info(
-    { operationType: 'WORKER' },
-    'SIGTERM received — shutting down worker'
-  );
-  process.exit(0);
-});
+process.on('SIGINT', () => shutdownWorkers('SIGINT'));
+process.on('SIGTERM', () => shutdownWorkers('SIGTERM'));
 
 process.on('uncaughtException', (err) => {
   logger.error(
@@ -83,7 +90,7 @@ process.on('unhandledRejection', (reason) => {
 // Create workers for each queue
 // ─────────────────────────────────────────────
 
-createWorker('economy', async (job) => {
+const economyWorker = createWorker('economy', async (job) => {
   const { name } = job;
 
   try {
@@ -112,7 +119,7 @@ createWorker('economy', async (job) => {
   }
 });
 
-createWorker('user-cleanup', async (job) => {
+const userCleanupWorker = createWorker('user-cleanup', async (job) => {
   try {
     if (job.name === USER_CLEANUP_JOB_NAME) {
       await processUserCleanup(job);

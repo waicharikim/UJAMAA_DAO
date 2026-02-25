@@ -57,6 +57,37 @@ async function connectDatabase(maxRetries = 5, delay = 2000): Promise<void> {
 async function startServer() {
   try {
     // ==========================================================================
+    // 0. STARTUP ASSERTIONS — fail fast before touching any service
+    // ==========================================================================
+
+    // ENCRYPTION_KEY: required for all crypto operations
+    if (!process.env.ENCRYPTION_KEY) {
+      if (NODE_ENV === 'production') {
+        throw new Error('ENCRYPTION_KEY must be set in production');
+      }
+      logger.warn(
+        { operationType: 'STARTUP' },
+        'ENCRYPTION_KEY not set — crypto features will fail (acceptable in dev only)'
+      );
+    }
+
+    // JWT_SECRET: reject short or obviously-default values in production
+    const jwtSecret = process.env.JWT_SECRET || '';
+    if (NODE_ENV === 'production' && jwtSecret.length < 32) {
+      throw new Error(
+        'JWT_SECRET must be at least 32 characters in production'
+      );
+    }
+    if (
+      NODE_ENV === 'production' &&
+      jwtSecret === '6e603cfa9affb7677020ad6a930bd3f076867ff38d100586dc5d985bed845ad0'
+    ) {
+      throw new Error(
+        'JWT_SECRET is set to the insecure development default — set a unique secret in production'
+      );
+    }
+
+    // ==========================================================================
     // 1. WAIT FOR ALL ASYNC SERVICES TO BE READY
     //    (Redis, event listeners, token blacklist, etc.)
     // ==========================================================================
@@ -158,6 +189,10 @@ async function startServer() {
           './core/services/token-blacklist.service.js'
         );
         await tokenBlacklistService.shutdown();
+
+        // Close BullMQ ioredis connection (queue/index.ts)
+        const { redisConnection } = await import('./core/queue/index.js');
+        await redisConnection.quit();
 
         logger.info({ operationType: 'SHUTDOWN' }, 'Redis connections closed');
       } catch (err) {
