@@ -28,11 +28,8 @@ fi
 
 echo "✅ Prisma client generated successfully"
 
-echo "🚀 Applying Prisma migrations (dev mode)..."
-# --name required for non-TTY (Docker) environments (Prisma v7+)
-npx prisma migrate dev --name "schema_alignment" || \
-  npx prisma migrate deploy || \
-  echo "⚠️ Migration issues in dev — continuing..."
+echo "🚀 Applying Prisma migrations..."
+npx prisma migrate deploy
 
 echo "🚀 Starting web server (tsx watch)..."
 exec npx tsx watch src/index.ts
