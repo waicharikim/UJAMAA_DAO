@@ -1,7 +1,5 @@
 "use client"
 
-import type React from "react"
-
 import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -9,19 +7,22 @@ import { z } from "zod"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useAuth } from "@/contexts/auth-context"
-import { apiClient } from "@/lib/api"
+import { userApi } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
 import type { User } from "@/lib/types"
-import { Upload } from "lucide-react"
+import { Phone, Info } from "lucide-react"
 
+/**
+ * Backend updateProfile only accepts: name, avatarUrl, privacySettings, accessibility.
+ * Phone updates go through /auth/phone/send-code + /auth/phone/verify-code (separate flow).
+ * Bio is not in the backend User model.
+ */
 const profileSchema = z.object({
-  username: z.string().min(3).max(50).optional(),
-  email: z.string().email().optional().or(z.literal("")),
-  bio: z.string().max(500).optional(),
+  name: z.string().min(2, "Name must be at least 2 characters").max(100).optional(),
+  avatarUrl: z.string().url("Must be a valid URL").optional().or(z.literal("")),
 })
 
 type ProfileFormData = z.infer<typeof profileSchema>
@@ -34,9 +35,7 @@ interface ProfileEditFormProps {
 
 export function ProfileEditForm({ user, onCancel, onSave }: ProfileEditFormProps) {
   const [isLoading, setIsLoading] = useState(false)
-  const [avatarFile, setAvatarFile] = useState<File | null>(null)
-  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
-  const { updateUser } = useAuth()
+  const { refreshUser } = useAuth()
   const { toast } = useToast()
 
   const {
@@ -46,44 +45,24 @@ export function ProfileEditForm({ user, onCancel, onSave }: ProfileEditFormProps
   } = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
-      username: user.username || "",
-      email: user.email || "",
-      bio: user.bio || "",
+      name: user.username || "",
+      avatarUrl: user.avatar || "",
     },
   })
-
-  const handleAvatarChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file) {
-      setAvatarFile(file)
-      const reader = new FileReader()
-      reader.onload = () => setAvatarPreview(reader.result as string)
-      reader.readAsDataURL(file)
-    }
-  }
 
   const onSubmit = async (data: ProfileFormData) => {
     try {
       setIsLoading(true)
+      const payload: Parameters<typeof userApi.updateProfile>[0] = {}
+      if (data.name) payload.name = data.name
+      if (data.avatarUrl) payload.avatarUrl = data.avatarUrl
 
-      // Create FormData for file upload if avatar is selected
-      const formData = new FormData()
-      Object.entries(data).forEach(([key, value]) => {
-        if (value) formData.append(key, value)
-      })
-
-      if (avatarFile) {
-        formData.append("avatar", avatarFile)
-      }
-
-      const updatedUser = await apiClient.updateProfile(data)
-      updateUser(updatedUser)
-
+      await userApi.updateProfile(payload)
+      await refreshUser()
       toast({
         title: "Profile Updated",
         description: "Your profile has been successfully updated.",
       })
-
       onSave()
     } catch (error) {
       console.error("Failed to update profile:", error)
@@ -98,48 +77,78 @@ export function ProfileEditForm({ user, onCancel, onSave }: ProfileEditFormProps
   }
 
   return (
-    <Card>
+    <Card className="border-0 shadow-card">
       <CardHeader>
-        <CardTitle>Edit Profile</CardTitle>
+        <CardTitle className="font-display text-xl text-[#0E0B08]">Edit Profile</CardTitle>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+          {/* Avatar display */}
           <div className="flex items-center gap-4">
-            <Avatar className="h-16 w-16">
-              <AvatarImage src={avatarPreview || user.avatar} />
-              <AvatarFallback>{user.username?.[0]?.toUpperCase() || "U"}</AvatarFallback>
+            <Avatar className="h-14 w-14 rounded-xl flex-shrink-0" style={{ border: "2px solid rgba(201,146,42,0.3)" }}>
+              <AvatarImage src={user.avatar || "/placeholder.svg"} />
+              <AvatarFallback
+                className="rounded-xl font-semibold text-white"
+                style={{ background: "linear-gradient(135deg, #2A5240, #1E3D2F)" }}
+              >
+                {(user.username || user.email || "U")[0].toUpperCase()}
+              </AvatarFallback>
             </Avatar>
             <div>
-              <Label htmlFor="avatar" className="cursor-pointer">
-                <div className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700">
-                  <Upload className="h-4 w-4" />
-                  Change Avatar
-                </div>
-              </Label>
-              <Input id="avatar" type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
+              <p className="text-sm font-medium text-[#0E0B08]">{user.email || "No email"}</p>
+              <p className="text-xs text-[#0E0B08]/50">Account email (not editable here)</p>
             </div>
           </div>
 
+          {/* Display name */}
           <div>
-            <Label htmlFor="username">Username</Label>
-            <Input id="username" {...register("username")} placeholder="Enter your username" />
-            {errors.username && <p className="text-sm text-red-600 mt-1">{errors.username.message}</p>}
+            <Label htmlFor="name" className="text-sm font-medium text-[#0E0B08]">Display Name</Label>
+            <Input
+              id="name"
+              {...register("name")}
+              placeholder="Your full name"
+              className="mt-1"
+            />
+            {errors.name && <p className="text-xs text-red-600 mt-1">{errors.name.message}</p>}
           </div>
 
+          {/* Avatar URL */}
           <div>
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" {...register("email")} placeholder="Enter your email" />
-            {errors.email && <p className="text-sm text-red-600 mt-1">{errors.email.message}</p>}
+            <Label htmlFor="avatarUrl" className="text-sm font-medium text-[#0E0B08]">Avatar URL</Label>
+            <Input
+              id="avatarUrl"
+              type="url"
+              {...register("avatarUrl")}
+              placeholder="https://example.com/your-photo.jpg"
+              className="mt-1"
+            />
+            {errors.avatarUrl && <p className="text-xs text-red-600 mt-1">{errors.avatarUrl.message}</p>}
           </div>
 
-          <div>
-            <Label htmlFor="bio">Bio</Label>
-            <Textarea id="bio" {...register("bio")} placeholder="Tell us about yourself" rows={3} />
-            {errors.bio && <p className="text-sm text-red-600 mt-1">{errors.bio.message}</p>}
+          {/* Phone note */}
+          <div
+            className="flex items-start gap-2.5 p-3 rounded-xl"
+            style={{ background: "rgba(201,146,42,0.06)", border: "1px solid rgba(201,146,42,0.15)" }}
+          >
+            <Info className="h-4 w-4 flex-shrink-0 mt-0.5" style={{ color: "#C9922A" }} />
+            <div>
+              <p className="text-xs font-semibold text-[#0E0B08]">Phone / M-Pesa</p>
+              <p className="text-xs text-[#0E0B08]/60 mt-0.5">
+                {user.phone
+                  ? `Current: ${user.phone}. `
+                  : "No phone linked. "}
+                Phone verification is managed separately via the security settings.
+              </p>
+            </div>
           </div>
 
-          <div className="flex gap-2 pt-4">
-            <Button type="submit" disabled={isLoading}>
+          <div className="flex gap-2 pt-1">
+            <Button
+              type="submit"
+              disabled={isLoading}
+              className="font-semibold hover:opacity-90"
+              style={{ background: "#C9922A", color: "#0E0B08" }}
+            >
               {isLoading ? "Saving..." : "Save Changes"}
             </Button>
             <Button type="button" variant="outline" onClick={onCancel}>

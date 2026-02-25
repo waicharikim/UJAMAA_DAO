@@ -1,67 +1,104 @@
-@layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-    
-    --radius: 0.5rem;
-  }
-
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-  }
-}
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    /* ── UjamaaDAO design system ──────────────────────────────
+       Source: ujamasa-dashboard.html design tokens
+       Mapped to shadcn/ui HSL CSS vars so all components
+       automatically use the correct palette.
+    ─────────────────────────────────────────────────────────── */
+
+    /* Page & card backgrounds */
+    --background: 35 60% 93%;        /* sand  #F6F0E6 */
+    --foreground: 30 22% 5%;         /* ink   #0E0B08 */
+
+    --card: 0 0% 100%;               /* white */
+    --card-foreground: 30 22% 5%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 30 22% 5%;
+
+    /* Primary = gold */
+    --primary: 38 65% 48%;           /* #C9922A */
+    --primary-foreground: 30 22% 5%; /* ink on gold */
+
+    /* Secondary = sand-dark */
+    --secondary: 35 40% 89%;         /* #EDE5D4 */
+    --secondary-foreground: 30 22% 5%;
+
+    /* Muted = lighter sand */
+    --muted: 35 40% 89%;
+    --muted-foreground: 30 22% 35%;  /* ink-40 */
+
+    /* Accent = forest green */
+    --accent: 148 35% 18%;           /* #1E3D2F */
+    --accent-foreground: 0 0% 100%;
+
+    /* Destructive = ember */
+    --destructive: 12 72% 40%;       /* #B03A1E */
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 35 30% 85%;
+    --input: 35 30% 85%;
+    --ring: 38 65% 48%;              /* gold focus ring */
+
+    --radius: 0.75rem;
+
+    /* ── Raw tokens (use these for custom components) ─────── */
+    --ink:          #0E0B08;
+    --ink-80:       rgba(14,11,8,0.8);
+    --ink-40:       rgba(14,11,8,0.4);
+    --ink-15:       rgba(14,11,8,0.15);
+    --ink-06:       rgba(14,11,8,0.06);
+    --gold:         #C9922A;
+    --gold-light:   #E8B84B;
+    --gold-pale:    rgba(201,146,42,0.12);
+    --gold-glow:    rgba(201,146,42,0.25);
+    --ember:        #B03A1E;
+    --ember-pale:   rgba(176,58,30,0.1);
+    --forest:       #1E3D2F;
+    --forest-mid:   #2A5240;
+    --forest-pale:  rgba(30,61,47,0.1);
+    --sand:         #F6F0E6;
+    --sand-dark:    #EDE5D4;
+    --parchment:    #FAF7F2;
+    --sidebar-bg:   #0E0B08;
+    --page-bg:      #F4EFE6;
+    --shadow-gold:  0 8px 32px rgba(201,146,42,0.2);
+  }
+
+  /* Dark mode keeps sidebar-style ink background */
+  .dark {
+    --background: 30 22% 5%;
+    --foreground: 35 60% 93%;
+    --card: 30 15% 8%;
+    --card-foreground: 35 60% 93%;
+    --popover: 30 15% 8%;
+    --popover-foreground: 35 60% 93%;
+    --primary: 38 65% 48%;
+    --primary-foreground: 30 22% 5%;
+    --secondary: 30 15% 12%;
+    --secondary-foreground: 35 60% 93%;
+    --muted: 30 15% 12%;
+    --muted-foreground: 35 30% 55%;
+    --accent: 153 33% 24%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 12 72% 40%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 30 15% 14%;
+    --input: 30 15% 14%;
+    --ring: 38 65% 48%;
+  }
+
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}

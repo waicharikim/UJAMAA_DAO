@@ -53,9 +53,9 @@ export default function ProjectDetailPage() {
             userId: user?.id || "user1",
             user: {
               id: user?.id || "user1",
-              name: user?.name || "John Doe",
+              name: user?.username || "John Doe",
               email: user?.email || "john@example.com",
-              avatarUrl: user?.avatarUrl,
+              avatarUrl: user?.avatar,
               impactPoints: 150,
             },
             role: "MANAGER",
@@ -112,7 +112,7 @@ export default function ProjectDetailPage() {
         },
         managedBy: {
           id: user?.id || "user1",
-          name: user?.name || "John Doe",
+          name: user?.username || "John Doe",
           role: "PROJECT_MANAGER",
         },
         groupId: "group1",
@@ -173,7 +173,7 @@ export default function ProjectDetailPage() {
               milestoneId: "m1",
               submittedBy: {
                 id: user?.id || "user1",
-                name: user?.name || "John Doe",
+                name: user?.username || "John Doe",
               },
               evidence: {
                 description:

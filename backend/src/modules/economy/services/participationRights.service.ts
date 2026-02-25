@@ -26,7 +26,7 @@ import { eventBus } from '../../../core/utils/eventBus.js';
 const { MAX_BALANCE, MONTHLY_REGEN_BASE, ACTIVE_USER_DAYS_THRESHOLD } =
   PR_CONFIG;
 
-class ParticipationRightsService {
+export class ParticipationRightsService {
   private prisma: PrismaClient;
 
   constructor(prismaClient: PrismaClient = prisma) {

@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { Heart, Users, Vote, Coins, Shield, Globe, Award, TreePine, HandHeart, ArrowRight } from "lucide-react"
+import { Heart, Users, Vote, Coins, Shield, Globe, Award, TreePine, ArrowRight } from "lucide-react"
 
 const values = [
   {
@@ -12,7 +12,7 @@ const values = [
     color: "from-red-500 to-pink-500",
   },
   {
-    icon: HandHeart,
+    icon: Heart,
     title: "Harambee",
     description: "Pulling together for collective progress and mutual support",
     color: "from-orange-500 to-yellow-500",

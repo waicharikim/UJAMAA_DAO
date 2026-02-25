@@ -6,13 +6,16 @@ export interface User {
   email?: string
   phone?: string
   avatar?: string
-  bio?: string
+  bio?: string  // NOTE: not in backend schema — always undefined from server
 
-  // Dual location system
+  // Verification — from backend verificationLevel field
+  verificationLevel?: "UNVERIFIED" | "EMAIL_VERIFIED" | "PHONE_VERIFIED" | "COMMUNITY_VERIFIED" | "FULL_VERIFIED"
+
+  // Dual location system (populated from geographic hierarchy in getMe response)
   residenceCounty: string
   residenceConstituency: string
-  originCounty: string
-  originConstituency: string
+  originCounty: string  // not in backend — always empty
+  originConstituency: string  // not in backend — always empty
 
   // Professional information
   industry: string
