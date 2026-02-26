@@ -544,3 +544,40 @@ Write community module tests → move community status from `partial` → `teste
 
 **Token usage:**
 Sonnet 4.6 — heavy session (4 concurrent tasks: ADR decisions, contracts scaffold, frontend wiring, economy tests)
+
+---
+
+## [2026-02-26] — auth email links fixed, frontend user flow verified end-to-end
+
+**What was built:**
+
+- **Auth email link bug fixed** (`backend/src/modules/auth/services/auth.service.ts`):
+  - Both magic-link and email-verification emails used `BASE_URL` (backend `:4000`) — links pointed directly to the backend and returned 404 when clicked
+  - Fixed: both now use `FRONTEND_URL` (frontend `:3000`) + `/auth/callback?token=...` as the landing path
+- **Frontend callback page updated** (`frontend/app/auth/callback/page.tsx`):
+  - Previously only called `verifyMagicLink()` (existing-user JWT flow)
+  - Now detects token type: JWT (2 dots = 3 segments) → `verifyMagicLink()`; hex string → `verifyEmailToken()`
+- **`verifyEmailToken()` added to api.ts** (`frontend/lib/api.ts`):
+  - Calls `GET /auth/verify-email?token=...` → `{ sessionToken, user, session, needsProfileCompletion }`
+- **`verifyEmailToken()` added to auth context** (`frontend/contexts/auth-context.tsx`):
+  - Stores `sessionToken` as the access token (no refresh token in the new-user verify-email flow)
+  - Maps user with existing `mapBackendUser()` and shows "Karibu" welcome toast
+- **MailHog started and verified**: `docker compose up -d mailhog` + port bindings confirmed at `localhost:8025`
+- **Full registration and sign-in flow tested and verified**: new-user 4-step form → email → click link → dashboard; existing-user sign-in modal → email → click link → dashboard
+
+**Decisions made:**
+- No new architectural decisions — targeted bug fix only
+- Token type detection via dot-count (JWT = 2 dots) chosen over a `type` query param to avoid backend URL changes beyond the host/path fix
+
+**What's still broken or incomplete:**
+- Community module: zero tests (still highest backend priority)
+- Blockchain: `PrToken.sol` + `UtToken.sol` not written
+- Frontend Phase 3: Privy integration not yet done
+- New-user verify-email flow has no refresh token — session expires after 7 days with no silent renewal (acceptable for now, same as magic-link UX)
+- MailHog container must be started manually (`docker compose up -d mailhog`) — it is in `docker-compose.yml` but not in the default `make dev` startup profile
+
+**Next milestone:**
+Write community module tests to move community from `partial` → `tested`, then start blockchain session (`PrToken.sol` + `UtToken.sol` + Base Sepolia deploy).
+
+**Token usage:**
+Sonnet 4.6 — light session (1 bug diagnosed and fixed across 4 files, E2E flow tested)

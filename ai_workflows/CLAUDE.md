@@ -43,7 +43,7 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 
 ---
 
-## 3. Current Progress (Updated: 2026-02-24)
+## 3. Current Progress (Updated: 2026-02-26)
 
 > **How to read this table:**
 > - `scaffold` = directory + schema only, no working logic
@@ -85,7 +85,7 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 - `BASE_URL`, `SMTP_*`, `ENCRYPTION_KEY`, `ALLOWED_ORIGINS` ✅ now in `docker/docker-compose.yml` web env. `ENCRYPTION_KEY` defaults to empty string — set it with `openssl rand -hex 32` before enabling TOTP/2FA or encrypted fields.
 - M-Pesa: not started
 - On-chain PR/UT (Base Sepolia): not started
-- Frontend (Next.js): not started
+- Frontend (Next.js): **partial** — landing page, 4-step registration form, magic-link sign-in modal, auth callback, dashboard (PR balance via TanStack Query), profile edit, app shell (sidebar/topbar/mobile nav). Build green (15 routes). Auth email links fixed and E2E flow verified 2026-02-26. Privy integration not yet done.
 
 **Infrastructure completed (2026-02-21/22):**
 - Prisma schemas aligned: **80 models** (77 original + ImpactPointLog + UserLocationImpact + Ward back-relation), 12 per-module schemas merged via `mergeSchema.ts`, validates cleanly
@@ -221,6 +221,9 @@ A module is **production-ready** when ALL of these are true:
 | Prisma `upsert` where clause must reference a `@unique` field | `seedSystemGroups()` used `where: { systemType: 'NATIONAL' }` but `systemType` is not unique on `Group`. Prisma throws `Argument 'where' needs at least one of '...'`. Always use a `@unique` or `@@unique` field (e.g. `name`) in `upsert` where clauses. |
 | Seed `create` block spreads non-schema fields | `seedRoles()` spread `{ name, namespace, description, builtin }` into Prisma `create` — `namespace` and `builtin` do not exist on the `Role` model, causing `Unknown argument` errors. Always destructure only schema-mapped fields in seed `create` blocks. |
 | `proofUrl` on `ResidenceChangeRequest` was non-nullable | `ResidenceChangeRequest.proofUrl` was `String` in schema, but `requestResidenceChange()` correctly accepts `proofUrl` as optional. TypeScript error `Type 'string | null' is not assignable to type 'string'` signals a schema mismatch — apply `String?` migration before setting `null`. |
+| Email links go to backend (`:4000`) instead of frontend — clicking does nothing | `auth.service.ts` used `BASE_URL` (backend URL) to build both magic-link and verify-email links. The backend returns 404 for `/auth/login` and `/auth/verify-email` (no `/api/v1` prefix). Fix: use `FRONTEND_URL` (`:3000`) + `/auth/callback?token=...` for both. |
+| Frontend `/auth/callback` fails for new-user verification tokens | The callback page previously only called `verifyMagicLink()` (JWT flow). New-user tokens are hex strings that need `GET /auth/verify-email`. Detect token type by dot-count: 2 dots = JWT magic link → `verifyMagicLink()`; no dots = hex verification token → `verifyEmailToken()`. |
+| MailHog starts but port bindings are missing | Running `docker compose up -d mailhog` when the container already exists may reuse the old container without applying port config. Fix: `docker compose stop mailhog && docker compose rm -f mailhog && docker compose up -d mailhog` to force container recreation with correct port bindings (`1025:1025`, `8025:8025`). |
 
 ---
 
