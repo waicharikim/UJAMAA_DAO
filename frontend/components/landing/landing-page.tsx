@@ -1,220 +1,184 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { ConnectWallet } from "@/components/auth/connect-wallet"
 import { useAuth } from "@/contexts/auth-context"
+import { cn } from "@/lib/utils"
 import {
-  Users,
-  Vote,
-  Coins,
-  Shield,
-  Award,
-  ArrowRight,
-  Star,
-  TreePine,
-  Target,
-  ChevronRight,
-  Heart,
   Menu,
   X,
+  ShieldCheck,
+  TrendingUp,
+  Vote,
+  Droplets,
+  Landmark,
+  Wrench,
 } from "lucide-react"
 
-// ── Data ─────────────────────────────────────────────────
+// ── Animated concentric rings (canvas) ───────────────────────────────────────
 
-const features = [
-  {
-    icon: Vote,
-    title: "Democratic Governance",
-    subtitle: "Transparent Decision Making",
-    description:
-      "Participate in transparent, blockchain-based voting and proposal systems that embody the spirit of community cooperation.",
-    color: "from-orange-500 to-red-500",
-  },
-  {
-    icon: Users,
-    title: "Community Groups",
-    subtitle: "Ubuntu Networks",
-    description:
-      "Join location-based groups that reflect our diverse African communities, fostering Ubuntu and collective growth.",
-    color: "from-green-500 to-emerald-500",
-  },
-  {
-    icon: Coins,
-    title: "Shared Economy",
-    subtitle: "Community Tokens",
-    description:
-      "Earn and spend community tokens through meaningful contributions, building wealth together as one people.",
-    color: "from-yellow-500 to-orange-500",
-  },
-  {
-    icon: Award,
-    title: "Impact Recognition",
-    subtitle: "Contribution Rewards",
-    description:
-      "Get recognised for positive community impact with our point system that celebrates African values of giving back.",
-    color: "from-purple-500 to-pink-500",
-  },
-  {
-    icon: Shield,
-    title: "Digital Security",
-    subtitle: "Blockchain Protection",
-    description:
-      "Built on secure blockchain technology that protects our community's interests and maintains transparency.",
-    color: "from-blue-500 to-indigo-500",
-  },
-  {
-    icon: TreePine,
-    title: "Environmental Focus",
-    subtitle: "Sustainable Development",
-    description: "Support eco-friendly projects that protect our beautiful African landscape for future generations.",
-    color: "from-green-600 to-teal-500",
-  },
-]
-
-const stats = [
-  { label: "Active Members", value: "2,847", icon: Users },
-  { label: "Proposals", value: "156", icon: Vote },
-  { label: "Projects", value: "89", icon: Target },
-  { label: "Tokens Distributed", value: "1.2M", icon: Coins },
-]
-
-const testimonials = [
-  {
-    name: "Amina Wanjiku",
-    role: "Community Leader",
-    location: "Nairobi, Kenya",
-    content:
-      "UJAMAA has transformed how our community makes decisions. The transparency and inclusivity reflect our true African values.",
-    avatar: "AW",
-  },
-  {
-    name: "Kwame Asante",
-    role: "Social Entrepreneur",
-    location: "Accra, Ghana",
-    content:
-      "Through UJAMAA, I've connected with like-minded individuals across Africa. Together, we're building something beautiful.",
-    avatar: "KA",
-  },
-  {
-    name: "Fatima Diallo",
-    role: "Teacher & Activist",
-    location: "Lagos, Nigeria",
-    content:
-      "The impact point system motivates me to contribute more to my community. It's like digital community building!",
-    avatar: "FD",
-  },
-]
-
-const coreValues = [
-  {
-    icon: Heart,
-    title: "Ubuntu",
-    description: "I am because we are — our interconnectedness defines us",
-    color: "from-red-500 to-pink-500",
-  },
-  {
-    icon: Users,
-    title: "Harambee",
-    description: "Pulling together — collective effort for community progress",
-    color: "from-orange-500 to-yellow-500",
-  },
-  {
-    icon: TreePine,
-    title: "Sustainability",
-    description: "Environmental stewardship — caring for our shared home",
-    color: "from-green-500 to-emerald-500",
-  },
-]
-
-// ── Navbar ────────────────────────────────────────────────
-
-const ADINKRA_BG = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Cg fill='none' stroke='rgba(201,146,42,0.06)' stroke-width='1'%3E%3Ccircle cx='40' cy='40' r='28'/%3E%3Ccircle cx='40' cy='40' r='16'/%3E%3Cline x1='40' y1='12' x2='40' y2='0'/%3E%3Cline x1='40' y1='68' x2='40' y2='80'/%3E%3Cline x1='12' y1='40' x2='0' y2='40'/%3E%3Cline x1='68' y1='40' x2='80' y2='40'/%3E%3C/g%3E%3C/svg%3E")`
-
-function LandingNav({ isAuthenticated }: { isAuthenticated: boolean }) {
-  const [open, setOpen] = useState(false)
-  const [scrolled, setScrolled] = useState(false)
+function ConcentricRings() {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20)
-    window.addEventListener("scroll", onScroll, { passive: true })
-    return () => window.removeEventListener("scroll", onScroll)
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return
+    let animId: number
+    let dpr = 1
+
+    const rings = [
+      { r: 70,  color: "rgba(212,145,30,0.30)",  width: 1.5, speed:  0.0004,  dots: 3 },
+      { r: 130, color: "rgba(56,160,99,0.22)",   width: 1.2, speed: -0.00025, dots: 4 },
+      { r: 200, color: "rgba(212,145,30,0.15)",  width: 1,   speed:  0.0002,  dots: 2 },
+      { r: 280, color: "rgba(247,242,232,0.08)", width: 0.8, speed: -0.00012, dots: 3 },
+    ]
+
+    const dotColors = ["#E9A52E", "#38A063", "#D4911E", "#C43D28"]
+
+    function resize() {
+      if (!canvas) return
+      dpr = window.devicePixelRatio || 1
+      const rect = canvas.getBoundingClientRect()
+      canvas.width  = rect.width  * dpr
+      canvas.height = rect.height * dpr
+      ctx!.setTransform(dpr, 0, 0, dpr, 0, 0)
+    }
+
+    let time = 0
+
+    function draw() {
+      if (!canvas || !ctx) return
+      const w  = canvas.width  / dpr
+      const h  = canvas.height / dpr
+      const cx = w / 2
+      const cy = h / 2
+
+      ctx.clearRect(0, 0, w, h)
+      time += 1
+
+      for (const ring of rings) {
+        ctx.beginPath()
+        ctx.arc(cx, cy, ring.r, 0, Math.PI * 2)
+        ctx.strokeStyle = ring.color
+        ctx.lineWidth   = ring.width
+        ctx.stroke()
+
+        for (let d = 0; d < ring.dots; d++) {
+          const angle = time * ring.speed + (d * Math.PI * 2) / ring.dots
+          const dx    = cx + Math.cos(angle) * ring.r
+          const dy    = cy + Math.sin(angle) * ring.r
+          const dc    = dotColors[(d + rings.indexOf(ring)) % dotColors.length]
+
+          ctx.beginPath()
+          ctx.arc(dx, dy, 10, 0, Math.PI * 2)
+          const grad = ctx.createRadialGradient(dx, dy, 0, dx, dy, 10)
+          grad.addColorStop(0, dc + "60")
+          grad.addColorStop(1, dc + "00")
+          ctx.fillStyle = grad
+          ctx.fill()
+
+          ctx.beginPath()
+          ctx.arc(dx, dy, 3, 0, Math.PI * 2)
+          ctx.fillStyle = dc
+          ctx.fill()
+        }
+      }
+
+      // Centre amber dot
+      ctx.beginPath()
+      ctx.arc(cx, cy, 5, 0, Math.PI * 2)
+      ctx.fillStyle = "#E9A52E"
+      ctx.fill()
+      ctx.beginPath()
+      ctx.arc(cx, cy, 16, 0, Math.PI * 2)
+      const cGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 16)
+      cGrad.addColorStop(0, "rgba(233,165,46,0.40)")
+      cGrad.addColorStop(1, "rgba(233,165,46,0)")
+      ctx.fillStyle = cGrad
+      ctx.fill()
+
+      animId = requestAnimationFrame(draw)
+    }
+
+    resize()
+    draw()
+    window.addEventListener("resize", resize)
+    return () => {
+      cancelAnimationFrame(animId)
+      window.removeEventListener("resize", resize)
+    }
   }, [])
 
   return (
-    <header
-      className={[
-        "sticky top-0 z-50 w-full transition-all duration-300",
-        scrolled
-          ? "bg-[#0E0B08]/95 backdrop-blur-md border-b border-[rgba(201,146,42,0.15)] shadow-lg shadow-black/20"
-          : "bg-[#0E0B08]",
-      ].join(" ")}
-      style={{ backgroundImage: ADINKRA_BG, backgroundSize: "80px 80px" }}
-    >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+    <canvas
+      ref={canvasRef}
+      className="pointer-events-none absolute inset-0 h-full w-full"
+      aria-hidden="true"
+    />
+  )
+}
+
+// ── Navbar ────────────────────────────────────────────────────────────────────
+
+const navLinks = [
+  { label: "How It Works", href: "#how-it-works" },
+  { label: "Use Cases",    href: "#use-cases"    },
+  { label: "Principles",   href: "#principles"   },
+]
+
+function LandingNavbar({ isAuthenticated }: { isAuthenticated: boolean }) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <nav className="fixed top-0 right-0 left-0 z-50 border-b border-cream/[0.08] bg-tea-dark/90 backdrop-blur-xl">
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5 lg:px-8">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-3 flex-shrink-0">
-          <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-base flex-shrink-0"
-            style={{
-              background: "linear-gradient(135deg, #C9922A 0%, #E8B84B 100%)",
-              color: "#0E0B08",
-              boxShadow: "0 2px 12px rgba(201,146,42,0.35)",
-            }}
-          >
-            UJ
-          </div>
-          <div className="flex flex-col leading-none">
-            <span className="font-display font-bold text-white text-[17px]">UjamaaDAO</span>
-            <span className="text-[8px] font-medium uppercase tracking-[1.5px]" style={{ color: "rgba(201,146,42,0.65)" }}>
-              Ward Platform
-            </span>
-          </div>
+        <Link href="/" className="flex items-center gap-2.5">
+          <span className="font-serif text-xl font-bold text-cream">
+            UjamaaDAO
+          </span>
+          <span className="hidden rounded-full bg-amber/15 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[1.5px] text-amber-bright sm:inline-block">
+            protocol
+          </span>
         </Link>
 
-        {/* Desktop nav */}
-        <nav className="hidden md:flex items-center gap-6 text-sm">
-          {[
-            { label: "About", href: "/about" },
-            { label: "Features", href: "#features" },
-            { label: "Community", href: "#values" },
-          ].map((item) => (
+        {/* Desktop nav links */}
+        <div className="hidden items-center gap-8 md:flex">
+          {navLinks.map((link) => (
             <a
-              key={item.href}
-              href={item.href}
-              className="text-[rgba(255,255,255,0.6)] hover:text-[#E8B84B] transition-colors font-medium"
+              key={link.href}
+              href={link.href}
+              className="text-[13px] font-medium text-cream/60 transition-colors hover:text-cream"
             >
-              {item.label}
+              {link.label}
             </a>
           ))}
-        </nav>
+        </div>
 
-        {/* CTA buttons */}
-        <div className="hidden md:flex items-center gap-3">
+        {/* Desktop CTAs */}
+        <div className="hidden items-center gap-4 md:flex">
           {isAuthenticated ? (
-            <Link href="/dashboard">
-              <Button
-                size="sm"
-                className="text-[#0E0B08] font-semibold"
-                style={{ background: "linear-gradient(135deg, #C9922A 0%, #E8B84B 100%)" }}
-              >
-                Go to Dashboard
-                <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-              </Button>
+            <Link
+              href="/dashboard"
+              className="rounded-full bg-amber px-5 py-2 text-[13px] font-bold text-tea-dark transition-all hover:bg-amber-bright hover:scale-[1.03] active:scale-[0.97]"
+            >
+              Dashboard
             </Link>
           ) : (
             <>
-              <ConnectWallet />
-              <Link href="/auth/register">
-                <Button
-                  size="sm"
-                  className="text-[#0E0B08] font-semibold"
-                  style={{ background: "linear-gradient(135deg, #C9922A 0%, #E8B84B 100%)" }}
-                >
-                  Join Community
-                </Button>
+              <Link
+                href="/auth/callback"
+                className="text-[13px] font-medium text-cream/60 transition-colors hover:text-cream"
+              >
+                Sign In
+              </Link>
+              <Link
+                href="/auth/register"
+                className="rounded-full bg-amber px-5 py-2 text-[13px] font-bold text-tea-dark transition-all hover:bg-amber-bright hover:scale-[1.03] active:scale-[0.97]"
+              >
+                Get Started
               </Link>
             </>
           )}
@@ -222,394 +186,550 @@ function LandingNav({ isAuthenticated }: { isAuthenticated: boolean }) {
 
         {/* Mobile hamburger */}
         <button
-          className="md:hidden text-white p-1"
-          onClick={() => setOpen((v) => !v)}
-          aria-label="Toggle menu"
+          className="flex h-10 w-10 items-center justify-center rounded-lg text-cream/70 transition-colors hover:text-cream md:hidden"
+          onClick={() => setOpen(!open)}
+          aria-label={open ? "Close menu" : "Open menu"}
         >
-          {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          {open ? <X size={20} /> : <Menu size={20} />}
         </button>
       </div>
 
       {/* Mobile menu */}
-      {open && (
-        <div className="md:hidden border-t border-[rgba(201,146,42,0.12)] bg-[#0E0B08] px-4 pb-4 pt-2 space-y-3">
-          {[
-            { label: "About", href: "/about" },
-            { label: "Features", href: "#features" },
-            { label: "Community", href: "#values" },
-          ].map((item) => (
+      <div
+        className={cn(
+          "overflow-hidden border-t border-cream/[0.06] bg-tea-dark/95 backdrop-blur-xl transition-all duration-300 md:hidden",
+          open ? "max-h-80 opacity-100" : "max-h-0 opacity-0"
+        )}
+      >
+        <div className="flex flex-col gap-1 px-5 py-4">
+          {navLinks.map((link) => (
             <a
-              key={item.href}
-              href={item.href}
-              className="block text-sm text-[rgba(255,255,255,0.7)] hover:text-[#E8B84B] py-1.5 font-medium"
+              key={link.href}
+              href={link.href}
+              className="rounded-lg px-3 py-2.5 text-sm font-medium text-cream/60 transition-colors hover:text-cream"
               onClick={() => setOpen(false)}
             >
-              {item.label}
+              {link.label}
             </a>
           ))}
-          <div className="pt-2 flex flex-col gap-2">
+          <div className="mt-3 flex flex-col gap-2 border-t border-cream/[0.08] pt-4">
             {isAuthenticated ? (
-              <Link href="/dashboard">
-                <Button className="w-full" size="sm">
-                  Go to Dashboard
-                </Button>
+              <Link
+                href="/dashboard"
+                className="rounded-full bg-amber px-4 py-2.5 text-center text-sm font-bold text-tea-dark"
+                onClick={() => setOpen(false)}
+              >
+                Dashboard
               </Link>
             ) : (
               <>
-                <Link href="/auth/register">
-                  <Button
-                    className="w-full text-[#0E0B08] font-semibold"
-                    size="sm"
-                    style={{ background: "linear-gradient(135deg, #C9922A 0%, #E8B84B 100%)" }}
-                  >
-                    Join Community
-                  </Button>
+                <Link
+                  href="/auth/callback"
+                  className="rounded-lg px-3 py-2.5 text-center text-sm font-medium text-cream/60"
+                  onClick={() => setOpen(false)}
+                >
+                  Sign In
                 </Link>
-                <ConnectWallet />
+                <Link
+                  href="/auth/register"
+                  className="rounded-full bg-amber px-4 py-2.5 text-center text-sm font-bold text-tea-dark"
+                  onClick={() => setOpen(false)}
+                >
+                  Get Started
+                </Link>
               </>
             )}
           </div>
         </div>
-      )}
-    </header>
+      </div>
+    </nav>
   )
 }
 
-// ── Main page ─────────────────────────────────────────────
+// ── Hero section ──────────────────────────────────────────────────────────────
 
-export function LandingPage() {
-  const { isAuthenticated } = useAuth()
-
+function HeroSection({ isAuthenticated }: { isAuthenticated: boolean }) {
   return (
-    <div className="min-h-screen bg-white">
-      <LandingNav isAuthenticated={isAuthenticated} />
-
-      {/* ── Hero ─────────────────────────────────────────── */}
-      <section
-        className="relative overflow-hidden"
+    <section className="relative flex min-h-[100dvh] flex-col overflow-hidden bg-tea-dark">
+      {/* Faint grid */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        aria-hidden="true"
         style={{
-          background: "linear-gradient(160deg, #0E0B08 0%, #1C1409 45%, #2A1F0E 70%, #1C2E1A 100%)",
-          backgroundImage: ADINKRA_BG,
-          backgroundSize: "80px 80px",
+          backgroundImage:
+            "linear-gradient(rgba(247,242,232,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(247,242,232,0.04) 1px, transparent 1px)",
+          backgroundSize: "60px 60px",
         }}
-      >
-        {/* Radial gold glow */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            background: "radial-gradient(ellipse 60% 50% at 50% -10%, rgba(201,146,42,0.18) 0%, transparent 70%)",
-          }}
-        />
-        {/* Green glow bottom-right */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            background: "radial-gradient(ellipse 40% 40% at 90% 100%, rgba(30,100,50,0.25) 0%, transparent 60%)",
-          }}
-        />
+      />
 
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 pt-20 pb-24 text-center">
-          <Badge
-            className="mb-6 border-0 text-xs font-medium px-4 py-1.5 uppercase tracking-widest"
-            style={{ background: "rgba(201,146,42,0.15)", color: "#E8B84B" }}
-          >
-            African Digital Community DAO
-          </Badge>
+      <ConcentricRings />
 
-          <h1 className="font-display font-bold text-white mb-4" style={{ fontSize: "clamp(3rem, 10vw, 6rem)", lineHeight: 1.05 }}>
-            UJAMAA
-          </h1>
+      {/* Warm radial glow */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        aria-hidden="true"
+        style={{
+          background:
+            "radial-gradient(ellipse 50% 50% at 50% 50%, rgba(212,145,30,0.08) 0%, transparent 70%)",
+        }}
+      />
 
-          <p className="text-lg md:text-xl font-medium mb-3" style={{ color: "rgba(255,255,255,0.75)" }}>
-            Decentralised Community Governance for Africa
-          </p>
-
-          <p className="text-base max-w-2xl mx-auto mb-10" style={{ color: "rgba(255,255,255,0.45)" }}>
-            A DAO that brings African communities together through blockchain technology,
-            embodying the spirit of Ubuntu: <em className="not-italic" style={{ color: "rgba(201,146,42,0.8)" }}>"I am because we are"</em>
-          </p>
-
-          <div className="flex flex-col sm:flex-row gap-3 justify-center items-center mb-16">
-            {isAuthenticated ? (
-              <Link href="/dashboard">
-                <Button
-                  size="lg"
-                  className="px-8 font-semibold text-[#0E0B08]"
-                  style={{ background: "linear-gradient(135deg, #C9922A 0%, #E8B84B 100%)" }}
-                >
-                  Go to Dashboard
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
-            ) : (
-              <>
-                <Link href="/auth/register">
-                  <Button
-                    size="lg"
-                    className="px-8 font-semibold text-[#0E0B08]"
-                    style={{ background: "linear-gradient(135deg, #C9922A 0%, #E8B84B 100%)" }}
-                  >
-                    Join the Community
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                </Link>
-                <Link href="/about">
-                  <Button
-                    variant="outline"
-                    size="lg"
-                    className="px-8 font-medium border-[rgba(255,255,255,0.15)] text-[rgba(255,255,255,0.7)] hover:bg-[rgba(255,255,255,0.05)] hover:text-white bg-transparent"
-                  >
-                    Learn More
-                    <ChevronRight className="ml-1 h-4 w-4" />
-                  </Button>
-                </Link>
-              </>
-            )}
-          </div>
-
-          {/* Stats row */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-3xl mx-auto">
-            {stats.map((stat, i) => {
-              const Icon = stat.icon
-              return (
-                <div
-                  key={i}
-                  className="rounded-xl px-4 py-4 text-center"
-                  style={{
-                    background: "rgba(255,255,255,0.04)",
-                    border: "1px solid rgba(201,146,42,0.12)",
-                  }}
-                >
-                  <Icon className="h-5 w-5 mx-auto mb-2" style={{ color: "#E8B84B" }} />
-                  <div className="text-xl font-bold text-white">{stat.value}</div>
-                  <div className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.4)" }}>{stat.label}</div>
-                </div>
-              )
-            })}
-          </div>
+      <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-5 pt-28 pb-20 lg:px-8">
+        {/* Overline badge */}
+        <div className="mb-8 inline-flex items-center gap-3 rounded-full border border-amber/30 bg-amber/10 px-5 py-2">
+          <div className="h-2 w-2 rounded-full bg-amber-bright" />
+          <span className="text-xs font-bold uppercase tracking-[2.5px] text-amber-bright">
+            {"The People's Protocol"}
+          </span>
         </div>
-      </section>
 
-      {/* ── Core Values ─────────────────────────────────── */}
-      <section id="values" className="py-20 bg-gradient-to-br from-green-50 to-yellow-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="text-center mb-14">
-            <h2 className="text-3xl md:text-4xl font-bold mb-3 text-slate-900">Our Foundation</h2>
-            <p className="text-lg text-slate-500">
-              Built on African values that have guided communities for generations
-            </p>
-          </div>
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
-            {coreValues.map((value, i) => {
-              const Icon = value.icon
-              return (
-                <div
-                  key={i}
-                  className="rounded-2xl p-8 text-center bg-white shadow-sm hover:shadow-md transition-shadow border border-slate-100"
-                >
-                  <div
-                    className={`h-16 w-16 rounded-2xl bg-gradient-to-br ${value.color} flex items-center justify-center mx-auto mb-5`}
-                  >
-                    <Icon className="h-8 w-8 text-white" />
-                  </div>
-                  <h3 className="text-xl font-bold mb-2 text-slate-900">{value.title}</h3>
-                  <p className="text-slate-500 text-sm leading-relaxed">{value.description}</p>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      </section>
+        {/* Headline */}
+        <h1 className="max-w-5xl text-center font-serif text-[clamp(2.8rem,8vw,7rem)] font-bold leading-[0.92] tracking-tight text-cream">
+          Collective{" "}
+          <span className="relative inline-block">
+            <span className="relative z-10 text-amber-bright">Power</span>
+            <span
+              className="absolute -bottom-2 left-0 h-3 w-full rounded-sm"
+              style={{
+                background: "linear-gradient(to right, rgba(233,165,46,0.35), rgba(56,160,99,0.20))",
+              }}
+              aria-hidden="true"
+            />
+          </span>
+          <br />
+          <span className="text-cream">Onchain</span>
+        </h1>
 
-      {/* ── Features ─────────────────────────────────────── */}
-      <section id="features" className="py-20 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="text-center mb-14">
-            <h2 className="text-3xl md:text-4xl font-bold mb-3 text-slate-900">Powerful Features</h2>
-            <p className="text-lg text-slate-500">Everything you need to participate in community governance</p>
-          </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {features.map((feature, i) => {
-              const Icon = feature.icon
-              return (
-                <div
-                  key={i}
-                  className="group rounded-2xl p-6 border border-slate-100 hover:border-orange-200 hover:shadow-lg transition-all duration-300 bg-white"
-                >
-                  <div
-                    className={`w-11 h-11 rounded-xl bg-gradient-to-r ${feature.color} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300`}
-                  >
-                    <Icon className="h-5 w-5 text-white" />
-                  </div>
-                  <h3 className="text-base font-bold text-slate-900 mb-0.5">{feature.title}</h3>
-                  <p className="text-xs font-semibold text-orange-500 mb-2">{feature.subtitle}</p>
-                  <p className="text-sm text-slate-500 leading-relaxed">{feature.description}</p>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      </section>
+        <p className="mt-8 max-w-lg text-center text-lg leading-relaxed text-cream/70 lg:text-xl">
+          Cooperative funding, collective governance, and community-powered economics — built for Africa.
+        </p>
 
-      {/* ── How It Works ─────────────────────────────────── */}
-      <section className="py-20 bg-gradient-to-br from-orange-50 to-green-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="text-center mb-14">
-            <h2 className="text-3xl md:text-4xl font-bold mb-3 text-slate-900">How It Works</h2>
-            <p className="text-lg text-slate-500">Three steps to join your community</p>
-          </div>
-          <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-            {[
-              {
-                step: "01",
-                title: "Create Your Account",
-                description: "Sign up with your email, name, and select the ward you live in — takes under 2 minutes",
-                icon: Users,
-              },
-              {
-                step: "02",
-                title: "Join a Group",
-                description: "Find and join your local ward group or a community initiative you care about",
-                icon: Users,
-              },
-              {
-                step: "03",
-                title: "Participate & Vote",
-                description: "Engage in governance, vote on proposals, and earn Participation Rights",
-                icon: Vote,
-              },
-            ].map((item, i) => {
-              const Icon = item.icon
-              return (
-                <div key={i} className="text-center relative">
-                  <div
-                    className="w-14 h-14 rounded-full flex items-center justify-center text-white font-bold text-lg mx-auto mb-5"
-                    style={{ background: "linear-gradient(135deg, #C9922A 0%, #E8B84B 100%)", color: "#0E0B08" }}
-                  >
-                    {item.step}
-                  </div>
-                  <Icon className="h-7 w-7 text-orange-400 mx-auto mb-3" />
-                  <h3 className="text-lg font-bold mb-2 text-slate-900">{item.title}</h3>
-                  <p className="text-sm text-slate-500 leading-relaxed">{item.description}</p>
-                  {i < 2 && (
-                    <div className="hidden md:block absolute top-7 left-full w-full">
-                      <ArrowRight className="h-5 w-5 text-orange-300 mx-auto" />
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Testimonials ─────────────────────────────────── */}
-      <section className="py-20 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="text-center mb-14">
-            <h2 className="text-3xl md:text-4xl font-bold mb-3 text-slate-900">Community Voices</h2>
-            <p className="text-lg text-slate-500">Hear from active members across Africa</p>
-          </div>
-          <div className="grid md:grid-cols-3 gap-6 max-w-6xl mx-auto">
-            {testimonials.map((t, i) => (
-              <div
-                key={i}
-                className="rounded-2xl p-6 border border-slate-100 bg-gradient-to-br from-orange-50/50 to-white"
+        {/* CTAs */}
+        <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row">
+          {isAuthenticated ? (
+            <Link
+              href="/dashboard"
+              className="group relative inline-flex h-12 items-center gap-2.5 overflow-hidden rounded-full bg-amber px-8 text-sm font-bold text-tea-dark shadow-[0_0_20px_rgba(212,145,30,0.30)] transition-all hover:bg-amber-bright hover:shadow-[0_0_32px_rgba(233,165,46,0.40)] hover:scale-[1.03] active:scale-[0.98]"
+            >
+              <span className="relative z-10">Go to Dashboard</span>
+              <svg
+                className="relative z-10 h-4 w-4 transition-transform group-hover:translate-x-0.5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.5}
               >
-                <div className="flex items-center mb-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+              </svg>
+            </Link>
+          ) : (
+            <>
+              <Link
+                href="/auth/register"
+                className="group relative inline-flex h-12 items-center gap-2.5 overflow-hidden rounded-full bg-amber px-8 text-sm font-bold text-tea-dark shadow-[0_0_20px_rgba(212,145,30,0.30)] transition-all hover:bg-amber-bright hover:shadow-[0_0_32px_rgba(233,165,46,0.40)] hover:scale-[1.03] active:scale-[0.98]"
+              >
+                <span className="relative z-10">Join the Movement</span>
+                <svg
+                  className="relative z-10 h-4 w-4 transition-transform group-hover:translate-x-0.5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+              </Link>
+              <a
+                href="#how-it-works"
+                className="inline-flex h-12 items-center rounded-full border border-cream/20 px-8 text-sm font-semibold text-cream/80 transition-colors hover:border-leaf/40 hover:text-leaf"
+              >
+                How It Works
+              </a>
+            </>
+          )}
+        </div>
+
+        {/* Stats row */}
+        <div className="mt-16 flex flex-wrap items-center justify-center gap-8 sm:gap-12">
+          {[
+            { value: "47",     label: "Wards Active",  color: "#E9A52E" },
+            { value: "12.4M",  label: "KES Pooled",    color: "#38A063" },
+            { value: "2,400+", label: "Proposals",     color: "#C43D28" },
+          ].map((stat) => (
+            <div key={stat.label} className="flex flex-col items-center gap-1">
+              <span className="font-mono text-2xl font-bold" style={{ color: stat.color }}>
+                {stat.value}
+              </span>
+              <span className="text-[11px] font-medium uppercase tracking-[1.5px] text-cream/40">
+                {stat.label}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Bottom marquee strip */}
+      <div className="relative z-10 overflow-hidden border-t border-cream/[0.08] py-4" aria-hidden="true">
+        <div
+          className="flex w-max gap-16"
+          style={{ animation: "marquee 30s linear infinite" }}
+        >
+          {[
+            "Umoja", "Ujima", "Ujamaa", "Kujichagulia", "Nia",
+            "Umoja", "Ujima", "Ujamaa", "Kujichagulia", "Nia",
+          ].map((word, i) => (
+            <span
+              key={i}
+              className="whitespace-nowrap font-serif text-sm italic text-cream/20"
+            >
+              {word}
+            </span>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ── How It Works ──────────────────────────────────────────────────────────────
+
+const steps = [
+  {
+    num: "01",
+    icon: ShieldCheck,
+    title: "Verify",
+    subtitle: "Community-backed identity",
+    description:
+      "M-Pesa verification and community vouching. No bots, just real people with real stake.",
+    color: "#C8851A",
+  },
+  {
+    num: "02",
+    icon: TrendingUp,
+    title: "Contribute",
+    subtitle: "Earn participation rights",
+    description:
+      "Funding, labor, mentorship, skills. Every contribution grows your voice in the collective.",
+    color: "#2E7D4F",
+  },
+  {
+    num: "03",
+    icon: Vote,
+    title: "Govern",
+    subtitle: "Direct onchain democracy",
+    description:
+      "Proposals, transparent treasury, ward-level voting. Your community, your decisions.",
+    color: "#A83220",
+  },
+]
+
+function HowItWorksSection() {
+  return (
+    <section
+      id="how-it-works"
+      className="relative overflow-hidden bg-cream py-24 lg:py-32"
+    >
+      {/* Subtle top accent line */}
+      <div
+        className="pointer-events-none absolute top-0 right-0 left-0 h-px"
+        aria-hidden="true"
+        style={{
+          background:
+            "linear-gradient(to right, transparent, rgba(200,133,26,0.4), rgba(46,125,79,0.25), transparent)",
+        }}
+      />
+
+      <div className="mx-auto max-w-6xl px-5 lg:px-8">
+        <div className="max-w-xl">
+          <span className="text-[11px] font-semibold uppercase tracking-[3px] text-amber">
+            How It Works
+          </span>
+          <h2 className="mt-4 font-serif text-4xl font-bold text-chai md:text-5xl">
+            Three steps to
+            <br />
+            collective power
+          </h2>
+        </div>
+
+        {/* Steps with connecting line */}
+        <div className="relative mt-20">
+          <div
+            className="absolute top-0 bottom-0 left-8 hidden w-px md:block"
+            aria-hidden="true"
+            style={{
+              background:
+                "linear-gradient(to bottom, rgba(200,133,26,0.35), rgba(46,125,79,0.25), rgba(168,50,32,0.20), transparent)",
+            }}
+          />
+
+          <div className="flex flex-col gap-16 md:gap-20">
+            {steps.map((step) => (
+              <div
+                key={step.num}
+                className="group relative flex flex-col gap-6 md:flex-row md:items-start md:gap-16"
+              >
+                <div className="relative flex shrink-0 items-center gap-4 md:w-16 md:flex-col md:items-center md:gap-2">
                   <div
-                    className="w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold text-sm mr-3 flex-shrink-0"
-                    style={{ background: "linear-gradient(135deg, #C9922A 0%, #E8B84B 100%)", color: "#0E0B08" }}
+                    className="hidden h-3 w-3 rounded-full md:block"
+                    style={{
+                      backgroundColor: step.color,
+                      boxShadow: `0 0 12px ${step.color}40`,
+                    }}
+                  />
+                  <span
+                    className="font-mono text-sm font-bold md:text-xs"
+                    style={{ color: step.color }}
                   >
-                    {t.avatar}
-                  </div>
-                  <div>
-                    <div className="font-semibold text-slate-900 text-sm">{t.name}</div>
-                    <div className="text-xs text-orange-600 font-medium">{t.role}</div>
-                    <div className="text-xs text-slate-400">{t.location}</div>
-                  </div>
+                    {step.num}
+                  </span>
                 </div>
-                <p className="text-sm text-slate-600 italic leading-relaxed">"{t.content}"</p>
-                <div className="flex text-yellow-400 mt-3 gap-0.5">
-                  {[...Array(5)].map((_, j) => (
-                    <Star key={j} className="h-3.5 w-3.5 fill-current" />
-                  ))}
+
+                <div className="flex-1 border-l border-chai/[0.08] pl-6 md:border-l-0 md:border-t md:border-chai/[0.06] md:pt-6 md:pl-0">
+                  <div className="flex items-start gap-4">
+                    <div
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+                      style={{
+                        backgroundColor: `${step.color}12`,
+                        color: step.color,
+                      }}
+                    >
+                      <step.icon size={22} strokeWidth={1.5} />
+                    </div>
+                    <div>
+                      <h3 className="font-serif text-2xl font-bold text-chai md:text-3xl">
+                        {step.title}
+                      </h3>
+                      <p className="mt-0.5 text-sm font-medium text-warm-gray">
+                        {step.subtitle}
+                      </p>
+                    </div>
+                  </div>
+                  <p className="mt-4 max-w-md text-base leading-relaxed text-chai/50">
+                    {step.description}
+                  </p>
                 </div>
               </div>
             ))}
           </div>
         </div>
-      </section>
+      </div>
+    </section>
+  )
+}
 
-      {/* ── CTA Footer ───────────────────────────────────── */}
-      <section
-        className="py-20 relative overflow-hidden"
-        style={{ background: "linear-gradient(135deg, #0E0B08 0%, #1C2E1A 100%)" }}
+// ── Use Cases / Wards section ─────────────────────────────────────────────────
+
+const showcases = [
+  {
+    icon: Droplets,
+    title: "Fund Infrastructure",
+    label: "Community Treasury",
+    description:
+      "Pool resources to fund boreholes, clinics, solar grids. Track every shilling from contribution to completion with onchain transparency.",
+    metric: "KES 12.4M",
+    metricLabel: "pooled across 47 wards",
+    accent: "#C8851A",
+    span: "md:col-span-2",
+  },
+  {
+    icon: Landmark,
+    title: "Govern Collectively",
+    label: "Direct Democracy",
+    description:
+      "Every verified member gets a voice. Propose spending, debate priorities, vote on budgets. No middlemen.",
+    metric: "2,400+",
+    metricLabel: "proposals passed",
+    accent: "#2E7D4F",
+    span: "md:col-span-1",
+  },
+  {
+    icon: Wrench,
+    title: "Trade Skills Locally",
+    label: "Skills Marketplace",
+    description:
+      "Connect plumbers, tutors, welders, nurses. Hire hyperlocal, keep money circulating within the community.",
+    metric: "860",
+    metricLabel: "skills listed",
+    accent: "#A83220",
+    span: "md:col-span-1",
+  },
+]
+
+function UseCaseCard({ item }: { item: (typeof showcases)[number] }) {
+  const [hovered, setHovered] = useState(false)
+
+  return (
+    <div
+      className={`group relative flex flex-col justify-between overflow-hidden rounded-2xl border p-6 transition-all duration-300 lg:p-8 ${item.span}`}
+      style={{
+        borderColor: hovered ? `${item.accent}40` : "rgba(247,242,232,0.06)",
+        backgroundColor: hovered ? `${item.accent}08` : "rgba(20,47,34,0.6)",
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <div>
+        <div className="flex items-center justify-between">
+          <span
+            className="rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[1.5px]"
+            style={{ borderColor: `${item.accent}25`, color: item.accent }}
+          >
+            {item.label}
+          </span>
+          <div
+            className="flex h-10 w-10 items-center justify-center rounded-xl transition-colors"
+            style={{ backgroundColor: `${item.accent}12`, color: item.accent }}
+          >
+            <item.icon size={20} strokeWidth={1.5} />
+          </div>
+        </div>
+
+        <h3 className="mt-6 font-serif text-2xl font-bold text-cream lg:text-3xl">
+          {item.title}
+        </h3>
+        <p className="mt-3 text-sm leading-relaxed text-cream/40">
+          {item.description}
+        </p>
+      </div>
+
+      <div
+        className="mt-8 border-t pt-5"
+        style={{ borderColor: `${item.accent}12` }}
       >
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            backgroundImage: ADINKRA_BG,
-            backgroundSize: "80px 80px",
-          }}
-        />
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            background: "radial-gradient(ellipse 60% 60% at 50% 100%, rgba(201,146,42,0.12) 0%, transparent 70%)",
-          }}
-        />
+        <div className="flex items-baseline gap-2">
+          <span className="font-mono text-2xl font-bold tabular-nums" style={{ color: item.accent }}>
+            {item.metric}
+          </span>
+          <span className="text-xs text-cream/30">{item.metricLabel}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
 
-        <div className="relative max-w-3xl mx-auto px-4 sm:px-6 text-center">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4 text-white">Join UJAMAA Today</h2>
-          <p className="text-base mb-8" style={{ color: "rgba(255,255,255,0.55)" }}>
-            Be part of Africa's digital transformation. Together we build stronger,
-            more connected communities — one ward at a time.
-          </p>
+function WardsSection() {
+  return (
+    <section
+      id="use-cases"
+      className="relative overflow-hidden bg-tea-green py-24 lg:py-32"
+    >
+      {/* Accent line */}
+      <div
+        className="pointer-events-none absolute top-0 right-0 left-0 h-px"
+        aria-hidden="true"
+        style={{
+          background:
+            "linear-gradient(to right, transparent, rgba(200,133,26,0.3), rgba(46,125,79,0.2), transparent)",
+        }}
+      />
 
-          <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
-            {isAuthenticated ? (
-              <Link href="/dashboard">
-                <Button
-                  size="lg"
-                  className="px-8 font-semibold text-[#0E0B08]"
-                  style={{ background: "linear-gradient(135deg, #C9922A 0%, #E8B84B 100%)" }}
-                >
-                  Go to Dashboard
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
-            ) : (
-              <>
-                <Link href="/auth/register">
-                  <Button
-                    size="lg"
-                    className="px-8 font-semibold text-[#0E0B08]"
-                    style={{ background: "linear-gradient(135deg, #C9922A 0%, #E8B84B 100%)" }}
-                  >
-                    Create Your Account
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                </Link>
-                <Link href="/about">
-                  <Button
-                    variant="outline"
-                    size="lg"
-                    className="px-8 border-[rgba(255,255,255,0.15)] text-[rgba(255,255,255,0.7)] hover:bg-[rgba(255,255,255,0.05)] hover:text-white bg-transparent"
-                  >
-                    Read More
-                    <ChevronRight className="ml-1 h-4 w-4" />
-                  </Button>
-                </Link>
-              </>
-            )}
+      <div className="mx-auto max-w-6xl px-5 lg:px-8">
+        <div className="flex flex-col items-end text-right">
+          <span className="text-[11px] font-semibold uppercase tracking-[3px] text-leaf">
+            Use Cases
+          </span>
+          <h2 className="mt-4 max-w-lg font-serif text-4xl font-bold text-cream md:text-5xl">
+            What communities
+            <br />
+            are building
+          </h2>
+        </div>
+
+        <div className="mt-16 grid gap-4 md:grid-cols-3">
+          {showcases.map((item) => (
+            <UseCaseCard key={item.title} item={item} />
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ── Footer ────────────────────────────────────────────────────────────────────
+
+const footerLinks = [
+  { label: "How It Works", href: "#how-it-works"  },
+  { label: "Use Cases",    href: "#use-cases"      },
+  { label: "About",        href: "/about"          },
+  { label: "Get Started",  href: "/auth/register"  },
+]
+
+function Footer() {
+  return (
+    <footer
+      id="principles"
+      className="relative overflow-hidden border-t border-cream/[0.04] bg-tea-green"
+    >
+      {/* Oversized watermark */}
+      <div
+        className="pointer-events-none absolute bottom-0 left-1/2 -translate-x-1/2 select-none"
+        aria-hidden="true"
+      >
+        <span className="whitespace-nowrap font-serif text-[clamp(6rem,18vw,16rem)] font-bold leading-none text-cream/[0.02]">
+          UjamaaDAO
+        </span>
+      </div>
+
+      <div className="relative z-10 mx-auto max-w-6xl px-5 py-16 lg:px-8 lg:py-20">
+        <div className="flex flex-col gap-12 md:flex-row md:items-start md:justify-between">
+          <div className="max-w-sm">
+            <span className="font-serif text-2xl font-bold text-cream">UjamaaDAO</span>
+            <p className="mt-3 text-sm leading-relaxed text-cream/30">
+              {"The People's Protocol. Cooperative funding, collective governance, and community-powered economics built for Africa."}
+            </p>
           </div>
 
-          <p className="mt-10 text-xs" style={{ color: "rgba(255,255,255,0.25)" }}>
-            "Unity is strength, division is weakness" — African Proverb
+          <div className="flex flex-wrap gap-x-8 gap-y-3">
+            {footerLinks.map((link) => (
+              <Link
+                key={link.label}
+                href={link.href}
+                className="text-sm text-cream/30 transition-colors hover:text-cream"
+              >
+                {link.label}
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-cream/[0.04] pt-6 md:flex-row">
+          <div className="flex flex-wrap gap-3">
+            {["Umoja", "Ujima", "Ujamaa", "Kujichagulia", "Nia"].map((principle, i) => {
+              const colors = ["#C8851A", "#2E7D4F", "#A83220"]
+              const c = colors[i % colors.length]
+              return (
+                <span
+                  key={principle}
+                  className="text-[11px] font-medium"
+                  style={{ color: `${c}70` }}
+                >
+                  {principle}
+                </span>
+              )
+            })}
+          </div>
+
+          <p className="text-xs text-cream/20">
+            {new Date().getFullYear()} UjamaaDAO
           </p>
         </div>
-      </section>
+      </div>
+    </footer>
+  )
+}
+
+// ── Main export ───────────────────────────────────────────────────────────────
+
+export function LandingPage() {
+  const { isAuthenticated } = useAuth()
+
+  return (
+    <div className="min-h-screen">
+      <LandingNavbar isAuthenticated={isAuthenticated} />
+      <HeroSection isAuthenticated={isAuthenticated} />
+      <HowItWorksSection />
+      <WardsSection />
+      <Footer />
     </div>
   )
 }

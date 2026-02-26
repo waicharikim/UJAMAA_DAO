@@ -4,92 +4,77 @@
 
 @layer base {
   :root {
-    /* ── UjamaaDAO design system ──────────────────────────────
-       Source: ujamasa-dashboard.html design tokens
-       Mapped to shadcn/ui HSL CSS vars so all components
-       automatically use the correct palette.
+    /* ── UjamaaDAO — Warm Earth Palette (Chai) ──────────────
+       Redesigned: tea-green + amber + cream + leaf
+       HSL values mapped for shadcn/ui component compatibility.
     ─────────────────────────────────────────────────────────── */
 
     /* Page & card backgrounds */
-    --background: 35 60% 93%;        /* sand  #F6F0E6 */
-    --foreground: 30 22% 5%;         /* ink   #0E0B08 */
+    --background: 40 55% 93%;         /* cream  #F7F2E8 */
+    --foreground: 30 28% 8%;          /* chai   #1A120B */
 
-    --card: 0 0% 100%;               /* white */
-    --card-foreground: 30 22% 5%;
+    --card: 40 55% 93%;               /* cream */
+    --card-foreground: 30 28% 8%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 30 22% 5%;
+    --popover: 40 55% 93%;
+    --popover-foreground: 30 28% 8%;
 
-    /* Primary = gold */
-    --primary: 38 65% 48%;           /* #C9922A */
-    --primary-foreground: 30 22% 5%; /* ink on gold */
+    /* Primary = amber */
+    --primary: 38 73% 47%;            /* #D4911E */
+    --primary-foreground: 40 55% 93%; /* cream on amber */
 
-    /* Secondary = sand-dark */
-    --secondary: 35 40% 89%;         /* #EDE5D4 */
-    --secondary-foreground: 30 22% 5%;
+    /* Secondary = tea-green */
+    --secondary: 150 43% 20%;         /* #1D4731 */
+    --secondary-foreground: 40 55% 93%;
 
-    /* Muted = lighter sand */
-    --muted: 35 40% 89%;
-    --muted-foreground: 30 22% 35%;  /* ink-40 */
+    /* Muted = cream-dim */
+    --muted: 38 38% 89%;              /* #EDE7DA */
+    --muted-foreground: 30 12% 43%;   /* warm-gray #7A6E60 */
 
-    /* Accent = forest green */
-    --accent: 148 35% 18%;           /* #1E3D2F */
-    --accent-foreground: 0 0% 100%;
+    /* Accent = leaf green */
+    --accent: 145 47% 43%;            /* #38A063 */
+    --accent-foreground: 40 55% 93%;
 
     /* Destructive = ember */
-    --destructive: 12 72% 40%;       /* #B03A1E */
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 10 68% 46%;        /* #C43D28 */
+    --destructive-foreground: 40 55% 93%;
 
-    --border: 35 30% 85%;
-    --input: 35 30% 85%;
-    --ring: 38 65% 48%;              /* gold focus ring */
+    --border: 38 38% 85%;
+    --input: 38 38% 85%;
+    --ring: 38 73% 47%;               /* amber focus ring */
 
     --radius: 0.75rem;
 
-    /* ── Raw tokens (use these for custom components) ─────── */
-    --ink:          #0E0B08;
-    --ink-80:       rgba(14,11,8,0.8);
-    --ink-40:       rgba(14,11,8,0.4);
-    --ink-15:       rgba(14,11,8,0.15);
-    --ink-06:       rgba(14,11,8,0.06);
-    --gold:         #C9922A;
-    --gold-light:   #E8B84B;
-    --gold-pale:    rgba(201,146,42,0.12);
-    --gold-glow:    rgba(201,146,42,0.25);
-    --ember:        #B03A1E;
-    --ember-pale:   rgba(176,58,30,0.1);
-    --forest:       #1E3D2F;
-    --forest-mid:   #2A5240;
-    --forest-pale:  rgba(30,61,47,0.1);
-    --sand:         #F6F0E6;
-    --sand-dark:    #EDE5D4;
-    --parchment:    #FAF7F2;
-    --sidebar-bg:   #0E0B08;
-    --page-bg:      #F4EFE6;
-    --shadow-gold:  0 8px 32px rgba(201,146,42,0.2);
-  }
+    /* ── Raw tokens — use these in inline styles / custom components ─── */
+    --cream:         #F7F2E8;
+    --cream-dim:     #EDE7DA;
+    --tea-green:     #1D4731;
+    --tea-dark:      #142F22;
+    --amber:         #D4911E;
+    --amber-bright:  #E9A52E;
+    --leaf:          #38A063;
+    --chai:          #1A120B;
+    --ember:         #C43D28;
+    --warm-gray:     #7A6E60;
+    --frosted:       rgba(29,71,49,0.92);
+    --sidebar-bg:    #1D4731;
+    --page-bg:       #F7F2E8;
 
-  /* Dark mode keeps sidebar-style ink background */
-  .dark {
-    --background: 30 22% 5%;
-    --foreground: 35 60% 93%;
-    --card: 30 15% 8%;
-    --card-foreground: 35 60% 93%;
-    --popover: 30 15% 8%;
-    --popover-foreground: 35 60% 93%;
-    --primary: 38 65% 48%;
-    --primary-foreground: 30 22% 5%;
-    --secondary: 30 15% 12%;
-    --secondary-foreground: 35 60% 93%;
-    --muted: 30 15% 12%;
-    --muted-foreground: 35 30% 55%;
-    --accent: 153 33% 24%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 12 72% 40%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 30 15% 14%;
-    --input: 30 15% 14%;
-    --ring: 38 65% 48%;
+    /* Legacy aliases kept for dashboard components */
+    --ink:        #1A120B;
+    --ink-80:     rgba(26,18,11,0.8);
+    --ink-40:     rgba(26,18,11,0.4);
+    --ink-15:     rgba(26,18,11,0.15);
+    --ink-06:     rgba(26,18,11,0.06);
+    --gold:       #D4911E;
+    --gold-light: #E9A52E;
+    --gold-pale:  rgba(212,145,30,0.12);
+    --gold-glow:  rgba(212,145,30,0.25);
+    --forest:     #1D4731;
+    --forest-mid: #38A063;
+    --sand:       #F7F2E8;
+    --sand-dark:  #EDE7DA;
+    --shadow-gold: 0 8px 32px rgba(212,145,30,0.2);
   }
 
   * {
@@ -101,4 +86,19 @@
     color: hsl(var(--foreground));
     font-feature-settings: "rlig" 1, "calt" 1;
   }
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes float-up {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-8px); }
+}
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
 }

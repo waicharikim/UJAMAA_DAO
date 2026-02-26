@@ -43,34 +43,46 @@ const config: Config = {
           DEFAULT: "hsl(var(--popover))",
           foreground: "hsl(var(--popover-foreground))",
         },
-        // Raw design tokens — use when you need exact control
+
+        // ── Chai palette — warm earth design system ──────────────────
+        "tea-green":    "#1D4731",
+        "tea-dark":     "#142F22",
+        "cream":        "#F7F2E8",
+        "cream-dim":    "#EDE7DA",
+        "amber":        "#D4911E",
+        "amber-bright": "#E9A52E",
+        "leaf":         "#38A063",
+        "chai":         "#1A120B",
+        "warm-gray":    "#7A6E60",
+
+        // ── Legacy tokens kept for backward compat ────────────────────
         ink: {
-          DEFAULT: "#0E0B08",
-          80: "rgba(14,11,8,0.8)",
-          40: "rgba(14,11,8,0.4)",
-          15: "rgba(14,11,8,0.15)",
-          6:  "rgba(14,11,8,0.06)",
+          DEFAULT: "#1A120B",
+          80: "rgba(26,18,11,0.8)",
+          40: "rgba(26,18,11,0.4)",
+          15: "rgba(26,18,11,0.15)",
+          6:  "rgba(26,18,11,0.06)",
         },
         gold: {
-          DEFAULT: "#C9922A",
-          light: "#E8B84B",
-          pale: "rgba(201,146,42,0.12)",
+          DEFAULT: "#D4911E",
+          light:  "#E9A52E",
+          pale:   "rgba(212,145,30,0.12)",
         },
         ember: {
-          DEFAULT: "#B03A1E",
-          pale: "rgba(176,58,30,0.1)",
+          DEFAULT: "#C43D28",
+          pale:    "rgba(196,61,40,0.1)",
         },
         forest: {
-          DEFAULT: "#1E3D2F",
-          mid: "#2A5240",
-          pale: "rgba(30,61,47,0.1)",
+          DEFAULT: "#1D4731",
+          mid:     "#38A063",
+          pale:    "rgba(29,71,49,0.1)",
         },
         sand: {
-          DEFAULT: "#F6F0E6",
-          dark: "#EDE5D4",
+          DEFAULT: "#F7F2E8",
+          dark:    "#EDE7DA",
         },
-        parchment: "#FAF7F2",
-        sidebar: "#0E0B08",
+        parchment: "#F7F2E8",
+        sidebar:   "#1D4731",
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -79,10 +91,11 @@ const config: Config = {
       },
       fontFamily: {
         sans:    ["var(--font-outfit)", "ui-sans-serif", "system-ui", "sans-serif"],
+        serif:   ["var(--font-cormorant)", "ui-serif", "Georgia", "serif"],
         display: ["var(--font-cormorant)", "ui-serif", "Georgia", "serif"],
       },
       boxShadow: {
-        gold: "0 8px 32px rgba(201,146,42,0.2)",
+        gold: "0 8px 32px rgba(212,145,30,0.2)",
         card: "0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)",
       },
     },
