@@ -301,7 +301,10 @@ const requireDashboardAuth = (req: any, res: any, next: any) => {
     .toString()
     .split(':');
 
-  if (safeCompare(login || '', auth.login) && safeCompare(password || '', auth.password)) {
+  if (
+    safeCompare(login || '', auth.login) &&
+    safeCompare(password || '', auth.password)
+  ) {
     return next();
   }
 

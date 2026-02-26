@@ -64,7 +64,9 @@ export const createCommitmentSchema = z.object({
  * Validates body for POST /economy/commitments/dues
  */
 export const duesOptInSchema = z.object({
-  tier: z.enum(['ORDINARY', 'SUPPORTER', 'SPONSOR'], { message: 'tier must be ORDINARY, SUPPORTER, or SPONSOR' }),
+  tier: z.enum(['ORDINARY', 'SUPPORTER', 'SPONSOR'], {
+    message: 'tier must be ORDINARY, SUPPORTER, or SPONSOR',
+  }),
   startPeriod: z
     .string()
     .regex(/^\d{4}-\d{2}$/, 'startPeriod must be YYYY-MM format')
