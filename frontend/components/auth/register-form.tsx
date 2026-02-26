@@ -68,32 +68,26 @@ function StepIndicator({ current }: { current: number }) {
           <div key={i} className="flex items-center flex-1">
             <div className="flex flex-col items-center gap-1">
               <div
-                className={[
-                  "w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold transition-all",
-                  done
-                    ? "bg-green-500 text-white"
-                    : active
-                    ? "bg-orange-500 text-white shadow-lg shadow-orange-200"
-                    : "bg-slate-100 text-slate-400",
-                ].join(" ")}
+                className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold transition-all"
+                style={{
+                  background: done ? "#38A063" : active ? "#D4911E" : "rgba(26,18,11,0.08)",
+                  color: done || active ? "#F7F2E8" : "#7A6E60",
+                  boxShadow: active ? "0 4px 12px rgba(212,145,30,0.30)" : "none",
+                }}
               >
                 {done ? <CheckCircle2 className="h-5 w-5" /> : <Icon className="h-4 w-4" />}
               </div>
               <span
-                className={[
-                  "text-[10px] font-medium hidden sm:block",
-                  active ? "text-orange-600" : done ? "text-green-600" : "text-slate-400",
-                ].join(" ")}
+                className="text-[10px] font-medium hidden sm:block"
+                style={{ color: active ? "#D4911E" : done ? "#38A063" : "#7A6E60" }}
               >
                 {step.label}
               </span>
             </div>
             {i < STEPS.length - 1 && (
               <div
-                className={[
-                  "flex-1 h-0.5 mx-2 mt-[-12px] rounded-full transition-all",
-                  done ? "bg-green-400" : "bg-slate-200",
-                ].join(" ")}
+                className="flex-1 h-0.5 mx-2 mt-[-12px] rounded-full transition-all"
+                style={{ background: done ? "#38A063" : "rgba(26,18,11,0.10)" }}
               />
             )}
           </div>
@@ -149,10 +143,10 @@ function WardCascade({
 
   return (
     <div className="space-y-3">
-      <p className="text-sm font-semibold text-slate-700">{label}</p>
+      <p className="text-sm font-semibold text-chai">{label}</p>
 
       <div>
-        <Label className="text-xs text-slate-500 mb-1 block">County</Label>
+        <Label className="text-xs text-warm-gray mb-1 block">County</Label>
         <Select value={countyId} onValueChange={(v) => { onCountyChange(v); onConstituencyChange(""); onWardChange("") }}>
           <SelectTrigger>
             <SelectValue placeholder="Select county…" />
@@ -164,7 +158,7 @@ function WardCascade({
       </div>
 
       <div>
-        <Label className="text-xs text-slate-500 mb-1 block">Constituency</Label>
+        <Label className="text-xs text-warm-gray mb-1 block">Constituency</Label>
         <Select
           value={constituencyId}
           onValueChange={(v) => { onConstituencyChange(v); onWardChange("") }}
@@ -180,7 +174,7 @@ function WardCascade({
       </div>
 
       <div>
-        <Label className="text-xs text-slate-500 mb-1 block">Ward</Label>
+        <Label className="text-xs text-warm-gray mb-1 block">Ward</Label>
         <Select
           value={wardId}
           onValueChange={onWardChange}
@@ -373,7 +367,7 @@ export function RegisterForm() {
       {/* Step 1 — Primary residence (where you live now) */}
       {step === 1 && (
         <div className="space-y-2">
-          <p className="text-sm text-slate-500 mb-4">
+          <p className="text-sm text-warm-gray mb-4">
             Select the ward where you currently live. This determines which community projects
             and governance you participate in.
           </p>
@@ -394,7 +388,7 @@ export function RegisterForm() {
       {/* Step 2 — Origin / Secondary ward */}
       {step === 2 && (
         <div className="space-y-2">
-          <p className="text-sm text-slate-500 mb-4">
+          <p className="text-sm text-warm-gray mb-4">
             Select your home area — where you are originally from. This connects you to
             your ancestral ward&apos;s community even while living elsewhere.
           </p>
@@ -416,11 +410,11 @@ export function RegisterForm() {
       {step === 3 && (
         <div className="space-y-5">
           <div>
-            <p className="text-sm font-semibold text-slate-700 mb-1">
+            <p className="text-sm font-semibold text-chai mb-1">
               Your industries{" "}
               <span className="font-normal text-slate-400">(pick 1–3)</span>
             </p>
-            <p className="text-xs text-slate-400 mb-3">What sector do you work in?</p>
+            <p className="text-xs text-warm-gray mb-3">What sector do you work in?</p>
             <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto">
               {industries.map((ind) => {
                 const selected = form.industryIds.includes(ind.id)
@@ -429,12 +423,12 @@ export function RegisterForm() {
                     key={ind.id}
                     type="button"
                     onClick={() => toggleMulti("industryIds", ind.id, 3)}
-                    className={[
-                      "text-xs px-3 py-1.5 rounded-full border font-medium transition-all",
-                      selected
-                        ? "bg-orange-500 border-orange-500 text-white"
-                        : "bg-white border-slate-200 text-slate-600 hover:border-orange-300",
-                    ].join(" ")}
+                    className="text-xs px-3 py-1.5 rounded-full border font-medium transition-all"
+                    style={{
+                      background: selected ? "#D4911E" : "transparent",
+                      borderColor: selected ? "#D4911E" : "rgba(26,18,11,0.15)",
+                      color: selected ? "#F7F2E8" : "#7A6E60",
+                    }}
                   >
                     {ind.name}
                   </button>
@@ -444,11 +438,11 @@ export function RegisterForm() {
           </div>
 
           <div>
-            <p className="text-sm font-semibold text-slate-700 mb-1">
+            <p className="text-sm font-semibold text-chai mb-1">
               Goods &amp; services{" "}
               <span className="font-normal text-slate-400">(pick at least 1)</span>
             </p>
-            <p className="text-xs text-slate-400 mb-3">What can you offer or need in the community?</p>
+            <p className="text-xs text-warm-gray mb-3">What can you offer or need in the community?</p>
             <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
               {goodsServices.map((gs) => {
                 const selected = form.goodsServiceIds.includes(gs.id)
@@ -457,12 +451,12 @@ export function RegisterForm() {
                     key={gs.id}
                     type="button"
                     onClick={() => toggleMulti("goodsServiceIds", gs.id, 20)}
-                    className={[
-                      "text-xs px-3 py-1.5 rounded-full border font-medium transition-all",
-                      selected
-                        ? "bg-green-500 border-green-500 text-white"
-                        : "bg-white border-slate-200 text-slate-600 hover:border-green-300",
-                    ].join(" ")}
+                    className="text-xs px-3 py-1.5 rounded-full border font-medium transition-all"
+                    style={{
+                      background: selected ? "#38A063" : "transparent",
+                      borderColor: selected ? "#38A063" : "rgba(26,18,11,0.15)",
+                      color: selected ? "#F7F2E8" : "#7A6E60",
+                    }}
                   >
                     {gs.name}
                   </button>
@@ -475,7 +469,7 @@ export function RegisterForm() {
 
       {/* Error */}
       {error && (
-        <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
+        <p className="text-sm rounded-md px-3 py-2" style={{ color: "#C43D28", background: "rgba(196,61,40,0.08)", border: "1px solid rgba(196,61,40,0.15)" }}>
           {error}
         </p>
       )}
@@ -491,7 +485,8 @@ export function RegisterForm() {
 
         {step < 3 ? (
           <Button
-            className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
+            className="flex-1 text-cream"
+          style={{ background: "#D4911E" }}
             onClick={() => setStep((s) => s + 1)}
             disabled={!canAdvance()}
           >
@@ -500,7 +495,8 @@ export function RegisterForm() {
           </Button>
         ) : (
           <Button
-            className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
+            className="flex-1 text-cream"
+          style={{ background: "#D4911E" }}
             onClick={handleSubmit}
             disabled={submitting || !canAdvance()}
           >

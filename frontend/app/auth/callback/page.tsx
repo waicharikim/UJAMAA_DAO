@@ -36,8 +36,8 @@ function CallbackInner() {
   return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="text-center space-y-4">
-        <Loader2 className="h-8 w-8 animate-spin mx-auto" style={{ color: "#C9922A" }} />
-        <p className="text-sm text-[#0E0B08]/60">Signing you in...</p>
+        <Loader2 className="h-8 w-8 animate-spin mx-auto" style={{ color: "#D4911E" }} />
+        <p className="text-sm text-chai/60">Signing you in...</p>
       </div>
     </div>
   )
@@ -48,7 +48,7 @@ export default function AuthCallbackPage() {
     <Suspense
       fallback={
         <div className="min-h-screen flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#C9922A" }} />
+          <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#D4911E" }} />
         </div>
       }
     >

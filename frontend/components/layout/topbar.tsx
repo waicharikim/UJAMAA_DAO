@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation"
 import { Bell } from "lucide-react"
-import { ConnectWallet } from "@/components/auth/connect-wallet"
+import { WalletButton } from "@/components/auth/wallet-button"
 import { Button } from "@/components/ui/button"
 
 const PAGE_TITLES: Record<string, string> = {
@@ -59,7 +59,7 @@ export function Topbar() {
           />
         </Button>
 
-        <ConnectWallet />
+        <WalletButton />
       </div>
     </header>
   )

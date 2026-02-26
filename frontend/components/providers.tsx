@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { AuthProvider } from "@/contexts/auth-context"
 import { RoleProvider } from "@/contexts/role-context"
 import { NotificationProvider } from "@/contexts/notification-context"
+import { WalletProvider } from "@/contexts/wallet-context"
 import { useState } from "react"
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -23,9 +24,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <RoleProvider>
-          <NotificationProvider>{children}</NotificationProvider>
-        </RoleProvider>
+        <WalletProvider>
+          <RoleProvider>
+            <NotificationProvider>{children}</NotificationProvider>
+          </RoleProvider>
+        </WalletProvider>
       </AuthProvider>
     </QueryClientProvider>
   )
