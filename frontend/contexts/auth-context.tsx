@@ -241,17 +241,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [toast]
   )
 
-  // ── step 2: verify magic link token ──
+  // ── step 2a: verify magic link token (existing users — JWT) ──
+  // Backend returns { sessionToken, user, session, needsProfileCompletion } — field is sessionToken, not accessToken
   const verifyMagicLink = useCallback(
     async (linkToken: string) => {
       setIsLoading(true)
       try {
-        const { accessToken, refreshToken, user: rawUser } = await authApi.verifyMagicLink(linkToken)
-        tokenStore.set(accessToken, refreshToken)
-        setToken(accessToken)
+        const { sessionToken, user: rawUser } = await authApi.verifyMagicLink(linkToken)
+        tokenStore.set(sessionToken)
+        setToken(sessionToken)
         const mappedUser = mapBackendUser(rawUser)
         setUser(mappedUser)
-        toast({ title: "Welcome!", description: `Logged in as ${mappedUser.email || mappedUser.username}.` })
+        toast({ title: "Welcome back!", description: `Logged in as ${mappedUser.email || mappedUser.username}.` })
       } catch (err) {
         const message = err instanceof ApiError ? err.message : "Login link is invalid or expired."
         toast({ title: "Login failed", description: message, variant: "destructive" })

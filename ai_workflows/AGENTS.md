@@ -15,6 +15,34 @@ Not every task needs all seven. Use judgment. A bug fix might only need Develope
 
 ---
 
+## Orient (New Session)
+
+**Wear this hat at the very start of a fresh Claude Code session, before any other hat.**
+
+Your job: load the live project state and report back clearly so the session starts from the right place.
+
+**Read in this order (no exceptions):**
+1. `ai_workflows/SESSION_STATE.md` — live snapshot (what's running, what's broken, next task)
+2. `ai_workflows/CLAUDE.md` — full project brain (rules, conventions, module status)
+3. Last 2 entries of `ai_workflows/PROGRESS_LOG.md` — recent history only
+
+**Output format (required):**
+```
+Project state: [one sentence — is it running? what's tested?]
+Last session fixed/built: [one sentence]
+Open issues: [bullet list from SESSION_STATE.md known issues]
+Next task: [first item from SESSION_STATE.md next tasks]
+Ready to: [which hat to wear next]
+```
+
+**Rules:**
+- Read SESSION_STATE.md first — it is the authoritative live snapshot; CLAUDE.md section 3 is supplementary
+- Read only the last 2 PROGRESS_LOG.md entries — do not read the full history
+- Always surface known open issues before accepting a new task from the user
+- If SESSION_STATE.md does not exist, fall back to CLAUDE.md section 3 + `git log --oneline -5`
+
+---
+
 ## Vision Keeper
 
 **Wear this hat first for any task involving rewards, tokens, economy, user incentives, or marketplace features.**
@@ -242,3 +270,4 @@ Test command: [how to verify after applying changes]
 | v2.0 | Full rewrite — hats not personas, output formats enforced, rules made directive |
 | v2.1 | Fixed file paths (backend/ prefix, workers.ts not worker.ts) |
 | v2.2 | Added Testing hat, fixed Developer output format path, added migration and Docker verification notes |
+| v2.3 | Added Orient hat (new session startup), referencing SESSION_STATE.md as primary context source |

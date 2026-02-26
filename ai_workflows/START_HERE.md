@@ -24,17 +24,18 @@ Full rules are in CLAUDE.md section 2.
 
 ---
 
-## Where is the project right now?
+## Where is the project right now? (Updated 2026-02-26)
 
-Backend architecture is in place: Express API + BullMQ worker, per-module Prisma schemas merged (77 models), Docker Compose fully configured. Infrastructure pre-flight is done — the system has not yet run end-to-end but is ready for first launch.
+**Read `SESSION_STATE.md` for the live snapshot** — it always has the current state, known bugs, and next task.
 
-No tests exist anywhere. Twelve modules are at `partial` status (code written, untested). Five are scaffolded only.
-
-Marketplace, governance, education, emergency response, M-Pesa, and blockchain are all designed but not built.
-
-Frontend doesn't exist yet.
-
-Full picture in CLAUDE.md section 3.
+Quick summary:
+- **Backend**: running ✅ — Express API + BullMQ worker, 80 Prisma models, 12 routes mounted
+- **Tests**: 173/173 green — auth (104), user (35), economy (34). All other modules: zero tests.
+- **Modules tested**: auth, user, economy. **Partial** (code, no tests): community, governance, projects, marketplace, notifications, onboarding, emergency, audit, admin. **Scaffold**: reputation, education, treasury, integration, verification.
+- **Frontend**: partial — landing, 4-step registration, sign-in, auth callback, dashboard, profile. Build green (15 routes). E2E auth flow verified 2026-02-26.
+- **Blockchain**: ADRs decided (Privy, Foundry, Base), `contracts/` scaffold exists. No Solidity written yet.
+- **M-Pesa**: not started.
+- **Next priorities**: community module tests → PrToken.sol + UtToken.sol → Privy frontend.
 
 Full picture in CLAUDE.md section 3.
 
@@ -44,6 +45,7 @@ Full picture in CLAUDE.md section 3.
 
 | What you're doing | Go to |
 |---|---|
+| **Live project state, current bugs, next task** | **SESSION_STATE.md ← start here** |
 | General project context, tech stack, conventions | CLAUDE.md |
 | Understanding who does what in a session | AGENTS.md |
 | Running a full task from start to finish | ORCHESTRATION.md |
@@ -60,7 +62,8 @@ Full picture in CLAUDE.md section 3.
 Copy this and adapt it:
 
 ```
-Load full UjamaaDAO context from CLAUDE.md, AGENTS.md, ORCHESTRATION.md, and PROGRESS_LOG.md.
+Load UjamaaDAO context: SESSION_STATE.md (current state), CLAUDE.md (project brain),
+and the last 2 entries of PROGRESS_LOG.md (recent history).
 
 Mode: [Planning / Coding / Review / Emergency / Documentation / DevOps]
 Tier: [Quick / Standard / Major]
@@ -74,10 +77,12 @@ Output in markdown with full file paths in code blocks.
 
 ## The most important habits
 
+- **Read SESSION_STATE.md first** — it has the live snapshot and known open issues
 - **Vision Keeper runs first** for any incentive/reward/marketplace task
 - **Architect plans before Developer codes** for anything Standard or Major
-- **PROGRESS_LOG.md gets updated** at the end of every session that changes code
+- **SESSION_STATE.md + PROGRESS_LOG.md get updated** at the end of every session that changes code
 - **`make dev` must work** after any Docker or infrastructure change
+- **MailHog must be started manually** — `docker compose -f docker/docker-compose.yml up -d mailhog`
 - **Module readiness checklist** (CLAUDE.md section 6) defines "done"
 
 ---

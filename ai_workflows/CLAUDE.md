@@ -85,6 +85,7 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 - `BASE_URL`, `SMTP_*`, `ENCRYPTION_KEY`, `ALLOWED_ORIGINS` ✅ now in `docker/docker-compose.yml` web env. `ENCRYPTION_KEY` defaults to empty string — set it with `openssl rand -hex 32` before enabling TOTP/2FA or encrypted fields.
 - M-Pesa: not started
 - On-chain PR/UT (Base Sepolia): not started
+- MailHog (dev email catcher): NOT auto-started by `make dev`. Run `docker compose -f docker/docker-compose.yml up -d mailhog` separately. Web UI at `http://localhost:8025`. Without it all magic-link and verification emails are silently dropped in dev.
 - Frontend (Next.js): **partial** — landing page, 4-step registration form, magic-link sign-in modal, auth callback, dashboard (PR balance via TanStack Query), profile edit, app shell (sidebar/topbar/mobile nav). Build green (15 routes). Auth email links fixed and E2E flow verified 2026-02-26. Privy integration not yet done.
 
 **Infrastructure completed (2026-02-21/22):**
@@ -120,8 +121,8 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 ### Frontend (Phase 1 — auth/user APIs wired)
 - Next.js 15 + React 18 + TypeScript + Tailwind CSS + shadcn/ui (installed)
 - `frontend/lib/api.ts` — real HTTP client with JWT injection + auto-refresh (`authApi`, `userApi`, `economyApi`)
-- `frontend/contexts/auth-context.tsx` — magic link flow (`requestMagicLink`, `verifyMagicLink`, auto-hydrate from localStorage)
-- `frontend/app/auth/callback/page.tsx` — handles magic link token from URL
+- `frontend/contexts/auth-context.tsx` — magic link flow (`requestMagicLink`, `verifyMagicLink`, `verifyEmailToken`, auto-hydrate from localStorage)
+- `frontend/app/auth/callback/page.tsx` — detects token type and routes: JWT (2 dots) → `verifyMagicLink` (`GET /auth/login`); hex → `verifyEmailToken` (`GET /auth/verify-email`)
 - `frontend/.env.local` — `NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1`
 - TanStack Query, Wagmi (mock — to be replaced by Privy in Phase 3), Zustand
 
@@ -153,6 +154,8 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 - Async service init in `backend/src/app.ts` via `servicesReady` promise before accepting traffic
 - All new queues must register in `backend/src/core/jobs/register.ts`
 - All new events must be typed in the event bus types file
+- Auth token field name: both `GET /auth/verify-email` and `GET /auth/login` return `sessionToken` (not `accessToken`). Frontend must read `sessionToken`. No refresh token is issued — 7-day lifetime per ADR-022.
+- `AUTH_CLEANUP_JOB` runs on the `user-cleanup` worker queue (not a dedicated auth queue). New low-volume auth housekeeping jobs belong in `user-cleanup` — do not create a third queue.
 
 ---
 
@@ -199,7 +202,7 @@ A module is **production-ready** when ALL of these are true:
 | TypeScript errors in scaffold services that reference unmapped Prisma models | Add `// @ts-nocheck` at the top of the service file and a note like `scaffold: <ModelName> alignment in progress`. Do not attempt full schema fixes on scaffold modules — defer until that module is actively being built. |
 | Magic links produce `undefined/auth/verify-email?...` in emails | `BASE_URL` env var is not set. Add `BASE_URL=http://localhost:4000` to the web service environment in `docker/docker-compose.yml`. |
 | Emails not sending at all (magic links, verification) | SMTP credentials not configured. Add `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` to web service environment in `docker/docker-compose.yml`. Startup logs show "Email service NOT configured" warning when missing. |
-| `/admin/queues` Bull Board returns 401 with correct password | Username is always `admin`. Password is `DASHBOARD_PASSWORD` env var (default `admin123` in dev docker-compose). Change before any shared or production deployment. Auth uses `timingSafeEqual` via SHA-256 hash — timing-safe as of `app.ts:287`. |
+| `/admin/queues` Bull Board returns 401 with correct password | Username is always `admin`. Password is `DASHBOARD_PASSWORD` env var (default `YourVeryStrongPassword123!` in dev — `app.ts:297`). Change before any shared or production deployment. Auth uses `timingSafeEqual` via SHA-256 hash. |
 | CI fails: `PrismaConfigEnvError: Cannot resolve environment variable: DATABASE_URL` | Prisma v7 `prisma.config.ts` calls `env('DATABASE_URL')` at config-load time, even during `prisma generate`. Add `DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ci_db` to the job-level `env:` block in `.github/workflows/ci.yml`. |
 | ESLint error: `Cannot find module '@eslint/js/dist/configs/typescript.js'` | That subpath does not exist in `@eslint/js`. Rewrite `eslint.config.js` to import `@typescript-eslint/eslint-plugin`, `@typescript-eslint/parser`, and `globals` directly — do not rely on `@eslint/js` TypeScript re-exports. |
 | JWT `jti` claim does not match session ID | `signJwtToken` generates a new random hex `jti` regardless of the payload's `jti` field. The actual session ID travels in the JWT `sessionId` field (not `jti`). Token revocation checks must use `sessionId`, not `jti`. |
@@ -224,6 +227,8 @@ A module is **production-ready** when ALL of these are true:
 | Email links go to backend (`:4000`) instead of frontend — clicking does nothing | `auth.service.ts` used `BASE_URL` (backend URL) to build both magic-link and verify-email links. The backend returns 404 for `/auth/login` and `/auth/verify-email` (no `/api/v1` prefix). Fix: use `FRONTEND_URL` (`:3000`) + `/auth/callback?token=...` for both. |
 | Frontend `/auth/callback` fails for new-user verification tokens | The callback page previously only called `verifyMagicLink()` (JWT flow). New-user tokens are hex strings that need `GET /auth/verify-email`. Detect token type by dot-count: 2 dots = JWT magic link → `verifyMagicLink()`; no dots = hex verification token → `verifyEmailToken()`. |
 | MailHog starts but port bindings are missing | Running `docker compose up -d mailhog` when the container already exists may reuse the old container without applying port config. Fix: `docker compose stop mailhog && docker compose rm -f mailhog && docker compose up -d mailhog` to force container recreation with correct port bindings (`1025:1025`, `8025:8025`). |
+| Magic link emails sent but nothing arrives in MailHog | MailHog is not started — it is NOT part of the default `make dev` startup. Run `docker compose -f docker/docker-compose.yml up -d mailhog` manually. Check `http://localhost:8025` to confirm it's up. |
+| Existing-user magic link login silently fails (user not authenticated after clicking link) | `frontend/lib/api.ts verifyMagicLink` was destructuring `{ accessToken }` but the backend returns `{ sessionToken }` in `MagicLinkAuthResult`. `accessToken` would be `undefined`, storing the string `"undefined"` in localStorage and sending `Authorization: Bearer undefined` on all requests. Fix: destructure `sessionToken` from `verifyMagicLink` response; `auth-context.tsx verifyMagicLink` must call `tokenStore.set(sessionToken)`. |
 
 ---
 
@@ -247,3 +252,4 @@ A module is **production-ready** when ALL of these are true:
 | v2.8 | User module: 35 tests green (35 route integration tests). User status upgraded partial → tested. 5 service bugs fixed (proofUrl null, vouch P2002 race, timeout semantic, redundant middleware x5, dead code). Schema migration `20260223214449_make_proof_url_nullable`. Dev seed repaired (systemType uniqueness, Role schema fields). Auth helpers upsert-refactored. 8 new common issues added (upsert idempotency, Industry.active, response shapes, 400 vs 422, PENDING status, unique where clause, non-schema fields, proofUrl nullable). Total tests: 139 green. |
 | v2.9 | ADR-009 closed (Privy chosen). ADR-018/019/020 added (Foundry, contracts/ at root, minter wallet). `contracts/` scaffold created (foundry.toml, README with architecture). Frontend Phase 1: api.ts real HTTP client, auth-context magic link flow, connect-wallet.tsx email dialog, auth/callback page, .env.local. Dashboard wired to real user data. Economy module: 34 new tests green (18 service unit + 16 route integration). Bug fixed: duesOptInSchema added. ParticipationRightsService class exported. Total: 173 green tests. |
 | v3.0 | Audit pass (2026-02-24): removed stale Bull Board timing-safe issue (fixed in app.ts:287), updated env-var gap note (BASE_URL/SMTP_*/ENCRYPTION_KEY/ALLOWED_ORIGINS now in docker-compose), added `frontend` service to infrastructure list, added 3 new common issues (sendJobFailureAlert stub, 7-day token, ENCRYPTION_KEY empty default). ADR-021 (auth→user direct import exception) and ADR-022 (7-day token) added to DECISIONS.md. |
+| v3.1 | Audit pass (2026-02-26): START_HERE.md rewritten (was severely stale). SESSION_STATE.md created (always-current live snapshot). Orient hat added to AGENTS.md. CLAUDE.md: MailHog startup note added to section 3, auth-context entry updated (verifyEmailToken added), two new section 5 conventions (sessionToken field name, auth-cleanup queue), DASHBOARD_PASSWORD default corrected (was `admin123`, actually `YourVeryStrongPassword123!`), 3 new section 7 issues. Code bug fixed: `verifyMagicLink` in api.ts + auth-context.tsx now correctly reads `sessionToken` instead of `accessToken`. |
