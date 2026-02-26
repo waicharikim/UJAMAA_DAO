@@ -222,7 +222,7 @@ class AuthService {
       const verificationToken = await tokenService.createVerificationToken(
         user.id
       );
-      const verificationLink = `${process.env.BASE_URL}/auth/verify-email?token=${verificationToken}`;
+      const verificationLink = `${process.env.FRONTEND_URL}/auth/callback?token=${verificationToken}`;
 
       await sendVerificationEmail(email, name, verificationLink);
 
@@ -253,7 +253,7 @@ class AuthService {
     };
 
     const magicLinkToken = await tokenService.createMagicLinkToken(payload);
-    const loginLink = `${process.env.BASE_URL}/auth/login?token=${magicLinkToken}`;
+    const loginLink = `${process.env.FRONTEND_URL}/auth/callback?token=${magicLinkToken}`;
 
     await sendLoginEmail(email, user.name || 'User', loginLink);
 

@@ -181,6 +181,16 @@ export const authApi = {
     ),
 
   /**
+   * GET /auth/verify-email?token=...
+   * Exchanges an email verification token (hex, for new users) for a session.
+   * Returns { sessionToken, user, session, needsProfileCompletion }
+   */
+  verifyEmailToken: (token: string) =>
+    apiFetch<{ sessionToken: string; user: any; session: any; needsProfileCompletion: boolean }>(
+      `/auth/verify-email?token=${encodeURIComponent(token)}`
+    ),
+
+  /**
    * POST /auth/refresh
    * Exchange refresh token for new access token (called automatically by apiFetch on 401).
    */
