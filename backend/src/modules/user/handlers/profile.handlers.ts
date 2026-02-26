@@ -20,7 +20,8 @@ export async function getMyProfile(req: AuthRequest, res: Response) {
   const userId = req.user!.userId;
 
   try {
-    const { _privacySettings: _ps, ...profile } = await userService.getProfile(userId);
+    const { _privacySettings: _ps, ...profile } =
+      await userService.getProfile(userId);
 
     sendSuccess(res, profile, 'Profile retrieved successfully', 200);
   } catch (error) {

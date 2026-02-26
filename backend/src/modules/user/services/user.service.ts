@@ -705,7 +705,8 @@ class UserService {
     const voucherLevelIndex = VERIFICATION_LEVEL_ORDER.indexOf(
       voucher.verificationLevel as VerificationLevel
     );
-    const communityLevelIndex = VERIFICATION_LEVEL_ORDER.indexOf('COMMUNITY_VERIFIED');
+    const communityLevelIndex =
+      VERIFICATION_LEVEL_ORDER.indexOf('COMMUNITY_VERIFIED');
     if (voucherLevelIndex < communityLevelIndex) {
       throw ApiError.insufficientVerification(
         'Only community-verified users can vouch'
@@ -740,7 +741,8 @@ class UserService {
         },
       });
     } catch (e: any) {
-      if (e.code === 'P2002') throw ApiError.conflict('Already vouched for this user');
+      if (e.code === 'P2002')
+        throw ApiError.conflict('Already vouched for this user');
       throw e;
     }
 

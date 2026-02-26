@@ -80,7 +80,8 @@ async function startServer() {
     }
     if (
       NODE_ENV === 'production' &&
-      jwtSecret === '6e603cfa9affb7677020ad6a930bd3f076867ff38d100586dc5d985bed845ad0'
+      jwtSecret ===
+        '6e603cfa9affb7677020ad6a930bd3f076867ff38d100586dc5d985bed845ad0'
     ) {
       throw new Error(
         'JWT_SECRET is set to the insecure development default — set a unique secret in production'
