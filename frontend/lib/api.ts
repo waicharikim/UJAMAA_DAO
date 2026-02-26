@@ -168,15 +168,12 @@ export const authApi = {
 
   /**
    * GET /auth/login?token=...
-   * Exchanges the magic link token for access + refresh tokens.
-   * Returns { accessToken, refreshToken, user } where user = AuthUserResponse shape:
-   *   { id, email, name, phoneNumber, walletAddress, verificationLevel,
-   *     primaryWardId, secondaryWardId, emailVerified, phoneVerified,
-   *     communityVerified, globalImpactPoints, utilityTokens,
-   *     participationRights, roles: string[], createdAt, lastLoginAt }
+   * Exchanges the magic link JWT (existing users) for a session.
+   * Backend returns MagicLinkAuthResult: { sessionToken, user, session, needsProfileCompletion }
+   * NOTE: field is `sessionToken`, NOT `accessToken`. No refresh token — 7-day lifetime (ADR-022).
    */
   verifyMagicLink: (token: string) =>
-    apiFetch<{ accessToken: string; refreshToken: string; user: any }>(
+    apiFetch<{ sessionToken: string; user: any; session: any; needsProfileCompletion: boolean }>(
       `/auth/login?token=${encodeURIComponent(token)}`
     ),
 
