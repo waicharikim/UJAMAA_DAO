@@ -13,7 +13,153 @@ import {
   Droplets,
   Landmark,
   Wrench,
+  Mail,
+  Loader2,
+  ExternalLink,
 } from "lucide-react"
+
+// ── Sign-in modal ─────────────────────────────────────────────────────────────
+
+const IS_DEV = process.env.NODE_ENV === "development"
+
+function SignInModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { requestMagicLink } = useAuth()
+  const [email, setEmail] = useState("")
+  const [sending, setSending] = useState(false)
+  const [sent, setSent] = useState(false)
+
+  const handleSend = async () => {
+    if (!email.trim()) return
+    setSending(true)
+    try {
+      await requestMagicLink({ email: email.trim() })
+      setSent(true)
+    } catch {
+      // toast already shown inside requestMagicLink
+    } finally {
+      setSending(false)
+    }
+  }
+
+  const handleClose = () => {
+    onClose()
+    setTimeout(() => { setSent(false); setEmail("") }, 300)
+  }
+
+  if (!open) return null
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center px-4"
+      onClick={handleClose}
+    >
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-chai/70 backdrop-blur-sm" />
+
+      {/* Panel */}
+      <div
+        className="relative w-full max-w-md rounded-2xl p-8 shadow-2xl"
+        style={{ background: "#142F22", border: "1px solid rgba(212,145,30,0.22)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Close */}
+        <button
+          onClick={handleClose}
+          className="absolute top-4 right-4 h-8 w-8 flex items-center justify-center rounded-lg text-cream/40 hover:text-cream transition-colors"
+          style={{ background: "rgba(247,242,232,0.06)" }}
+          aria-label="Close"
+        >
+          <X size={16} />
+        </button>
+
+        {/* Header */}
+        <div className="mb-6">
+          <span className="font-serif text-xl font-bold text-cream">Sign in</span>
+          <p className="mt-1 text-sm text-cream/50">
+            Enter your email and we&apos;ll send a secure, passwordless login link.
+          </p>
+        </div>
+
+        {sent ? (
+          <div className="text-center space-y-3 py-4">
+            <div className="text-4xl">📬</div>
+            <p className="font-medium text-cream">Check your email</p>
+            <p className="text-sm text-cream/50">
+              We sent a link to{" "}
+              <strong className="text-amber-bright">{email}</strong>. Click it to sign in.
+            </p>
+            {IS_DEV && (
+              <a
+                href="http://localhost:8025"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-amber/70 hover:text-amber transition-colors"
+              >
+                <ExternalLink size={12} />
+                Dev mode — view in MailHog
+              </a>
+            )}
+            <button
+              onClick={() => setSent(false)}
+              className="block mx-auto text-sm text-cream/40 hover:text-cream/70 transition-colors mt-2"
+            >
+              Try a different email
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="relative">
+              <Mail
+                size={16}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-cream/30"
+              />
+              <input
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                autoFocus
+                className="w-full rounded-xl pl-9 pr-4 py-3 text-sm text-cream placeholder-cream/30 outline-none transition-all focus:border-amber/40"
+                style={{
+                  background: "rgba(247,242,232,0.07)",
+                  border: "1px solid rgba(247,242,232,0.12)",
+                }}
+              />
+            </div>
+
+            <button
+              onClick={handleSend}
+              disabled={sending || !email.trim()}
+              className="w-full rounded-full py-3 text-sm font-bold text-tea-dark transition-all hover:bg-amber-bright hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2"
+              style={{ background: "#D4911E" }}
+            >
+              {sending ? (
+                <>
+                  <Loader2 size={15} className="animate-spin" />
+                  Sending…
+                </>
+              ) : (
+                "Send Login Link"
+              )}
+            </button>
+
+            <p className="text-center text-xs text-cream/30">
+              New to UjamaaDAO?{" "}
+              <Link
+                href="/auth/register"
+                onClick={handleClose}
+                className="text-amber hover:text-amber-bright font-medium transition-colors"
+              >
+                Create your account →
+              </Link>
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 // ── Animated concentric rings (canvas) ───────────────────────────────────────
 
@@ -128,7 +274,13 @@ const navLinks = [
   { label: "Principles",   href: "#principles"   },
 ]
 
-function LandingNavbar({ isAuthenticated }: { isAuthenticated: boolean }) {
+function LandingNavbar({
+  isAuthenticated,
+  onSignIn,
+}: {
+  isAuthenticated: boolean
+  onSignIn: () => void
+}) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -168,12 +320,12 @@ function LandingNavbar({ isAuthenticated }: { isAuthenticated: boolean }) {
             </Link>
           ) : (
             <>
-              <Link
-                href="/auth/callback"
+              <button
+                onClick={onSignIn}
                 className="text-[13px] font-medium text-cream/60 transition-colors hover:text-cream"
               >
                 Sign In
-              </Link>
+              </button>
               <Link
                 href="/auth/register"
                 className="rounded-full bg-amber px-5 py-2 text-[13px] font-bold text-tea-dark transition-all hover:bg-amber-bright hover:scale-[1.03] active:scale-[0.97]"
@@ -223,13 +375,12 @@ function LandingNavbar({ isAuthenticated }: { isAuthenticated: boolean }) {
               </Link>
             ) : (
               <>
-                <Link
-                  href="/auth/callback"
-                  className="rounded-lg px-3 py-2.5 text-center text-sm font-medium text-cream/60"
-                  onClick={() => setOpen(false)}
+                <button
+                  onClick={() => { setOpen(false); onSignIn() }}
+                  className="rounded-lg px-3 py-2.5 text-center text-sm font-medium text-cream/60 hover:text-cream"
                 >
                   Sign In
-                </Link>
+                </button>
                 <Link
                   href="/auth/register"
                   className="rounded-full bg-amber px-4 py-2.5 text-center text-sm font-bold text-tea-dark"
@@ -248,7 +399,13 @@ function LandingNavbar({ isAuthenticated }: { isAuthenticated: boolean }) {
 
 // ── Hero section ──────────────────────────────────────────────────────────────
 
-function HeroSection({ isAuthenticated }: { isAuthenticated: boolean }) {
+function HeroSection({
+  isAuthenticated,
+  onSignIn,
+}: {
+  isAuthenticated: boolean
+  onSignIn: () => void
+}) {
   return (
     <section className="relative flex min-h-[100dvh] flex-col overflow-hidden bg-tea-dark">
       {/* Faint grid */}
@@ -339,12 +496,12 @@ function HeroSection({ isAuthenticated }: { isAuthenticated: boolean }) {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
               </Link>
-              <a
-                href="#how-it-works"
-                className="inline-flex h-12 items-center rounded-full border border-cream/20 px-8 text-sm font-semibold text-cream/80 transition-colors hover:border-leaf/40 hover:text-leaf"
+              <button
+                onClick={onSignIn}
+                className="inline-flex h-12 items-center rounded-full border border-cream/20 px-8 text-sm font-semibold text-cream/80 transition-colors hover:border-amber/40 hover:text-amber"
               >
-                How It Works
-              </a>
+                Sign In
+              </button>
             </>
           )}
         </div>
@@ -722,11 +879,13 @@ function Footer() {
 
 export function LandingPage() {
   const { isAuthenticated } = useAuth()
+  const [signInOpen, setSignInOpen] = useState(false)
 
   return (
     <div className="min-h-screen">
-      <LandingNavbar isAuthenticated={isAuthenticated} />
-      <HeroSection isAuthenticated={isAuthenticated} />
+      <SignInModal open={signInOpen} onClose={() => setSignInOpen(false)} />
+      <LandingNavbar isAuthenticated={isAuthenticated} onSignIn={() => setSignInOpen(true)} />
+      <HeroSection isAuthenticated={isAuthenticated} onSignIn={() => setSignInOpen(true)} />
       <HowItWorksSection />
       <WardsSection />
       <Footer />
