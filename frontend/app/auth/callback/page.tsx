@@ -5,10 +5,16 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { Loader2 } from "lucide-react"
 
+// JWT magic-link tokens have exactly 2 dots (3 base64url segments).
+// Email verification tokens are hex strings with no dots.
+function isJwtToken(token: string): boolean {
+  return (token.match(/\./g) ?? []).length === 2
+}
+
 function CallbackInner() {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const { verifyMagicLink } = useAuth()
+  const { verifyMagicLink, verifyEmailToken } = useAuth()
   const called = useRef(false)
 
   useEffect(() => {
@@ -21,10 +27,11 @@ function CallbackInner() {
       return
     }
 
-    verifyMagicLink(token)
+    const verify = isJwtToken(token) ? verifyMagicLink(token) : verifyEmailToken(token)
+    verify
       .then(() => router.replace("/dashboard"))
       .catch(() => router.replace("/?error=invalid_token"))
-  }, [searchParams, verifyMagicLink, router])
+  }, [searchParams, verifyMagicLink, verifyEmailToken, router])
 
   return (
     <div className="min-h-screen flex items-center justify-center">

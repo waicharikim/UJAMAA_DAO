@@ -174,8 +174,10 @@ function mapBackendUser(raw: any): User {
 interface AuthContextType extends Pick<AuthState, "user" | "token" | "isAuthenticated" | "isLoading"> {
   /** Step 1 of magic link flow: sends the link email (existing users: email only; new users: full registration params) */
   requestMagicLink: (params: { email: string; name?: string; phoneNumber?: string; primaryWardId?: string; secondaryWardId?: string; industryIds?: string[]; goodsServiceIds?: string[] }) => Promise<void>
-  /** Step 2: called from /auth/callback page with token from URL */
+  /** Step 2a: called from /auth/callback for existing users (JWT magic link) */
   verifyMagicLink: (token: string) => Promise<void>
+  /** Step 2b: called from /auth/callback for new users (hex email verification token) */
+  verifyEmailToken: (token: string) => Promise<void>
   logout: () => Promise<void>
   /** Patch local user state with already-mapped Partial<User> fields */
   updateUser: (userData: Partial<User>) => void
@@ -261,6 +263,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [toast]
   )
 
+  // ── step 2b: verify email token (new users) ──
+  const verifyEmailToken = useCallback(
+    async (linkToken: string) => {
+      setIsLoading(true)
+      try {
+        const { sessionToken, user: rawUser } = await authApi.verifyEmailToken(linkToken)
+        // sessionToken is a 7-day access JWT; no refresh token in this flow
+        tokenStore.set(sessionToken)
+        setToken(sessionToken)
+        const mappedUser = mapBackendUser(rawUser)
+        setUser(mappedUser)
+        toast({ title: "Welcome to UjamaaDAO!", description: `Account verified. Karibu, ${mappedUser.username || mappedUser.email}!` })
+      } catch (err) {
+        const message = err instanceof ApiError ? err.message : "Verification link is invalid or expired."
+        toast({ title: "Verification failed", description: message, variant: "destructive" })
+        throw err
+      } finally {
+        setIsLoading(false)
+      }
+    },
+    [toast]
+  )
+
   // ── logout ──
   const logout = useCallback(async () => {
     await authApi.logout()
@@ -306,6 +331,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         requestMagicLink,
         verifyMagicLink,
+        verifyEmailToken,
         logout,
         updateUser,
         refreshUser,
