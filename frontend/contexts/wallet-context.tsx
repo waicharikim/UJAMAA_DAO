@@ -1,13 +1,15 @@
 "use client"
 
 /**
- * WalletContext — wraps Privy wallet functionality.
+ * WalletContext — wraps Privy for onchain wallet connectivity.
  *
- * Requires env var: NEXT_PUBLIC_PRIVY_APP_ID
- * Get your App ID from https://dashboard.privy.io
+ * Env var required: NEXT_PUBLIC_PRIVY_APP_ID
+ * Get yours at https://dashboard.privy.io
  *
- * When the App ID is missing the context returns safe defaults
- * and connectWallet() shows an actionable error toast.
+ * When the App ID is present the real PrivyProvider is rendered.
+ * When it is missing, a graceful stub is shown instead (build still works).
+ *
+ * ADR-009: Privy chosen (phone-primary, zero-crypto UX, gasless Pimlico, Base)
  */
 
 import {
@@ -16,18 +18,27 @@ import {
   useCallback,
   type ReactNode,
 } from "react"
+import {
+  PrivyProvider,
+  usePrivy,
+  useWallets,
+  useConnectWallet,
+  useLogout,
+} from "@privy-io/react-auth"
 import { useToast } from "@/hooks/use-toast"
 
+// ── Shared interface ──────────────────────────────────────────────────────────
+
 export interface WalletContextType {
-  /** Connected wallet address, or null if not connected */
+  /** Primary connected wallet address, or null */
   walletAddress: string | null
-  /** Whether a wallet is currently connected */
+  /** True when at least one wallet is connected */
   isConnected: boolean
-  /** Whether a wallet connection is in progress */
+  /** True while Privy is still initialising */
   isConnecting: boolean
-  /** Open the Privy connect modal */
+  /** Open the Privy connect / create wallet modal */
   connectWallet: () => Promise<void>
-  /** Disconnect current wallet */
+  /** Disconnect wallet (logs out of Privy; UjamaaDAO session stays) */
   disconnectWallet: () => Promise<void>
 }
 
@@ -39,18 +50,16 @@ const WalletContext = createContext<WalletContextType>({
   disconnectWallet: async () => {},
 })
 
-/**
- * If Privy is not installed yet we export a stub provider
- * that renders children and provides the safe default context above.
- */
+// ── Stub — no Privy App ID ────────────────────────────────────────────────────
+
 function StubWalletProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast()
 
   const connectWallet = useCallback(async () => {
     toast({
-      title: "Wallet connection",
+      title: "Wallet not configured",
       description:
-        "Add NEXT_PUBLIC_PRIVY_APP_ID to .env.local to enable wallet connection. Get your key at dashboard.privy.io",
+        "Add NEXT_PUBLIC_PRIVY_APP_ID to frontend/.env.local to enable wallet connection.",
       variant: "destructive",
     })
   }, [toast])
@@ -70,14 +79,68 @@ function StubWalletProvider({ children }: { children: ReactNode }) {
   )
 }
 
-/**
- * When NEXT_PUBLIC_PRIVY_APP_ID is set, swap StubWalletProvider
- * for the real Privy implementation (see wallet-context.privy.tsx).
- * For now exports the stub so the app builds and runs without Privy.
- */
-export function WalletProvider({ children }: { children: ReactNode }) {
-  return <StubWalletProvider>{children}</StubWalletProvider>
+// ── Real Privy adapter ────────────────────────────────────────────────────────
+
+function PrivyWalletAdapter({ children }: { children: ReactNode }) {
+  const { ready } = usePrivy()
+  const { wallets } = useWallets()
+  const { connectWallet: privyConnect } = useConnectWallet()
+  const { logout } = useLogout()
+
+  const walletAddress = wallets[0]?.address ?? null
+  const isConnected = wallets.length > 0
+  const isConnecting = !ready
+
+  const connectWallet = useCallback(async () => {
+    privyConnect()
+  }, [privyConnect])
+
+  const disconnectWallet = useCallback(async () => {
+    await logout()
+  }, [logout])
+
+  return (
+    <WalletContext.Provider
+      value={{ walletAddress, isConnected, isConnecting, connectWallet, disconnectWallet }}
+    >
+      {children}
+    </WalletContext.Provider>
+  )
 }
+
+// ── Provider (auto-selects real vs stub) ──────────────────────────────────────
+
+export function WalletProvider({ children }: { children: ReactNode }) {
+  const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID
+
+  if (!appId) {
+    return <StubWalletProvider>{children}</StubWalletProvider>
+  }
+
+  return (
+    <PrivyProvider
+      appId={appId}
+      config={{
+        // Appearance — matches Chai palette
+        appearance: {
+          theme: "dark",
+          accentColor: "#D4911E",
+        },
+        // Login options shown in the Privy modal
+        loginMethods: ["email", "wallet", "google"],
+        // Auto-create an embedded wallet for users who log in without one
+        embeddedWallets: {
+          createOnLogin: "users-without-wallets",
+          requireUserPasswordOnCreate: false,
+        },
+      }}
+    >
+      <PrivyWalletAdapter>{children}</PrivyWalletAdapter>
+    </PrivyProvider>
+  )
+}
+
+// ── Hook ──────────────────────────────────────────────────────────────────────
 
 export function useWallet(): WalletContextType {
   return useContext(WalletContext)
