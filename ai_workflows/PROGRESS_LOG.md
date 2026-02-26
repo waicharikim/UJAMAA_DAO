@@ -581,3 +581,51 @@ Write community module tests to move community from `partial` → `tested`, then
 
 **Token usage:**
 Sonnet 4.6 — light session (1 bug diagnosed and fixed across 4 files, E2E flow tested)
+
+---
+
+## [2026-02-26] — Privy wallet integration complete, frontend build 15/15 green
+
+**What was built:**
+
+- **Full Privy wallet integration** (`frontend/contexts/wallet-context.tsx`):
+  - Replaced `StubWalletProvider` with real `PrivyProvider` wrapping `PrivyWalletAdapter`
+  - Hooks wired: `usePrivy`, `useWallets`, `useConnectWallet`, `useLogout`
+  - Config: `loginMethods: ["email","wallet","google"]`, `embeddedWallets: { createOnLogin: "users-without-wallets" }`
+  - Falls back to `StubWalletProvider` when `NEXT_PUBLIC_PRIVY_APP_ID` is unset
+- **`frontend/components/auth/wallet-button.tsx`** (new): amber "Connect Wallet" pill when disconnected; green address pill with copy/disconnect dropdown when connected
+- **`frontend/.env.local`**: `NEXT_PUBLIC_PRIVY_APP_ID` set (App ID only — secret is server-side, never in frontend env)
+- **`frontend/components/providers.tsx`**: `WalletProvider` added between `AuthProvider` and `RoleProvider`
+- **Auth flows wired to landing page**:
+  - `SignInModal` lives on the landing page itself (not `/auth/callback`) — email input → magic link → MailHog confirmation
+  - `onSignIn` prop threads through `LandingNavbar` and `HeroSection` to open the modal
+  - Fixed: landing page "Sign In" was incorrectly linked to `/auth/callback` (token processor, not sign-in UX)
+- **Register page Chai palette redesign** (`app/auth/register/page.tsx`): tea-dark background, cream card, amber UJ badge
+- **Webpack stubs for Privy transitive deps** (`frontend/next.config.mjs`):
+  - `@base-org/account` → `stubs/empty.js` (Coinbase smart-wallet; viem ESM resolution fails indirectly in webpack)
+  - `unstorage` → `stubs/empty.js` (WalletConnect KV storage, not used)
+  - `x402/client` → `stubs/empty.js` (Privy payment protocol, not used)
+  - `DelegatedActionsConsentScreen` → `stubs/empty.js` via `webpack.NormalModuleReplacementPlugin` (imports `CloudUpload` icon absent from lucide-react v0.294)
+- **`frontend/stubs/empty.js`** (new): `module.exports = {}` — canonical empty stub for all unused Privy features
+- **Docker node_modules sync**: ran `npm install` inside `ujamaa_frontend` container (659 packages added including all Privy transitive deps); container restart required to pick up new modules
+
+**Decisions made:**
+
+- `NormalModuleReplacementPlugin` chosen over a webpack `resolve.alias` for the `DelegatedActionsConsentScreen` stub: the alias approach (`"lucide-react": shim.mjs`) did not apply to ESM-format files inside `node_modules` in the Next.js build pipeline; `NormalModuleReplacementPlugin` matches on the resolved resource path and works reliably in both `next build` and `next dev`
+- App Secret (`PRIVY_APP_SECRET`) is explicitly server-side only — never added to `NEXT_PUBLIC_*` env vars; the frontend only receives the App ID
+- `stubs/empty.js` established as the canonical pattern for any future Privy feature module we don't use (add a new `resolve.alias` or `NormalModuleReplacementPlugin` entry in `next.config.mjs` + point at the same file)
+
+**What's still broken or incomplete:**
+
+- Community module: zero tests (still highest backend priority)
+- Blockchain: `PrToken.sol` + `UtToken.sol` not written
+- Chai palette not extended to dashboard, profile, or proposals screens (still use old inline hex values)
+- New-user verify-email flow has no refresh token — 7-day session, no silent renewal (same as session 11, intentional per ADR-022)
+- MailHog must be started manually (`docker compose up -d mailhog`) — not in default `make dev` profile
+
+**Next milestone:**
+
+Write community module tests to move community from `partial` → `tested`, then write `PrToken.sol` + `UtToken.sol` in a dedicated blockchain session.
+
+**Token usage:**
+Sonnet 4.6 — medium session (Privy integration, 3 cascading webpack build errors resolved, Docker npm install)
