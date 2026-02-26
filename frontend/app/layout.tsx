@@ -1,12 +1,12 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Outfit, Cormorant_Garamond } from "next/font/google"
+import { Inter, Cormorant_Garamond } from "next/font/google"
 import "../styles/globals.css"
 import { Providers } from "@/components/providers"
 import { AppShell } from "@/components/layout/app-shell"
 import { Toaster } from "@/components/ui/toaster"
 
-const outfit = Outfit({
+const inter = Inter({
   subsets: ["latin"],
   variable: "--font-outfit",
   display: "swap",
@@ -31,7 +31,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`${outfit.variable} ${cormorant.variable}`}>
+    <html lang="en" className={`${inter.variable} ${cormorant.variable}`}>
       <body className="font-sans bg-background text-foreground antialiased">
         <Providers>
           <AppShell>{children}</AppShell>

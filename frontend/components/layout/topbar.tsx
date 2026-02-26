@@ -32,31 +32,30 @@ export function Topbar() {
     <header
       className="sticky top-0 z-40 flex h-[52px] items-center gap-4 px-6 md:px-7 flex-shrink-0"
       style={{
-        background: "rgba(250,247,242,0.88)",
+        background: "rgba(247,242,232,0.90)",
         backdropFilter: "blur(12px)",
         WebkitBackdropFilter: "blur(12px)",
-        borderBottom: "1px solid rgba(14,11,8,0.06)",
+        borderBottom: "1px solid rgba(26,18,11,0.07)",
       }}
     >
       {/* Page title */}
-      <h1 className="font-display font-semibold text-[18px] text-[#0E0B08] leading-none tracking-tight flex-1">
+      <h1 className="font-serif font-semibold text-[18px] text-chai leading-none tracking-tight flex-1">
         {title}
       </h1>
 
       {/* Actions */}
       <div className="flex items-center gap-2">
-        {/* Notification bell */}
         <Button
           variant="ghost"
           size="sm"
-          className="relative h-8 w-8 p-0 rounded-lg hover:bg-[rgba(201,146,42,0.08)]"
+          className="relative h-8 w-8 p-0 rounded-lg hover:bg-[rgba(212,145,30,0.10)]"
           aria-label="Notifications"
         >
-          <Bell className="h-[17px] w-[17px] text-[#0E0B08]" />
+          <Bell className="h-[17px] w-[17px] text-chai" />
           {/* Ember dot */}
           <span
             className="absolute top-1 right-1 w-2 h-2 rounded-full"
-            style={{ background: "#B03A1E" }}
+            style={{ background: "#C43D28" }}
           />
         </Button>
 

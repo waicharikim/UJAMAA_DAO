@@ -21,7 +21,7 @@ export function AppShell({ children }: AppShellProps) {
   }
 
   return (
-    <div className="flex min-h-screen" style={{ background: "#F4EFE6" }}>
+    <div className="flex min-h-screen" style={{ background: "#F7F2E8" }}>
       {/* Desktop sidebar */}
       <Sidebar />
 
