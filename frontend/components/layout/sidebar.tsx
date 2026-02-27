@@ -15,7 +15,9 @@ import {
   Landmark,
   User,
   Shield,
-  MoreHorizontal,
+  LogOut,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react"
 
 const primaryNav = [
@@ -34,16 +36,24 @@ const secondaryNav = [
 // Adinkra Gye Nyame motif in amber-on-tea-green
 const ADINKRA_SVG = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Cg fill='none' stroke='rgba(212,145,30,0.07)' stroke-width='1'%3E%3Ccircle cx='40' cy='40' r='28'/%3E%3Ccircle cx='40' cy='40' r='16'/%3E%3Cline x1='40' y1='12' x2='40' y2='0'/%3E%3Cline x1='40' y1='68' x2='40' y2='80'/%3E%3Cline x1='12' y1='40' x2='0' y2='40'/%3E%3Cline x1='68' y1='40' x2='80' y2='40'/%3E%3Cline x1='20' y1='20' x2='12' y2='12'/%3E%3Cline x1='60' y1='20' x2='68' y2='12'/%3E%3Cline x1='20' y1='60' x2='12' y2='68'/%3E%3Cline x1='60' y1='60' x2='68' y2='68'/%3E%3C/g%3E%3C/svg%3E")`
 
-export function Sidebar() {
+interface SidebarProps {
+  collapsed: boolean
+  onToggle: () => void
+}
+
+export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname()
-  const { user, isAuthenticated } = useAuth()
+  const { user, isAuthenticated, logout } = useAuth()
   const { hasAnyRole } = useRole()
 
   const showAdmin = hasAnyRole(["admin", "super_admin", "county_admin"])
 
   return (
     <aside
-      className="hidden md:flex w-[272px] min-h-screen flex-col flex-shrink-0 relative overflow-hidden"
+      className={cn(
+        "hidden md:flex min-h-screen flex-col flex-shrink-0 relative overflow-hidden transition-all duration-300",
+        collapsed ? "w-[72px]" : "w-[272px]"
+      )}
       style={{ background: "#1D4731" }}
     >
       {/* Adinkra pattern overlay */}
@@ -64,11 +74,12 @@ export function Sidebar() {
         }}
       />
 
-      {/* Logo */}
+      {/* Logo + collapse toggle */}
       <div
-        className="relative z-10 flex items-center gap-[14px] px-6 py-8"
+        className="relative z-10 flex items-center px-[14px] py-[22px]"
         style={{ borderBottom: "1px solid rgba(247,242,232,0.08)" }}
       >
+        {/* UJ badge — always visible */}
         <div
           className="w-11 h-11 rounded-xl flex items-center justify-center font-serif font-bold text-[22px] flex-shrink-0"
           style={{
@@ -80,30 +91,57 @@ export function Sidebar() {
         >
           UJ
         </div>
-        <div className="flex flex-col">
+
+        {/* Wordmark — hidden when collapsed */}
+        <div
+          className={cn(
+            "flex flex-col ml-[14px] transition-all duration-200 overflow-hidden",
+            collapsed ? "w-0 opacity-0" : "w-auto opacity-100"
+          )}
+        >
           <span
-            className="font-serif font-bold text-cream leading-none"
+            className="font-serif font-bold text-cream leading-none whitespace-nowrap"
             style={{ fontSize: 20, letterSpacing: "0.3px" }}
           >
             UjamaaDAO
           </span>
           <span
-            className="font-sans font-medium uppercase"
+            className="font-sans font-medium uppercase whitespace-nowrap"
             style={{ fontSize: 9, color: "rgba(233,165,46,0.7)", letterSpacing: "1.5px", marginTop: 3 }}
           >
             Ward Platform
           </span>
         </div>
+
+        {/* Collapse toggle — slides to edge when expanded, stays centered when collapsed */}
+        <button
+          onClick={onToggle}
+          className={cn(
+            "relative z-10 flex h-7 w-7 items-center justify-center rounded-lg transition-all duration-200 hover:bg-[rgba(247,242,232,0.10)] flex-shrink-0",
+            collapsed ? "ml-0 mt-0" : "ml-auto"
+          )}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          style={{ border: "1px solid rgba(247,242,232,0.12)" }}
+        >
+          {collapsed
+            ? <ChevronRight className="h-3.5 w-3.5" style={{ color: "rgba(247,242,232,0.45)" }} />
+            : <ChevronLeft  className="h-3.5 w-3.5" style={{ color: "rgba(247,242,232,0.45)" }} />
+          }
+        </button>
       </div>
 
-      {/* Primary nav */}
-      <nav className="relative z-10 flex-1 flex flex-col px-[14px] pt-5 pb-4 gap-[2px] overflow-y-auto">
-        <span
-          className="px-[10px] pb-[6px] pt-3 text-[9px] font-bold tracking-[2px] uppercase"
-          style={{ color: "rgba(247,242,232,0.25)" }}
-        >
-          Main
-        </span>
+      {/* Nav */}
+      <nav className="relative z-10 flex-1 flex flex-col px-[10px] pt-5 pb-4 gap-[2px] overflow-y-auto overflow-x-hidden">
+
+        {/* Section label */}
+        {!collapsed && (
+          <span
+            className="px-[10px] pb-[6px] pt-1 text-[9px] font-bold tracking-[2px] uppercase"
+            style={{ color: "rgba(247,242,232,0.25)" }}
+          >
+            Main
+          </span>
+        )}
 
         {primaryNav.map((item) => {
           const Icon = item.icon
@@ -112,8 +150,10 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              title={collapsed ? item.label : undefined}
               className={cn(
-                "relative flex items-center gap-[11px] px-3 py-[10px] rounded-lg overflow-hidden transition-all duration-200 group",
+                "relative flex items-center gap-[11px] rounded-lg overflow-hidden transition-all duration-200",
+                collapsed ? "justify-center px-0 py-[10px]" : "px-3 py-[10px]",
                 active ? "bg-[rgba(212,145,30,0.12)]" : "hover:bg-[rgba(247,242,232,0.06)]"
               )}
             >
@@ -125,31 +165,34 @@ export function Sidebar() {
               )}
               <span
                 className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-all duration-200"
-                style={{
-                  background: active ? "rgba(212,145,30,0.18)" : "rgba(247,242,232,0.06)",
-                }}
+                style={{ background: active ? "rgba(212,145,30,0.18)" : "rgba(247,242,232,0.06)" }}
               >
                 <Icon
                   className="h-[15px] w-[15px]"
                   style={{ color: active ? "#E9A52E" : "rgba(247,242,232,0.55)" }}
                 />
               </span>
-              <span
-                className="text-[13.5px] font-medium transition-colors duration-200"
-                style={{ color: active ? "#E9A52E" : "rgba(247,242,232,0.60)" }}
-              >
-                {item.label}
-              </span>
+              {!collapsed && (
+                <span
+                  className="text-[13.5px] font-medium whitespace-nowrap transition-all duration-200"
+                  style={{ color: active ? "#E9A52E" : "rgba(247,242,232,0.60)" }}
+                >
+                  {item.label}
+                </span>
+              )}
             </Link>
           )
         })}
 
-        <span
-          className="px-[10px] pb-[6px] pt-5 text-[9px] font-bold tracking-[2px] uppercase"
-          style={{ color: "rgba(247,242,232,0.25)" }}
-        >
-          More
-        </span>
+        {!collapsed && (
+          <span
+            className="px-[10px] pb-[6px] pt-5 text-[9px] font-bold tracking-[2px] uppercase"
+            style={{ color: "rgba(247,242,232,0.25)" }}
+          >
+            More
+          </span>
+        )}
+        {collapsed && <div className="my-2 h-px" style={{ background: "rgba(247,242,232,0.08)" }} />}
 
         {secondaryNav.map((item) => {
           const Icon = item.icon
@@ -158,8 +201,10 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              title={collapsed ? item.label : undefined}
               className={cn(
-                "relative flex items-center gap-[11px] px-3 py-[10px] rounded-lg overflow-hidden transition-all duration-200",
+                "relative flex items-center gap-[11px] rounded-lg overflow-hidden transition-all duration-200",
+                collapsed ? "justify-center px-0 py-[10px]" : "px-3 py-[10px]",
                 active ? "bg-[rgba(212,145,30,0.12)]" : "hover:bg-[rgba(247,242,232,0.06)]"
               )}
             >
@@ -178,12 +223,14 @@ export function Sidebar() {
                   style={{ color: active ? "#E9A52E" : "rgba(247,242,232,0.55)" }}
                 />
               </span>
-              <span
-                className="text-[13.5px] font-medium"
-                style={{ color: active ? "#E9A52E" : "rgba(247,242,232,0.60)" }}
-              >
-                {item.label}
-              </span>
+              {!collapsed && (
+                <span
+                  className="text-[13.5px] font-medium whitespace-nowrap"
+                  style={{ color: active ? "#E9A52E" : "rgba(247,242,232,0.60)" }}
+                >
+                  {item.label}
+                </span>
+              )}
             </Link>
           )
         })}
@@ -191,8 +238,10 @@ export function Sidebar() {
         {showAdmin && (
           <Link
             href="/admin"
+            title={collapsed ? "Admin" : undefined}
             className={cn(
-              "relative flex items-center gap-[11px] px-3 py-[10px] rounded-lg overflow-hidden transition-all duration-200",
+              "relative flex items-center gap-[11px] rounded-lg overflow-hidden transition-all duration-200",
+              collapsed ? "justify-center px-0 py-[10px]" : "px-3 py-[10px]",
               pathname.startsWith("/admin")
                 ? "bg-[rgba(212,145,30,0.12)]"
                 : "hover:bg-[rgba(247,242,232,0.06)]"
@@ -214,59 +263,93 @@ export function Sidebar() {
             >
               <Shield
                 className="h-[15px] w-[15px]"
-                style={{
-                  color: pathname.startsWith("/admin") ? "#E9A52E" : "rgba(247,242,232,0.55)",
-                }}
+                style={{ color: pathname.startsWith("/admin") ? "#E9A52E" : "rgba(247,242,232,0.55)" }}
               />
             </span>
-            <span
-              className="text-[13.5px] font-medium"
-              style={{
-                color: pathname.startsWith("/admin") ? "#E9A52E" : "rgba(247,242,232,0.60)",
-              }}
-            >
-              Admin
-            </span>
+            {!collapsed && (
+              <span
+                className="text-[13.5px] font-medium whitespace-nowrap"
+                style={{ color: pathname.startsWith("/admin") ? "#E9A52E" : "rgba(247,242,232,0.60)" }}
+              >
+                Admin
+              </span>
+            )}
           </Link>
         )}
       </nav>
 
-      {/* Sidebar footer — user card */}
+      {/* Footer — user card + logout */}
       <div
-        className="relative z-10 flex items-center gap-[10px] mx-1 mb-2 px-[14px] py-4 rounded-lg cursor-pointer transition-colors duration-200 hover:bg-[rgba(247,242,232,0.05)]"
+        className="relative z-10 px-[10px] pb-3 pt-2"
         style={{ borderTop: "1px solid rgba(247,242,232,0.07)" }}
       >
         {isAuthenticated && user ? (
           <>
-            <Avatar
-              className="h-9 w-9 rounded-xl flex-shrink-0"
-              style={{ border: "1.5px solid rgba(212,145,30,0.35)" }}
+            {/* User info row */}
+            <div
+              className={cn(
+                "flex items-center gap-[10px] px-[10px] py-3 rounded-lg",
+                !collapsed && "mb-1"
+              )}
             >
-              <AvatarImage src={user.avatar || "/placeholder.svg"} />
-              <AvatarFallback
-                className="rounded-xl font-semibold text-cream text-sm"
-                style={{ background: "linear-gradient(135deg, #38A063, #1D4731)" }}
+              <Avatar
+                className="h-9 w-9 rounded-xl flex-shrink-0"
+                style={{ border: "1.5px solid rgba(212,145,30,0.35)" }}
               >
-                {(user.username || user.email || "U")[0].toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-semibold truncate" style={{ color: "rgba(247,242,232,0.85)" }}>
-                {user.username || user.email || "Member"}
-              </p>
-              <p className="text-[10px] mt-[1px] truncate" style={{ color: "rgba(247,242,232,0.35)" }}>
-                {user.roles?.[0]?.name || "Member"}
-              </p>
+                <AvatarImage src={user.avatar || "/placeholder.svg"} />
+                <AvatarFallback
+                  className="rounded-xl font-semibold text-cream text-sm"
+                  style={{ background: "linear-gradient(135deg, #38A063, #1D4731)" }}
+                >
+                  {(user.username || user.email || "U")[0].toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              {!collapsed && (
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-semibold truncate" style={{ color: "rgba(247,242,232,0.85)" }}>
+                    {user.username || user.email || "Member"}
+                  </p>
+                  <p className="text-[10px] mt-[1px] truncate" style={{ color: "rgba(247,242,232,0.35)" }}>
+                    {user.roles?.[0]?.name || "Member"}
+                  </p>
+                </div>
+              )}
             </div>
-            <MoreHorizontal
-              className="h-[14px] w-[14px] flex-shrink-0"
-              style={{ color: "rgba(247,242,232,0.25)" }}
-            />
+
+            {/* Logout button */}
+            <button
+              onClick={() => logout()}
+              title="Sign out"
+              className={cn(
+                "w-full flex items-center gap-[10px] rounded-lg px-[10px] py-[9px] transition-all duration-200 hover:bg-[rgba(196,61,40,0.12)] group",
+                collapsed && "justify-center"
+              )}
+            >
+              <span
+                className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                style={{ background: "rgba(196,61,40,0.08)" }}
+              >
+                <LogOut
+                  className="h-[14px] w-[14px] transition-colors"
+                  style={{ color: "rgba(196,61,40,0.6)" }}
+                />
+              </span>
+              {!collapsed && (
+                <span
+                  className="text-[13px] font-medium"
+                  style={{ color: "rgba(196,61,40,0.65)" }}
+                >
+                  Sign out
+                </span>
+              )}
+            </button>
           </>
         ) : (
-          <span className="text-[13px]" style={{ color: "rgba(247,242,232,0.35)" }}>
-            Not signed in
-          </span>
+          <div className={cn("px-[10px] py-3", collapsed && "flex justify-center")}>
+            <span className="text-[13px]" style={{ color: "rgba(247,242,232,0.35)" }}>
+              {collapsed ? "—" : "Not signed in"}
+            </span>
+          </div>
         )}
       </div>
     </aside>
