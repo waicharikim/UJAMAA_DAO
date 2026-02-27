@@ -6,12 +6,12 @@
 
 ---
 
-**Last updated:** 2026-02-27 (session 16)
+**Last updated:** 2026-02-28 (session 17)
 **Branch:** `develop`
 **Last commits:**
+- `df6d74e` docs: audit pass — correct 8 doc contradictions, add missing conventions
 - `58ee904` feat(frontend): collapsible sidebar + logout button
 - `b6ac189` docs: session 15 log — Chai palette extended to all frontend pages
-- `a0dca9f` feat(frontend): apply Chai palette to all pages
 
 ---
 
@@ -26,23 +26,27 @@
 
 ---
 
-## What was completed in the last session (session 16)
+## What was completed in the last session (session 17)
 
-- **Collapsible sidebar** (`components/layout/sidebar.tsx`):
-  - Animated width: 272px (expanded) ↔ 72px (collapsed) with `transition-all duration-300`
-  - `ChevronLeft`/`ChevronRight` toggle button in logo header area
-  - Collapsed mode: icons only, section labels hidden, divider replaces "More" label, nav items centred, native `title=` tooltips on all links
-  - Accepts `collapsed: boolean` and `onToggle: () => void` props
-- **Logout button** — ember-red `LogOut` icon + "Sign out" label at sidebar footer, calls `logout()` from `useAuth`. Icon-only when collapsed.
-- **AppShell state** (`components/layout/app-shell.tsx`) — owns `collapsed` state, passes to both `Sidebar` and `Topbar`
-- **Topbar expand affordance** (`components/layout/topbar.tsx`) — `PanelLeft` button appears at left of topbar when sidebar is collapsed, giving a clear re-expand target
+- **Full `/audit-docs` pass** — read 8 files (CLAUDE.md, DECISIONS.md, app.ts, index.ts, workers.ts, auth.service.ts, schema.prisma, docker-compose.yml)
+- **8 doc contradictions corrected** in `CLAUDE.md` + `DECISIONS.md`:
+  1. JWT_SECRET minimum: ≥32 chars (not 64)
+  2. DASHBOARD_PASSWORD default: `admin123` (not `YourVeryStrongPassword123!`)
+  3. ENCRYPTION_KEY default: 64 zero chars (not empty string)
+  4. Traefik state: fully commented out (not "runs but ports not bound")
+  5. `failedJobHandler`: dead code, never registered on any worker event (stronger than "doesn't email")
+  6. ADR-009 Privy login: `loginMethods: ['email','wallet','google']` (not `loginWithPhone()`)
+  7. ADR-010 build order: Auth→User→Economy→Community→Governance (not Marketplace second)
+  8. Wagmi stale note removed (Privy active since session 13)
+- **Missing conventions added to §5**: 10 MB body limit, `logSecurityEvent()` utility, event bus registry
+- **Gaps filled**: dev port map (Redis=6380), graceful shutdown full order, Docker services list corrected
 
 ---
 
 ## Known open issues
 
 - `next build` fails at `/404` static generation (Next.js 15.3.3 bug, pre-existing, dev unaffected)
-- `sendJobFailureAlert` in `workers.ts` is effectively dead code — job failures log but no human is alerted
+- `failedJobHandler` in `workers.ts` is dead code — needs `worker.on('failed', failedJobHandler)` wired; `sendJobFailureAlert` is never called at all
 - No tests for community, governance, projects, marketplace, notifications, onboarding, emergency, audit, admin modules
 - M-Pesa verification in `user.service.ts` is stubbed — always returns success
 - `PrToken.sol` + `UtToken.sol` not written

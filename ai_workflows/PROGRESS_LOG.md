@@ -711,3 +711,53 @@ Write community module tests to move community from `partial` → `tested`, then
 
 **Token usage:**
 Sonnet 4.6 — light session (3 files, collapsible sidebar + logout)
+
+---
+
+## [2026-02-28] — Docs audit: 8 contradictions corrected, missing conventions added
+
+**What was built:**
+
+- **Full `/audit-docs` pass** — Architect hat + Documentation hat, 8 files read in full:
+  - `ai_workflows/CLAUDE.md`, `ai_workflows/DECISIONS.md`
+  - `backend/src/app.ts`, `backend/src/index.ts`, `backend/src/workers.ts`
+  - `backend/src/modules/auth/services/auth.service.ts`
+  - `backend/prisma/schema.prisma`, `docker/docker-compose.yml`
+- **8 doc contradictions corrected** in `CLAUDE.md` and `DECISIONS.md` (commit `df6d74e`):
+  1. JWT_SECRET minimum: docs said ≥64 chars; code enforces ≥32 in production — fixed to 32
+  2. DASHBOARD_PASSWORD default: docs said `YourVeryStrongPassword123!`; docker-compose actually sets `admin123` — corrected. (A v3.1 "correction" had introduced this error.)
+  3. ENCRYPTION_KEY default: docs said "silently empty string"; docker-compose actually sets 64 zero chars — corrected in both §3 and §7
+  4. Traefik state: docs said "container runs but ports not bound"; Traefik is fully commented out and does not run — corrected
+  5. `failedJobHandler` scope: docs said `sendJobFailureAlert` fires but doesn't email/Slack; the whole handler is dead code — never registered on any worker `failed` event, so `sendJobFailureAlert` is never called at all — corrected with stronger language + fix instruction
+  6. ADR-009 Privy login method: ADR said "Primary login flow: `loginWithPhone()`"; actual config uses `loginMethods: ['email','wallet','google']` — corrected
+  7. ADR-010 build order: ADR said Auth → Marketplace → Governance; actual order followed was Auth → User → Economy → Community → Governance — revised with reasoning
+  8. Wagmi stale note in §4: "to be replaced by Privy in Phase 3" — Privy has been active since session 13; note removed
+- **Missing conventions added to §5** (things enforced by code but not documented):
+  - 10 MB request body limit
+  - `logSecurityEvent(message, type, severity, detail, context)` from `core/logger/logger.ts` — for all security-relevant events; severity values listed
+  - **Event bus registry** — canonical list of current published events: `user.created`, `user.email.verified`, `auth.login`, with listener mappings
+- **Other gaps filled**:
+  - Dev port map added to §3 cross-cutting gaps — includes Redis `:6380` (host) callout which would otherwise confuse developers expecting `:6379`
+  - Graceful shutdown order corrected in §4: rateLimiter → tokenBlacklistService → BullMQ redis → Prisma (was just "close server → disconnect Prisma/Redis")
+  - Docker Compose active service list corrected: `traefik` removed, `mailhog` added
+  - `v3.3` version history entry added
+
+**Decisions made:**
+
+- No new architectural decisions — this was a pure documentation pass. All DECISIONS.md changes were corrections to existing ADRs (ADR-009, ADR-010), not new decisions.
+
+**What's still broken or incomplete:**
+
+- `failedJobHandler` is dead code in `workers.ts` — needs `worker.on('failed', failedJobHandler)` wired before production (now correctly documented; code fix deferred)
+- `User.verificationLevel` and `User.status` are plain `String` fields in Prisma schema, not enums — no DB-level enforcement. Not a blocking issue but worth a schema ADR when governance module is built
+- `User.roles String[]` is a denormalized duplicate of `UserRole` join table — no documented sync contract
+- `next build` fails at `/404` static generation (Next.js 15.3.3 bug, pre-existing)
+- No tests for community, governance, projects, marketplace, notifications, onboarding, emergency, audit, admin modules
+- `PrToken.sol` + `UtToken.sol` not written
+
+**Next milestone:**
+
+Write community module tests to move community from `partial` → `tested` (highest backend priority — directly imported by auth; the last major gap before governance can be hardened).
+
+**Token usage:**
+Sonnet 4.6 — medium session (8-file read-audit across 2,000+ lines of code + 14 targeted doc edits)
