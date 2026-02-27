@@ -1,6 +1,7 @@
 "use client"
 
 import type { ReactNode } from "react"
+import { useState } from "react"
 import { usePathname } from "next/navigation"
 import { Sidebar } from "./sidebar"
 import { Topbar } from "./topbar"
@@ -15,6 +16,7 @@ const PUBLIC_ROUTES = ["/", "/about", "/auth/register", "/auth/callback"]
 
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname()
+  const [collapsed, setCollapsed] = useState(false)
 
   if (PUBLIC_ROUTES.includes(pathname)) {
     return <>{children}</>
@@ -23,11 +25,11 @@ export function AppShell({ children }: AppShellProps) {
   return (
     <div className="flex min-h-screen" style={{ background: "#F7F2E8" }}>
       {/* Desktop sidebar */}
-      <Sidebar />
+      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
 
       {/* Main content area */}
       <div className="flex flex-1 flex-col min-w-0">
-        <Topbar />
+        <Topbar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
         {/* Page content — extra bottom padding on mobile for pill nav */}
         <main className="flex-1 overflow-y-auto pb-28 md:pb-0">
           {children}
