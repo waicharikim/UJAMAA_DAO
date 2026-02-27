@@ -20,17 +20,17 @@ This backend provides all core APIs, business logic, authentication, and integra
 
 ## Key Features
 
-- **User Management**: Wallet-based authentication, dual-location user profiles (origin & residence), impact points and tokens tracking.
+- **User Management**: Email magic-link authentication, dual-location user profiles (origin & residence wards), impact points and participation rights tracking.
 - **Group Governance**: Creation and management of community and company groups, membership invitations, roles, and admin elections.
 - **County Groups**: System-created federated groups representing counties with dynamic membership based on impact points.
 - **Proposal System**: Multi-level proposal creation (local, constituency, county, national) with privacy and voting scopes.
 - **Voting Mechanism**: Combined individual and group block voting with quorum and consensus enforcement.
 - **Project & Milestones**: Projects built from proposals, milestone tracking with funding tied to verified completion.
-- **Token & Impact Points Economy**: Token minting, burning, transfers, and impact points for reputation and governance participation.
-- **Authentication**: Wallet-signature-based login using nonce challenges, JWT session tokens.
-- **Logging & Error Handling**: Structured logging with Pino, consistent ApiError-based error handling.
-- **Testing**: Comprehensive unit and integration tests with Vitest and Supertest.
-- **Dockerized**: Multi-service docker-compose setup with PostgreSQL, backend API, and optionally blockchain node.
+- **Economy**: Participation Rights (PR) soulbound tokens + Utility Tokens (UT), dues commitments, impact points for reputation and governance.
+- **Authentication**: Email magic links (JWT + hex token), phone OTP via Africa's Talking, JWT session management.
+- **Logging & Error Handling**: Structured logging with Pino (`operationType` context), consistent ApiError-based error handling.
+- **Testing**: 173 tests green — 104 auth, 35 user, 34 economy (Vitest + Supertest). CI runs on every push.
+- **Dockerized**: Multi-service docker-compose setup with PostgreSQL, Redis, Traefik, MailHog, and frontend.
 
 ---
 
@@ -119,15 +119,20 @@ See [INFRASTRUCTURE.md](./INFRASTRUCTURE.md) for detailed setup instructions.
 ### 3. Testing
 
 ```bash
-# Run all tests
-npm test
+# Run all tests (173 tests — auth, user, economy)
+npx vitest run
 
-# Run specific test file
-npm test -- tests/user.test.ts
+# Run specific suite
+npx vitest run tests/auth/
+npx vitest run tests/user/
+npx vitest run tests/economy/
 
-# Run with coverage
-npm run test:coverage
+# Watch mode
+npx vitest
 ```
+
+> Tests require the test database (`ujamaa_postgres_test` on port 5433) to be running.
+> `make dev` starts it automatically.
 
 ### 4. Code Quality
 
@@ -151,17 +156,19 @@ The backend depends on these environment variables (set in `.env`):
 ### Required
 
 - `DATABASE_URL`: PostgreSQL connection string
-- `REDIS_URL`: Redis connection string
-- `JWT_SECRET`: Secret key for JWT signing (use strong secret in production!)
-- `NODE_ENV`: Environment (development, production, test)
-- `PORT`: Server port (default: 4000)
+- `REDIS_HOST` / `REDIS_PORT`: Redis connection (BullMQ uses these, not `REDIS_URL`)
+- `JWT_SECRET`: Secret key for JWT signing (use strong secret in production)
+- `NODE_ENV`: Environment (`development`, `production`, `test`)
+- `PORT`: Server port (default: `4000`)
 
 ### Optional
 
-- `LOG_LEVEL`: Log level (debug, info, warn, error)
-- `FRONTEND_URL`: Frontend application URL
-- `SMTP_*`: Email configuration
-- `TWILIO_*`: SMS provider configuration
+- `LOG_LEVEL`: Log level (`debug`, `info`, `warn`, `error`)
+- `FRONTEND_URL`: Frontend URL for magic link emails (default: `http://localhost:3000`)
+- `SMTP_HOST` / `SMTP_PORT`: Email relay (MailHog in dev)
+- `AT_API_KEY` / `AT_USERNAME`: Africa's Talking credentials for SMS OTP
+- `MINTER_PRIVATE_KEY`: Backend EOA for minting PR/UT tokens on Base L2 (worker only)
+- `PR_TOKEN_ADDRESS` / `UT_TOKEN_ADDRESS`: Deployed contract addresses (post-blockchain session)
 
 See `.env.example` for complete list with descriptions.
 
@@ -289,15 +296,15 @@ See [UPGRADE-GUIDE.md](./UPGRADE-GUIDE.md) for observability options.
 
 ## Technology Stack
 
-- **Runtime**: Node.js 18+
-- **Language**: TypeScript
+- **Runtime**: Node.js 22
+- **Language**: TypeScript (strict)
 - **Framework**: Express
-- **Database**: PostgreSQL + Prisma ORM
-- **Cache/Queue**: Redis + BullMQ
-- **Testing**: Vitest + Supertest
-- **Logging**: Pino (structured, with `operationType` context)
+- **Database**: PostgreSQL 15 + Prisma ORM (80 models)
+- **Cache/Queue**: Redis + BullMQ (4 background jobs)
+- **Testing**: Vitest + Supertest — 173 tests, CI green
+- **Logging**: Pino (structured, `operationType` context)
 - **Validation**: Zod
-- **Authentication**: JWT + Web3 wallet signatures
+- **Authentication**: Email magic links + Africa's Talking SMS OTP + JWT sessions
 
 ---
 
