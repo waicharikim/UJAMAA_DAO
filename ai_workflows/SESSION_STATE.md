@@ -6,12 +6,12 @@
 
 ---
 
-**Last updated:** 2026-02-26 (session 13)
+**Last updated:** 2026-02-27 (session 14)
 **Branch:** `develop`
 **Last commits:**
+- `29a4b87` feat(frontend): landing page — 3D orbital system + higher-purpose content
+- `276e0ce` chore: repo cleanup before collaborator onboarding
 - `bf759fd` feat(frontend): activate Privy wallet — stub transitive deps, fix build
-- `4b93c66` feat(frontend): auth flows on landing + wallet scaffold
-- `0db35ec` feat(frontend): redesign — Chai palette, v0 landing page, tea-green sidebar
 
 ---
 
@@ -26,14 +26,19 @@
 
 ---
 
-## What was completed in the last session (session 13)
+## What was completed in the last session (session 14)
 
-- **Privy wallet integration** — `wallet-context.tsx` wired to real `PrivyProvider` + hooks (`usePrivy`, `useWallets`, `useConnectWallet`, `useLogout`). `wallet-button.tsx` added (amber pill / green address dropdown). App ID set in `.env.local`.
-- **Auth flows on landing page** — `SignInModal` on landing page (was wrongly linked to `/auth/callback`). `onSignIn` prop threads through `LandingNavbar` and `HeroSection`.
-- **Register page Chai palette** — tea-dark bg, cream card, amber badge.
-- **Webpack stubs** — 4 Privy transitive deps stubbed in `next.config.mjs` (`@base-org/account`, `unstorage`, `x402/client` via `resolve.alias`; `DelegatedActionsConsentScreen` via `NormalModuleReplacementPlugin`).
-- **Build green** — 15/15 routes compile, 0 errors.
-- **Docker npm install** — `@privy-io/react-auth` + 659 transitive deps installed inside `ujamaa_frontend` container.
+- **Repo cleanup** — deleted: `scripts/` (3 stale/insecure scripts), root `package.json`/`package-lock.json`, `blockchain/` (redundant), `tall rate-limit-redis` (git accident). Relocated stale docs to `ai_workflows/` and `docs/`. Rewrote `backend/INFRASTRUCTURE.md`. Added `SETUP.md` at repo root and `frontend/.env.local.example`.
+- **Traefik disabled in dev** — ports were never bound to host; commented out in `docker-compose.yml`. ADR-023 added to DECISIONS.md.
+- **MailHog docs fixed** — corrected `SMTP_HOST` from `172.19.0.1` → `mailhog` (container name). All prior docs claiming MailHog needed manual start were wrong — it auto-starts with `make dev`.
+- **Landing page full rewrite** — `frontend/components/landing/landing-page.tsx`:
+  - 3D OrbitalSystem canvas: true 3-D tilted ellipses (dim back arc / bright front arc), depth-sorted dots with scale+alpha by z-depth, pulsing sun with 8 animated rays, mouse parallax
+  - New VisionSection: "Africa has always known how to build together" — manifesto body, three philosophy pillars (Not DeFi / Not Charity / Not Governance Theater), Nyerere/Arusha Declaration quote
+  - Hero reframed around cooperative tradition (chama, harambee, sacco), not ward mechanics
+  - All 7 Nguzo Saba in marquee, footer, and dedicated Nguzo Saba strip in ProtocolSection
+  - New ProtocolSection: PR tokens (soulbound) / Impact Points (non-transferable) / Community Treasury (onchain)
+  - HowItWorks, UseCases: descriptions rewritten around economic self-determination language
+- **Known build issue** — `next build` fails at static generation of `/404` with `<Html> should not be imported outside of pages/_document` (Next.js 15.3.3 bug: uses development React bundle during static generation). TypeScript compilation is clean. Site runs correctly in dev (`make dev`). Pre-existing — present on the codebase before session 14.
 
 ---
 
@@ -60,9 +65,10 @@
 
 ## Next tasks (priority order)
 
-1. **Community module tests** — move community `partial` → `tested` (highest backend priority; directly imported by auth)
-2. **Blockchain session** — `PrToken.sol` (soulbound ERC-20) + `UtToken.sol` + Foundry tests + Base Sepolia deploy + wire `participationRights.service.ts`
-3. **Extend Chai palette** — apply to dashboard, profile, proposals screens
+1. **Fix `next build` 404 prerender error** — Next.js 15.3.3 bug. Options: upgrade Next.js (risky), or configure `output: 'standalone'` to check if it changes static gen behavior. Low urgency — dev server works fine.
+2. **Community module tests** — move community `partial` → `tested` (highest backend priority; directly imported by auth)
+3. **Blockchain session** — `PrToken.sol` (soulbound ERC-20) + `UtToken.sol` + Foundry tests + Base Sepolia deploy + wire `participationRights.service.ts`
+4. **Extend Chai palette** — apply to dashboard, profile, proposals screens
 
 ---
 
