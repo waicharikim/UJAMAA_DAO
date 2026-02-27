@@ -249,3 +249,15 @@
 **Consequences:** `backend/src/core/jobs/` now contains only `register.ts`. Any new scheduled job gets a processor file in its module (`modules/[name]/jobs/[name].jobs.ts`), registers in `register.ts`, and dispatches in `workers.ts`. The `securityEventsService.cleanupOldEvents()` call (previously only in the deleted node-cron file) was migrated into the active BullMQ auth-cleanup job before deletion. The ADR-006 setInterval exception for ephemeral in-memory cleanup still applies.
 
 ---
+
+## [ADR-023] — Traefik disabled in dev; direct port access only
+
+**Date:** 2026-02-27
+**Status:** Decided
+**Decision:** The Traefik reverse proxy service is commented out in `docker/docker-compose.yml` for the development environment. All services use direct host port mappings: API on `:4000`, frontend on `:3000`, MailHog on `:8025`, Redis on `:6380`, Postgres on `:5432`/`:5433`.
+**Why:** Traefik was included early for production readiness but was never functional in dev — its ports (80, 443, 8080) were not binding to the host, routing through `localhost` was not working, and the dashboard was unreachable. It added a confusing non-functional container without providing any dev benefit. Direct port access is simpler, more debuggable, and sufficient for all current development work.
+**Consequences:** In dev, access services at their direct ports — do not expect `app.localhost` or Traefik-routed hostnames to work. The `traefik.enable=true` labels and router labels on `web` and `frontend` services are harmless and stay in place — they will be picked up automatically when Traefik is re-enabled. Config files (`traefik/traefik.yml`, `traefik/acme.json`) are retained in the repo.
+**To re-enable for production:** Uncomment the `traefik` service block in `docker/docker-compose.yml`, update `traefik/traefik.yml` with the production domain and Let's Encrypt email, ensure `traefik/acme.json` has `chmod 600`, remove direct `ports:` mappings from `web` and `frontend` services (or keep them alongside Traefik — both work), and run `make prod`.
+
+---
+
