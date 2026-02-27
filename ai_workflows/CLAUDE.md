@@ -100,7 +100,7 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 ## 4. Tech Stack
 
 ### Backend (active)
-- Node.js 20+ / TypeScript strict mode
+- Node.js 22 / TypeScript strict mode
 - Express — `backend/src/app.ts` (REST API, middleware chain)
 - Prisma — each module owns its schema at `backend/src/modules/[name]/prisma/schema.prisma`
 - BullMQ + Redis — queues registered in `backend/src/core/jobs/register.ts`

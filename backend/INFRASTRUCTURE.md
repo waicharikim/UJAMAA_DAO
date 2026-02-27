@@ -1,502 +1,227 @@
-# 🏗️ Ujamaa DAO - Backend Infrastructure
+# UjamaaDAO — Infrastructure Reference
 
-This repository contains the Ujamaa DAO backend with a **flexible Docker setup** that grows with your needs.
+> **New collaborator?** Start with [`SETUP.md`](../SETUP.md) at the repo root — it covers clone-to-running in one page.
+> This document is the deeper reference for Docker architecture, environment variables, and production deployment.
 
-## 🚀 Quick Start
+---
+
+## Active Services (`make dev`)
+
+| Container | Host Port | Purpose |
+|---|---|---|
+| `ujamaa_web` | 4000 | Express REST API |
+| `ujamaa_worker` | — | BullMQ background jobs |
+| `ujamaa_postgres` | 5432 | Main PostgreSQL database |
+| `ujamaa_postgres_test` | 5433 | Test database (isolated) |
+| `ujamaa_redis` | 6380 | Redis — cache + BullMQ queues |
+| `ujamaa_frontend` | 3000 | Next.js frontend |
+| `ujamaa_mailhog` | 8025 (UI) / 1025 (SMTP) | Email catcher (dev only) |
+
+Traefik is disabled in dev (see ADR-023). Services use direct port access.
+
+---
+
+## Architecture
+
+```
+[Browser]
+    ↓ localhost:3000
+[Frontend — Next.js]
+    ↓ localhost:4000/api/v1
+[Web Container — Express]
+    ├─→ [PostgreSQL :5432]    (Prisma ORM)
+    ├─→ [Redis :6379]         (rate limiting + event pub/sub)
+    └─→ [BullMQ Queue]        (enqueue background jobs)
+              ↓
+    [Worker Container]
+         ├─→ Process jobs (economy, user cleanup, auth cleanup)
+         └─→ Event handlers (PR awards, notifications)
+```
+
+---
+
+## Environment Variables
+
+All variables are documented in `.env.example`. Defaults work for local dev — no changes needed.
+
+### Key variables
 
 ```bash
-# 1. Copy environment file
-cp .env.example .env
-
-# 2. Edit .env with your values
-nano .env
-
-# 3. Start services
-make dev
-```
-
-That's it! Your API is now running at http://localhost:4000
-
-## 📦 What's Included
-
-### Core Services (Always Active):
-- ✅ **Traefik** - Reverse proxy + SSL termination
-- ✅ **Web API** - Node.js + Express + Prisma
-- ✅ **Worker** - BullMQ background jobs + event handlers
-- ✅ **PostgreSQL** - Main + test databases
-- ✅ **Redis** - Cache + job queues
-
-### Observability (Enable When Needed):
-- 💤 **Prometheus** - Metrics collection
-- 💤 **Grafana** - Dashboards & visualization
-- 💤 **Loki** - Log aggregation
-- 💤 **Jaeger** - Distributed tracing
-- 💤 **Envoy** - Service mesh sidecars
-- 💤 **Fluent-bit** - Log forwarding
-
-## 📁 Project Structure
-
-```
-ujamaadao-backend/
-├── src/
-│   ├── core/                   # Core infrastructure
-│   │   ├── database/          # Prisma client
-│   │   ├── events/            # Event bus
-│   │   ├── jobs/              # BullMQ jobs
-│   │   ├── logger/            # Pino logger
-│   │   └── queue/             # Queue setup
-│   ├── modules/                # Feature modules
-│   │   ├── auth/
-│   │   ├── user/
-│   │   ├── admin/
-│   │   ├── economy/
-│   │   └── community/
-│   ├── app.ts                 # Express app
-│   ├── index.ts               # Web server entry
-│   ├── workers.ts             # Worker entry
-│   └── worker-events.ts       # Event listeners
-│
-├── prisma/
-│   ├── schema.prisma
-│   └── migrations/
-│
-│
-├── docker/                    # Docker Compose configs (project root)
-│   ├── docker-compose.yml     # Main Docker config
-│   └── docker-compose.prod.yml # Production config
-├── Dockerfile
-├── .env                       # Your environment variables
-├── .env.example              # Template
-│
-├── config-templates/          # Observability templates
-│   ├── envoy/
-│   ├── fluent-bit/
-│   ├── prometheus/
-│   ├── grafana/
-│   ├── loki/
-│   └── jaeger/
-│
-├── traefik/                   # Traefik configs
-│   ├── traefik.yml           # Development
-│   ├── traefik.prod.yml      # Production
-│   └── acme.json             # SSL certificates
-│
-├── Makefile                   # Convenience commands
-├── UPGRADE-GUIDE.md          # Observability upgrade path
-└── README.md                 # This file
-```
-
-## 🎯 When to Enable Observability
-
-### Use Simple Setup (Current) When:
-- 👨‍💻 Actively developing features
-- 🏃 Need fast iteration cycles
-- 💻 Running on local machine
-- 👤 Solo developer or small team
-- 📊 Don't need detailed metrics yet
-
-### Enable Observability When:
-- 👥 You have 100+ real users
-- 🐛 Need to debug performance issues
-- 📈 Want SLAs and monitoring
-- 🔍 Need detailed logs/metrics/traces
-- ☸️ Preparing for Kubernetes
-- 👥 Multiple developers need visibility
-
-## 🔧 Common Commands
-
-### Development
-
-```bash
-# Start everything (simple mode)
-make dev
-
-# View logs
-make logs
-make logs-web      # Just web server
-make logs-worker   # Just worker
-
-# Stop everything
-make down
-
-# Restart services
-make restart
-
-# Clean up (deletes volumes!)
-make clean
-```
-
-### Database Operations
-
-```bash
-# Access database shell
-make db-shell
-
-# Run migrations
-make db-migrate
-
-# Reset database (DANGEROUS!)
-make db-reset
-
-# Create backup
-make backup
-```
-
-### Observability (When Ready)
-
-```bash
-# Check what's configured
-make check-configs
-
-# Setup config templates (one-time)
-make setup-configs
-
-# Enable monitoring (Prometheus + Grafana)
-make enable-monitoring
-
-# Enable logging (Loki + Fluent-bit)
-make enable-logging
-
-# Enable tracing (Jaeger)
-make enable-tracing
-
-# Enable service mesh (Envoy sidecars)
-make enable-service-mesh
-
-# Enable everything
-make enable-all
-
-# Revert to simple mode
-make disable-observability
-```
-
-## 🌐 Service URLs
-
-### Always Available:
-- **API Direct**: http://localhost:4000
-- **API via Traefik**: http://localhost or http://ujamaa.localhost
-- **Traefik Dashboard**: http://localhost:8080
-- **PostgreSQL**: localhost:5432
-- **PostgreSQL Test**: localhost:5433
-- **Redis**: localhost:6379
-
-### When Observability Enabled:
-- **Grafana**: http://localhost:3001 (admin/admin)
-- **Prometheus**: http://localhost:9090
-- **Loki**: http://localhost:3100
-- **Jaeger UI**: http://localhost:16686
-- **Envoy Admin (API)**: http://localhost:9901
-- **Envoy Admin (Worker)**: http://localhost:9902
-
-## 🔐 Environment Variables
-
-### Required Variables
-
-```bash
-# Database
-DATABASE_URL=postgresql://ujamaa_user:ujamaa_pass@postgres:5432/ujamaa_db
-
-# Redis
-REDIS_URL=redis://redis:6379
-
 # Application
 NODE_ENV=development
 PORT=4000
-JWT_SECRET=your_jwt_secret_change_in_production
+JWT_SECRET=<64 char hex>          # openssl rand -hex 32
+ENCRYPTION_KEY=<64 char hex>      # openssl rand -hex 32 — required for 2FA/TOTP
 
-# Frontend
+# Database
+DATABASE_URL=postgresql://ujamaa_user:ujamaa_pass@postgres:5432/ujamaa_db
+
+# Redis (BullMQ uses HOST+PORT, not URL)
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_URL=redis://redis:6379      # rate-limiter only
+
+# URLs
+BASE_URL=http://localhost:4000
 FRONTEND_URL=http://localhost:3000
+ALLOWED_ORIGINS=http://localhost:3000
 
-# Email (SMTP)
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your_email@gmail.com
-SMTP_PASS=your_app_password
+# Email — MailHog in dev (no auth required)
+SMTP_HOST=mailhog
+SMTP_PORT=1025
+SMTP_FROM=noreply@ujamaadao.org
 
-# SMS (Optional - Twilio/Africa's Talking)
-SMS_PROVIDER=twilio
-TWILIO_ACCOUNT_SID=your_sid
-TWILIO_AUTH_TOKEN=your_token
-TWILIO_PHONE_NUMBER=+1234567890
+# SMS — Africa's Talking
+ENABLE_SMS=false
+AT_API_KEY=
+AT_USERNAME=sandbox
 
-# Admin
-DASHBOARD_PASSWORD=admin123_change_in_production
+# Blockchain (worker only — not needed for dev)
+MINTER_PRIVATE_KEY=
+PR_TOKEN_ADDRESS=
+UT_TOKEN_ADDRESS=
 ```
 
-### Important Notes
+### Important notes
 
-1. **Service Names in Docker**: Use `postgres`, `redis` as hostnames (not `localhost`)
-2. **JWT Secret**: Generate a strong secret for production: `openssl rand -base64 32`
-3. **Database Password**: Change default password in production
-4. **SMTP**: Use app-specific passwords, not your main password
+- **Never use `localhost`** in Docker env vars — use service names (`postgres`, `redis`, `mailhog`)
+- **`ENCRYPTION_KEY`** — silently empty by default; set before enabling TOTP/2FA
+- **`MINTER_PRIVATE_KEY`** — backend EOA for minting PR/UT tokens; not needed until contracts are deployed
 
-## 🏗️ Architecture
+---
 
-### Service Mapping
-
-| Component | Docker Service | Ports | Purpose |
-|-----------|----------------|-------|---------|
-| Web API | `web` | 4000 | Express API endpoints |
-| Worker | `worker` | - | Background jobs + heavy events |
-| PostgreSQL | `postgres` | 5432 | Main database |
-| PostgreSQL Test | `postgres_test` | 5433 | Test database |
-| Redis | `redis` | 6379 | Cache + BullMQ queues |
-| Traefik | `traefik` | 80, 443, 8080 | Reverse proxy |
-
-### How Components Connect
-
-```
-[User Request] 
-    ↓
-[Traefik :80/:443] 
-    ↓
-[Web Container :4000]
-    ↓
-    ├─→ [PostgreSQL :5432] (via Prisma)
-    ├─→ [Redis :6379] (cache + publish events)
-    └─→ [BullMQ Queue] (enqueue jobs)
-         ↓
-    [Worker Container]
-         ├─→ Process jobs from queue
-         ├─→ Listen to Redis pub/sub events
-         └─→ Heavy event handlers (PR awards, notifications)
-```
-
-## 🛠️ Development Workflow
-
-### Option 1: Docker (Recommended)
+## Common Commands
 
 ```bash
-# Start everything with hot reload
-make dev
+make dev              # Start all services
+make logs             # View all logs
+make logs-web         # API server logs
+make logs-worker      # Worker logs
+make restart          # Restart all services
+make down             # Stop all services
+make clean            # Stop + delete volumes (DESTRUCTIVE)
 
-# Watch logs in real-time
-make logs
+make db-shell         # PostgreSQL shell
+make db-migrate       # Run Prisma migrations
+make db-studio        # Prisma Studio UI
+make db-reset         # Reset database (DESTRUCTIVE)
+make backup           # Dump database to file
+```
 
-# Run database migrations
-make db-migrate
+---
 
-# Access database
-make db-shell
+## Troubleshooting
 
-# Reset and restart
+**Services won't start**
+```bash
+docker ps               # See what's running
+make logs               # Check for errors
+make down && make dev   # Fresh start
+```
+
+**Worker crash: `redischeck.sh: Permission denied`**
+```bash
+chmod +x backend/docker/*.sh
 make restart
 ```
 
-**Benefits:**
-- ✅ Matches production environment
-- ✅ Automatic hot reload on code changes
-- ✅ All services isolated
-- ✅ Easy to reset/clean
-
-### Option 2: Local Development Without Docker
-
-> ⚠️ **Not recommended and against project rules (ADR-005).** All development must use Docker.
-> Service names (`postgres`, `redis`) differ from `localhost` — bare-metal setup will
-> require `.env` changes that must not be committed. Use `make dev` instead.
-
-## 🚀 Production Deployment
-
-### Step 1: Prepare Production Environment
-
+**Email not arriving in MailHog**
 ```bash
-# Copy production env template
-cp .env.example .env.prod
+# Confirm SMTP_HOST is 'mailhog', not an IP
+grep SMTP_HOST docker/docker-compose.yml
 
-# Edit with production values
-nano .env.prod
+# Check MailHog is running
+docker ps | grep mailhog
+
+# Check logs for SMTP errors
+make logs-web | grep -i smtp
 ```
 
-**Critical changes:**
-- Set `NODE_ENV=production`
-- Strong `JWT_SECRET` (use `openssl rand -base64 32`)
-- Production `DATABASE_URL`
-- Production `REDIS_URL`
-- Real SMTP credentials
-- Change all default passwords
-- Set your `DOMAIN` for Traefik SSL
+**env var changes not taking effect**
+```bash
+# 'make restart' reuses containers — use force-recreate:
+docker compose -f ../docker/docker-compose.yml up -d --force-recreate
+```
 
-### Step 2: Update Traefik for Production
+**tsx watch silently stops after a crash**
+```bash
+touch backend/src/app.ts    # Touch any watched file to trigger restart
+```
 
-Edit `traefik/traefik.prod.yml`:
+**Prisma schema out of sync**
+```bash
+docker exec ujamaa_web npm run db:merge    # Regenerate prisma/schema.prisma
+make db-migrate
+```
+
+---
+
+## Production Deployment
+
+### 1. Prepare environment
+
+```bash
+cp .env.example .env.prod
+# Edit .env.prod:
+#   NODE_ENV=production
+#   JWT_SECRET=$(openssl rand -hex 32)
+#   ENCRYPTION_KEY=$(openssl rand -hex 32)
+#   DATABASE_URL=postgresql://... (production DB)
+#   SMTP_HOST=<real SMTP provider>
+#   DASHBOARD_PASSWORD=<strong password>
+#   FRONTEND_URL=https://your-domain.com
+```
+
+### 2. Enable Traefik
+
+In `docker/docker-compose.yml`, uncomment the `traefik` service block (see ADR-023).
+
+In `traefik/traefik.yml`, enable Let's Encrypt:
 ```yaml
-entryPoints:
-  web:
-    address: ":80"
-    http:
-      redirections:
-        entryPoint:
-          to: websecure
-          scheme: https
-  websecure:
-    address: ":443"
-
 certificatesResolvers:
   letsencrypt:
     acme:
-      email: your@email.com        # ← Change this
-      storage: /acme.json
+      email: your@email.com
+      storage: /letsencrypt/acme.json
       httpChallenge:
         entryPoint: web
 ```
 
-### Step 3: Deploy
+Ensure `traefik/acme.json` has `chmod 600`.
+
+### 3. Deploy
 
 ```bash
-# Build production images
 make prod-build
-
-# Start production stack
 make prod
-
-# Run migrations
 docker compose -f ../docker/docker-compose.prod.yml exec web npx prisma migrate deploy
-
-# Check status
-docker compose -f ../docker/docker-compose.prod.yml ps
 ```
 
-### Step 4: Configure DNS
+### Production checklist
 
-Point your domain to your server:
-```
-your-domain.com → A → your.server.ip.address
-```
-
-Traefik will automatically get SSL certificates!
-
-## 🔍 Troubleshooting
-
-### Services Won't Start
-
-```bash
-# Check status
-docker compose ps
-
-# View specific service logs
-make logs-web
-make logs-worker
-
-# Check resource usage
-docker stats
-```
-
-### Database Connection Failed
-
-```bash
-# Check if postgres is running
-docker compose ps postgres
-
-# Verify health
-docker compose exec postgres pg_isready
-
-# Test connection
-docker compose exec web npx prisma db pull
-```
-
-### Redis Connection Failed
-
-```bash
-# Check if redis is running
-docker compose ps redis
-
-# Test connection
-docker compose exec redis redis-cli ping
-# Should return: PONG
-```
-
-### Jobs Not Processing
-
-```bash
-# Check worker is running
-docker compose ps worker
-
-# View worker logs
-make logs-worker
-
-# Check Redis connection from worker
-docker compose exec worker node -e "
-const Redis = require('ioredis');
-const redis = new Redis(process.env.REDIS_URL);
-redis.ping().then(console.log).catch(console.error);
-"
-```
-
-### Hot Reload Not Working
-
-```bash
-# Check volume mounts
-docker compose config | grep volumes -A 5
-
-# Restart with rebuild
-docker compose up -d --build
-
-# Check tsx is watching
-make logs-web | grep watching
-```
-
-## 📊 Monitoring & Observability
-
-When you're ready for advanced monitoring, see **UPGRADE-GUIDE.md** for:
-
-- Enabling Prometheus + Grafana dashboards
-- Centralized logging with Loki
-- Distributed tracing with Jaeger
-- Service mesh with Envoy
-- Application metrics integration
-- Custom alerts
-
-**Quick start:**
-```bash
-make check-configs          # See what's available
-make setup-configs          # One-time setup
-make enable-monitoring      # Start with monitoring
-```
-
-## ✅ Pre-Deployment Checklist
-
-### Development
-- [ ] `.env` file created with all required variables
-- [ ] Can start services: `make dev`
-- [ ] Can access API: http://localhost:4000/health
-- [ ] Database migrations run successfully
-- [ ] Worker processing jobs correctly
-- [ ] Can view logs: `make logs`
-
-### Production
-- [ ] `.env.prod` with production credentials
-- [ ] Domain DNS configured
-- [ ] SSL/HTTPS working via Traefik
-- [ ] Strong JWT secret set
-- [ ] All default passwords changed
-- [ ] Database backups configured
-- [ ] Error tracking set up (optional: Sentry)
-- [ ] Load testing completed (optional)
-
-## 🎓 Next Steps
-
-1. ✅ Get development environment running (`make dev`)
-2. 📖 Read UPGRADE-GUIDE.md for observability options
-3. 🔍 Learn about your monitoring options
-4. 📊 Enable monitoring when you have real users
-5. 🚀 Deploy to production when ready
-
-## 📚 Resources
-
-- **Upgrade Guide**: `UPGRADE-GUIDE.md` - How to enable observability
-- **Config Templates**: `config-templates/` - All observability configs
-- **Docker Compose**: https://docs.docker.com/compose/
-- **Traefik**: https://doc.traefik.io/traefik/
-- **Prisma**: https://www.prisma.io/docs/
-- **BullMQ**: https://docs.bullmq.io/
-
-## 🆘 Getting Help
-
-1. Check the troubleshooting section above
-2. View service logs: `make logs`
-3. Check this README and UPGRADE-GUIDE.md
-4. Verify all services are up: `docker compose ps`
+- [ ] All secrets rotated from dev defaults
+- [ ] `ENCRYPTION_KEY` set (64 hex chars)
+- [ ] Real SMTP credentials configured
+- [ ] `DASHBOARD_PASSWORD` changed from default
+- [ ] `ALLOWED_ORIGINS` set to your domain only
+- [ ] `traefik/acme.json` has `chmod 600`
+- [ ] Traefik service uncommented and domain configured
+- [ ] Database backups scheduled
 
 ---
 
-**Ready to build!** 🎉 Start with `make dev` and grow from there.
+## Observability (when needed)
+
+Prometheus, Grafana, Loki, Jaeger and Envoy sidecars are pre-configured but disabled. Enable when you have real users and need SLAs or debugging visibility.
+
+```bash
+make check-configs          # Check what's available
+make setup-configs          # Copy config templates (one-time)
+make enable-monitoring      # Prometheus + Grafana
+make enable-logging         # Loki + Fluent-bit
+make enable-tracing         # Jaeger
+make enable-all             # Full observability stack
+make disable-observability  # Revert to simple mode
+```
+
+See `UPGRADE-GUIDE.md` for the full observability upgrade path.
