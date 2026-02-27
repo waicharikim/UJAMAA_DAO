@@ -1,6 +1,6 @@
 # UjamaaDAO
 
-UjamaaDAO is a neighborhood sovereignty platform for Kenyan wards — cooperative governance, community project funding, and marketplace for skills and goods, rooted in Ujamaa philosophy (cooperative economics, familyhood).
+UjamaaDAO is a neighborhood sovereignty platform for Kenyan wards — cooperative governance, community project funding, and a marketplace for skills and goods, rooted in Ujamaa philosophy (cooperative economics, familyhood).
 
 **Core premise:** Real wards become self-reliant economic, governance, and resilience units. Money and labor are traceable to measurable outcomes — a borehole drilled, a skill trained, clean water flowing.
 
@@ -10,12 +10,12 @@ UjamaaDAO is a neighborhood sovereignty platform for Kenyan wards — cooperativ
 
 | Layer | Status |
 |---|---|
-| Backend API | Architecture complete, 12 partial modules, 0 tests |
-| Prisma schema | 77 models, validated, fresh migration pending first run |
-| Docker/Infra | Fully configured, not yet run end-to-end |
-| Frontend | Not started |
-| M-Pesa | Not started |
-| On-chain (Base L2) | Not started |
+| Backend API | ✅ Running — 12 modules, 3 fully tested (173 tests green), CI green |
+| Prisma schema | ✅ 80 models, migrations applied, E2E flow verified |
+| Docker/Infra | ✅ All services running (`make dev`) — API, worker, postgres, redis, frontend, MailHog |
+| Frontend | ✅ Active — 15 routes, Chai palette design system, magic-link auth, Privy wallet |
+| M-Pesa | 🔶 Stubbed — service exists, always returns success (real Daraja API integration pending) |
+| Smart Contracts | 🔶 Scaffold only — `contracts/` directory, Foundry config, no Solidity yet |
 
 ---
 
@@ -23,33 +23,42 @@ UjamaaDAO is a neighborhood sovereignty platform for Kenyan wards — cooperativ
 
 ```
 UJAMAA_DAO/
-├── backend/            # Node.js + Express + Prisma backend
+├── backend/            # Node.js 22 + Express + Prisma backend
 │   ├── src/
-│   │   ├── app.ts          # Express app
-│   │   ├── index.ts        # Web server entry
-│   │   ├── workers.ts      # BullMQ worker entry
-│   │   ├── core/           # Shared infrastructure
-│   │   └── modules/        # Feature modules (auth, user, economy, community, ...)
-│   ├── prisma/             # Generated merged schema + migrations
+│   │   ├── app.ts          # Express app, middleware, route mounts
+│   │   ├── index.ts        # Server entry, startup assertions
+│   │   ├── workers.ts      # BullMQ worker entry (4 background jobs)
+│   │   ├── core/           # Shared infrastructure (logger, queue, rbac, errors…)
+│   │   └── modules/        # Feature modules (auth, user, economy, community, …)
+│   ├── prisma/             # Merged schema (80 models) + migrations
+│   ├── tests/              # Vitest suites — 173 tests (104 auth, 35 user, 34 economy)
 │   ├── Makefile            # All dev commands
-│   └── ...
+│   └── .env.example
+│
+├── frontend/           # Next.js 15 frontend
+│   ├── app/            # App Router pages (15 routes)
+│   ├── components/     # UI components (layout, auth, landing, dashboard…)
+│   ├── contexts/       # Auth + wallet (Privy) contexts
+│   ├── lib/            # Typed API client (authApi, userApi, economyApi)
+│   └── stubs/          # Webpack stubs for unused Privy transitive deps
+│
+├── contracts/          # Solidity (Foundry) — scaffold, no code yet
+│   ├── foundry.toml
+│   └── src/            # PrToken.sol + UtToken.sol (to be written)
 │
 ├── docker/             # Docker Compose configs
 │   ├── docker-compose.yml          # Development stack
-│   ├── docker-compose.prod.yml     # Production stack
-│   └── start-*.sh                  # Container startup scripts
+│   └── docker-compose.prod.yml     # Production stack
 │
 ├── traefik/            # Traefik reverse proxy config
-│   ├── traefik.yml         # Development config
-│   └── acme.json           # SSL cert storage
 │
-├── ai_workflows/       # Claude context files (project brain)
-│   ├── CLAUDE.md       # Full project context
-│   ├── START_HERE.md   # Session orientation
-│   └── ...
+├── ai_workflows/       # Claude AI context files (project brain)
+│   ├── CLAUDE.md       # Full project context — read every session
+│   ├── SESSION_STATE.md # Live snapshot — read this first
+│   ├── PROGRESS_LOG.md # Session history
+│   ├── DECISIONS.md    # All ADRs (ADR-001 through ADR-022)
+│   └── AGENTS.md       # Claude agent hats and workflow
 │
-├── frontend/           # Next.js frontend (not started)
-├── contracts/          # Solidity contracts (not started)
 └── docs/               # API and module documentation
 ```
 
@@ -59,25 +68,30 @@ UJAMAA_DAO/
 
 ### Prerequisites
 - Docker + Docker Compose
-- Node.js 20+ (for local schema tooling only — all dev runs in Docker)
+- Node.js 22 (for local schema tooling and frontend build — all services run in Docker)
 
-### First Run
+### Run Everything
 
 ```bash
-# From the project root
 cd backend
-
-# Start all services
 make dev
-
-# Then inside the web container, run the first migration:
-make db-migrate
-# Or: docker exec -it ujamaa_web npx prisma migrate dev --name schema_alignment
 ```
 
-API is available at: `http://localhost:4000`
-Health check: `http://localhost:4000/health`
-Ready check: `http://localhost:4000/ready`
+This starts: API (`:4000`), worker, PostgreSQL, Redis, frontend (`:3000`), MailHog (`:8025`).
+
+```bash
+# On first run — apply migrations
+make db-migrate
+
+# Check the API is healthy
+curl http://localhost:4000/health
+```
+
+### Frontend
+Visit **`http://localhost:3000`** — full UI with landing page, registration, and dashboard.
+
+### Dev Email (Magic Links)
+Visit **`http://localhost:8025`** — MailHog catches all outgoing emails in development.
 
 ---
 
@@ -85,35 +99,53 @@ Ready check: `http://localhost:4000/ready`
 
 | Layer | Technology |
 |---|---|
-| Runtime | Node.js 20+, TypeScript strict |
+| Runtime | Node.js 22, TypeScript strict |
 | Framework | Express |
-| Database | PostgreSQL + Prisma ORM |
+| Database | PostgreSQL 15 + Prisma ORM (80 models) |
 | Queue | BullMQ + Redis |
-| Logger | Pino (structured, with `operationType`) |
-| Testing | Vitest + Supertest (no tests written yet) |
-| Docker | Docker Compose with Traefik |
-| Blockchain (planned) | Base L2 (Sepolia), PR/UT tokens, Privy/Dynamic embedded wallets |
-| Frontend (planned) | Next.js 14, TanStack Query, Wagmi |
+| Logger | Pino (structured, `operationType` context) |
+| Testing | Vitest + Supertest — 173 tests, CI green |
+| Auth | Email magic links (JWT + hex token), Africa's Talking SMS |
+| Frontend | Next.js 15 (App Router), TanStack Query v5, Tailwind v3, shadcn/ui |
+| Wallet | Privy (`@privy-io/react-auth` v3.14.1) — embedded wallets on Base L2 |
+| Contracts | Foundry (forge/cast/anvil) — Base Sepolia → Base Mainnet |
+| Infra | Docker Compose + Traefik reverse proxy |
+| CI | GitHub Actions — type-check · lint · prisma validate · build |
 
 ---
 
 ## Non-Negotiable Rules
 
-1. **Marketplace = discovery only.** No payments, no escrow.
+1. **Marketplace = discovery only.** No payments, no escrow, no checkout UI.
 2. **Real money via M-Pesa to platform accounts.** Never P2P.
-3. **Blockchain is hybrid.** On-chain: governance, PR/UT tokens. Off-chain: UX.
+3. **Blockchain is hybrid.** On-chain: governance records, PR/UT tokens. Off-chain: all UX.
 4. **PR token is soulbound.** Earned UT has no cash-out path.
 5. **Everything runs in Docker.** Use service names (`postgres`, `redis`), not `localhost`.
 
 ---
 
+## Authentication Flow
+
+UjamaaDAO uses **email magic links** — no passwords, no seed phrases.
+
+- **New users**: 4-step registration form → email verification link → session token
+- **Returning users**: Enter email on landing page → magic link email → session token
+- **Wallet**: Privy embedded wallet created automatically on first login (invisible to user)
+
+---
+
 ## Documentation
 
-- [`ai_workflows/CLAUDE.md`](ai_workflows/CLAUDE.md) — Full project context + module status table
-- [`ai_workflows/START_HERE.md`](ai_workflows/START_HERE.md) — Where to start each session
-- [`backend/README.md`](backend/README.md) — Backend-specific setup and commands
-- [`backend/INFRASTRUCTURE.md`](backend/INFRASTRUCTURE.md) — Docker, deployment, troubleshooting
-- [`docs/`](docs/) — API documentation per module
+| File | Contents |
+|---|---|
+| [`ai_workflows/SESSION_STATE.md`](ai_workflows/SESSION_STATE.md) | Live project snapshot — read first each session |
+| [`ai_workflows/CLAUDE.md`](ai_workflows/CLAUDE.md) | Full project context, module status, conventions |
+| [`ai_workflows/DECISIONS.md`](ai_workflows/DECISIONS.md) | All architectural decisions (ADR-001 – ADR-022) |
+| [`ai_workflows/PROGRESS_LOG.md`](ai_workflows/PROGRESS_LOG.md) | Session-by-session build history |
+| [`backend/README.md`](backend/README.md) | Backend setup, commands, architecture |
+| [`frontend/README.md`](frontend/README.md) | Frontend setup, design system, page inventory |
+| [`contracts/README.md`](contracts/README.md) | Smart contract architecture and next steps |
+| [`docs/`](docs/) | API documentation per module |
 
 ---
 
