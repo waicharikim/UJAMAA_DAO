@@ -7,7 +7,7 @@ version: '3.9'
 # Backend code is in: /backend/
 # 
 # ✅ ACTIVE (Version A - Pragmatic):
-#    - Simple web + worker + Traefik setup
+#    - Simple web + worker setup (direct port access)
 #    - Fast startup, easy debugging
 #    - Perfect for current development
 #
@@ -26,29 +26,31 @@ version: '3.9'
 services:
   # ─────────────────────────────────────────────────────────────────────────
   # TRAEFIK (Reverse Proxy + Let's Encrypt)
+  # 💤 DISABLED for dev — enable for production (TLS, domain routing)
+  # Config files: traefik/traefik.yml + traefik/acme.json (ready to go)
+  # To re-enable: uncomment this block and update traefik.yml with your domain
   # ─────────────────────────────────────────────────────────────────────────
-  traefik:
-    image: traefik:v2.11
-    container_name: ujamaa_traefik
-    restart: unless-stopped
-    ports:
-      - "80:80"       # HTTP
-      - "443:443"     # HTTPS
-      - "8080:8080"   # Traefik dashboard
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ../traefik/acme.json:/letsencrypt/acme.json
-      - ../traefik/traefik.yml:/etc/traefik/traefik.yml:ro
-    environment:
-      - TZ=UTC
-    networks:
-      - backend
-      # - mesh  # VERSION B: Uncomment for service mesh
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.localhost`)"
-      - "traefik.http.routers.traefik-dashboard.service=api@internal"
-      - "traefik.http.routers.traefik-dashboard.entrypoints=web"
+  # traefik:
+  #   image: traefik:v2.11
+  #   container_name: ujamaa_traefik
+  #   restart: unless-stopped
+  #   ports:
+  #     - "80:80"       # HTTP
+  #     - "443:443"     # HTTPS
+  #     - "8080:8080"   # Traefik dashboard
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock:ro
+  #     - ../traefik/acme.json:/letsencrypt/acme.json
+  #     - ../traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+  #   environment:
+  #     - TZ=UTC
+  #   networks:
+  #     - backend
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.localhost`)"
+  #     - "traefik.http.routers.traefik-dashboard.service=api@internal"
+  #     - "traefik.http.routers.traefik-dashboard.entrypoints=web"
 
   # ═════════════════════════════════════════════════════════════════════════
   # WEB SERVER (API) - VERSION A (ACTIVE)
