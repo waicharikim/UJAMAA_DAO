@@ -116,7 +116,7 @@
 - Privy's SDK is lighter — suits low-data mobile users on 3G in rural wards.
 - Dynamic is better for DeFi products where users arrive with existing MetaMask wallets. That is not UjamaaDAO's user.
 - Cost: Privy has a generous free tier (usage-based). Dynamic is more expensive per MAU at scale.
-**Consequences:** Install `@privy-io/react-auth` in the frontend (Phase 3, after economy/community backends are hardened). Replace `frontend/components/auth/connect-wallet.tsx` with `usePrivy()` hook. Primary login flow: `loginWithPhone()`. On wallet creation: `PATCH /api/v1/users/me/profile` with `walletAddress`. Gate on-chain features behind `user.walletAddress !== null`.
+**Consequences:** `@privy-io/react-auth` is installed and active (session 13). `frontend/contexts/wallet-context.tsx` wraps `PrivyProvider`. Implemented `loginMethods: ['email', 'wallet', 'google']` — phone login is not currently configured in the Privy SDK (phone remains the primary *identity* field on the User model, but the Privy entry point is email/embedded wallet). On wallet creation: `PATCH /api/v1/users/me/profile` with `walletAddress`. Gate on-chain features behind `user.walletAddress !== null`.
 
 ---
 
@@ -170,13 +170,13 @@
 
 ---
 
-## [ADR-010] — Auth module first, then marketplace, then governance
+## [ADR-010] — Module build order
 
-**Date:** 2026-02-19
-**Status:** Decided
-**Decision:** Build and harden modules in this order: Auth → Marketplace → Governance → Education → Emergency → Collective Project Loop.
-**Why:** Everything depends on auth. Marketplace is the first user-facing feature that drives adoption. Governance requires users to exist and be verified. Education and emergency can be layered on. The collective project loop is the most complex and requires all other systems to be stable.
-**Consequences:** Don't start marketplace until auth passes the module readiness checklist. Don't start governance until marketplace is solid. Frontend comes after at least auth + marketplace are running.
+**Date:** 2026-02-19 (revised 2026-02-28)
+**Status:** Revised — original proposed order was not followed
+**Decision:** Original proposed order: Auth → Marketplace → Governance → Education → Emergency → Collective Project Loop. **Actual build order (as of 2026-02-28):** Auth → User → Economy → Community → Governance → Projects → Emergency → Education → Collective Project Loop.
+**Why:** Everything depends on auth. The User and Economy modules turned out to be prerequisites for Community — community verification requires user profiles and PR economy to already exist. Governance requires verified community members, which in turn requires economy. Marketplace became lower priority because the core economic loop (dues, PR, commitments) had to exist before discovery was useful. Frontend development followed auth + user + economy (not auth + marketplace as originally planned).
+**Consequences:** Marketplace is `partial` and lower priority than originally planned. Governance is the next major backend priority after community tests are green. The original build order should be treated as superseded — use the actual sequence above for planning future module work.
 
 ---
 

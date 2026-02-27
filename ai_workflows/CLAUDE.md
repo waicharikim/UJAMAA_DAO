@@ -82,7 +82,7 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 - TypeScript: `npx tsc --noEmit` returns **0 errors** ✅ (`develop` branch — PR #3 merged 2026-02-23)
 - ESLint: `npm run lint` passes clean ✅ (`develop` branch — ESLint config rewritten 2026-02-23, 133 files formatted)
 - BullMQ scheduling: 4 active jobs registered — user-cleanup (4h), auth-cleanup (03:00), monthly-pr-regen (1st of month), daily-commitment-penalties (02:00)
-- `BASE_URL`, `SMTP_*`, `ENCRYPTION_KEY`, `ALLOWED_ORIGINS` ✅ now in `docker/docker-compose.yml` web env. `ENCRYPTION_KEY` defaults to empty string — set it with `openssl rand -hex 32` before enabling TOTP/2FA or encrypted fields.
+- `BASE_URL`, `SMTP_*`, `ENCRYPTION_KEY`, `ALLOWED_ORIGINS` ✅ now in `docker/docker-compose.yml` web env. `ENCRYPTION_KEY` defaults to 64 zero chars (`000...000`) — functional but insecure. Replace with `openssl rand -hex 32` before enabling TOTP/2FA or any encrypted fields.
 - M-Pesa: not started
 - On-chain PR/UT (Base Sepolia): not started
 - MailHog (dev email catcher): ✅ auto-started by `make dev` (defined in `docker/docker-compose.yml`). Web UI at `http://localhost:8025`. SMTP host is `mailhog:1025` (container name) — no auth required.
@@ -91,7 +91,8 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 **Infrastructure completed (2026-02-21/22):**
 - Prisma schemas aligned: **80 models** (77 original + ImpactPointLog + UserLocationImpact + Ward back-relation), 12 per-module schemas merged via `mergeSchema.ts`, validates cleanly
 - Old Jan 2026 migrations cleared — fresh migration runs on first `make dev`
-- Docker config fixed: `REDIS_HOST`/`REDIS_PORT` env vars added to web + worker, `traefik/` directory created with `traefik.yml` + `acme.json`, worker startup script filename corrected (`workers.ts`). Note: Traefik container runs but its ports (80/443/8080) are not bound to the host — routing through Traefik is not functional in dev; services use direct port mappings (4000, 3000) instead.
+- Docker config fixed: `REDIS_HOST`/`REDIS_PORT` env vars added to web + worker, `traefik/` directory created with `traefik.yml` + `acme.json`, worker startup script filename corrected (`workers.ts`). **Traefik is fully commented out in `docker/docker-compose.yml` — it does not run at all in dev.** Direct port mappings are used instead. See ADR-023 to re-enable for production.
+- **Dev port map**: API `:4000`, frontend `:3000`, Postgres `:5432`, Postgres test `:5433`, Redis `:6380` (host; container listens on 6379 — host port 6380 avoids conflict with any local Redis), MailHog SMTP `:1025`, MailHog UI `:8025`.
 - `queue/index.ts` fixed: duplicate `deadLetterQueue` export removed, dead example Worker code removed
 - `registerAllListeners()` now called in `app.ts` `initializeServices()` — event bus is live on startup
 
@@ -112,10 +113,10 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 - Testing — Vitest + Supertest (`backend/vitest.config.ts`) — **173 tests green** (104 auth across 11 files + 35 user across 2 files + 34 economy across 3 files); `fileParallelism: false` required (shared test DB); `resolve.alias` for `@core/*` and `@modules/*` required in vitest config
 
 ### Infrastructure (active)
-- Docker Compose: `docker/docker-compose.yml` — services: `traefik`, `web`, `worker`, `postgres`, `postgres_test`, `redis`, `frontend`
+- Docker Compose: `docker/docker-compose.yml` — active services: `web`, `worker`, `postgres`, `postgres_test`, `redis`, `frontend`, `mailhog`. (`traefik` service is commented out — see ADR-023.)
 - Makefile: `backend/Makefile` — commands: `make dev`, `make logs`, `make db-migrate`, `make db-shell`, `make down`, `make clean`
 - Entry points: `backend/src/index.ts` (web), `backend/src/workers.ts` (worker), `backend/src/worker-events.ts`
-- Graceful shutdown in `backend/src/index.ts`: SIGTERM/SIGINT → close server → disconnect Prisma/Redis
+- Graceful shutdown in `backend/src/index.ts`: SIGTERM/SIGINT → close server → shutdown rateLimiter → shutdown tokenBlacklistService → close BullMQ redisConnection → disconnect Prisma
 - Observability (disabled by default): Prometheus, Grafana, Loki, Jaeger
 
 ### Frontend (Phase 1 — auth/user APIs wired)
@@ -124,7 +125,7 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 - `frontend/contexts/auth-context.tsx` — magic link flow (`requestMagicLink`, `verifyMagicLink`, `verifyEmailToken`, auto-hydrate from localStorage)
 - `frontend/app/auth/callback/page.tsx` — detects token type and routes: JWT (2 dots) → `verifyMagicLink` (`GET /auth/login`); hex → `verifyEmailToken` (`GET /auth/verify-email`)
 - `frontend/.env.local` — `NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1`
-- TanStack Query, Wagmi (mock — to be replaced by Privy in Phase 3), Zustand
+- TanStack Query, Zustand. (Wagmi removed — replaced by Privy; see ADR-009.)
 
 ### Blockchain (scaffold — no code yet)
 - Base L2 (Sepolia testnet → Mainnet) — ADR-008
@@ -156,6 +157,9 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 - All new events must be typed in the event bus types file
 - Auth token field name: both `GET /auth/verify-email` and `GET /auth/login` return `sessionToken` (not `accessToken`). Frontend must read `sessionToken`. No refresh token is issued — 7-day lifetime per ADR-022.
 - `AUTH_CLEANUP_JOB` runs on the `user-cleanup` worker queue (not a dedicated auth queue). New low-volume auth housekeeping jobs belong in `user-cleanup` — do not create a third queue.
+- Request body limit: **10 MB** for all endpoints (`express.json` + `express.urlencoded` in `app.ts`). Payloads larger than this are rejected with 413.
+- Security events: use `logSecurityEvent(message, type, severity, detail, context)` from `backend/src/core/logger/logger.ts` for all security-relevant events (auth failures, brute force, suspicious activity). Do not call `logger.error` directly for security events. Severity values: `'LOW'`, `'MEDIUM'`, `'HIGH'`, `'CRITICAL'`.
+- **Event bus registry** — current published events: `user.created` (emitted on new user registration; economy + community listen), `user.email.verified` (emitted on email verification; economy awards PR, community enrolls groups), `auth.login` (emitted on every successful login; audit listens). Add all new events here and type them in the event bus types file.
 
 ---
 
@@ -192,7 +196,7 @@ A module is **production-ready** when ALL of these are true:
 | Wallet UX friction | Embedded wallets + gasless first tx via Pimlico |
 | `docker compose restart` doesn't pick up env var changes | Use `docker compose up --force-recreate` instead — restart reuses the existing container |
 | tsx watch silently pauses after `process.exit(1)` | Touch any watched file (e.g. `touch backend/src/app.ts`) to trigger a restart |
-| "JWT_SECRET invalid" at startup | JWT_SECRET must be ≥64 chars. Short default in docker-compose triggers Zod validation failure — use a 64-char hex fallback |
+| "JWT_SECRET invalid" at startup | JWT_SECRET must be **≥32 chars** in production. The hardcoded dev default (`6e603cfa...`) is explicitly blocked in production — use any different ≥32-char secret. The docker-compose dev default is 64 chars, which satisfies this minimum. |
 | Server exits ~15s after startup ("Shutdown timeout") | Force-exit timeout was set at module level, not inside `gracefulShutdown()` — it fired unconditionally. Move it inside the shutdown handler. |
 | `@prisma/client` missing enum error in a service | Service references an enum not defined in any module schema. Fix the service to use actual schema-aligned enums, not invented names. |
 | `redischeck.sh: Permission denied` in worker container | Run `chmod +x docker/*.sh` on host before `make dev`. Docker copies the file permission bits — if the script isn't executable on host, it won't be in the container. |
@@ -202,14 +206,14 @@ A module is **production-ready** when ALL of these are true:
 | TypeScript errors in scaffold services that reference unmapped Prisma models | Add `// @ts-nocheck` at the top of the service file and a note like `scaffold: <ModelName> alignment in progress`. Do not attempt full schema fixes on scaffold modules — defer until that module is actively being built. |
 | Magic links produce `undefined/auth/verify-email?...` in emails | `BASE_URL` env var is not set. Add `BASE_URL=http://localhost:4000` to the web service environment in `docker/docker-compose.yml`. |
 | Emails not sending at all (magic links, verification) | SMTP credentials not configured. Add `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` to web service environment in `docker/docker-compose.yml`. Startup logs show "Email service NOT configured" warning when missing. |
-| `/admin/queues` Bull Board returns 401 with correct password | Username is always `admin`. Password is `DASHBOARD_PASSWORD` env var (default `YourVeryStrongPassword123!` in dev — `app.ts:297`). Change before any shared or production deployment. Auth uses `timingSafeEqual` via SHA-256 hash. |
+| `/admin/queues` Bull Board returns 401 with correct password | Username is always `admin`. Password is `DASHBOARD_PASSWORD` env var (default **`admin123`** in dev per `docker-compose.yml`). Change before any shared or production deployment. Auth uses `timingSafeEqual` via SHA-256 hash. |
 | CI fails: `PrismaConfigEnvError: Cannot resolve environment variable: DATABASE_URL` | Prisma v7 `prisma.config.ts` calls `env('DATABASE_URL')` at config-load time, even during `prisma generate`. Add `DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ci_db` to the job-level `env:` block in `.github/workflows/ci.yml`. |
 | ESLint error: `Cannot find module '@eslint/js/dist/configs/typescript.js'` | That subpath does not exist in `@eslint/js`. Rewrite `eslint.config.js` to import `@typescript-eslint/eslint-plugin`, `@typescript-eslint/parser`, and `globals` directly — do not rely on `@eslint/js` TypeScript re-exports. |
 | JWT `jti` claim does not match session ID | `signJwtToken` generates a new random hex `jti` regardless of the payload's `jti` field. The actual session ID travels in the JWT `sessionId` field (not `jti`). Token revocation checks must use `sessionId`, not `jti`. |
 | Prisma migration SQL files not committed (silently gitignored) | `backend/.gitignore` has a `*.sql` rule. Add `!prisma/migrations/**/*.sql` directly after it to exempt migration files. Without this, migration files are invisible to git and teammates can't reproduce the schema history. |
-| `sendJobFailureAlert` fires but no alert is actually sent | `workers.ts:236-305` — the function only calls `logger.error`. Email and Slack blocks are commented out. Job failures reach the dead-letter queue and appear in logs, but no human is notified. Wire Slack webhook or email before any production deployment. |
+| `sendJobFailureAlert` fires but no alert is actually sent | `failedJobHandler` (which calls `sendJobFailureAlert`) is defined in `workers.ts` but **never registered on any worker `failed` event** — it is unreachable dead code. Job failures reach the dead-letter queue and appear in logs, but `sendJobFailureAlert` is never called at all. Fix: `worker.on('failed', failedJobHandler)`, then wire Slack webhook or email before production. |
 | Access token is valid for 7 days — 401 auto-refresh rarely fires | `auth.service.ts:448` issues 7-day access tokens (intentional for magic-link UX — see ADR-022). The `frontend/lib/api.ts` 401-refresh path exists as a safety net but will rarely trigger. Revocation requires explicit `DELETE /auth/sessions/:id`. |
-| `ENCRYPTION_KEY` defaults to empty string, not a crash | `docker/docker-compose.yml` sets `ENCRYPTION_KEY=${ENCRYPTION_KEY:-}` — silently empty if the host env var is not set. TOTP and encrypted fields will fail at runtime without a startup crash. Always set a 64-char hex value (`openssl rand -hex 32`) before enabling 2FA or any feature that calls the encryption utility. |
+| `ENCRYPTION_KEY` defaults to 64 zero chars, not a crash | `docker/docker-compose.yml` sets a default of 64 zero chars (`000...000`). TOTP and encrypted fields will work but with an insecure all-zero key — there is no startup crash. Always replace with a real value (`openssl rand -hex 32`) before enabling 2FA or any feature that calls the encryption utility. |
 | `TypeError: Cannot set property query of #<IncomingMessage> which has only a getter` | Express `req.query` is a getter-only property on `IncomingMessage`. Assigning `(req.query as any) = data` throws at runtime. Use `Object.defineProperty(req, 'query', { value: data, writable: true, configurable: true })` instead. |
 | Rate limiter blocks tests (`strictRateLimit` 5 req/15min exceeded) | Add a `NODE_ENV === 'test'` guard at the top of `buildRateLimiter` that returns a no-op middleware. Rate limiters share in-memory (or Redis) state across test cases hitting the same endpoint in the same run. |
 | `generateRandomHex(n)` throws "Must generate at least 8 bytes" | The crypto utility enforces a minimum of 8 bytes. Never pass a value less than 8. If you need fewer output characters, generate 8 bytes and slice: `generateRandomHex(8).slice(0, desiredLength)`. |
@@ -258,3 +262,4 @@ A module is **production-ready** when ALL of these are true:
 | v3.0 | Audit pass (2026-02-24): removed stale Bull Board timing-safe issue (fixed in app.ts:287), updated env-var gap note (BASE_URL/SMTP_*/ENCRYPTION_KEY/ALLOWED_ORIGINS now in docker-compose), added `frontend` service to infrastructure list, added 3 new common issues (sendJobFailureAlert stub, 7-day token, ENCRYPTION_KEY empty default). ADR-021 (auth→user direct import exception) and ADR-022 (7-day token) added to DECISIONS.md. |
 | v3.1 | Audit pass (2026-02-26): START_HERE.md rewritten (was severely stale). SESSION_STATE.md created (always-current live snapshot). Orient hat added to AGENTS.md. CLAUDE.md: MailHog startup note added to section 3, auth-context entry updated (verifyEmailToken added), two new section 5 conventions (sessionToken field name, auth-cleanup queue), DASHBOARD_PASSWORD default corrected (was `admin123`, actually `YourVeryStrongPassword123!`), 3 new section 7 issues. Code bug fixed: `verifyMagicLink` in api.ts + auth-context.tsx now correctly reads `sessionToken` instead of `accessToken`. |
 | v3.2 | Privy wallet integration complete (2026-02-26): `wallet-context.tsx` wired to real `PrivyProvider`, `wallet-button.tsx` added, App ID in `.env.local`. Auth flows connected to landing page (`SignInModal`, `onSignIn` prop). Register page Chai palette. Webpack stubs for 4 Privy transitive deps in `next.config.mjs`. Frontend build 15/15 green. Docker npm install pattern documented. 4 new section 7 issues added. |
+| v3.3 | Audit pass (2026-02-28): 8 contradictions corrected — JWT_SECRET minimum (32 not 64 chars), DASHBOARD_PASSWORD default (`admin123` not `YourVeryStrongPassword123!`), ENCRYPTION_KEY default (64 zeros not empty string), Traefik state (fully commented out, not "runs but ports not bound"), `failedJobHandler` scope (dead code, never registered on any event), ADR-009 Privy login method, ADR-010 build order, Wagmi stale note removed. Added: dev port map (Redis=6380), graceful shutdown full order, body limit + `logSecurityEvent` + event bus registry conventions. |
