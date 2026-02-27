@@ -55,15 +55,14 @@ openssl rand -hex 32    # Use output for JWT_SECRET and ENCRYPTION_KEY
 ### Frontend env
 
 ```bash
-cp frontend/.env.local.example frontend/.env.local   # if the example exists
-# OR create it manually:
-cat > frontend/.env.local << 'EOF'
-NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1
-NEXT_PUBLIC_PRIVY_APP_ID=cmm3oautu048e0djonwhybq5c
-EOF
+cp frontend/.env.local.example frontend/.env.local
 ```
 
-> `NEXT_PUBLIC_PRIVY_APP_ID` is the development Privy App ID. It is safe to commit — it is an App ID, not a secret. The Privy secret key lives server-side only.
+This sets two variables:
+- `NEXT_PUBLIC_API_URL` — backend URL (must be reachable from the browser, i.e. `localhost:4000`)
+- `NEXT_PUBLIC_PRIVY_APP_ID` — Privy wallet App ID for embedded wallets (Base L2)
+
+> The Privy App ID is not a secret — it is safe to check in. The Privy secret key lives server-side only and is never in the frontend.
 
 ---
 
@@ -103,7 +102,7 @@ This single command starts **all 8 services**:
 | Redis | localhost:6380 | Cache + job queues |
 | Frontend | http://localhost:3000 | Next.js app |
 | MailHog | http://localhost:8025 | Catches all dev emails |
-| Traefik | http://localhost:8080 | Reverse proxy dashboard |
+| Traefik | (internal only) | Reverse proxy — not yet wired for dev |
 
 Wait ~30 seconds for services to become healthy, then check:
 
@@ -129,9 +128,11 @@ This runs Prisma migrations inside the `web` container. You should see all migra
 ```bash
 # API health
 curl http://localhost:4000/health
+# → {"success":true,"status":"ok"}
 
 # Database + Prisma connected
 curl http://localhost:4000/ready
+# → {"success":true}
 
 # Frontend
 open http://localhost:3000
@@ -139,7 +140,7 @@ open http://localhost:3000
 # Email catcher (for magic links in dev)
 open http://localhost:8025
 
-# Queue dashboard (admin/admin123)
+# Queue dashboard (username: admin, password: admin123)
 open http://localhost:4000/admin/queues
 ```
 
@@ -298,7 +299,8 @@ All 12 module routes are mounted and functional. Three modules are fully tested 
 **Services won't start**
 ```bash
 make down && make dev        # Fresh start
-docker compose logs traefik  # Check Traefik specifically
+docker ps                    # See which containers are running
+make logs                    # Check logs for errors
 ```
 
 **Web server exits immediately**
