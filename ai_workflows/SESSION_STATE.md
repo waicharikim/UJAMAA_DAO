@@ -6,12 +6,12 @@
 
 ---
 
-**Last updated:** 2026-02-27 (session 14)
+**Last updated:** 2026-02-27 (session 15)
 **Branch:** `develop`
 **Last commits:**
+- `a0dca9f` feat(frontend): apply Chai palette to all pages
+- `2e8a087` docs: session 14 log — landing page rewrite + repo cleanup complete
 - `29a4b87` feat(frontend): landing page — 3D orbital system + higher-purpose content
-- `276e0ce` chore: repo cleanup before collaborator onboarding
-- `bf759fd` feat(frontend): activate Privy wallet — stub transitive deps, fix build
 
 ---
 
@@ -26,29 +26,34 @@
 
 ---
 
-## What was completed in the last session (session 14)
+## What was completed in the last session (session 15)
 
-- **Repo cleanup** — deleted: `scripts/` (3 stale/insecure scripts), root `package.json`/`package-lock.json`, `blockchain/` (redundant), `tall rate-limit-redis` (git accident). Relocated stale docs to `ai_workflows/` and `docs/`. Rewrote `backend/INFRASTRUCTURE.md`. Added `SETUP.md` at repo root and `frontend/.env.local.example`.
-- **Traefik disabled in dev** — ports were never bound to host; commented out in `docker-compose.yml`. ADR-023 added to DECISIONS.md.
-- **MailHog docs fixed** — corrected `SMTP_HOST` from `172.19.0.1` → `mailhog` (container name). All prior docs claiming MailHog needed manual start were wrong — it auto-starts with `make dev`.
-- **Landing page full rewrite** — `frontend/components/landing/landing-page.tsx`:
-  - 3D OrbitalSystem canvas: true 3-D tilted ellipses (dim back arc / bright front arc), depth-sorted dots with scale+alpha by z-depth, pulsing sun with 8 animated rays, mouse parallax
-  - New VisionSection: "Africa has always known how to build together" — manifesto body, three philosophy pillars (Not DeFi / Not Charity / Not Governance Theater), Nyerere/Arusha Declaration quote
-  - Hero reframed around cooperative tradition (chama, harambee, sacco), not ward mechanics
-  - All 7 Nguzo Saba in marquee, footer, and dedicated Nguzo Saba strip in ProtocolSection
-  - New ProtocolSection: PR tokens (soulbound) / Impact Points (non-transferable) / Community Treasury (onchain)
-  - HowItWorks, UseCases: descriptions rewritten around economic self-determination language
-- **Known build issue** — `next build` fails at static generation of `/404` with `<Html> should not be imported outside of pages/_document` (Next.js 15.3.3 bug: uses development React bundle during static generation). TypeScript compilation is clean. Site runs correctly in dev (`make dev`). Pre-existing — present on the codebase before session 14.
+- **About page full rewrite** — `frontend/app/about/page.tsx`:
+  - Dark `#0A1F14` background matching landing page
+  - Hero: Ujamaa etymology — "the word that changed how Africa thinks about building together"
+  - Philosophy section: chama/harambee/tontine/stokvel cooperative tradition + Nyerere 1962 quote
+  - Three pillars: Govern Together / Work Together / Prosper Together
+  - All 7 Nguzo Saba with full Swahili names, English translations, and principle meanings
+  - Protocol section: soulbound PR tokens / Impact Points / Community Treasury
+  - CTA → `/auth/register`, footer Nguzo Saba name strip
+- **Chai palette extended to all authenticated pages:**
+  - `components/layout/page-header.tsx` — cream gradient, amber badge, `font-display` chai title
+  - `components/layout/stats-grid.tsx` — cream cards, Chai change pills (tea-green/ember/chai)
+  - `app/groups/page.tsx`, `app/proposals/page.tsx`, `app/projects/page.tsx`, `app/admin/page.tsx` — Chai stat icon colors (`#C9922A`/`#1E3D2F`/`#B03A1E`/`#2A5240`), amber spinners, amber pill CTAs
+  - `app/groups/[id]/page.tsx` — amber-tinted skeleton pulses
+  - `app/projects/[id]/page.tsx` — full redesign: `InfoCard`, custom amber progress bar, `StatusBadge`, tea-green participant avatars, amber `TabsList`
+  - `app/dashboard/page.tsx` — cream gradient loading fallback
 
 ---
 
 ## Known open issues
 
+- `next build` fails at `/404` static generation (Next.js 15.3.3 bug, pre-existing, dev unaffected)
 - `sendJobFailureAlert` in `workers.ts` is effectively dead code — job failures log but no human is alerted
 - No tests for community, governance, projects, marketplace, notifications, onboarding, emergency, audit, admin modules
 - M-Pesa verification in `user.service.ts` is stubbed — always returns success
 - `PrToken.sol` + `UtToken.sol` not written
-- Chai palette not extended to dashboard/profile/proposals screens (still use old inline hex values)
+- Deep scaffold components (MilestoneTracker, AdminDashboard, GroupDetail, FetchProposals) still use internal blue/slate colours — blocked until those modules are actively built
 
 ---
 
@@ -65,10 +70,9 @@
 
 ## Next tasks (priority order)
 
-1. **Fix `next build` 404 prerender error** — Next.js 15.3.3 bug. Options: upgrade Next.js (risky), or configure `output: 'standalone'` to check if it changes static gen behavior. Low urgency — dev server works fine.
-2. **Community module tests** — move community `partial` → `tested` (highest backend priority; directly imported by auth)
-3. **Blockchain session** — `PrToken.sol` (soulbound ERC-20) + `UtToken.sol` + Foundry tests + Base Sepolia deploy + wire `participationRights.service.ts`
-4. **Extend Chai palette** — apply to dashboard, profile, proposals screens
+1. **Community module tests** — move community `partial` → `tested` (highest backend priority; directly imported by auth)
+2. **Blockchain session** — `PrToken.sol` (soulbound ERC-20) + `UtToken.sol` + Foundry tests + Base Sepolia deploy + wire `participationRights.service.ts`
+3. **Fix `next build` 404 prerender error** — Next.js 15.3.3 bug. Low urgency — dev server works fine.
 
 ---
 
@@ -88,5 +92,7 @@ frontend/components/auth/wallet-button.tsx  — Connect Wallet pill / address dr
 frontend/next.config.mjs                    — Webpack stubs for Privy transitive deps
 frontend/stubs/empty.js                     — Canonical empty stub (module.exports = {})
 frontend/app/auth/callback/page.tsx         — Token type detection → routes to correct verify function
-ai_workflows/DECISIONS.md                   — All ADRs (ADR-001 through ADR-022)
+frontend/components/layout/page-header.tsx  — Shared page header (cream gradient + amber badge)
+frontend/components/layout/stats-grid.tsx   — Shared stats grid (cream cards + Chai change pills)
+ai_workflows/DECISIONS.md                   — All ADRs (ADR-001 through ADR-023)
 ```

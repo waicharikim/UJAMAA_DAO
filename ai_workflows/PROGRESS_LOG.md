@@ -629,3 +629,49 @@ Write community module tests to move community from `partial` → `tested`, then
 
 **Token usage:**
 Sonnet 4.6 — medium session (Privy integration, 3 cascading webpack build errors resolved, Docker npm install)
+
+---
+
+## [2026-02-27] — Chai palette extended to all frontend pages
+
+**What was built:**
+
+- **`frontend/app/about/page.tsx`** — full rewrite matching landing page design:
+  - Dark `#0A1F14` background (matches landing page)
+  - Hero: Ujamaa etymology + "the word that changed how Africa thinks about building together"
+  - Philosophy section: chama/harambee/tontine/stokvel cooperative tradition + Nyerere 1962 quote blockquote
+  - Three pillars: Govern Together / Work Together / Prosper Together
+  - All 7 Nguzo Saba with Swahili names, English translations, and full principle meanings
+  - Protocol section: soulbound PR tokens / Impact Points / Community Treasury with tea-green accent cards
+  - CTA → `/auth/register`, footer Nguzo Saba name strip
+- **`frontend/components/layout/page-header.tsx`** — replaced blue gradient with cream gradient (`#FAF7F2→#F6F0E6`), amber badge, amber glow; title uses `font-display` chai text
+- **`frontend/components/layout/stats-grid.tsx`** — replaced white/slate cards with cream gradient; Chai palette change pills (tea-green/ember/chai) instead of green/red/slate
+- **`frontend/app/groups/page.tsx`** — Chai stat icon colors, amber spinner, amber pill CTA replacing purple/pink gradient button
+- **`frontend/app/proposals/page.tsx`** — Chai stat colors, amber pill CTA
+- **`frontend/app/projects/page.tsx`** — Chai stat colors, amber spinner, amber pill CTA
+- **`frontend/app/admin/page.tsx`** — Chai stat colors, amber spinner
+- **`frontend/app/groups/[id]/page.tsx`** — amber-tinted skeleton pulses replacing `bg-slate-200`
+- **`frontend/app/projects/[id]/page.tsx`** — full redesign: `InfoCard` component with cream gradient, custom amber progress bar, `StatusBadge` with Chai colors, tea-green participant avatar initials, amber-tinted `TabsList`, all `text-gray-*` → `text-[#1A120B]` chai palette
+- **`frontend/app/dashboard/page.tsx`** — cream gradient loading fallback replacing `bg-slate-200`
+
+**Decisions made:**
+
+- Authenticated pages (dashboard, profile, groups, proposals, projects, admin, marketplace, treasury) keep cream backgrounds — they live inside AppShell which already sets `#F7F2E8` page background; only dark `#0A1F14` is used for public/marketing pages (landing, about)
+- Stat icon colors standardised across all pages: amber `#C9922A` / tea-dark `#1E3D2F` / ember `#B03A1E` / tea-mid `#2A5240` — matching the pattern already established in `dashboard-content.tsx`
+- Blue/purple/green/orange Tailwind gradient classes (`from-blue-500`, `from-purple-500`, etc.) fully removed from all page and component files
+
+**What's still broken or incomplete:**
+
+- `next build` fails at `/404` static generation (Next.js 15.3.3 bug, pre-existing, dev server unaffected)
+- `sendJobFailureAlert` in `workers.ts` is dead code — no human alert on job failure
+- No tests for community, governance, projects, marketplace, notifications, onboarding, emergency, audit, admin
+- M-Pesa verification in `user.service.ts` stubbed — always returns success
+- `PrToken.sol` + `UtToken.sol` not written
+- Deep components (MilestoneTracker, AdminDashboard, GroupDetail, FetchProposals, etc.) still use internal blue/slate/gray colours — these are scaffold-tier components not yet connected to real data
+
+**Next milestone:**
+
+Write community module tests to move community from `partial` → `tested`, then start blockchain session (`PrToken.sol` + `UtToken.sol` + Foundry tests + Base Sepolia deploy).
+
+**Token usage:**
+Sonnet 4.6 — medium session (about page rewrite + 10-file Chai palette rollout)
