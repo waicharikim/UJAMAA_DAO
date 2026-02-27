@@ -91,7 +91,7 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 **Infrastructure completed (2026-02-21/22):**
 - Prisma schemas aligned: **80 models** (77 original + ImpactPointLog + UserLocationImpact + Ward back-relation), 12 per-module schemas merged via `mergeSchema.ts`, validates cleanly
 - Old Jan 2026 migrations cleared — fresh migration runs on first `make dev`
-- Docker config fixed: `REDIS_HOST`/`REDIS_PORT` env vars added to web + worker, `traefik/` directory created with `traefik.yml` + `acme.json`, worker startup script filename corrected (`workers.ts`)
+- Docker config fixed: `REDIS_HOST`/`REDIS_PORT` env vars added to web + worker, `traefik/` directory created with `traefik.yml` + `acme.json`, worker startup script filename corrected (`workers.ts`). Note: Traefik container runs but its ports (80/443/8080) are not bound to the host — routing through Traefik is not functional in dev; services use direct port mappings (4000, 3000) instead.
 - `queue/index.ts` fixed: duplicate `deadLetterQueue` export removed, dead example Worker code removed
 - `registerAllListeners()` now called in `app.ts` `initializeServices()` — event bus is live on startup
 
