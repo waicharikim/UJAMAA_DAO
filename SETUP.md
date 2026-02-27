@@ -91,7 +91,7 @@ cd backend
 make dev
 ```
 
-This single command starts **all 8 services**:
+This single command starts **7 services**:
 
 | Service | URL | Description |
 |---|---|---|
@@ -102,7 +102,8 @@ This single command starts **all 8 services**:
 | Redis | localhost:6380 | Cache + job queues |
 | Frontend | http://localhost:3000 | Next.js app |
 | MailHog | http://localhost:8025 | Catches all dev emails |
-| Traefik | (internal only) | Reverse proxy — not yet wired for dev |
+
+> Traefik (reverse proxy) is disabled in dev — services use direct port access. It will be enabled for production (TLS, domain routing).
 
 Wait ~30 seconds for services to become healthy, then check:
 
