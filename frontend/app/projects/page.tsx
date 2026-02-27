@@ -5,7 +5,6 @@ import { PageHeader } from "@/components/layout/page-header"
 import { StatsGrid } from "@/components/layout/stats-grid"
 import { ProjectDashboard } from "@/components/projects/project-dashboard"
 import { useAuth } from "@/contexts/auth-context"
-import { Button } from "@/components/ui/button"
 import { Plus, FolderOpen, Target, Users, TrendingUp } from "lucide-react"
 import type { Project } from "@/lib/types/projects"
 
@@ -21,7 +20,6 @@ export default function ProjectsPage() {
   const loadProjects = async () => {
     try {
       setLoading(true)
-      // Mock data for demonstration
       const mockProjects: Project[] = [
         {
           id: "1",
@@ -158,7 +156,7 @@ export default function ProjectsPage() {
       change: "+1 this month",
       changeType: "positive" as const,
       icon: FolderOpen,
-      color: "bg-gradient-to-br from-green-500 to-green-600",
+      color: "bg-[#1E3D2F]",
       description: "Currently running",
     },
     {
@@ -167,7 +165,7 @@ export default function ProjectsPage() {
       change: "+5 this week",
       changeType: "positive" as const,
       icon: Target,
-      color: "bg-gradient-to-br from-blue-500 to-blue-600",
+      color: "bg-[#C9922A]",
       description: "Achievements unlocked",
     },
     {
@@ -176,7 +174,7 @@ export default function ProjectsPage() {
       change: "+3 new members",
       changeType: "positive" as const,
       icon: Users,
-      color: "bg-gradient-to-br from-purple-500 to-purple-600",
+      color: "bg-[#2A5240]",
       description: "Community involvement",
     },
     {
@@ -185,7 +183,7 @@ export default function ProjectsPage() {
       change: "On track",
       changeType: "positive" as const,
       icon: TrendingUp,
-      color: "bg-gradient-to-br from-orange-500 to-orange-600",
+      color: "bg-[#B03A1E]",
       description: "Project completion",
     },
   ]
@@ -194,7 +192,7 @@ export default function ProjectsPage() {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+          <div className="h-10 w-10 animate-spin rounded-full border-2 border-[#C9922A] border-t-transparent" />
         </div>
       </div>
     )
@@ -205,16 +203,15 @@ export default function ProjectsPage() {
       <PageHeader
         title="Project Management"
         description="Track your project participation, manage milestones, and collaborate with team members."
-        gradient
         actions={
-          <Button
+          <button
             onClick={handleCreateProject}
-            size="lg"
-            className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
+            className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold transition-all hover:scale-[1.02] active:scale-[0.98]"
+            style={{ background: "#D4911E", color: "#0A1F14" }}
           >
-            <Plus className="h-4 w-4 mr-2" />
+            <Plus className="h-4 w-4" />
             Create Project
-          </Button>
+          </button>
         }
       />
 

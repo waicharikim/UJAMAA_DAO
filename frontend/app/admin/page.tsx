@@ -23,7 +23,6 @@ export default function AdminPage() {
   const loadSystemStats = async () => {
     try {
       setLoading(true)
-      // Mock system stats - in real app, fetch from admin API
       setSystemStats({
         totalUsers: 1247,
         activeProposals: 23,
@@ -44,7 +43,7 @@ export default function AdminPage() {
       change: "+45 this week",
       changeType: "positive" as const,
       icon: Users,
-      color: "bg-gradient-to-br from-blue-500 to-blue-600",
+      color: "bg-[#C9922A]",
       description: "Platform members",
     },
     {
@@ -53,7 +52,7 @@ export default function AdminPage() {
       change: "All systems operational",
       changeType: "positive" as const,
       icon: Shield,
-      color: "bg-gradient-to-br from-green-500 to-green-600",
+      color: "bg-[#1E3D2F]",
       description: "Platform status",
     },
     {
@@ -62,7 +61,7 @@ export default function AdminPage() {
       change: "+3 today",
       changeType: "positive" as const,
       icon: TrendingUp,
-      color: "bg-gradient-to-br from-purple-500 to-purple-600",
+      color: "bg-[#2A5240]",
       description: "Governance activity",
     },
     {
@@ -71,7 +70,7 @@ export default function AdminPage() {
       change: "Requires attention",
       changeType: "neutral" as const,
       icon: AlertTriangle,
-      color: "bg-gradient-to-br from-orange-500 to-orange-600",
+      color: "bg-[#B03A1E]",
       description: "Admin tasks",
     },
   ]
@@ -80,7 +79,7 @@ export default function AdminPage() {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+          <div className="h-10 w-10 animate-spin rounded-full border-2 border-[#C9922A] border-t-transparent" />
         </div>
       </div>
     )
@@ -92,7 +91,6 @@ export default function AdminPage() {
         <PageHeader
           title="System Administration"
           description="Monitor platform health, manage users, and configure system settings."
-          gradient
           badge="Admin Only"
         />
 

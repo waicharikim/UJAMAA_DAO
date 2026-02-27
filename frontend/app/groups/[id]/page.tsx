@@ -32,10 +32,10 @@ export default function GroupPage({ params }: GroupPageProps) {
 
 function GroupDetailSkeleton() {
   return (
-    <div className="animate-pulse">
-      <div className="h-8 bg-slate-200 rounded w-1/2 mb-4" />
-      <div className="h-4 bg-slate-200 rounded w-3/4 mb-2" />
-      <div className="h-4 bg-slate-200 rounded w-1/2" />
+    <div className="animate-pulse space-y-4">
+      <div className="h-8 rounded-xl w-1/2" style={{ background: "rgba(201,146,42,0.1)" }} />
+      <div className="h-4 rounded-xl w-3/4" style={{ background: "rgba(201,146,42,0.07)" }} />
+      <div className="h-4 rounded-xl w-1/2" style={{ background: "rgba(201,146,42,0.07)" }} />
     </div>
   )
 }
@@ -45,10 +45,10 @@ function GroupMembersSkeleton() {
     <div className="animate-pulse space-y-4">
       {[...Array(5)].map((_, i) => (
         <div key={i} className="flex items-center gap-3">
-          <div className="h-10 w-10 bg-slate-200 rounded-full" />
-          <div className="flex-1">
-            <div className="h-4 bg-slate-200 rounded w-3/4 mb-1" />
-            <div className="h-3 bg-slate-200 rounded w-1/2" />
+          <div className="h-10 w-10 rounded-full" style={{ background: "rgba(201,146,42,0.1)" }} />
+          <div className="flex-1 space-y-2">
+            <div className="h-4 rounded-xl w-3/4" style={{ background: "rgba(201,146,42,0.07)" }} />
+            <div className="h-3 rounded-xl w-1/2" style={{ background: "rgba(201,146,42,0.05)" }} />
           </div>
         </div>
       ))}

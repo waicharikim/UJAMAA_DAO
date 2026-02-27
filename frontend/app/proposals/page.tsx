@@ -6,7 +6,6 @@ import { FetchProposals } from "@/components/proposals/fetch-proposals"
 import { VotingProvider } from "@/contexts/voting-context"
 import { useAuth } from "@/contexts/auth-context"
 import { useRole } from "@/contexts/role-context"
-import { Button } from "@/components/ui/button"
 import { Plus, Vote, TrendingUp, Users, Clock } from "lucide-react"
 
 export default function ProposalsPage() {
@@ -24,7 +23,7 @@ export default function ProposalsPage() {
       change: "+2 this week",
       changeType: "positive" as const,
       icon: Vote,
-      color: "bg-gradient-to-br from-blue-500 to-blue-600",
+      color: "bg-[#C9922A]",
       description: "Currently voting",
     },
     {
@@ -33,7 +32,7 @@ export default function ProposalsPage() {
       change: "+45 today",
       changeType: "positive" as const,
       icon: TrendingUp,
-      color: "bg-gradient-to-br from-green-500 to-green-600",
+      color: "bg-[#1E3D2F]",
       description: "Community participation",
     },
     {
@@ -42,7 +41,7 @@ export default function ProposalsPage() {
       change: "+12 this month",
       changeType: "positive" as const,
       icon: Users,
-      color: "bg-gradient-to-br from-purple-500 to-purple-600",
+      color: "bg-[#B03A1E]",
       description: "Active voters",
     },
     {
@@ -51,7 +50,7 @@ export default function ProposalsPage() {
       change: "Faster than usual",
       changeType: "positive" as const,
       icon: Clock,
-      color: "bg-gradient-to-br from-orange-500 to-orange-600",
+      color: "bg-[#2A5240]",
       description: "Decision speed",
     },
   ]
@@ -62,17 +61,16 @@ export default function ProposalsPage() {
         <PageHeader
           title="Governance Proposals"
           description="Participate in community governance by voting on proposals and creating new initiatives."
-          gradient
           actions={
             hasScope("proposals:create") && (
-              <Button
+              <button
                 onClick={handleCreateProposal}
-                size="lg"
-                className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+                className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold transition-all hover:scale-[1.02] active:scale-[0.98]"
+                style={{ background: "#D4911E", color: "#0A1F14" }}
               >
-                <Plus className="h-4 w-4 mr-2" />
+                <Plus className="h-4 w-4" />
                 Create Proposal
-              </Button>
+              </button>
             )
           }
         />
