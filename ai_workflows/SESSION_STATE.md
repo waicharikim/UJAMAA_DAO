@@ -6,12 +6,12 @@
 
 ---
 
-**Last updated:** 2026-02-27 (session 15)
+**Last updated:** 2026-02-27 (session 16)
 **Branch:** `develop`
 **Last commits:**
+- `58ee904` feat(frontend): collapsible sidebar + logout button
+- `b6ac189` docs: session 15 log — Chai palette extended to all frontend pages
 - `a0dca9f` feat(frontend): apply Chai palette to all pages
-- `2e8a087` docs: session 14 log — landing page rewrite + repo cleanup complete
-- `29a4b87` feat(frontend): landing page — 3D orbital system + higher-purpose content
 
 ---
 
@@ -26,23 +26,16 @@
 
 ---
 
-## What was completed in the last session (session 15)
+## What was completed in the last session (session 16)
 
-- **About page full rewrite** — `frontend/app/about/page.tsx`:
-  - Dark `#0A1F14` background matching landing page
-  - Hero: Ujamaa etymology — "the word that changed how Africa thinks about building together"
-  - Philosophy section: chama/harambee/tontine/stokvel cooperative tradition + Nyerere 1962 quote
-  - Three pillars: Govern Together / Work Together / Prosper Together
-  - All 7 Nguzo Saba with full Swahili names, English translations, and principle meanings
-  - Protocol section: soulbound PR tokens / Impact Points / Community Treasury
-  - CTA → `/auth/register`, footer Nguzo Saba name strip
-- **Chai palette extended to all authenticated pages:**
-  - `components/layout/page-header.tsx` — cream gradient, amber badge, `font-display` chai title
-  - `components/layout/stats-grid.tsx` — cream cards, Chai change pills (tea-green/ember/chai)
-  - `app/groups/page.tsx`, `app/proposals/page.tsx`, `app/projects/page.tsx`, `app/admin/page.tsx` — Chai stat icon colors (`#C9922A`/`#1E3D2F`/`#B03A1E`/`#2A5240`), amber spinners, amber pill CTAs
-  - `app/groups/[id]/page.tsx` — amber-tinted skeleton pulses
-  - `app/projects/[id]/page.tsx` — full redesign: `InfoCard`, custom amber progress bar, `StatusBadge`, tea-green participant avatars, amber `TabsList`
-  - `app/dashboard/page.tsx` — cream gradient loading fallback
+- **Collapsible sidebar** (`components/layout/sidebar.tsx`):
+  - Animated width: 272px (expanded) ↔ 72px (collapsed) with `transition-all duration-300`
+  - `ChevronLeft`/`ChevronRight` toggle button in logo header area
+  - Collapsed mode: icons only, section labels hidden, divider replaces "More" label, nav items centred, native `title=` tooltips on all links
+  - Accepts `collapsed: boolean` and `onToggle: () => void` props
+- **Logout button** — ember-red `LogOut` icon + "Sign out" label at sidebar footer, calls `logout()` from `useAuth`. Icon-only when collapsed.
+- **AppShell state** (`components/layout/app-shell.tsx`) — owns `collapsed` state, passes to both `Sidebar` and `Topbar`
+- **Topbar expand affordance** (`components/layout/topbar.tsx`) — `PanelLeft` button appears at left of topbar when sidebar is collapsed, giving a clear re-expand target
 
 ---
 

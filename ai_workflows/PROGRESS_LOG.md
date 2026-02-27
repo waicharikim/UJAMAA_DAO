@@ -675,3 +675,39 @@ Write community module tests to move community from `partial` → `tested`, then
 
 **Token usage:**
 Sonnet 4.6 — medium session (about page rewrite + 10-file Chai palette rollout)
+
+---
+
+## [2026-02-27] — Collapsible sidebar + logout button
+
+**What was built:**
+
+- **`frontend/components/layout/sidebar.tsx`** — collapsible sidebar:
+  - Animated width transition: 272px (expanded) ↔ 72px (collapsed), `transition-all duration-300`
+  - `ChevronLeft`/`ChevronRight` toggle button in the logo header area
+  - Collapsed mode: icons only, section labels hidden, divider replaces "More" label, nav items centred, native `title=` tooltips on all links
+  - **Logout button** at footer: ember-red `LogOut` icon + "Sign out" label (icon-only when collapsed), calls `logout()` from `useAuth`
+  - User card above logout: avatar + name/role (avatar-only when collapsed)
+  - Props: `collapsed: boolean`, `onToggle: () => void`
+- **`frontend/components/layout/app-shell.tsx`** — owns `collapsed` state (`useState(false)`), passes `collapsed` + `onToggle` down to both `Sidebar` and `Topbar`
+- **`frontend/components/layout/topbar.tsx`** — accepts `collapsed`/`onToggle` props; renders a `PanelLeft` expand button at left of topbar when sidebar is collapsed, giving a clear re-expand affordance
+
+**Decisions made:**
+
+- Collapse state lives in `AppShell` (not a context or localStorage) — simplest correct scope; sidebar and topbar both need it, both are direct children of AppShell
+- Topbar expand button only shown when sidebar is collapsed — avoids duplicate toggle controls when sidebar is visible
+- `title=` attribute used for collapsed-mode tooltips — zero extra dependencies, works natively, consistent with the rest of the design
+
+**What's still broken or incomplete:**
+
+- Collapse state resets on page navigation (not persisted to localStorage) — acceptable for now
+- `next build` fails at `/404` static generation (Next.js 15.3.3 bug, pre-existing)
+- No tests for community, governance, projects, marketplace, notifications, onboarding, emergency, audit, admin
+- `PrToken.sol` + `UtToken.sol` not written
+
+**Next milestone:**
+
+Write community module tests to move community from `partial` → `tested`, then start blockchain session.
+
+**Token usage:**
+Sonnet 4.6 — light session (3 files, collapsible sidebar + logout)
