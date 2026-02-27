@@ -21,13 +21,8 @@
 |---|---|---|
 | Backend API | ✅ healthy | http://localhost:4000/health |
 | Frontend | ✅ running | http://localhost:3000 |
-| MailHog | ⚠️ manual start required | http://localhost:8025 |
+| MailHog | ✅ auto-started by `make dev` | http://localhost:8025 |
 | Tests | ✅ 173/173 green | `cd backend && npx vitest run` |
-
-**MailHog is NOT auto-started by `make dev`.** Run manually:
-```
-docker compose -f docker/docker-compose.yml up -d mailhog
-```
 
 ---
 
@@ -49,7 +44,6 @@ docker compose -f docker/docker-compose.yml up -d mailhog
 - M-Pesa verification in `user.service.ts` is stubbed — always returns success
 - `PrToken.sol` + `UtToken.sol` not written
 - Chai palette not extended to dashboard/profile/proposals screens (still use old inline hex values)
-- MailHog must be started manually
 
 ---
 

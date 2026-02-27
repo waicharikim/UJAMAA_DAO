@@ -76,7 +76,7 @@ services:
       - DASHBOARD_PASSWORD=${DASHBOARD_PASSWORD:-admin123}
       - BASE_URL=${BASE_URL:-http://localhost:4000}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3001}
-      - SMTP_HOST=${SMTP_HOST:-172.19.0.1}
+      - SMTP_HOST=${SMTP_HOST:-mailhog}
       - SMTP_PORT=${SMTP_PORT:-1025}
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASSWORD=${SMTP_PASSWORD:-}
