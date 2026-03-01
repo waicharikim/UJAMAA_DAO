@@ -43,7 +43,7 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 
 ---
 
-## 3. Current Progress (Updated: 2026-02-26)
+## 3. Current Progress (Updated: 2026-03-02)
 
 > **How to read this table:**
 > - `scaffold` = directory + schema only, no working logic
@@ -58,7 +58,7 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 | auth | tested | 10+ handlers, 10+ services, routes, validators, prisma schema. SMS wired (AT SDK). Auth-cleanup BullMQ job. **104 green tests** across 11 files (service units + 34 HTTP route integration tests). Schema fully aligned (2FA + security_events migration applied). |
 | user | tested | 7 handlers, services, routes, validators, prisma schema, cleanup job. **35 green tests** (1 helper file + 34 route integration tests). 5 service bugs fixed: proofUrl nullable, vouch P2002 race, timeout semantic, redundant middleware, dead code. Migration `20260223214449_make_proof_url_nullable` applied. |
 | economy | tested | PR service (award/spend/balance/hasSufficient), dues history, commitments. **34 green tests** (2 files: 18 service unit + 16 route integration). Bug fixed: duesOptInSchema added (validator/handler mismatch on POST /commitments/dues). Audit wired: PR_AWARDED, PR_SPENT, DUES_PAID, COMMITMENT_CREATED. |
-| community | partial | Group management: controllers, services, routes, member event listeners |
+| community | tested | Group management: controllers, services, routes, member event listeners. **49 green tests** (4 files: 13 service unit + 16 membership service unit + 20 route integration). Event listener registration fixed: `registerCommunityListeners()` now active — users auto-enroll in system groups on email verification. |
 | governance | partial | Proposal controllers, services, routes, prisma schema |
 | projects | partial | Project lifecycle: controllers, services, routes, prisma schema |
 | marketplace | partial | Listing controllers, services, routes, prisma schema. Discovery-only per Rule 1. |
@@ -74,7 +74,7 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 | verification | scaffold | Empty directory |
 
 **Cross-cutting gaps (apply to all modules):**
-- Tests: auth **104 green** (11 files), user **35 green** (2 files), economy **34 green** (3 files). All other modules: zero tests. Total: **173 green tests**.
+- Tests: auth **104 green** (11 files), user **35 green** (2 files), economy **34 green** (3 files), community **49 green** (4 files). All other modules: zero tests. Total: **222 green tests**.
 - `make dev` → `/health` ✅ verified 2026-02-22 — server responds `{"success":true,"status":"ok"}`
 - `make dev` → `/ready` ✅ verified 2026-02-22 — Prisma connected, migration applied
 - Worker container: `redischeck.sh` needs `chmod +x docker/*.sh` on host after fresh clone
@@ -110,7 +110,7 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 - Structured logging — `backend/src/core/logger/logger.ts` with `operationType`
 - Error handling — `ApiError` class (`backend/src/core/errors/ApiError.ts`)
 - RBAC — `backend/src/core/rbac/` (roles, authorize middleware, integration)
-- Testing — Vitest + Supertest (`backend/vitest.config.ts`) — **173 tests green** (104 auth across 11 files + 35 user across 2 files + 34 economy across 3 files); `fileParallelism: false` required (shared test DB); `resolve.alias` for `@core/*` and `@modules/*` required in vitest config
+- Testing — Vitest + Supertest (`backend/vitest.config.ts`) — **222 tests green** (104 auth across 11 files + 35 user across 2 files + 34 economy across 3 files + 49 community across 4 files); `fileParallelism: false` required (shared test DB); `resolve.alias` for `@core/*` and `@modules/*` required in vitest config
 
 ### Infrastructure (active)
 - Docker Compose: `docker/docker-compose.yml` — active services: `web`, `worker`, `postgres`, `postgres_test`, `redis`, `frontend`, `mailhog`. (`traefik` service is commented out — see ADR-023.)
@@ -219,6 +219,7 @@ A module is **production-ready** when ALL of these are true:
 | `generateRandomHex(n)` throws "Must generate at least 8 bytes" | The crypto utility enforces a minimum of 8 bytes. Never pass a value less than 8. If you need fewer output characters, generate 8 bytes and slice: `generateRandomHex(8).slice(0, desiredLength)`. |
 | Audit call after `return prisma.$transaction(...)` is unreachable dead code | If a service method returns the transaction result directly (`return prisma.$transaction(...)`), any code after the closing `});` is unreachable. To add a post-transaction audit call, refactor to `const result = await prisma.$transaction(...); await auditService.log(...); return result;`. Rename inner transaction variables to avoid shadowing (e.g. `record` instead of `payment`). |
 | Audit records should not be created inside transaction blocks | Place `auditService.log()` calls **after** the `await prisma.$transaction(...)` call, never inside the transaction callback. If the transaction rolls back (exception), the audit call never fires — no orphaned records. If the audit call itself fails after a successful transaction, the audit trail has a gap but the operation is not reversed. This is the correct trade-off for current scale. |
+| `enrollInSystemGroups` throws unique constraint when `primaryWardId === secondaryWardId` | `enrollInSystemGroups` fans out to `Promise.all` concurrently. When the same ward is used for both primary and secondary, two concurrent `findFirst → null → create` calls both try to insert the same `@unique Group.name` → Prisma unique constraint violation. In tests, always use two distinct ward IDs (`TEST_WARD_ID` + `TEST_WARD_ID_B`). In production, prevent users from setting the same ward for both fields. |
 | Frontend dev server: `Module not found: Can't resolve '@privy-io/react-auth'` | The Docker container's `node_modules` is an anonymous volume created at first build — it predates any packages added to `package.json` after that point. Fix: `docker exec ujamaa_frontend npm install --no-fund --no-audit` then `docker restart ujamaa_frontend`. The package will persist in the volume. |
 | `webpack resolve.alias` for a package doesn't apply to ESM files inside `node_modules` | Next.js + webpack 5 ESM module handling does not reliably apply `resolve.alias` entries when the importer is an `.mjs` file inside `node_modules`. Use `webpack.NormalModuleReplacementPlugin(/TargetFileName/, path.resolve(__dirname, 'stubs/empty.js'))` instead — it matches on the resolved resource path and works in both `next build` and `next dev`. |
 | Privy transitive dep causes `Module not found` at build time | `@privy-io/react-auth` pulls in `@base-org/account` (Coinbase smart wallets), `unstorage` (WalletConnect KV), `x402/client` (Privy payments), and `DelegatedActionsConsentScreen` (imports missing lucide icon). Add webpack `resolve.alias` stubs for the first three and a `NormalModuleReplacementPlugin` for the last one — all point at `frontend/stubs/empty.js`. See `frontend/next.config.mjs` for the exact config. |
@@ -266,3 +267,4 @@ A module is **production-ready** when ALL of these are true:
 | v3.2 | Privy wallet integration complete (2026-02-26): `wallet-context.tsx` wired to real `PrivyProvider`, `wallet-button.tsx` added, App ID in `.env.local`. Auth flows connected to landing page (`SignInModal`, `onSignIn` prop). Register page Chai palette. Webpack stubs for 4 Privy transitive deps in `next.config.mjs`. Frontend build 15/15 green. Docker npm install pattern documented. 4 new section 7 issues added. |
 | v3.3 | Audit pass (2026-02-28): 8 contradictions corrected — JWT_SECRET minimum (32 not 64 chars), DASHBOARD_PASSWORD default (`admin123` not `YourVeryStrongPassword123!`), ENCRYPTION_KEY default (64 zeros not empty string), Traefik state (fully commented out, not "runs but ports not bound"), `failedJobHandler` scope (dead code, never registered on any event), ADR-009 Privy login method, ADR-010 build order, Wagmi stale note removed. Added: dev port map (Redis=6380), graceful shutdown full order, body limit + `logSecurityEvent` + event bus registry conventions. |
 | v3.4 | Session 18 (2026-03-02): Roles system hardened — `roles.ts` rewritten, 5 new system roles + 2 group roles, `RoleHierarchy`, `roleIncludes()`, type guards, `AssignmentMethod`, `ElectionThresholds`. Raw string role literals replaced in admin/audit routes + password-reset service. Notification type-loss bug fixed (`toPrismaType()` in notification.service.ts). Audit wired: 6 events active (USER_CREATED, EMAIL_VERIFIED, PR_AWARDED, PR_SPENT, DUES_PAID, COMMITMENT_CREATED). `AuditAction` enum extended. Economy services refactored to `const result = await $transaction()` pattern. 2 new §7 common issues (audit outside transactions, unreachable post-return code). |
+| v3.5 | Session 19 (2026-03-02): Community module tests — 49 new tests (13 group.service + 16 groupMembership.service + 20 group.routes), community status partial → **tested**. Event listener registration gap fixed: `registerCommunityListeners()` now active in `listener-registry.ts`. `TEST_WARD_ID_B` + `seedSecondWard()` added to community test helpers to avoid `Promise.all` concurrent group create race. Total: **222 green tests**. 1 new §7 issue (enrollInSystemGroups same-ward race). |
