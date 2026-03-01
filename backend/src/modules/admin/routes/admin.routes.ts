@@ -19,6 +19,7 @@ import { validateRequest } from '../../../core/middleware/validateRequest.js';
 import { authenticate } from '../../../core/middleware/auth.middleware.js';
 import { authorize } from '../../../core/middleware/authorize.js';
 import { toMiddleware, requireAdmin } from '../../../core/rbac/authorize.js';
+import { SystemRoles } from '../../../core/rbac/roles.js';
 import { buildRateLimiter } from '../../../core/middleware/rateLimiter.js';
 
 // Validators
@@ -56,7 +57,7 @@ router.use(authenticate);
 
 router.use(
   authorize({
-    allowedRoles: ['ADMIN', 'COMPLIANCE_OFFICER', 'SUPER_ADMIN'],
+    allowedRoles: [SystemRoles.SUPER_ADMIN, SystemRoles.COMPLIANCE_OFFICER],
   }),
   toMiddleware(requireAdmin())
 );
@@ -149,7 +150,7 @@ router.patch(
  */
 router.get(
   '/users/:userId/security-events',
-  authorize({ allowedRoles: ['COMPLIANCE_OFFICER', 'SUPER_ADMIN'] }),
+  authorize({ allowedRoles: [SystemRoles.COMPLIANCE_OFFICER, SystemRoles.SUPER_ADMIN] }),
   buildRateLimiter({ windowMs: 15 * 60 * 1000, max: 20 }),
   validateRequest({ schema: userIdParamSchema, target: 'params' }),
   asyncHandler(getUserSecurityEventsAdmin)
@@ -161,7 +162,7 @@ router.get(
 
 router.post(
   '/config/update',
-  authorize({ allowedRoles: ['SUPER_ADMIN'] }),
+  authorize({ allowedRoles: [SystemRoles.SUPER_ADMIN] }),
   buildRateLimiter({ windowMs: 15 * 60 * 1000, max: 5 }),
   validateRequest({
     schema: z.object({

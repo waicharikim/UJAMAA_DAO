@@ -6,12 +6,12 @@
 
 ---
 
-**Last updated:** 2026-02-28 (session 17)
+**Last updated:** 2026-03-02 (session 18)
 **Branch:** `develop`
 **Last commits:**
+- `9a1227b` docs: session 17 log — audit pass, 8 doc contradictions corrected
 - `df6d74e` docs: audit pass — correct 8 doc contradictions, add missing conventions
 - `58ee904` feat(frontend): collapsible sidebar + logout button
-- `b6ac189` docs: session 15 log — Chai palette extended to all frontend pages
 
 ---
 
@@ -26,20 +26,15 @@
 
 ---
 
-## What was completed in the last session (session 17)
+## What was completed in the last session (session 18)
 
-- **Full `/audit-docs` pass** — read 8 files (CLAUDE.md, DECISIONS.md, app.ts, index.ts, workers.ts, auth.service.ts, schema.prisma, docker-compose.yml)
-- **8 doc contradictions corrected** in `CLAUDE.md` + `DECISIONS.md`:
-  1. JWT_SECRET minimum: ≥32 chars (not 64)
-  2. DASHBOARD_PASSWORD default: `admin123` (not `YourVeryStrongPassword123!`)
-  3. ENCRYPTION_KEY default: 64 zero chars (not empty string)
-  4. Traefik state: fully commented out (not "runs but ports not bound")
-  5. `failedJobHandler`: dead code, never registered on any worker event (stronger than "doesn't email")
-  6. ADR-009 Privy login: `loginMethods: ['email','wallet','google']` (not `loginWithPhone()`)
-  7. ADR-010 build order: Auth→User→Economy→Community→Governance (not Marketplace second)
-  8. Wagmi stale note removed (Privy active since session 13)
-- **Missing conventions added to §5**: 10 MB body limit, `logSecurityEvent()` utility, event bus registry
-- **Gaps filled**: dev port map (Redis=6380), graceful shutdown full order, Docker services list corrected
+- **Roles system hardened** — `roles.ts` rewritten per `roles.md` decisions: 5 new system roles (compliance_officer, county_coordinator, blockchain_admin, contract_deployer, multisig_signer), 2 new group roles (SECRETARY, MODERATOR), `RoleHierarchy`, `roleIncludes()`, type guards, display names, `AssignmentMethod`, `ElectionThresholds`. Seed updated. Raw string literals in admin/audit routes + password-reset service replaced with `SystemRoles.*`.
+- **Notification type bug fixed** — `notification.service.ts` was hardcoding `PrismaNotificationType.SYSTEM` for all types. Added `toPrismaType()`: DUES_* → ECONOMIC, PROPOSAL_* → PROPOSAL, rest → SYSTEM.
+- **Audit logging wired into auth + economy** — `GET /api/v1/audit/search` now returns real records:
+  - Auth: `USER_CREATED` (on registration), `EMAIL_VERIFIED` (on first verification)
+  - Economy: `PR_AWARDED` + `PR_SPENT` (every award/spend), `DUES_PAID`, `COMMITMENT_CREATED`
+  - Both economy services refactored from `return prisma.$transaction(...)` to `const result = await ...` pattern to allow post-transaction audit calls
+- **Test helper fixed** — `createTestAdmin()` now upserts `system:super_admin` (was creating non-existent `'ADMIN'` role that matched the old raw-string check)
 
 ---
 
@@ -50,7 +45,10 @@
 - No tests for community, governance, projects, marketplace, notifications, onboarding, emergency, audit, admin modules
 - M-Pesa verification in `user.service.ts` is stubbed — always returns success
 - `PrToken.sol` + `UtToken.sol` not written
-- Deep scaffold components (MilestoneTracker, AdminDashboard, GroupDetail, FetchProposals) still use internal blue/slate colours — blocked until those modules are actively built
+- Raw-string role literals remain in `admin.validators.ts` + `emergency.routes.ts` (pre-existing)
+- Audit not yet wired for: profile updates, group joins, governance actions (wire when those modules are tested)
+- Notifications: no DUES_REMINDER BullMQ job, no preference routes, only emergency module sends notifications
+- Deep scaffold components (MilestoneTracker, AdminDashboard, GroupDetail, FetchProposals) still use internal blue/slate colours
 
 ---
 
@@ -80,6 +78,7 @@ backend/src/app.ts                          — Express app, middleware order, r
 backend/src/index.ts                        — Server entry, startup assertions, graceful shutdown
 backend/src/workers.ts                      — BullMQ worker, 4 jobs (economy x2, user-cleanup, auth-cleanup)
 backend/src/core/jobs/register.ts           — All repeatable job registrations
+backend/src/core/rbac/roles.ts              — SystemRoles, GroupRoles, RoleHierarchy, roleIncludes(), type guards
 docker/docker-compose.yml                   — All services, env vars, healthchecks
 backend/vitest.config.ts                    — Test config (fileParallelism:false, resolve.alias, env block)
 frontend/lib/api.ts                         — HTTP client (authApi, userApi, economyApi)

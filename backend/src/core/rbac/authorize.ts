@@ -15,6 +15,7 @@ import { Request, RequestHandler, Response, NextFunction } from 'express';
 import { AuthRequest } from '../types/Ujamaadao.types.js';
 import { ApiError } from '../errors/ApiError.js';
 import { createRequestLogger, logSecurityEvent } from '../logger/logger.js';
+import { SystemRoles } from './roles.js';
 
 type Scope = string | null;
 
@@ -78,7 +79,7 @@ const hasRole = (
  * Check if user is super admin (bypasses all other checks)
  */
 const isSuperAdmin = (req: AuthRequest): boolean => {
-  const isSuper = req.user?.roles?.includes('SUPER_ADMIN') || false;
+  const isSuper = req.user?.roles?.includes(SystemRoles.SUPER_ADMIN) || false;
   if (isSuper) {
     createRequestLogger(req).info(
       { operationType: 'SECURITY', metadata: { bypass: 'super_admin' } },
@@ -191,8 +192,8 @@ const requireOwnershipOrAdmin =
 // CONVENIENCE SHORTCUTS (match guide examples)
 // ==========================================================================
 
-export const requireSuperAdmin = () => requireSystemRole('SUPER_ADMIN');
-export const requireAdmin = () => requireSystemRole('ADMIN');
+export const requireSuperAdmin = () => requireSystemRole(SystemRoles.SUPER_ADMIN);
+export const requireAdmin = () => requireSystemRole(SystemRoles.SUPER_ADMIN);
 
 export const requireWardLeader = (
   wardId: string

@@ -45,7 +45,7 @@ class NotificationService {
     await prisma.notification.create({
       data: {
         userId: dto.userId,
-        type: PrismaNotificationType.SYSTEM,
+        type: this.toPrismaType(dto.type),
         title: dto.title,
         message: dto.message,
         metadata: dto.data ? JSON.parse(JSON.stringify(dto.data)) : undefined,
@@ -74,6 +74,21 @@ class NotificationService {
       { userId: dto.userId, type: dto.type, channels: allowedChannels },
       'Notification sent'
     );
+  }
+
+  private toPrismaType(type: NotificationType): PrismaNotificationType {
+    switch (type) {
+      case NotificationType.DUES_REMINDER:
+      case NotificationType.DUES_OVERDUE:
+        return PrismaNotificationType.ECONOMIC;
+      case NotificationType.PROPOSAL_NEW:
+      case NotificationType.PROPOSAL_VOTING_STARTED:
+      case NotificationType.PROPOSAL_VOTE_CAST:
+      case NotificationType.PROPOSAL_PASSED:
+        return PrismaNotificationType.PROPOSAL;
+      default:
+        return PrismaNotificationType.SYSTEM;
+    }
   }
 
   private getDefaultChannels(type: NotificationType): NotificationChannel[] {

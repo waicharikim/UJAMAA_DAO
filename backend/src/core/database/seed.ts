@@ -621,6 +621,36 @@ async function seedRoles() {
       description: 'User support and moderation',
       builtin: true,
     },
+    {
+      name: 'system:compliance_officer',
+      namespace: 'system',
+      description: 'User verification and platform rule enforcement',
+      builtin: true,
+    },
+    {
+      name: 'system:county_coordinator',
+      namespace: 'system',
+      description: 'County-level elected observer and coordinator (one per county, 47 total)',
+      builtin: true,
+    },
+    {
+      name: 'system:blockchain_admin',
+      namespace: 'system',
+      description: 'Manages smart contracts — deploy, upgrade governor contracts, emergency pauses. Technical only, no governance override.',
+      builtin: true,
+    },
+    {
+      name: 'system:contract_deployer',
+      namespace: 'system',
+      description: 'Can deploy new smart contracts to the blockchain',
+      builtin: true,
+    },
+    {
+      name: 'system:multisig_signer',
+      namespace: 'system',
+      description: 'Signs critical on-chain transactions, required for treasury operations',
+      builtin: true,
+    },
 
     {
       name: 'location:ward_admin',

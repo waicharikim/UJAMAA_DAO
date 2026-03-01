@@ -761,3 +761,49 @@ Write community module tests to move community from `partial` → `tested` (high
 
 **Token usage:**
 Sonnet 4.6 — medium session (8-file read-audit across 2,000+ lines of code + 14 targeted doc edits)
+
+---
+
+## [2026-03-02] — Roles system hardened, notification type bug fixed, audit wired into auth + economy
+
+**What was built:**
+
+- **`backend/src/core/rbac/roles.ts`** — Complete rewrite per `roles.md` design decisions:
+  - 5 new system roles: `system:compliance_officer`, `system:county_coordinator`, `system:blockchain_admin`, `system:contract_deployer`, `system:multisig_signer`
+  - 2 new group roles: `SECRETARY`, `MODERATOR`
+  - `RoleHierarchy` — LEADER inherits FACILITATOR + MODERATOR + SECRETARY + MENTOR + MEMBER
+  - `roleIncludes(userRole, requiredRole)` — hierarchy-aware permission check
+  - `isValidSystemRole()` + `isValidGroupRole()` — runtime type guards
+  - `RoleDisplayNames`, `GroupRoleDescriptions`, `AssignmentMethod`, `GroupRoleAssignment`, `SystemRoleAssignment`, `ElectionThresholds`
+- **`backend/src/core/database/seed.ts`** — 5 new role rows seeded
+- **`backend/src/modules/admin/routes/admin.routes.ts`** + **`audit.routes.ts`** + **`password-reset.service.ts`** — all raw string role literals replaced with `SystemRoles.*` constants
+- **`backend/tests/auth/helpers.ts`** — `createTestAdmin()` fixed to upsert `system:super_admin` (was creating non-existent `'ADMIN'` role)
+- **`backend/src/modules/notifications/services/notification.service.ts`** — Type-loss bug fixed: added `toPrismaType()` mapping DUES_REMINDER/DUES_OVERDUE → ECONOMIC; PROPOSAL_* → PROPOSAL; rest → SYSTEM (was hardcoded SYSTEM for everything)
+- **`backend/src/modules/audit/types.ts`** — Added `EMAIL_VERIFIED` and `COMMITMENT_CREATED` to `AuditAction` enum
+- **`backend/src/modules/auth/services/auth.service.ts`** — `USER_CREATED` audit after new user creation; `EMAIL_VERIFIED` audit after first-time email verification
+- **`backend/src/modules/economy/services/participationRights.service.ts`** — `PR_AWARDED` + `PR_SPENT` audit after each transaction; refactored `return this.prisma.$transaction(...)` → `const log = await ...` pattern to allow post-transaction calls
+- **`backend/src/modules/economy/services/dues.service.ts`** — `DUES_PAID` + `COMMITMENT_CREATED` audit; same refactor pattern
+- All tests: 173/173 green
+
+**Decisions made:**
+
+- Audit calls placed **outside** transaction blocks — orphaned audit records are preferable to failed operations. Revisit with outbox/saga pattern if strict audit completeness is required.
+- `roleIncludes()` resolves inherited permissions at runtime — callers don't need to enumerate every sub-role.
+
+**What's still broken or incomplete:**
+
+- `next build` fails at `/404` (Next.js 15.3.3 bug, pre-existing)
+- `failedJobHandler` in `workers.ts` still dead code
+- No tests for community, governance, projects, marketplace, notifications, onboarding, emergency, audit, admin
+- M-Pesa verification stubbed
+- `PrToken.sol` + `UtToken.sol` not written
+- Raw-string role literals remain in `admin.validators.ts` + `emergency.routes.ts` (pre-existing, out of scope)
+- Profile updates, group joins, governance actions not yet wired into audit (wire when those modules are tested)
+- Notifications: no DUES_REMINDER BullMQ job, no preference routes, only emergency module sends notifications
+
+**Next milestone:**
+
+Write community module tests to move community from `partial` → `tested`, then start blockchain session (`PrToken.sol` + `UtToken.sol` + Foundry tests + Base Sepolia deploy).
+
+**Token usage:**
+Sonnet 4.6 — heavy session (roles system rewrite, 3 service files refactored for audit, 2-module diagnostic, notification type fix)

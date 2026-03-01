@@ -10,6 +10,7 @@ import { AuditController } from '../controllers/audit.controller.js';
 import { authenticate } from '../../../core/middleware/auth.middleware.js';
 import { authorize } from '../../../core/middleware/authorize.js';
 import { asyncHandler } from '../../../core/utils/response.js';
+import { SystemRoles } from '../../../core/rbac/roles.js';
 
 const router = Router();
 
@@ -19,10 +20,10 @@ router.use(authenticate);
 router.use(
   authorize({
     allowedRoles: [
-      'SUPER_ADMIN',
-      'WARD_ADMIN',
-      'COUNTY_ADMIN',
-      'CONSTITUENCY_ADMIN',
+      SystemRoles.SUPER_ADMIN,
+      SystemRoles.WARD_ADMIN,
+      SystemRoles.COUNTY_ADMIN,
+      SystemRoles.CONSTITUENCY_ADMIN,
     ],
   })
 );
