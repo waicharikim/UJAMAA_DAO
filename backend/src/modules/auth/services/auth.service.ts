@@ -40,6 +40,8 @@ import {
   toUserResponse,
   toSessionResponse,
 } from '../types.js';
+import { auditService } from '../../audit/services/audit.service.js';
+import { AuditAction } from '../../audit/types.js';
 
 type VerifyMagicLinkContext = WalletAuthContext;
 
@@ -242,6 +244,14 @@ class AuthService {
         secondaryWardId,
       });
 
+      await auditService.log(
+        user.id,
+        AuditAction.USER_CREATED,
+        'user',
+        user.id,
+        { primaryWardId, secondaryWardId, registrationMethod: 'email' }
+      );
+
       return { newUser: true, sentVerification: true };
     }
 
@@ -406,6 +416,14 @@ class AuthService {
         primaryWardId: user.primaryWardId,
         secondaryWardId: user.secondaryWardId,
       });
+
+      await auditService.log(
+        user.id,
+        AuditAction.EMAIL_VERIFIED,
+        'user',
+        user.id,
+        { verificationLevel: 'EMAIL_VERIFIED', loginMethod }
+      );
 
       // Check if all four flags now met → promote to FULL_VERIFIED
       await userService.checkFullVerification(user.id);

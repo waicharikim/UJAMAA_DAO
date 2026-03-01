@@ -25,6 +25,8 @@ import {
 } from '../types.js';
 import { ApiError } from '../../../core/errors/ApiError.js';
 import { logger } from '../../../core/logger/logger.js';
+import { auditService } from '../../audit/services/audit.service.js';
+import { AuditAction } from '../../audit/types.js';
 
 class DuesService {
   /**
@@ -42,9 +44,9 @@ class DuesService {
       throw ApiError.badRequest('Invalid tier or amount');
     }
 
-    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const payment = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Record payment
-      const payment = await tx.duesPayment.create({
+      const record = await tx.duesPayment.create({
         data: {
           userId,
           tier,
@@ -91,8 +93,18 @@ class DuesService {
         '[DUES] Payment recorded — UT + PR awarded'
       );
 
-      return payment;
+      return record;
     });
+
+    await auditService.log(
+      userId,
+      AuditAction.DUES_PAID,
+      'dues_payment',
+      payment.id,
+      { tier, amountKes, period, prReward: tierConfig.prReward, mpesaReceipt }
+    );
+
+    return payment;
   }
 
   /**
@@ -126,6 +138,14 @@ class DuesService {
     logger.info(
       { userId, tier, commitmentId: commitment.id },
       '[COMMITMENT] Dues commitment created'
+    );
+
+    await auditService.log(
+      userId,
+      AuditAction.COMMITMENT_CREATED,
+      'commitment',
+      commitment.id,
+      { tier, amountKes: tierConfig.amountKes, frequency: 'MONTHLY', startPeriod, durationMonths }
     );
 
     return commitment;

@@ -30,7 +30,7 @@ const IS_DEV = process.env.NODE_ENV === "development"
 
 const NGUZO_SABA = [
   "Umoja",        // Unity
-  "Kujichagulia", // Self-determination
+  "Kujitambua", // Self-determination
   "Ujima",        // Collective work & responsibility
   "Ujamaa",       // Cooperative economics
   "Nia",          // Purpose
@@ -1062,7 +1062,7 @@ function ProtocolSection() {
           <div className="flex flex-wrap gap-x-8 gap-y-4">
             {[
               { sw: "Umoja",        en: "Unity"                 },
-              { sw: "Kujichagulia", en: "Self-Determination"    },
+              { sw: "Kujitambua", en: "Self-Determination"    },
               { sw: "Ujima",        en: "Collective Work"       },
               { sw: "Ujamaa",       en: "Cooperative Economics" },
               { sw: "Nia",          en: "Purpose"               },

@@ -22,6 +22,8 @@ import {
 import { ApiError } from '../../../core/errors/ApiError.js';
 import { logger } from '../../../core/logger/logger.js';
 import { eventBus } from '../../../core/utils/eventBus.js';
+import { auditService } from '../../audit/services/audit.service.js';
+import { AuditAction } from '../../audit/types.js';
 
 const { MAX_BALANCE, MONTHLY_REGEN_BASE, ACTIVE_USER_DAYS_THRESHOLD } =
   PR_CONFIG;
@@ -58,11 +60,11 @@ export class ParticipationRightsService {
   ): Promise<ParticipationRightsLog> {
     if (amount <= 0) throw new Error('Award amount must be positive');
 
-    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const log = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const current = await this.getBalanceWithTx(tx, userId);
       const newBalance = Math.min(current + amount, MAX_BALANCE);
 
-      const log = await tx.participationRightsLog.create({
+      const entry = await tx.participationRightsLog.create({
         data: {
           userId,
           amount,
@@ -83,8 +85,18 @@ export class ParticipationRightsService {
         '[PR] Awarded Participation Rights'
       );
 
-      return log;
+      return entry;
     });
+
+    await auditService.log(
+      userId,
+      AuditAction.PR_AWARDED,
+      'participation_right',
+      log.id,
+      { amount, reason, newBalance: log.balance, ...(metadata && { metadata }) }
+    );
+
+    return log;
   }
 
   /**
@@ -98,7 +110,7 @@ export class ParticipationRightsService {
   ): Promise<ParticipationRightsLog> {
     if (amount <= 0) throw new Error('Spend amount must be positive');
 
-    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const log = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const current = await this.getBalanceWithTx(tx, userId);
 
       if (current < amount) {
@@ -111,7 +123,7 @@ export class ParticipationRightsService {
 
       const newBalance = current - amount;
 
-      const log = await tx.participationRightsLog.create({
+      const entry = await tx.participationRightsLog.create({
         data: {
           userId,
           amount: -amount,
@@ -131,8 +143,18 @@ export class ParticipationRightsService {
         '[PR] Spent Participation Rights'
       );
 
-      return log;
+      return entry;
     });
+
+    await auditService.log(
+      userId,
+      AuditAction.PR_SPENT,
+      'participation_right',
+      log.id,
+      { amount, reason, newBalance: log.balance, ...(metadata && { metadata }) }
+    );
+
+    return log;
   }
 
   /**

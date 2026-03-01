@@ -84,8 +84,8 @@ export async function createTestUser(
 }
 
 /**
- * Create a user with an ADMIN Role (required for password-reset tests).
- * Sets a non-null passwordHash so requestReset() doesn't early-exit.
+ * Create a user with the system:super_admin role (required for password-reset tests).
+ * Sets a non-null passwordHash so requestReset() proceeds past the guard.
  */
 export async function createTestAdmin(email: string) {
   const user = await prisma.user.create({
@@ -104,8 +104,10 @@ export async function createTestAdmin(email: string) {
     },
   });
 
-  const role = await prisma.role.create({
-    data: { name: 'ADMIN', description: 'Admin role for tests' },
+  const role = await prisma.role.upsert({
+    where: { name: 'system:super_admin' },
+    update: {},
+    create: { name: 'system:super_admin', description: 'Super admin role for tests' },
   });
 
   await prisma.userRole.create({

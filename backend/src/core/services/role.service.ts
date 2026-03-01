@@ -366,7 +366,7 @@ class RoleService {
         const where: any = { userId, role: 'VERIFIER' };
 
         if (wardId) {
-          where.group = { locationScope: 'WARD', locationScopeId: wardId };
+          where.group = { locationScope: 'WARD', wardId };
         }
 
         const membership = await prisma.groupMember.findFirst({

@@ -25,6 +25,7 @@ import { logger, logSecurityEvent } from '../../../core/logger/logger.js';
 import { hashPassword } from '../../../core/utils/crypto.js';
 import { generateRandomHex } from '../../../core/utils/crypto.js';
 import { sendEmail } from '../../../core/utils/email.service.js';
+import { SystemRoles } from '../../../core/rbac/roles.js';
 
 const RESET_TOKEN_EXPIRY = 60 * 60 * 1000; // 1 hour
 const MAX_RESET_ATTEMPTS = 5;
@@ -89,7 +90,7 @@ class PasswordResetService {
 
       // Check if user is admin (only admins can have passwords)
       const roles = user.userRoles.map((ur) => ur.role.name);
-      const isAdmin = roles.includes('ADMIN') || roles.includes('SUPER_ADMIN');
+      const isAdmin = roles.includes(SystemRoles.SUPER_ADMIN);
 
       if (!isAdmin) {
         logSecurityEvent(
@@ -299,7 +300,7 @@ class PasswordResetService {
 
       // Check if user is still admin
       const roles = reset.user.userRoles.map((ur) => ur.role.name);
-      const isAdmin = roles.includes('ADMIN') || roles.includes('SUPER_ADMIN');
+      const isAdmin = roles.includes(SystemRoles.SUPER_ADMIN);
 
       if (!isAdmin) {
         logSecurityEvent(

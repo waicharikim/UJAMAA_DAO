@@ -23,6 +23,7 @@ import {
 } from '../types/Ujamaadao.types.js';
 import { ApiError } from '../errors/ApiError.js';
 import { createRequestLogger, logSecurityEvent } from '../logger/logger.js';
+import { SystemRoles } from '../rbac/roles.js';
 
 const VERIFICATION_LEVELS = [
   'UNVERIFIED',
@@ -99,7 +100,7 @@ export const authorize = (options: UjamaadaoAuthorizeOptions) => {
         return;
       }
 
-      if (skipAdmin && user.roles.includes('SUPER_ADMIN')) {
+      if (skipAdmin && user.roles.includes(SystemRoles.SUPER_ADMIN)) {
         logger.info(
           { operationType: 'AUTH', metadata: { bypass: 'super_admin' } },
           'Super admin bypassed authorization'
