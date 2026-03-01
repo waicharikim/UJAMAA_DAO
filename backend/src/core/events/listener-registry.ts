@@ -23,8 +23,10 @@ import { registerOnboardingListeners as registerEconomyListeners } from '../../m
 // Auth / User related (verification, profile, etc.)
 import { registerAuthListeners } from '../../modules/auth/listeners/auth-events.listener.js';
 
+// Community — system group enrollment on email verification + residence changes
+import { registerCommunityListeners } from '../../modules/community/listeners/user-events.listeners.js';
+
 // Add future modules here when ready:
-// import { registerCommunityListeners } from "../../modules/community/listeners/community-events.listener.js";
 // import { registerGovernanceListeners } from "../../modules/governance/listeners/governance-events.listener.js";
 
 /**
@@ -48,8 +50,8 @@ export async function registerAllListeners(): Promise<void> {
     await Promise.all([
       registerEconomyListeners(),
       registerAuthListeners(),
+      registerCommunityListeners(),
       // Add more when modules are ready:
-      // registerCommunityListeners(),
       // registerGovernanceListeners(),
     ]);
 
