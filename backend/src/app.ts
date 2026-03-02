@@ -74,6 +74,7 @@ import {
   economyQueue,
   userCleanupQueue,
   deadLetterQueue,
+  integrationQueue,
 } from '@core/queue/index.js';
 
 const app = express();
@@ -254,6 +255,7 @@ app.get('/api/v1/docs', (_req, res) => {
       emergency: '/api/v1/emergency',
       audit: '/api/v1/audit',
       onboarding: '/api/v1/onboarding',
+      integration: '/api/v1/integration',
       health: '/health',
       ready: '/ready',
     },
@@ -323,6 +325,7 @@ createBullBoard({
     new BullMQAdapter(economyQueue),
     new BullMQAdapter(userCleanupQueue),
     new BullMQAdapter(deadLetterQueue),
+    new BullMQAdapter(integrationQueue),
   ],
   serverAdapter,
 });

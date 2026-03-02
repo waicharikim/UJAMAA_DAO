@@ -250,6 +250,26 @@
 
 ---
 
+## [ADR-024] — Baraza integration: WhatsApp webhook pattern, multi-group scope
+
+**Date:** 2026-03-02
+**Status:** Decided
+**Decision:** The Baraza integration module supports Telegram, WhatsApp, and Discord.
+WhatsApp uses a webhook-receive pattern (no bot token); Telegram and Discord use bot
+token APIs. All three share a single `integrationQueue`. Bot tokens are worker-only env vars.
+**Why:** WhatsApp's official API requires a business account + Meta approval and uses
+an inbound webhook model — there is no "bot token" to send outbound messages without
+prior user initiation. Telegram and Discord have first-class bot APIs. Keeping all three
+in one module and one queue simplifies observability. Worker-only placement follows the
+principle that secrets should be on the service that needs them, not broadcast to all.
+**Consequences:** `TELEGRAM_BOT_TOKEN` and `DISCORD_BOT_TOKEN` go in the `worker:` env
+block only. No `WHATSAPP_BOT_TOKEN` env var — it would be unused. The `BarazaGroup`
+model has `@@unique([groupId, platform, externalId])` to prevent duplicates when a user
+joins multiple groups on the same platform. A user's messaging profile is global (not
+per-group) — one `UserMessagingProfile` row per platform per user.
+
+---
+
 ## [ADR-023] — Traefik disabled in dev; direct port access only
 
 **Date:** 2026-02-27

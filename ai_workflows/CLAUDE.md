@@ -43,7 +43,7 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 
 ---
 
-## 3. Current Progress (Updated: 2026-03-02)
+## 3. Current Progress (Updated: 2026-03-02 session 22)
 
 > **How to read this table:**
 > - `scaffold` = directory + schema only, no working logic
@@ -58,8 +58,8 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 | auth | tested | 10+ handlers, 10+ services, routes, validators, prisma schema. SMS wired (AT SDK). Auth-cleanup BullMQ job. **104 green tests** across 11 files (service units + 34 HTTP route integration tests). Schema fully aligned (2FA + security_events migration applied). |
 | user | tested | 7 handlers, services, routes, validators, prisma schema, cleanup job. **35 green tests** (1 helper file + 34 route integration tests). 5 service bugs fixed: proofUrl nullable, vouch P2002 race, timeout semantic, redundant middleware, dead code. Migration `20260223214449_make_proof_url_nullable` applied. |
 | economy | tested | PR service (award/spend/balance/hasSufficient), dues history, commitments. **34 green tests** (2 files: 18 service unit + 16 route integration). Bug fixed: duesOptInSchema added (validator/handler mismatch on POST /commitments/dues). Audit wired: PR_AWARDED, PR_SPENT, DUES_PAID, COMMITMENT_CREATED. |
-| community | tested | Group management: controllers, services, routes, member event listeners. **49 green tests** (4 files: 13 service unit + 16 membership service unit + 20 route integration). Event listener registration fixed: `registerCommunityListeners()` now active — users auto-enroll in system groups on email verification. |
-| governance | partial | Proposal controllers, services, routes, prisma schema |
+| community | tested | Group management: controllers, services, routes, member event listeners. **49 green tests** (4 files: 13 service unit + 16 membership service unit + 20 route integration). Event listener registration fixed: `registerCommunityListeners()` now active — users auto-enroll in system groups on email verification. GET endpoints added: `GET /community/my-groups` + `GET /community/:groupId/members?limit&offset`. |
+| governance | partial | Proposal controllers, services, routes, prisma schema. GET endpoints added: `GET /governance` (listProposals with groupId/status/limit/offset filters) + `GET /governance/:proposalId` (single proposal with votesSummary). Write endpoints: create, start-voting, vote, tally. No tests yet. |
 | projects | partial | Project lifecycle: controllers, services, routes, prisma schema |
 | marketplace | partial | Listing controllers, services, routes, prisma schema. Discovery-only per Rule 1. |
 | notifications | partial | Controllers, services, routes, prisma schema. Type-loss bug fixed: `toPrismaType()` maps DUES_* → ECONOMIC, PROPOSAL_* → PROPOSAL. Only emergency module sends notifications — no scheduled jobs, no preference routes yet. |
@@ -70,7 +70,7 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 | reputation | scaffold | Impact point + location impact services only — no routes or controllers |
 | education | scaffold | Prisma schema only |
 | treasury | scaffold | Prisma schema only |
-| integration | scaffold | Empty directory |
+| integration | partial | Full Baraza integration module: Telegram/WhatsApp/Discord bot services, BullMQ reward jobs, baraza-bot.service.ts, bot.controller.ts, bot.routes.ts, integration-events.listener.ts. BarazaGroup + BarazaAttendance + UserMessagingProfile schema. GET /baraza-groups wired to frontend. |
 | verification | scaffold | Empty directory |
 
 **Cross-cutting gaps (apply to all modules):**
@@ -121,7 +121,7 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 
 ### Frontend (Phase 1 — auth/user APIs wired)
 - Next.js 15 + React 18 + TypeScript + Tailwind CSS + shadcn/ui (installed)
-- `frontend/lib/api.ts` — real HTTP client with JWT injection + auto-refresh (`authApi`, `userApi`, `economyApi`)
+- `frontend/lib/api.ts` — real HTTP client with JWT injection + auto-refresh (`authApi`, `userApi`, `economyApi`, `integrationApi`, `notificationsApi`, `communityApi`, `governanceApi` + legacy `ApiClient` for backward compat)
 - `frontend/contexts/auth-context.tsx` — magic link flow (`requestMagicLink`, `verifyMagicLink`, `verifyEmailToken`, auto-hydrate from localStorage)
 - `frontend/app/auth/callback/page.tsx` — detects token type and routes: JWT (2 dots) → `verifyMagicLink` (`GET /auth/login`); hex → `verifyEmailToken` (`GET /auth/verify-email`)
 - `frontend/.env.local` — `NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1`
@@ -166,6 +166,7 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 - Request body limit: **10 MB** for all endpoints (`express.json` + `express.urlencoded` in `app.ts`). Payloads larger than this are rejected with 413.
 - Security events: use `logSecurityEvent(message, type, severity, detail, context)` from `backend/src/core/logger/logger.ts` for all security-relevant events (auth failures, brute force, suspicious activity). Do not call `logger.error` directly for security events. Severity values: `'LOW'`, `'MEDIUM'`, `'HIGH'`, `'CRITICAL'`.
 - **Event bus registry** — current published events: `user.created` (emitted on new user registration; economy + community listen; audit logs USER_CREATED), `user.email.verified` (emitted on email verification; economy awards PR, community enrolls groups; audit logs EMAIL_VERIFIED), `auth.login` (emitted on every successful login; audit listens), `economy.commitment.breached` (emitted when commitment breach threshold reached; no listeners yet). Add all new events here and type them in the event bus types file.
+- **Sensitive integration secrets belong on the `worker` service only, never `web`.** `MINTER_PRIVATE_KEY`, `TELEGRAM_BOT_TOKEN`, `DISCORD_BOT_TOKEN` are set in the `worker:` env block of `docker/docker-compose.yml`. The web service must never have these values. Verify each new secret is on the correct service before committing.
 
 ---
 
@@ -249,6 +250,10 @@ A module is **production-ready** when ALL of these are true:
 | `forge install --no-commit` fails — unexpected argument | Newer versions of Foundry removed `--no-commit` (the flag for the opposite behaviour is now `--commit`). `forge install` commits the submodule by default. Just run `forge install OpenZeppelin/openzeppelin-contracts` without any flag. The submodule commit will be staged automatically. |
 | `_beforeTokenTransfer` hook missing in OZ v5 — soulbound ERC-20 reverts unexpectedly | OZ v5 removed the `_beforeTokenTransfer` hook entirely. The correct soulbound pattern in OZ v5 is to override the four public transfer functions directly: `transfer()`, `transferFrom()`, `approve()`, `allowance()`. Call `revert("PR: non-transferable")` in the first three and `return 0` in the last. Internal `_mint`/`_burn` bypass these overrides so mint and burn still work. |
 | Backend ABI `require()` fails in ESM module with "require is not defined" | `backend/src/core/blockchain/client.ts` is an ESM file (the backend uses `"type": "module"` in package.json). Use `createRequire` from Node's `module` package: `import { createRequire } from 'module'; const require = createRequire(import.meta.url);`. Then `require('./path/to/artifact.json')` works normally. |
+| `integrationQueue` not visible in Bull Board `/admin/queues` | Add `integrationQueue` to both the import block and the `createBullBoard` queues array in `backend/src/app.ts`. Bug was introduced in session 21 when the queue was created but not registered on the dashboard. |
+| `DASHBOARD_PASSWORD` code fallback is `'YourVeryStrongPassword123!'` but `docker-compose.yml` default is `admin123` | These are two different values for two different situations. In Docker the env var is always set (`admin123`), so the code fallback never fires. The code fallback only runs if the env var is unset entirely (e.g. bare-metal dev). Change both before any shared deployment. |
+| `NEXT_PUBLIC_PRIVY_APP_ID` not in `docker/docker-compose.yml` frontend env | The value lives in `frontend/.env.local` (gitignored). A fresh clone will start the frontend container without a Privy App ID — wallet connect silently fails. Document the required env vars or add a placeholder in docker-compose. |
+| WhatsApp integration has no `WHATSAPP_BOT_TOKEN` env var | Intentional — WhatsApp uses an inbound webhook pattern, not a bot-token model. Only `TELEGRAM_BOT_TOKEN` and `DISCORD_BOT_TOKEN` are needed. Do not add a WhatsApp bot token. See ADR-024. |
 
 ---
 
@@ -278,3 +283,6 @@ A module is **production-ready** when ALL of these are true:
 | v3.4 | Session 18 (2026-03-02): Roles system hardened — `roles.ts` rewritten, 5 new system roles + 2 group roles, `RoleHierarchy`, `roleIncludes()`, type guards, `AssignmentMethod`, `ElectionThresholds`. Raw string role literals replaced in admin/audit routes + password-reset service. Notification type-loss bug fixed (`toPrismaType()` in notification.service.ts). Audit wired: 6 events active (USER_CREATED, EMAIL_VERIFIED, PR_AWARDED, PR_SPENT, DUES_PAID, COMMITMENT_CREATED). `AuditAction` enum extended. Economy services refactored to `const result = await $transaction()` pattern. 2 new §7 common issues (audit outside transactions, unreachable post-return code). |
 | v3.5 | Session 19 (2026-03-02): Community module tests — 49 new tests (13 group.service + 16 groupMembership.service + 20 group.routes), community status partial → **tested**. Event listener registration gap fixed: `registerCommunityListeners()` now active in `listener-registry.ts`. `TEST_WARD_ID_B` + `seedSecondWard()` added to community test helpers to avoid `Promise.all` concurrent group create race. Total: **222 green tests**. 1 new §7 issue (enrollInSystemGroups same-ward race). |
 | v3.6 | Session 20 (2026-03-02): Blockchain contracts written — `PrToken.sol` (soulbound ERC-20, OZ v5 override pattern) + `UtToken.sol` (standard ERC-20), 13 Foundry tests green. Deploy script ready. `backend/src/core/blockchain/client.ts` added with null-guard. `participationRights.service.ts` wired with triple-guarded on-chain mint. `ujamaa_anvil` Docker service added. Worker gets blockchain env vars (`BASE_RPC_URL`, `MINTER_PRIVATE_KEY` placeholder, `PR_TOKEN_ADDRESS`, `UT_TOKEN_ADDRESS`). Section 3 blockchain status updated. Dev port map updated (anvil :8545). 4 new §7 issues (forge --no-commit removed, OZ v5 soulbound pattern, ESM require). |
+| v3.7 | Session 21 (2026-03-02): Baraza messaging integration — `BarazaGroup` + `BarazaAttendance` + `UserMessagingProfile` Prisma models, migration applied. Full `backend/src/modules/integration/` module (Telegram, Discord, WhatsApp services, BullMQ reward jobs, bot controller + routes, event listener). `integrationQueue` + `integrationWorker` wired. Frontend register-form step 5 "Stay Connected". `requestMagicLink` extended with `messagingPlatforms`. Integration module status scaffold → **partial**. |
+| v3.8 | Session 22 (2026-03-02): Frontend wiring + GET endpoints — `integrationApi`, `notificationsApi`, `communityApi` (mutations + GET), `governanceApi` (mutations + GET) added to `frontend/lib/api.ts`. `NotificationsPopover` + `BarazaGroupsCard` components created. Topbar bell wired to real data. Dashboard sidebar updated. Backend community GET endpoints added (`GET /my-groups`, `GET /:groupId/members`). Backend governance GET endpoints added (`GET /`, `GET /:proposalId` with votesSummary). `ApiClient.getGroups()` + `getProposals()` now return real data. Community + Economy tests: 83/83 green. |
+| v3.9 | Audit pass (2026-03-02): `integrationQueue` added to Bull Board ✅; integration route added to docs endpoint; ADR-024 (Baraza platform decisions) written; §5 worker-only secrets convention added; 4 new §7 issues (Bull Board gap, DASHBOARD_PASSWORD double-default, Privy App ID not in docker-compose, WhatsApp webhook pattern). |
