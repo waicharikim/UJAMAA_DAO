@@ -41,6 +41,12 @@ import {
   processAuthCleanup,
 } from './modules/auth/jobs/auth-cleanup.jobs.js';
 
+import {
+  processBarazaAttendanceReward,
+  processBarazaSendInvite,
+} from './modules/integration/jobs/baraza-reward.jobs.js';
+import { BotJobName } from './modules/integration/types.js';
+
 // ─────────────────────────────────────────────
 // Graceful shutdown & error handling
 // ─────────────────────────────────────────────
@@ -51,7 +57,7 @@ async function shutdownWorkers(signal: string): Promise<void> {
     `${signal} received — draining and closing workers`
   );
   try {
-    await Promise.all([economyWorker.close(), userCleanupWorker.close()]);
+    await Promise.all([economyWorker.close(), userCleanupWorker.close(), integrationWorker.close()]);
     logger.info({ operationType: 'WORKER' }, 'All workers drained and closed');
   } catch (err) {
     logger.error(
@@ -138,6 +144,33 @@ const userCleanupWorker = createWorker('user-cleanup', async (job) => {
         stack: err instanceof Error ? err.stack : undefined,
       },
       'User cleanup job failed'
+    );
+    throw err;
+  }
+});
+
+const integrationWorker = createWorker('integration', async (job) => {
+  try {
+    if (job.name === BotJobName.BARAZA_ATTENDANCE_REWARD) {
+      await processBarazaAttendanceReward(job);
+    } else if (job.name === BotJobName.BARAZA_SEND_INVITE) {
+      await processBarazaSendInvite(job);
+    } else {
+      logger.warn(
+        { jobName: job.name, queue: 'integration' },
+        'Unknown integration job received'
+      );
+    }
+  } catch (err) {
+    logger.error(
+      {
+        jobId: job.id,
+        jobName: job.name,
+        queue: 'integration',
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      },
+      'Integration job failed'
     );
     throw err;
   }

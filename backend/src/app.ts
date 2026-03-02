@@ -64,6 +64,7 @@ import notificationRoutes from './modules/notifications/routes/notification.rout
 import emergencyRoutes from './modules/emergency/routes/emergency.routes.js';
 import auditRoutes from './modules/audit/routes/audit.routes.js';
 import onboardingRoutes from './modules/onboarding/routes/onboarding.routes.js';
+import integrationRoutes from './modules/integration/routes/bot.routes.js';
 
 // Bull Board dashboard
 import { ExpressAdapter } from '@bull-board/express';
@@ -275,6 +276,7 @@ app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/emergency', emergencyRoutes);
 app.use('/api/v1/audit', auditRoutes);
 app.use('/api/v1/onboarding', onboardingRoutes);
+app.use('/api/v1/integration', integrationRoutes);
 
 // ─────────────────────────────────────────────
 // BULL BOARD DASHBOARD — Visual queue monitoring

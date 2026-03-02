@@ -125,6 +125,7 @@ export function createWorker<T = any>(
 
 export const economyQueue = createQueue('economy');
 export const userCleanupQueue = createQueue('user-cleanup');
+export const integrationQueue = createQueue('integration');
 
 // Dead-letter queue for permanently failed jobs (after max retries)
 export const deadLetterQueue = createQueue('dead-letter');

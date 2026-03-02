@@ -26,6 +26,9 @@ import { registerAuthListeners } from '../../modules/auth/listeners/auth-events.
 // Community — system group enrollment on email verification + residence changes
 import { registerCommunityListeners } from '../../modules/community/listeners/user-events.listeners.js';
 
+// Integration — baraza invite fan-out on email verification
+import { registerIntegrationListeners } from '../../modules/integration/listeners/integration-events.listener.js';
+
 // Add future modules here when ready:
 // import { registerGovernanceListeners } from "../../modules/governance/listeners/governance-events.listener.js";
 
@@ -51,6 +54,7 @@ export async function registerAllListeners(): Promise<void> {
       registerEconomyListeners(),
       registerAuthListeners(),
       registerCommunityListeners(),
+      Promise.resolve(registerIntegrationListeners()),
       // Add more when modules are ready:
       // registerGovernanceListeners(),
     ]);

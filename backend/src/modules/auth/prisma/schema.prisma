@@ -2,6 +2,29 @@
 // AUTH MODULE - Authentication & Session Management
 // ============================================================================
 
+enum MessagingPlatform {
+  TELEGRAM
+  WHATSAPP
+  DISCORD
+}
+
+model UserMessagingProfile {
+  id             String            @id @default(uuid()) @db.Uuid
+  userId         String            @db.Uuid
+  platform       MessagingPlatform
+  handle         String?           // @username for Telegram/Discord; null for WhatsApp (phone already stored)
+  externalUserId String?           // platform-assigned user ID, populated by bot on first interaction
+  isVerified     Boolean           @default(false)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, platform])
+  @@index([platform, externalUserId])
+  @@map("user_messaging_profiles")
+}
+
 model EmailVerificationToken {
   id        String   @id @default(uuid()) @db.Uuid
   userId    String   @db.Uuid

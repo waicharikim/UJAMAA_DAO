@@ -122,6 +122,7 @@ model Group {
   ownedProjects       Project[]               @relation("GroupProjects") // UPDATED relation name
   // elections Election[] // TODO: define Election model when governance elections are implemented
   nationalContributions NationalContribution[]
+  barazaGroups          BarazaGroup[]
 
   @@index([isSystemGroup, systemType])
   @@index([isSystemGroup, voluntaryType])
@@ -305,6 +306,51 @@ model UserEngagementMetric {
 
   @@unique([userId, date])
   @@index([date])
+}
+
+// ============================================================================
+// BARAZA INTEGRATION — External messaging groups (Telegram / Discord / WhatsApp)
+// ============================================================================
+
+model BarazaGroup {
+  id           String            @id @default(uuid()) @db.Uuid
+  groupId      String            @db.Uuid
+  platform     MessagingPlatform
+  externalId   String            // Telegram chat ID / Discord channel ID
+  name         String            // display name on the external platform
+  inviteLink   String?
+  isActive     Boolean           @default(true)
+  registeredBy String            @db.Uuid
+  metadata     Json?             // platform extras (Discord guildId, etc.)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  group        Group             @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  attendances  BarazaAttendance[]
+
+  @@unique([groupId, platform, externalId])
+  @@index([groupId, isActive])
+  @@index([platform, externalId])
+  @@map("baraza_groups")
+}
+
+model BarazaAttendance {
+  id            String      @id @default(uuid()) @db.Uuid
+  barazaGroupId String      @db.Uuid
+  userId        String      @db.Uuid
+  sessionDate   String      // "YYYY-MM-DD" — one reward per user per baraza per day
+  prAwarded     Boolean     @default(false)
+  prAmount      Int         @default(0)
+  reportedAt    DateTime    @default(now())
+  reportedBy    String?     // "telegram_bot" | "discord_bot" | "manual"
+
+  barazaGroup   BarazaGroup @relation(fields: [barazaGroupId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, barazaGroupId, sessionDate])
+  @@index([barazaGroupId, sessionDate])
+  @@index([userId, prAwarded])
+  @@map("baraza_attendance")
 }
 
 // ============================================================================

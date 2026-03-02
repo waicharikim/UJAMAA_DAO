@@ -42,6 +42,15 @@ export const SendMagicLinkSchema = z.object({
     .min(1, 'At least one goods/service is required')
     .max(20, 'Maximum 20 goods/services allowed')
     .optional(),
+  messagingPlatforms: z
+    .array(
+      z.object({
+        platform: z.enum(['TELEGRAM', 'WHATSAPP', 'DISCORD']),
+        handle: z.string().max(100).optional(),
+      })
+    )
+    .max(3)
+    .optional(),
 });
 
 /**

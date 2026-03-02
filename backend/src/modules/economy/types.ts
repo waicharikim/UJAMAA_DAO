@@ -30,6 +30,11 @@ export enum ParticipationRightsReason {
   // Emergency
   EMERGENCY_REPORTED = 'EMERGENCY_REPORTED',
 
+  // Baraza (community messaging groups)
+  BARAZA_ATTENDED = 'BARAZA_ATTENDED',
+  BARAZA_FACILITATED = 'BARAZA_FACILITATED',
+  BARAZA_REPORT_SUBMITTED = 'BARAZA_REPORT_SUBMITTED',
+
   // Governance
   VOTED = 'VOTED',
   PROPOSAL_CREATED = 'PROPOSAL_CREATED',
@@ -89,6 +94,11 @@ export const PR_CONFIG = {
   VOTE_CAST: 10,
   PROPOSAL_CREATED: 50,
   PROPOSAL_EXECUTED: 200,
+
+  // Baraza
+  BARAZA_ATTENDED: 15,          // 1× per day per baraza (DB unique constraint enforces this)
+  BARAZA_FACILITATED: 25,       // extra for the person who hosts/organises
+  BARAZA_REPORT_SUBMITTED: 10,  // small incentive for coordinators keeping records
 } as const;
 
 /**

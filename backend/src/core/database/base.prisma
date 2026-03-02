@@ -216,6 +216,7 @@ model User {
   webauthnCredentials   WebAuthnCredential[]
   accountRecovery       AccountRecovery?
   securityEvents        SecurityEvent[]
+  messagingProfiles     UserMessagingProfile[]
 
   // ---- User module ----
   userIndustries            UserIndustry[]
@@ -243,6 +244,7 @@ model User {
   verificationRequests      VerificationRequest[]
   vouchedFor                CommunityVouch[]       @relation("VouchedFor")
   vouchesGiven              CommunityVouch[]       @relation("VouchesGiven")
+  barazaAttendances         BarazaAttendance[]
 
   // ---- Governance module ----
   proposals                 Proposal[]             @relation("UserProposals")

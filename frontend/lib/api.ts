@@ -160,6 +160,10 @@ export const authApi = {
     secondaryWardId?: string
     industryIds?: string[]
     goodsServiceIds?: string[]
+    messagingPlatforms?: Array<{
+      platform: "TELEGRAM" | "WHATSAPP" | "DISCORD"
+      handle?: string
+    }>
   }) =>
     apiFetch<void>("/auth/magic-link/send", {
       method: "POST",

@@ -58,6 +58,15 @@ const ethereumSignatureSchema = z
 // MAGIC LINK VALIDATORS
 // ============================================================================
 
+const messagingPlatformPreferenceSchema = z.object({
+  platform: z.enum(['TELEGRAM', 'WHATSAPP', 'DISCORD']),
+  handle: z
+    .string()
+    .max(100)
+    .regex(/^@?[\w.\-]+$/, 'Handle must only contain letters, numbers, _, -, .')
+    .optional(),
+});
+
 export const sendMagicLinkSchema = z
   .object({
     email: emailSchema,
@@ -74,6 +83,10 @@ export const sendMagicLinkSchema = z
       .array(uuidSchema)
       .min(1, 'At least one good/service required')
       .max(10, 'Maximum 10 goods/services allowed')
+      .optional(),
+    messagingPlatforms: z
+      .array(messagingPlatformPreferenceSchema)
+      .max(3)
       .optional(),
   })
   .refine(
