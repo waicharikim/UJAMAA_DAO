@@ -24,6 +24,7 @@ import { logger } from '../../../core/logger/logger.js';
 import { eventBus } from '../../../core/utils/eventBus.js';
 import { auditService } from '../../audit/services/audit.service.js';
 import { AuditAction } from '../../audit/types.js';
+import { getPrContract } from '../../../core/blockchain/client.js';
 
 const { MAX_BALANCE, MONTHLY_REGEN_BASE, ACTIVE_USER_DAYS_THRESHOLD } =
   PR_CONFIG;
@@ -95,6 +96,26 @@ export class ParticipationRightsService {
       log.id,
       { amount, reason, newBalance: log.balance, ...(metadata && { metadata }) }
     );
+
+    // On-chain mint — silently skipped if: test env, no wallet address, contract not configured
+    if (process.env.NODE_ENV !== 'test') {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { walletAddress: true },
+      });
+      if (user?.walletAddress) {
+        const prContract = getPrContract();
+        if (prContract) {
+          try {
+            const amountWei = BigInt(amount) * BigInt(10 ** 18);
+            await prContract.mint(user.walletAddress, amountWei);
+            logger.info({ userId, amount }, '[PR] On-chain mint succeeded');
+          } catch (err) {
+            logger.warn({ userId, err }, '[PR] On-chain mint failed — off-chain record intact');
+          }
+        }
+      }
+    }
 
     return log;
   }

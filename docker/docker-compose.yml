@@ -161,6 +161,21 @@ services:
   #     - ../statsd/web-statsd-mapping.yml:/etc/statsd/statsd-mapping.yml:ro
 
   # ═════════════════════════════════════════════════════════════════════════
+  # ANVIL (Local Ethereum node — Base fork for dev/test)
+  # JSON-RPC: http://anvil:8545 (inside Docker), http://localhost:8545 (host)
+  # Chain ID: 31337 (default Anvil)
+  # ═════════════════════════════════════════════════════════════════════════
+  anvil:
+    image: ghcr.io/foundry-rs/foundry:latest
+    container_name: ujamaa_anvil
+    restart: unless-stopped
+    entrypoint: ["anvil", "--host", "0.0.0.0", "--chain-id", "31337"]
+    ports:
+      - "8545:8545"
+    networks:
+      - backend
+
+  # ═════════════════════════════════════════════════════════════════════════
   # WORKER - VERSION A (ACTIVE)
   # ═════════════════════════════════════════════════════════════════════════
   worker:
@@ -177,6 +192,11 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - JWT_SECRET=${JWT_SECRET:-6e603cfa9affb7677020ad6a930bd3f076867ff38d100586dc5d985bed845ad0}
+      # Blockchain — worker only (web process does NOT receive MINTER_PRIVATE_KEY)
+      - BASE_RPC_URL=${BASE_RPC_URL:-http://anvil:8545}
+      - MINTER_PRIVATE_KEY=${MINTER_PRIVATE_KEY:-0x0000000000000000000000000000000000000000000000000000000000000001}
+      - PR_TOKEN_ADDRESS=${PR_TOKEN_ADDRESS:-}
+      - UT_TOKEN_ADDRESS=${UT_TOKEN_ADDRESS:-}
       # VERSION B: Uncomment for metrics
       # - STATSD_HOST=worker-metrics
       # - STATSD_PORT=8125
