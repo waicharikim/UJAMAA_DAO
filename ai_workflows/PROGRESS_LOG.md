@@ -860,3 +860,44 @@ Start blockchain session: write `PrToken.sol` (soulbound ERC-20) + `UtToken.sol`
 
 **Token usage:**
 Sonnet 4.6 — heavy session (4 test files created across 2 conversation continuations, concurrent create race diagnosed and fixed, 222 tests green)
+
+---
+
+## [2026-03-02] — Blockchain session: PrToken + UtToken contracts, Foundry tests green, backend wired
+
+**What was built:**
+
+- **`contracts/src/PrToken.sol`** — soulbound ERC-20 (Participation Rights): `transfer`, `transferFrom`, `approve` always revert with `"PR: non-transferable"`; `allowance` always returns 0. Role-gated `mint(address, uint256)` (emits `ParticipationRightsAwarded`) and `burn(address, uint256)`. Inherits OZ v5 `ERC20` + `AccessControl`. `PR_MINTER_ROLE` + `PR_BURNER_ROLE` granted to `admin` in constructor.
+- **`contracts/src/UtToken.sol`** — standard transferable ERC-20 (Utility Token): same role pattern (`UT_MINTER_ROLE`, `UT_BURNER_ROLE`), no transfer restrictions.
+- **`contracts/test/PrToken.t.sol`** (9 tests): mint balance, mint event, transfer reverts, transferFrom reverts, approve reverts, allowance zero, burn reduces balance, non-minter reverts, non-burner reverts — all green
+- **`contracts/test/UtToken.t.sol`** (4 tests): mint balance, transfer works A→B, burn reduces balance, non-minter reverts — all green
+- **`contracts/script/Deploy.s.sol`** — reads `MINTER_WALLET_ADDRESS` from env; deploys both tokens; logs addresses via `console.log`. Ready for Base Sepolia when wallet is funded.
+- **`contracts/lib/openzeppelin-contracts`** — OZ v5 installed via `forge install`; remapping `@openzeppelin/=lib/openzeppelin-contracts/` added to `foundry.toml`; `forge build` → ABIs in `contracts/out/`
+- **`backend/src/core/blockchain/client.ts`** (new): `getPrContract()` / `getUtContract()` — ethers v6 singletons; return `null` when `MINTER_PRIVATE_KEY` is missing or is the dev placeholder (`0x0000...`), when `BASE_RPC_URL` is missing, or when `PR_TOKEN_ADDRESS`/`UT_TOKEN_ADDRESS` are empty. Provider + signer initialised once per process.
+- **`backend/src/modules/economy/services/participationRights.service.ts`** — on-chain mint added after `auditService.log()` in `award()`: guarded by `NODE_ENV !== 'test'` + `user.walletAddress` non-null + `getPrContract() !== null`. Off-chain award and DB record are never affected if on-chain call fails.
+- **`docker/docker-compose.yml`** — `ujamaa_anvil` service added (image: `ghcr.io/foundry-rs/foundry:latest`, chain-id 31337, port 8545); worker service gets `BASE_RPC_URL`, `MINTER_PRIVATE_KEY` (dev placeholder), `PR_TOKEN_ADDRESS`, `UT_TOKEN_ADDRESS` env vars. Web service intentionally does NOT receive `MINTER_PRIVATE_KEY`.
+- **Foundry installed** at `/home/mzizi/.foundry/bin/` — `forge --version` → 1.5.1-stable
+
+**Decisions made:**
+
+- **Soulbound via public function override, not `_beforeTokenTransfer`** — OZ v5 removed `_beforeTokenTransfer` hook. The correct pattern is to override the four public functions (`transfer`, `transferFrom`, `approve`, `allowance`) directly and revert. Internal `_mint`/`_burn` bypass the public overrides, so mint and burn still work.
+- **Triple null-guard in `getPrContract()`** — any single missing env var returns `null` silently, no crash. This means all 222 existing tests pass without any mocking — `NODE_ENV=test` check in `award()` is a second layer of defence, but the null-guard in the client is the primary gate in dev/prod when contracts aren't deployed yet.
+- **`MINTER_PRIVATE_KEY` on worker only, never on web** — the HTTP API process has no need to sign transactions. Keeping the private key off the web container limits blast radius if the web process is compromised.
+- **OZ installed without `--no-commit`** — newer forge API removed that flag (now uses `--commit` for the opposite). `forge install` always commits the submodule by default in newer versions; the `contracts/lib/` submodule was staged and committed as part of the session commit.
+- **ABI artifacts loaded via `createRequire`** — `contracts/out/` artifacts are `require()`d from the backend using Node's `createRequire(import.meta.url)` since the backend uses ESM. Relative path from `client.ts` goes `../../../../../contracts/out/...`.
+
+**What's still broken or incomplete:**
+
+- Base Sepolia deploy not done — minter wallet not funded yet. `PR_TOKEN_ADDRESS` and `UT_TOKEN_ADDRESS` are empty in docker-compose; on-chain mint will silently skip until these are set.
+- `next build` fails at `/404` (Next.js 15.3.3 bug, pre-existing)
+- `failedJobHandler` in `workers.ts` still dead code
+- No tests for governance, projects, marketplace, notifications, onboarding, emergency, audit, admin
+- M-Pesa verification stubbed
+- Profile updates, group joins, governance actions not yet wired into audit
+
+**Next milestone:**
+
+Fund the minter wallet, run `forge script script/Deploy.s.sol --rpc-url base_sepolia --broadcast`, then set `PR_TOKEN_ADDRESS`/`UT_TOKEN_ADDRESS` in docker-compose to activate on-chain minting.
+
+**Token usage:**
+Sonnet 4.6 — medium session (2 Solidity contracts, 2 test files, 1 deploy script, 1 backend client, 2 file edits, forge install + build + test)

@@ -84,7 +84,7 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 - BullMQ scheduling: 4 active jobs registered — user-cleanup (4h), auth-cleanup (03:00), monthly-pr-regen (1st of month), daily-commitment-penalties (02:00)
 - `BASE_URL`, `SMTP_*`, `ENCRYPTION_KEY`, `ALLOWED_ORIGINS` ✅ now in `docker/docker-compose.yml` web env. `ENCRYPTION_KEY` defaults to 64 zero chars (`000...000`) — functional but insecure. Replace with `openssl rand -hex 32` before enabling TOTP/2FA or any encrypted fields.
 - M-Pesa: not started
-- On-chain PR/UT (Base Sepolia): not started
+- On-chain PR/UT (Base Sepolia): **contracts written** — `PrToken.sol` (soulbound) + `UtToken.sol` (standard) compiled, 13 Foundry tests green, backend `getPrContract()` wired with null-guard; Base Sepolia deploy pending (minter wallet not yet funded)
 - MailHog (dev email catcher): ✅ auto-started by `make dev` (defined in `docker/docker-compose.yml`). Web UI at `http://localhost:8025`. SMTP host is `mailhog:1025` (container name) — no auth required.
 - Frontend (Next.js): **partial** — landing page, about page, 4-step registration form, magic-link sign-in modal, auth callback, dashboard (PR balance via TanStack Query), profile edit, app shell (sidebar/topbar/mobile nav). Build green (15 routes). Auth email links fixed and E2E flow verified 2026-02-26. **Privy wallet integration complete** (`wallet-context.tsx` + `wallet-button.tsx`, App ID wired, webpack stubs in `next.config.mjs` for unused Privy deps). **Chai palette fully applied to all pages.** **Sidebar: collapsible** (272px ↔ 72px animated, icons-only mode, `ChevronLeft`/`ChevronRight` toggle, `PanelLeft` topbar expand button). **Logout button** in sidebar footer (`LogOut` icon, calls `useAuth.logout()`). Collapse state owned by `AppShell`, passed to `Sidebar` + `Topbar` as props.
 
@@ -92,7 +92,7 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 - Prisma schemas aligned: **80 models** (77 original + ImpactPointLog + UserLocationImpact + Ward back-relation), 12 per-module schemas merged via `mergeSchema.ts`, validates cleanly
 - Old Jan 2026 migrations cleared — fresh migration runs on first `make dev`
 - Docker config fixed: `REDIS_HOST`/`REDIS_PORT` env vars added to web + worker, `traefik/` directory created with `traefik.yml` + `acme.json`, worker startup script filename corrected (`workers.ts`). **Traefik is fully commented out in `docker/docker-compose.yml` — it does not run at all in dev.** Direct port mappings are used instead. See ADR-023 to re-enable for production.
-- **Dev port map**: API `:4000`, frontend `:3000`, Postgres `:5432`, Postgres test `:5433`, Redis `:6380` (host; container listens on 6379 — host port 6380 avoids conflict with any local Redis), MailHog SMTP `:1025`, MailHog UI `:8025`.
+- **Dev port map**: API `:4000`, frontend `:3000`, Postgres `:5432`, Postgres test `:5433`, Redis `:6380` (host; container listens on 6379 — host port 6380 avoids conflict with any local Redis), MailHog SMTP `:1025`, MailHog UI `:8025`, Anvil (local EVM) `:8545`.
 - `queue/index.ts` fixed: duplicate `deadLetterQueue` export removed, dead example Worker code removed
 - `registerAllListeners()` now called in `app.ts` `initializeServices()` — event bus is live on startup
 
@@ -127,16 +127,22 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 - `frontend/.env.local` — `NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1`
 - TanStack Query, Zustand. (Wagmi removed — replaced by Privy; see ADR-009.)
 
-### Blockchain (scaffold — no code yet)
+### Blockchain (contracts written — deploy pending)
 - Base L2 (Sepolia testnet → Mainnet) — ADR-008
-- PR: soulbound ERC-20 (`PrToken.sol`), UT: standard ERC-20 (`UtToken.sol`) — to write in dedicated session
-- Toolchain: Foundry (`forge`/`cast`/`anvil`) — ADR-018
+- `contracts/src/PrToken.sol` — soulbound ERC-20, non-transferable, role-gated mint/burn, `ParticipationRightsAwarded` event ✅
+- `contracts/src/UtToken.sol` — standard ERC-20, role-gated mint/burn ✅
+- `contracts/test/` — 13 Foundry tests green (`forge test -vv`) ✅
+- `contracts/script/Deploy.s.sol` — reads `MINTER_WALLET_ADDRESS`, deploys both; run with `--rpc-url base_sepolia` when wallet is funded
+- `contracts/lib/openzeppelin-contracts` — OZ v5 submodule; remapping in `foundry.toml`
+- Toolchain: Foundry (`forge`/`cast`/`anvil`) installed at `/home/mzizi/.foundry/bin/` — ADR-018
 - `contracts/` at repo root — ADR-019
 - Embedded wallets: **Privy** (ADR-009) — `@privy-io/react-auth` v3.14.1 installed and active in `frontend/contexts/wallet-context.tsx`
-- Backend minter wallet: `MINTER_PRIVATE_KEY` env var on worker — ADR-020
-- Gas sponsorship via Pimlico paymaster
-- Local dev: Anvil fork of Base Sepolia
-- `docker-compose.yml` `anvil` service to add in blockchain session
+- Backend minter wallet: `MINTER_PRIVATE_KEY` env var on **worker only** (not web) — ADR-020
+- `backend/src/core/blockchain/client.ts` — `getPrContract()` / `getUtContract()` with null-guard
+- `participationRights.service.ts` — on-chain mint wired, triple-guarded (NODE_ENV, walletAddress, getPrContract)
+- Gas sponsorship via Pimlico paymaster (not yet wired)
+- Local dev: `ujamaa_anvil` Docker service on port 8545; `BASE_RPC_URL=http://anvil:8545` on worker ✅
+- **Next:** fund minter wallet → `forge script Deploy.s.sol --rpc-url base_sepolia --broadcast` → set `PR_TOKEN_ADDRESS`/`UT_TOKEN_ADDRESS`
 
 ---
 
@@ -240,6 +246,9 @@ A module is **production-ready** when ALL of these are true:
 | MailHog starts but port bindings are missing | The container may have been created before the port config was added. Fix: `docker compose stop mailhog && docker compose rm -f mailhog && docker compose up -d mailhog` from the `docker/` directory to force recreation with correct port bindings (`1025:1025`, `8025:8025`). |
 | Magic link emails sent but nothing arrives in MailHog | MailHog is auto-started by `make dev`. If emails are still missing, check `SMTP_HOST` is `mailhog` (not `172.19.0.1`) in `docker/docker-compose.yml`, and confirm the `mailhog` container is running: `docker ps | grep mailhog`. Check UI at `http://localhost:8025`. |
 | Existing-user magic link login silently fails (user not authenticated after clicking link) | `frontend/lib/api.ts verifyMagicLink` was destructuring `{ accessToken }` but the backend returns `{ sessionToken }` in `MagicLinkAuthResult`. `accessToken` would be `undefined`, storing the string `"undefined"` in localStorage and sending `Authorization: Bearer undefined` on all requests. Fix: destructure `sessionToken` from `verifyMagicLink` response; `auth-context.tsx verifyMagicLink` must call `tokenStore.set(sessionToken)`. |
+| `forge install --no-commit` fails — unexpected argument | Newer versions of Foundry removed `--no-commit` (the flag for the opposite behaviour is now `--commit`). `forge install` commits the submodule by default. Just run `forge install OpenZeppelin/openzeppelin-contracts` without any flag. The submodule commit will be staged automatically. |
+| `_beforeTokenTransfer` hook missing in OZ v5 — soulbound ERC-20 reverts unexpectedly | OZ v5 removed the `_beforeTokenTransfer` hook entirely. The correct soulbound pattern in OZ v5 is to override the four public transfer functions directly: `transfer()`, `transferFrom()`, `approve()`, `allowance()`. Call `revert("PR: non-transferable")` in the first three and `return 0` in the last. Internal `_mint`/`_burn` bypass these overrides so mint and burn still work. |
+| Backend ABI `require()` fails in ESM module with "require is not defined" | `backend/src/core/blockchain/client.ts` is an ESM file (the backend uses `"type": "module"` in package.json). Use `createRequire` from Node's `module` package: `import { createRequire } from 'module'; const require = createRequire(import.meta.url);`. Then `require('./path/to/artifact.json')` works normally. |
 
 ---
 
@@ -268,3 +277,4 @@ A module is **production-ready** when ALL of these are true:
 | v3.3 | Audit pass (2026-02-28): 8 contradictions corrected — JWT_SECRET minimum (32 not 64 chars), DASHBOARD_PASSWORD default (`admin123` not `YourVeryStrongPassword123!`), ENCRYPTION_KEY default (64 zeros not empty string), Traefik state (fully commented out, not "runs but ports not bound"), `failedJobHandler` scope (dead code, never registered on any event), ADR-009 Privy login method, ADR-010 build order, Wagmi stale note removed. Added: dev port map (Redis=6380), graceful shutdown full order, body limit + `logSecurityEvent` + event bus registry conventions. |
 | v3.4 | Session 18 (2026-03-02): Roles system hardened — `roles.ts` rewritten, 5 new system roles + 2 group roles, `RoleHierarchy`, `roleIncludes()`, type guards, `AssignmentMethod`, `ElectionThresholds`. Raw string role literals replaced in admin/audit routes + password-reset service. Notification type-loss bug fixed (`toPrismaType()` in notification.service.ts). Audit wired: 6 events active (USER_CREATED, EMAIL_VERIFIED, PR_AWARDED, PR_SPENT, DUES_PAID, COMMITMENT_CREATED). `AuditAction` enum extended. Economy services refactored to `const result = await $transaction()` pattern. 2 new §7 common issues (audit outside transactions, unreachable post-return code). |
 | v3.5 | Session 19 (2026-03-02): Community module tests — 49 new tests (13 group.service + 16 groupMembership.service + 20 group.routes), community status partial → **tested**. Event listener registration gap fixed: `registerCommunityListeners()` now active in `listener-registry.ts`. `TEST_WARD_ID_B` + `seedSecondWard()` added to community test helpers to avoid `Promise.all` concurrent group create race. Total: **222 green tests**. 1 new §7 issue (enrollInSystemGroups same-ward race). |
+| v3.6 | Session 20 (2026-03-02): Blockchain contracts written — `PrToken.sol` (soulbound ERC-20, OZ v5 override pattern) + `UtToken.sol` (standard ERC-20), 13 Foundry tests green. Deploy script ready. `backend/src/core/blockchain/client.ts` added with null-guard. `participationRights.service.ts` wired with triple-guarded on-chain mint. `ujamaa_anvil` Docker service added. Worker gets blockchain env vars (`BASE_RPC_URL`, `MINTER_PRIVATE_KEY` placeholder, `PR_TOKEN_ADDRESS`, `UT_TOKEN_ADDRESS`). Section 3 blockchain status updated. Dev port map updated (anvil :8545). 4 new §7 issues (forge --no-commit removed, OZ v5 soulbound pattern, ESM require). |
