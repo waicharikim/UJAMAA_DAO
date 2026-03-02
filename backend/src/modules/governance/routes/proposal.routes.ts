@@ -16,6 +16,10 @@ const router = Router();
 
 router.use(authenticate);
 
+router.get('/', asyncHandler(ProposalController.listProposals));
+
+router.get('/:proposalId', asyncHandler(ProposalController.getProposal));
+
 router.post(
   '/create',
   validateRequest({

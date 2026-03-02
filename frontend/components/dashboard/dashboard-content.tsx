@@ -8,9 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { GroupsList } from "@/components/groups/groups-list"
 import { useAuth } from "@/contexts/auth-context"
 import { economyApi } from "@/lib/api"
+import { BarazaGroupsCard } from "@/components/integration/baraza-groups-card"
 
 // ─── Stat card skeleton ───────────────────────────────────
 function StatSkeleton() {
@@ -340,7 +340,7 @@ export function DashboardContent() {
 
           <div>
             <Suspense fallback={<Skeleton className="h-48 w-full rounded-xl" />}>
-              <GroupsList />
+              <BarazaGroupsCard />
             </Suspense>
           </div>
         </div>

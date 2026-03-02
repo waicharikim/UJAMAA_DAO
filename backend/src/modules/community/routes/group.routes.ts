@@ -52,6 +52,20 @@ router.post(
   asyncHandler(GroupController.leaveGroup)
 );
 
+router.get('/my-groups', asyncHandler(GroupController.getMyGroups));
+
+router.get(
+  '/:groupId/members',
+  validateRequest({
+    schema: z.object({
+      limit: z.string().optional(),
+      offset: z.string().optional(),
+    }),
+    target: 'query',
+  }),
+  asyncHandler(GroupController.getGroupMembers)
+);
+
 // FUTURE: Group admin actions — only LEADER of the group
 // Example:
 // router.post(

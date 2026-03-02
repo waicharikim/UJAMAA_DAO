@@ -1,9 +1,10 @@
 "use client"
 
 import { usePathname } from "next/navigation"
-import { Bell, PanelLeft } from "lucide-react"
+import { PanelLeft } from "lucide-react"
 import { WalletButton } from "@/components/auth/wallet-button"
 import { Button } from "@/components/ui/button"
+import { NotificationsPopover } from "./notifications-popover"
 
 const PAGE_TITLES: Record<string, string> = {
   "/dashboard": "Dashboard",
@@ -63,19 +64,7 @@ export function Topbar({ collapsed, onToggle }: TopbarProps) {
 
       {/* Actions */}
       <div className="flex items-center gap-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="relative h-8 w-8 p-0 rounded-lg hover:bg-[rgba(212,145,30,0.10)]"
-          aria-label="Notifications"
-        >
-          <Bell className="h-[17px] w-[17px] text-chai" />
-          {/* Ember dot */}
-          <span
-            className="absolute top-1 right-1 w-2 h-2 rounded-full"
-            style={{ background: "#C43D28" }}
-          />
-        </Button>
+        <NotificationsPopover />
 
         <WalletButton />
       </div>

@@ -222,6 +222,70 @@ class ProposalService {
 
     return { newStatus, quorum, approved };
   }
+
+  async getProposal(proposalId: string) {
+    const proposal = await prisma.proposal.findUnique({
+      where: { id: proposalId },
+      include: {
+        creator: { select: { id: true, name: true, avatarUrl: true } },
+        group: { select: { id: true, name: true, locationScope: true } },
+        votes: { select: { vote: true, voteWeight: true } },
+      },
+    });
+    if (!proposal) throw ApiError.notFound('Proposal');
+
+    const yesWeight = proposal.votes
+      .filter((v) => v.vote)
+      .reduce((s, v) => s + v.voteWeight, 0);
+    const noWeight = proposal.votes
+      .filter((v) => !v.vote)
+      .reduce((s, v) => s + v.voteWeight, 0);
+
+    const { votes, ...rest } = proposal;
+    return { ...rest, votesSummary: { total: votes.length, yesWeight, noWeight } };
+  }
+
+  async listProposals(params: {
+    groupId?: string;
+    status?: ProposalStatus;
+    limit?: number;
+    offset?: number;
+  }) {
+    const { groupId, status, limit = 20, offset = 0 } = params;
+    const where = {
+      ...(groupId ? { groupId } : {}),
+      ...(status ? { status } : {}),
+    };
+
+    const [proposals, total] = await Promise.all([
+      prisma.proposal.findMany({
+        where,
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          proposalType: true,
+          status: true,
+          groupId: true,
+          creatorId: true,
+          budget: true,
+          votingStartsAt: true,
+          votingEndsAt: true,
+          createdAt: true,
+          updatedAt: true,
+          creator: { select: { id: true, name: true } },
+          group: { select: { id: true, name: true } },
+          _count: { select: { votes: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
+      }),
+      prisma.proposal.count({ where }),
+    ]);
+
+    return { proposals, total, limit, offset };
+  }
 }
 
 export const proposalService = new ProposalService();

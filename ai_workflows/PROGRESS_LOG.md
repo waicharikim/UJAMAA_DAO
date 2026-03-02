@@ -901,3 +901,80 @@ Fund the minter wallet, run `forge script script/Deploy.s.sol --rpc-url base_sep
 
 **Token usage:**
 Sonnet 4.6 — medium session (2 Solidity contracts, 2 test files, 1 deploy script, 1 backend client, 2 file edits, forge install + build + test)
+
+---
+
+## [2026-03-02] — Baraza messaging integration: Telegram, WhatsApp, Discord + frontend step 5
+
+**What was built:**
+
+- **Schema additions** — `MessagingPlatform` enum + `UserMessagingProfile` model (userId, platform, handle, externalId) in auth schema; `BarazaGroup` model (groupId, platform, externalId, name, inviteLink, isActive) + `BarazaAttendance` model in community schema. Migration `20260302051843_add_baraza_integration` applied; total 83 Prisma models.
+- **PR config** — 3 new `ParticipationRightsReason` values: `BARAZA_ATTENDED` (+15), `BARAZA_FACILITATED` (+25), `BARAZA_REPORT_SUBMITTED` (+10). Added to `PR_CONFIG` + `ParticipationRightsReason` enum in `economy/types.ts`.
+- **Auth integration** — `auth.validators.ts` + auth types extended with `messagingPlatforms` on signup. `auth.service.ts` creates `UserMessagingProfile` rows inside the registration transaction.
+- **Integration module** (`backend/src/modules/integration/`): `types.ts`, `services/telegram.service.ts` (webhook processing + member sync), `services/discord.service.ts` (interaction handler), `services/baraza-bot.service.ts` (cross-platform reward dispatch), `jobs/baraza-reward.jobs.ts` (BullMQ job processor), `controllers/bot.controller.ts`, `routes/bot.routes.ts`, `listeners/integration-events.listener.ts`.
+- **Queue wiring** — `integrationQueue` added to `core/queue/index.ts`; `integrationWorker` added to `workers.ts`; `registerIntegrationListeners()` wired in `listener-registry.ts`. Routes mounted at `/api/v1/integration` in `app.ts`.
+- **Docker env** — Worker service gets `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `DISCORD_BOT_TOKEN`, `DISCORD_PUBLIC_KEY` env vars.
+- **Frontend step 5** — Register-form gains a "Stay Connected" step with Telegram/WhatsApp/Discord platform cards + handle inputs. `api.ts requestMagicLink` extended with `messagingPlatforms` param.
+
+**Decisions made:**
+
+- **Keep WhatsApp despite 1024-member group limit** — ~96% Kenyan penetration justifies staying on the platform. Overflow is handled via multiple baraza groups per ward (`@@unique([groupId, platform, externalId])` allows several WHATSAPP groups for one Group). Coordinators register "Ward North Baraza" + "Ward South Baraza" separately; join links are delivered at signup.
+- **Barazas scoped to one Group** — `BarazaGroup.groupId` references the `Group` table (no filter applied), allowing both system and voluntary groups to have linked barazas. One external group → one `BarazaGroup` row; multiple external groups can link to the same internal Group for overflow.
+- **Voluntary groups handled identically to system groups** — no schema filter; any `groupId` may be registered as a BarazaGroup.
+
+**What's still broken or incomplete:**
+
+- `next build` fails at `/404` (Next.js 15.3.3 bug, pre-existing)
+- `failedJobHandler` in `workers.ts` still dead code
+- No tests for integration module, governance, projects, marketplace, notifications, onboarding, emergency, audit, admin
+- Telegram/Discord bot tokens are placeholders — real bots not yet configured
+- M-Pesa verification stubbed
+- Base Sepolia deploy pending (minter wallet not funded)
+
+**Next milestone:**
+
+Wire frontend to all new backend endpoints — add `integrationApi`, `notificationsApi`, `communityApi`, `governanceApi` namespaces to `frontend/lib/api.ts` and update the notification bell + dashboard cards to show real data.
+
+**Token usage:**
+Sonnet 4.6 — heavy session (new Prisma models, migration, full integration module, BullMQ wiring, frontend step 5)
+
+---
+
+## [2026-03-02] — Frontend wiring + GET endpoints for community and governance
+
+**What was built:**
+
+- **`frontend/lib/api.ts`** — 4 new API namespaces added: `integrationApi` (`getBarazaGroups`, `registerBarazaGroup`, `recordAttendance`, `deactivateBarazaGroup`), `notificationsApi` (`getNotifications`, `markRead`), `communityApi` (mutations + `getMyGroups`, `getGroupMembers`), `governanceApi` (mutations + `getProposals`, `getProposal`). New DTOs: `BarazaGroupDto`, `RegisterBarazaGroupDto`, `NotificationDto`, `GroupMembershipDto`, `GroupMemberDto`, `ProposalDto`.
+- **`ApiClient` delegation** — `getGroups()` now calls `communityApi.getMyGroups()` and maps the response shape; `getGroupMembers()` delegates to `communityApi.getGroupMembers()`; `getProposals()` calls `governanceApi.getProposals()` and maps backend status enums to frontend display values; `markNotificationRead()` added (was missing, causing silent failures in `notification-context.tsx`); `getUserGroups()` delegates to `communityApi.getMyGroups()`.
+- **`components/layout/notifications-popover.tsx`** (new) — Real notification bell: reads from existing `NotificationContext` (already polls `/notifications`), shows unread count badge, popover with scrollable list, click-to-mark-read, relative timestamps, amber left-border for unread rows.
+- **`components/integration/baraza-groups-card.tsx`** (new) — "My Barazas" dashboard card: TanStack Query fetch, platform badges (Telegram=blue, WhatsApp=green, Discord=indigo), "Join" button opens invite link, "Inactive" badge for deactivated groups, empty state for wards with no barazas yet.
+- **Topbar** — hardcoded bell + red dot replaced with `<NotificationsPopover />`.
+- **Dashboard** — `<GroupsList />` stub replaced with `<BarazaGroupsCard />`.
+- **`auth-context.tsx`** — Pre-existing TypeScript error fixed: `requestMagicLink` type was missing `messagingPlatforms` field (added in session 21 to api.ts but AuthContextType was never updated).
+- **Backend community GET endpoints** — `GET /community/my-groups` (returns all active group memberships for the authenticated user) + `GET /community/:groupId/members?limit&offset` (paginated member list). Controller methods added to `group.controller.ts`; routes added to `group.routes.ts`. Service methods (`getUserGroups`, `getGroupMembers`) already existed in `groupMembership.service.ts`.
+- **Backend governance GET endpoints** — `GET /governance` (list proposals with `groupId`/`status`/`limit`/`offset` query params) + `GET /governance/:proposalId` (single proposal with vote weight summary). `getProposal()` + `listProposals()` service methods added to `proposal.service.ts`. Controller and route handlers added. GET routes registered before existing POST routes to avoid path conflicts with `/:proposalId/tally`.
+
+**Decisions made:**
+
+- **Reuse `NotificationContext` instead of direct API call in `NotificationsPopover`** — The context was already in the provider tree polling `/notifications` every 60s. Creating a second `useQuery` in the popover would duplicate the fetch. Reading from `useNotifications()` avoids double-fetching and shares the same cache.
+- **`ApiClient` class kept for backward-compatibility** — Six existing components (`groups-list.tsx`, `fetch-proposals.tsx`, `group-detail.tsx`, `group-members.tsx`, `voting-context.tsx`, `notification-context.tsx`) import `apiClient`. Rather than migrating all six in one session, the class methods were updated to delegate to the real namespaced APIs with response mapping. Migration can happen per-component.
+- **Governance `GET /` before POST routes** — Express router matches in registration order. `GET /:proposalId` must be registered before `POST /:proposalId/tally` to prevent the tally POST from being shadowed. Both GET routes go at the top of the router, before all POST routes.
+- **Frontend `Proposal` type mismatch handled with defaults** — The frontend `fetch-proposals.tsx` uses a richer `Proposal` interface (with `votingStats`, `userVote`, `canVote`, `canEdit`, `purpose`, etc.) that doesn't align 1:1 with the backend model. The `ApiClient.getProposals()` mapping layer fills unmapped fields with safe defaults (0, false, undefined) so the UI renders without errors, even if some features (voting stats, user vote history) remain incomplete until governance is fully built out.
+
+**What's still broken or incomplete:**
+
+- Auth test flakiness: 25/222 auth tests show intermittent failures (unique constraint on `name`, JWT expiry timing) — pre-existing, unrelated to this session's changes. Community + Economy tests: 83/83 green.
+- `next build` fails at `/404` (Next.js 15.3.3 bug, pre-existing)
+- `failedJobHandler` in `workers.ts` still dead code
+- No tests for integration, governance, projects, marketplace, notifications, onboarding, emergency, audit, admin
+- `fetch-proposals.tsx` + `voting-interface.tsx` + `enhanced-proposals.tsx` have pre-existing scaffold TypeScript errors (wrong Proposal interface shape) — renders correctly at runtime but tsc reports errors in those files
+- Governance proposal listing shows empty `votingStats` (yesVotes/noVotes hardcoded to 0) until vote weight aggregation is added to `listProposals`
+- M-Pesa verification stubbed
+- Base Sepolia deploy pending
+
+**Next milestone:**
+
+Move governance module from `partial` → `tested` by adding service + route tests (the GET endpoints added this session are the highest-value coverage gap), then wire the Base Sepolia deploy.
+
+**Token usage:**
+Sonnet 4.6 — heavy session (2-part: frontend wiring plan + GET endpoints plan, 8 files modified, 2 new frontend components)
