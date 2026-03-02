@@ -6,12 +6,12 @@
 
 ---
 
-**Last updated:** 2026-03-02 (session 18)
+**Last updated:** 2026-03-02 (session 20)
 **Branch:** `develop`
 **Last commits:**
+- `99bc298` feat(community): 49 new tests green, community partial → tested, listener registration fixed
+- `2fd236a` feat: roles hardened, notification type bug fixed, audit wired into auth + economy
 - `9a1227b` docs: session 17 log — audit pass, 8 doc contradictions corrected
-- `df6d74e` docs: audit pass — correct 8 doc contradictions, add missing conventions
-- `58ee904` feat(frontend): collapsible sidebar + logout button
 
 ---
 
@@ -26,15 +26,16 @@
 
 ---
 
-## What was completed in the last session (session 18)
+## What was completed in the last session (session 20)
 
-- **Roles system hardened** — `roles.ts` rewritten per `roles.md` decisions: 5 new system roles (compliance_officer, county_coordinator, blockchain_admin, contract_deployer, multisig_signer), 2 new group roles (SECRETARY, MODERATOR), `RoleHierarchy`, `roleIncludes()`, type guards, display names, `AssignmentMethod`, `ElectionThresholds`. Seed updated. Raw string literals in admin/audit routes + password-reset service replaced with `SystemRoles.*`.
-- **Notification type bug fixed** — `notification.service.ts` was hardcoding `PrismaNotificationType.SYSTEM` for all types. Added `toPrismaType()`: DUES_* → ECONOMIC, PROPOSAL_* → PROPOSAL, rest → SYSTEM.
-- **Audit logging wired into auth + economy** — `GET /api/v1/audit/search` now returns real records:
-  - Auth: `USER_CREATED` (on registration), `EMAIL_VERIFIED` (on first verification)
-  - Economy: `PR_AWARDED` + `PR_SPENT` (every award/spend), `DUES_PAID`, `COMMITMENT_CREATED`
-  - Both economy services refactored from `return prisma.$transaction(...)` to `const result = await ...` pattern to allow post-transaction audit calls
-- **Test helper fixed** — `createTestAdmin()` now upserts `system:super_admin` (was creating non-existent `'ADMIN'` role that matched the old raw-string check)
+- **Blockchain contracts written** — `contracts/src/PrToken.sol` (soulbound ERC-20, non-transferable, `ParticipationRightsAwarded` event, role-gated mint/burn) and `contracts/src/UtToken.sol` (standard ERC-20, role-gated mint/burn)
+- **Foundry tests green** — `contracts/test/PrToken.t.sol` (9 tests) + `contracts/test/UtToken.t.sol` (4 tests). `forge test -vv` → 13/13 [PASS]
+- **Deploy script** — `contracts/script/Deploy.s.sol` reads `MINTER_WALLET_ADDRESS` env; ready to run against Base Sepolia when wallet is funded
+- **OpenZeppelin v5 installed** — `contracts/lib/openzeppelin-contracts/`; remapping added to `foundry.toml`; `forge build` → ABIs in `contracts/out/`
+- **Backend blockchain client** — `backend/src/core/blockchain/client.ts`: `getPrContract()` / `getUtContract()` with null-guard (no crash when env vars missing or placeholder key)
+- **On-chain mint wired** — `participationRights.service.ts` `award()` method calls `prContract.mint()` after audit log, guarded by `NODE_ENV !== 'test'` + `walletAddress` check + `getPrContract()` null check
+- **Anvil Docker service** — `ujamaa_anvil` added to `docker-compose.yml`; worker service gets `BASE_RPC_URL`, `MINTER_PRIVATE_KEY` (dev placeholder), `PR_TOKEN_ADDRESS`, `UT_TOKEN_ADDRESS` env vars
+- **All 222 backend tests still green** — `npx vitest run` → 222/222; `npx tsc --noEmit` → 0 errors
 
 ---
 
@@ -44,7 +45,7 @@
 - `failedJobHandler` in `workers.ts` is dead code — needs `worker.on('failed', failedJobHandler)` wired; `sendJobFailureAlert` is never called at all
 - No tests for community, governance, projects, marketplace, notifications, onboarding, emergency, audit, admin modules
 - M-Pesa verification in `user.service.ts` is stubbed — always returns success
-- `PrToken.sol` + `UtToken.sol` not written
+- `PrToken.sol` + `UtToken.sol` written and tested ✅ — Base Sepolia deploy pending (need funded minter wallet)
 - Raw-string role literals remain in `admin.validators.ts` + `emergency.routes.ts` (pre-existing)
 - Audit not yet wired for: profile updates, group joins, governance actions (wire when those modules are tested)
 - Notifications: no DUES_REMINDER BullMQ job, no preference routes, only emergency module sends notifications
@@ -59,14 +60,15 @@
 | **tested** | auth (104 tests), user (35 tests), economy (34 tests) |
 | **partial** | community, governance, projects, marketplace, notifications, onboarding, emergency, audit, admin |
 | **scaffold** | reputation, education, treasury, integration, verification |
-| **not started** | M-Pesa, blockchain contracts |
+| **not started** | M-Pesa |
+| **contracts written** | PrToken.sol, UtToken.sol (13 Foundry tests green; Base Sepolia deploy pending) |
 
 ---
 
 ## Next tasks (priority order)
 
-1. **Community module tests** — move community `partial` → `tested` (highest backend priority; directly imported by auth)
-2. **Blockchain session** — `PrToken.sol` (soulbound ERC-20) + `UtToken.sol` + Foundry tests + Base Sepolia deploy + wire `participationRights.service.ts`
+1. **Base Sepolia deploy** — fund minter wallet → `forge script script/Deploy.s.sol --rpc-url base_sepolia --broadcast` → set `PR_TOKEN_ADDRESS`/`UT_TOKEN_ADDRESS` in docker-compose + `.env`
+2. **Governance module tests** — move governance `partial` → `tested`
 3. **Fix `next build` 404 prerender error** — Next.js 15.3.3 bug. Low urgency — dev server works fine.
 
 ---
