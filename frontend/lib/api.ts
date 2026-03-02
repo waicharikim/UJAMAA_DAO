@@ -573,6 +573,217 @@ export const economyApi = {
 }
 
 // ─────────────────────────────────────────────────────────
+// Integration API  — /api/v1/integration
+// ─────────────────────────────────────────────────────────
+
+export interface BarazaGroupDto {
+  id: string
+  groupId: string
+  platform: "TELEGRAM" | "WHATSAPP" | "DISCORD"
+  name: string
+  inviteLink: string | null
+  isActive: boolean
+  createdAt: string
+}
+
+export interface RegisterBarazaGroupDto {
+  groupId: string
+  platform: "TELEGRAM" | "WHATSAPP" | "DISCORD"
+  externalId: string
+  name: string
+  inviteLink?: string
+  metadata?: Record<string, unknown>
+}
+
+export const integrationApi = {
+  getBarazaGroups: () =>
+    apiFetch<BarazaGroupDto[]>("/integration/baraza-groups"),
+
+  registerBarazaGroup: (dto: RegisterBarazaGroupDto) =>
+    apiFetch<BarazaGroupDto>("/integration/baraza-groups", {
+      method: "POST",
+      body: JSON.stringify(dto),
+    }),
+
+  recordAttendance: (
+    groupId: string,
+    dto: {
+      sessionDate: string
+      attendeeExternalIds: string[]
+      facilitatorExternalId?: string
+      reportedBy?: string
+    }
+  ) =>
+    apiFetch<unknown>(`/integration/baraza-groups/${groupId}/attendance`, {
+      method: "POST",
+      body: JSON.stringify(dto),
+    }),
+
+  deactivateBarazaGroup: (groupId: string) =>
+    apiFetch<unknown>(`/integration/baraza-groups/${groupId}/deactivate`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+}
+
+// ─────────────────────────────────────────────────────────
+// Notifications API  — /api/v1/notifications
+// ─────────────────────────────────────────────────────────
+
+export interface NotificationDto {
+  id: string
+  type: string
+  title: string
+  message: string
+  isRead: boolean
+  createdAt: string
+  metadata?: Record<string, unknown>
+}
+
+export const notificationsApi = {
+  getNotifications: () =>
+    apiFetch<NotificationDto[]>("/notifications"),
+
+  markRead: (notificationId: string) =>
+    apiFetch<void>("/notifications/mark-read", {
+      method: "POST",
+      body: JSON.stringify({ notificationId }),
+    }),
+}
+
+// ─────────────────────────────────────────────────────────
+// Community API  — /api/v1/community
+// ─────────────────────────────────────────────────────────
+
+export interface GroupMembershipDto {
+  groupId: string
+  groupName: string
+  systemType: string | null
+  voluntaryType: string | null
+  isSystem: boolean
+  locationScope: string | null
+  role: string
+  joinedAt: string
+  memberCount: number
+  ward: { id: string; name: string } | null
+  constituency: { id: string; name: string } | null
+  county: { id: string; name: string } | null
+}
+
+export interface GroupMemberDto {
+  userId: string
+  userName: string
+  avatarUrl: string | null
+  verificationLevel: string
+  participationRights: number
+  role: string
+  joinedAt: string
+}
+
+export const communityApi = {
+  createVoluntaryGroup: (dto: {
+    name: string
+    voluntaryType: string
+    description?: string
+    avatarUrl?: string
+  }) =>
+    apiFetch<unknown>("/community/voluntary/create", {
+      method: "POST",
+      body: JSON.stringify(dto),
+    }),
+
+  joinGroup: (groupId: string) =>
+    apiFetch<unknown>("/community/join", {
+      method: "POST",
+      body: JSON.stringify({ groupId }),
+    }),
+
+  leaveGroup: (groupId: string) =>
+    apiFetch<unknown>("/community/leave", {
+      method: "POST",
+      body: JSON.stringify({ groupId }),
+    }),
+
+  getMyGroups: (): Promise<GroupMembershipDto[]> =>
+    apiFetch<GroupMembershipDto[]>("/community/my-groups"),
+
+  getGroupMembers: (groupId: string, limit = 50, offset = 0): Promise<GroupMemberDto[]> =>
+    apiFetch<GroupMemberDto[]>(`/community/${groupId}/members?limit=${limit}&offset=${offset}`),
+}
+
+// ─────────────────────────────────────────────────────────
+// Governance API  — /api/v1/governance
+// ─────────────────────────────────────────────────────────
+
+export interface ProposalDto {
+  id: string
+  title: string
+  description: string
+  proposalType: string
+  status: string
+  groupId: string | null
+  creatorId: string
+  budget: string | null
+  votingStartsAt: string | null
+  votingEndsAt: string | null
+  createdAt: string
+  updatedAt: string
+  creator: { id: string; name: string; avatarUrl?: string } | null
+  group: { id: string; name: string; locationScope?: string } | null
+  votesSummary?: { total: number; yesWeight: number; noWeight: number }
+  _count?: { votes: number }
+}
+
+export const governanceApi = {
+  createProposal: (dto: {
+    groupId: string
+    title: string
+    description: string
+    fundingAmountKes?: number
+    isEmergency?: boolean
+  }) =>
+    apiFetch<unknown>("/governance/create", {
+      method: "POST",
+      body: JSON.stringify(dto),
+    }),
+
+  startVoting: (proposalId: string) =>
+    apiFetch<unknown>("/governance/start-voting", {
+      method: "POST",
+      body: JSON.stringify({ proposalId }),
+    }),
+
+  castVote: (dto: { proposalId: string; option: "YES" | "NO" | "ABSTAIN" }) =>
+    apiFetch<unknown>("/governance/vote", {
+      method: "POST",
+      body: JSON.stringify(dto),
+    }),
+
+  tallyVotes: (proposalId: string) =>
+    apiFetch<unknown>(`/governance/${proposalId}/tally`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
+  getProposals: (params?: {
+    groupId?: string
+    status?: string
+    limit?: number
+    offset?: number
+  }): Promise<{ proposals: ProposalDto[]; total: number; limit: number; offset: number }> => {
+    const q = new URLSearchParams()
+    if (params?.groupId) q.set("groupId", params.groupId)
+    if (params?.status) q.set("status", params.status)
+    if (params?.limit) q.set("limit", String(params.limit))
+    if (params?.offset) q.set("offset", String(params.offset))
+    return apiFetch(`/governance${q.toString() ? `?${q}` : ""}`)
+  },
+
+  getProposal: (proposalId: string): Promise<ProposalDto> =>
+    apiFetch<ProposalDto>(`/governance/${proposalId}`),
+}
+
+// ─────────────────────────────────────────────────────────
 // Legacy compat — keep apiClient export so existing code doesn't break
 // while we migrate page by page.
 // ─────────────────────────────────────────────────────────
@@ -590,8 +801,25 @@ class ApiClient {
     return userApi.updateProfile(data)
   }
 
+  // Delegates to notificationsApi; maps backend isRead → frontend read field
   async getNotifications(): Promise<any[]> {
-    return []
+    try {
+      const dtos = await notificationsApi.getNotifications()
+      return dtos.map((n) => ({
+        ...n,
+        read: n.isRead,
+        userId: "",
+        category: "system",
+        channels: [],
+        deliveryStatus: {},
+      }))
+    } catch {
+      return []
+    }
+  }
+
+  async markNotificationRead(id: string): Promise<void> {
+    await notificationsApi.markRead(id)
   }
 
   async getNotificationPreferences(): Promise<any> {
@@ -603,30 +831,99 @@ class ApiClient {
   }
 
   async getGroups(): Promise<any[]> {
-    return []
+    try {
+      const memberships = await communityApi.getMyGroups()
+      return memberships.map((m) => ({
+        id: m.groupId,
+        name: m.groupName,
+        description: m.locationScope ?? "",
+        memberCount: m.memberCount,
+        userRole: m.role,
+        isPrivate: false,
+        avatar: undefined as string | undefined,
+      }))
+    } catch {
+      return []
+    }
   }
 
   async getGroup(_id: string): Promise<any> {
     return null
   }
 
-  async getGroupMembers(_id: string): Promise<any[]> {
-    return []
+  async getGroupMembers(id: string): Promise<any[]> {
+    try {
+      return await communityApi.getGroupMembers(id)
+    } catch {
+      return []
+    }
   }
 
   async getProposals(_filters?: any): Promise<any[]> {
-    return []
+    try {
+      const { proposals } = await governanceApi.getProposals()
+      const STATUS_MAP: Record<string, string> = {
+        DRAFT: "draft",
+        VOTING: "active",
+        APPROVED: "passed",
+        REJECTED: "rejected",
+        EXECUTING: "active",
+        COMPLETED: "passed",
+        CANCELLED: "rejected",
+      }
+      return proposals.map((p) => ({
+        id: p.id,
+        title: p.title,
+        description: p.description,
+        purpose: "nonprofit" as const,
+        locationScope: (p.group?.locationScope?.toLowerCase() ?? "local") as any,
+        isPrivate: false,
+        status: (STATUS_MAP[p.status] ?? p.status.toLowerCase()) as any,
+        createdBy: { id: p.creatorId, name: p.creator?.name ?? "Unknown" },
+        groupId: p.groupId ?? undefined,
+        groupName: p.group?.name ?? undefined,
+        votingDeadline: p.votingEndsAt ?? new Date().toISOString(),
+        tokenCost: 0,
+        impactPointsRequired: 0,
+        votingStats: {
+          totalVotes: p._count?.votes ?? p.votesSummary?.total ?? 0,
+          yesVotes: 0,
+          noVotes: 0,
+          abstainVotes: 0,
+          quorumRequired: 40,
+          consensusRequired: 50,
+          currentQuorum: 0,
+          currentConsensus: 0,
+        },
+        userVote: undefined,
+        canVote: false,
+        canEdit: false,
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt,
+      }))
+    } catch {
+      return []
+    }
   }
 
   async getUserGroups(): Promise<any[]> {
-    return []
+    try {
+      return await communityApi.getMyGroups()
+    } catch {
+      return []
+    }
   }
 
   async createProposal(_data: any): Promise<any> {
     return null
   }
 
-  async voteOnProposal(_proposalId: string, _vote: string): Promise<void> {}
+  async voteOnProposal(proposalId: string, vote: string): Promise<void> {
+    await governanceApi.castVote({
+      proposalId,
+      option: vote.toUpperCase() as "YES" | "NO" | "ABSTAIN",
+    })
+  }
 
   async getUserVotes(): Promise<any[]> {
     return []

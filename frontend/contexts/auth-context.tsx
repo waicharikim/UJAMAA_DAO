@@ -173,7 +173,7 @@ function mapBackendUser(raw: any): User {
 
 interface AuthContextType extends Pick<AuthState, "user" | "token" | "isAuthenticated" | "isLoading"> {
   /** Step 1 of magic link flow: sends the link email (existing users: email only; new users: full registration params) */
-  requestMagicLink: (params: { email: string; name?: string; phoneNumber?: string; primaryWardId?: string; secondaryWardId?: string; industryIds?: string[]; goodsServiceIds?: string[] }) => Promise<void>
+  requestMagicLink: (params: { email: string; name?: string; phoneNumber?: string; primaryWardId?: string; secondaryWardId?: string; industryIds?: string[]; goodsServiceIds?: string[]; messagingPlatforms?: Array<{ platform: "TELEGRAM" | "WHATSAPP" | "DISCORD"; handle?: string }> }) => Promise<void>
   /** Step 2a: called from /auth/callback for existing users (JWT magic link) */
   verifyMagicLink: (token: string) => Promise<void>
   /** Step 2b: called from /auth/callback for new users (hex email verification token) */

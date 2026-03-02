@@ -9,6 +9,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../../../core/types/Ujamaadao.types.js';
 import { sendSuccess } from '../../../core/utils/response.js';
 import { proposalService } from '../services/proposal.service.js';
+import { ProposalStatus } from '@prisma/client';
 
 export class ProposalController {
   static async createProposal(req: AuthRequest, res: Response) {
@@ -36,5 +37,22 @@ export class ProposalController {
     const { proposalId } = req.params;
     const result = await proposalService.tallyVotes(proposalId);
     sendSuccess(res, result, 'Votes tallied');
+  }
+
+  static async getProposal(req: AuthRequest, res: Response) {
+    const { proposalId } = req.params;
+    const result = await proposalService.getProposal(proposalId);
+    sendSuccess(res, result, 'Proposal retrieved');
+  }
+
+  static async listProposals(req: AuthRequest, res: Response) {
+    const { groupId, status, limit, offset } = req.query;
+    const result = await proposalService.listProposals({
+      groupId: groupId as string | undefined,
+      status: status as ProposalStatus | undefined,
+      limit: limit ? parseInt(limit as string) : undefined,
+      offset: offset ? parseInt(offset as string) : undefined,
+    });
+    sendSuccess(res, result, 'Proposals retrieved');
   }
 }
