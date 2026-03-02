@@ -26,11 +26,19 @@ import {
   MapPin,
   Briefcase,
   ExternalLink,
+  MessageSquare,
 } from "lucide-react"
 
 // ── Types ────────────────────────────────────────────────
 
 interface RefItem { id: string; name: string }
+
+type MessagingPlatform = "TELEGRAM" | "WHATSAPP" | "DISCORD"
+
+interface MessagingPref {
+  platform: MessagingPlatform
+  handle?: string
+}
 
 interface FormData {
   email: string
@@ -44,6 +52,7 @@ interface FormData {
   secondaryWardId: string
   industryIds: string[]
   goodsServiceIds: string[]
+  messagingPlatforms: MessagingPref[]
 }
 
 const STEPS = [
@@ -51,7 +60,29 @@ const STEPS = [
   { label: "Residence", icon: MapPin },
   { label: "Origin", icon: MapPin },
   { label: "Economy", icon: Briefcase },
+  { label: "Connect", icon: MessageSquare },
 ]
+
+const PLATFORM_INFO: Record<MessagingPlatform, { label: string; description: string; showHandle: boolean; handlePlaceholder: string }> = {
+  TELEGRAM: {
+    label: "Telegram",
+    description: "Fast group messaging + bot automation",
+    showHandle: true,
+    handlePlaceholder: "@username (optional)",
+  },
+  WHATSAPP: {
+    label: "WhatsApp",
+    description: "Mobile-first, no extra app needed",
+    showHandle: false,
+    handlePlaceholder: "",
+  },
+  DISCORD: {
+    label: "Discord",
+    description: "Rich community server with channels",
+    showHandle: true,
+    handlePlaceholder: "username (optional)",
+  },
+}
 
 const IS_DEV = process.env.NODE_ENV === "development"
 
@@ -219,6 +250,7 @@ export function RegisterForm() {
     secondaryWardId: "",
     industryIds: [],
     goodsServiceIds: [],
+    messagingPlatforms: [],
   })
 
   // Load reference data once
@@ -250,7 +282,27 @@ export function RegisterForm() {
     if (step === 1) return form.primaryWardId
     if (step === 2) return form.secondaryWardId
     if (step === 3) return form.industryIds.length > 0 && form.goodsServiceIds.length > 0
+    if (step === 4) return true // Step 5 is optional — always can proceed
     return false
+  }
+
+  const togglePlatform = (platform: MessagingPlatform) => {
+    setForm((prev) => {
+      const exists = prev.messagingPlatforms.find((p) => p.platform === platform)
+      if (exists) {
+        return { ...prev, messagingPlatforms: prev.messagingPlatforms.filter((p) => p.platform !== platform) }
+      }
+      return { ...prev, messagingPlatforms: [...prev.messagingPlatforms, { platform }] }
+    })
+  }
+
+  const setHandle = (platform: MessagingPlatform, handle: string) => {
+    setForm((prev) => ({
+      ...prev,
+      messagingPlatforms: prev.messagingPlatforms.map((p) =>
+        p.platform === platform ? { ...p, handle: handle || undefined } : p
+      ),
+    }))
   }
 
   // ── Submit ───────────────────────────────────────────
@@ -267,6 +319,7 @@ export function RegisterForm() {
         secondaryWardId: form.secondaryWardId,
         industryIds: form.industryIds,
         goodsServiceIds: form.goodsServiceIds,
+        messagingPlatforms: form.messagingPlatforms.length > 0 ? form.messagingPlatforms : undefined,
       })
       setDone(true)
     } catch (err) {
@@ -467,6 +520,65 @@ export function RegisterForm() {
         </div>
       )}
 
+      {/* Step 4 — Messaging platforms (optional) */}
+      {step === 4 && (
+        <div className="space-y-5">
+          <div>
+            <h3 className="text-base font-semibold text-chai">Stay Connected</h3>
+            <p className="text-sm text-warm-gray mt-1">
+              UjamaaDAO discussions happen in dedicated group chats. Choose where you want
+              to join your ward&apos;s Baraza.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            {(Object.keys(PLATFORM_INFO) as MessagingPlatform[]).map((platform) => {
+              const info = PLATFORM_INFO[platform]
+              const pref = form.messagingPlatforms.find((p) => p.platform === platform)
+              const selected = !!pref
+
+              return (
+                <div
+                  key={platform}
+                  className="rounded-xl border p-4 transition-all cursor-pointer"
+                  style={{
+                    borderColor: selected ? "#D4911E" : "rgba(26,18,11,0.12)",
+                    background: selected ? "rgba(212,145,30,0.06)" : "transparent",
+                  }}
+                  onClick={() => togglePlatform(platform)}
+                >
+                  <div className="flex items-start gap-3">
+                    <div
+                      className="w-5 h-5 rounded-full border-2 flex items-center justify-center mt-0.5 flex-shrink-0"
+                      style={{
+                        borderColor: selected ? "#D4911E" : "rgba(26,18,11,0.25)",
+                        background: selected ? "#D4911E" : "transparent",
+                      }}
+                    >
+                      {selected && <CheckCircle2 className="h-3 w-3 text-white" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-chai">{info.label}</p>
+                      <p className="text-xs text-warm-gray">{info.description}</p>
+                      {selected && info.showHandle && (
+                        <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+                          <Input
+                            placeholder={info.handlePlaceholder}
+                            className="h-8 text-xs"
+                            value={pref?.handle ?? ""}
+                            onChange={(e) => setHandle(platform, e.target.value)}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Error */}
       {error && (
         <p className="text-sm rounded-md px-3 py-2" style={{ color: "#C43D28", background: "rgba(196,61,40,0.08)", border: "1px solid rgba(196,61,40,0.15)" }}>
@@ -483,7 +595,7 @@ export function RegisterForm() {
           </Button>
         )}
 
-        {step < 3 ? (
+        {step < 4 ? (
           <Button
             className="flex-1 text-cream"
           style={{ background: "#D4911E" }}
@@ -494,24 +606,31 @@ export function RegisterForm() {
             <ArrowRight className="h-4 w-4 ml-1" />
           </Button>
         ) : (
-          <Button
-            className="flex-1 text-cream"
-          style={{ background: "#D4911E" }}
-            onClick={handleSubmit}
-            disabled={submitting || !canAdvance()}
-          >
-            {submitting ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                Creating account…
-              </>
-            ) : (
-              <>
-                <Mail className="h-4 w-4 mr-2" />
-                Create account
-              </>
+          <div className="flex-1 space-y-2">
+            <Button
+              className="w-full text-cream"
+              style={{ background: "#D4911E" }}
+              onClick={handleSubmit}
+              disabled={submitting}
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Creating account…
+                </>
+              ) : (
+                <>
+                  <Mail className="h-4 w-4 mr-2" />
+                  Create account
+                </>
+              )}
+            </Button>
+            {form.messagingPlatforms.length === 0 && (
+              <p className="text-xs text-center text-warm-gray">
+                You can add messaging preferences from your profile settings later.
+              </p>
             )}
-          </Button>
+          </div>
         )}
       </div>
     </div>

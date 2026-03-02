@@ -6,12 +6,11 @@
 
 ---
 
-**Last updated:** 2026-03-02 (session 20)
+**Last updated:** 2026-03-02 (session 21)
 **Branch:** `develop`
 **Last commits:**
-- `99bc298` feat(community): 49 new tests green, community partial → tested, listener registration fixed
-- `2fd236a` feat: roles hardened, notification type bug fixed, audit wired into auth + economy
-- `9a1227b` docs: session 17 log — audit pass, 8 doc contradictions corrected
+- `7c42cfc` docs: session 20 log — blockchain contracts written, Foundry tests green, backend wired
+- `07ff364` feat(blockchain): PrToken + UtToken contracts, Foundry tests, backend wired
 
 ---
 
@@ -22,11 +21,31 @@
 | Backend API | ✅ healthy | http://localhost:4000/health |
 | Frontend | ✅ running | http://localhost:3000 |
 | MailHog | ✅ auto-started by `make dev` | http://localhost:8025 |
-| Tests | ✅ 173/173 green | `cd backend && npx vitest run` |
+| Tests | ✅ 222/222 green | `cd backend && npx vitest run` |
 
 ---
 
-## What was completed in the last session (session 20)
+## What was completed in the last session (session 21)
+
+- **Baraza messaging integration** — full backend + frontend feature:
+  - `MessagingPlatform` enum + `UserMessagingProfile` model in auth schema
+  - `BarazaGroup` + `BarazaAttendance` models in community schema
+  - Migration `20260302051843_add_baraza_integration` applied; 83 Prisma models
+  - 3 new `ParticipationRightsReason` values + `PR_CONFIG` entries (BARAZA_ATTENDED=15, BARAZA_FACILITATED=25, BARAZA_REPORT_SUBMITTED=10)
+  - Auth validators + types extended to accept `messagingPlatforms` on signup
+  - Auth service creates `UserMessagingProfile` rows inside registration transaction
+  - New `backend/src/modules/integration/` module: `types.ts`, `services/telegram.service.ts`, `services/discord.service.ts`, `services/baraza-bot.service.ts`, `jobs/baraza-reward.jobs.ts`, `controllers/bot.controller.ts`, `routes/bot.routes.ts`, `listeners/integration-events.listener.ts`
+  - `integrationQueue` added to `core/queue/index.ts`; `integrationWorker` added to `workers.ts`
+  - `registerIntegrationListeners()` wired in `listener-registry.ts`
+  - Integration routes mounted at `/api/v1/integration` in `app.ts`
+  - Worker Docker env vars: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `DISCORD_BOT_TOKEN`, `DISCORD_PUBLIC_KEY`
+  - Frontend register-form: new step 5 "Stay Connected" with Telegram/WhatsApp/Discord cards + handle inputs
+  - `api.ts requestMagicLink` extended with `messagingPlatforms` param
+  - **`npx tsc --noEmit` → 0 errors; `npx vitest run` → 222/222 green**
+
+---
+
+## What was completed in the previous session (session 20)
 
 - **Blockchain contracts written** — `contracts/src/PrToken.sol` (soulbound ERC-20, non-transferable, `ParticipationRightsAwarded` event, role-gated mint/burn) and `contracts/src/UtToken.sol` (standard ERC-20, role-gated mint/burn)
 - **Foundry tests green** — `contracts/test/PrToken.t.sol` (9 tests) + `contracts/test/UtToken.t.sol` (4 tests). `forge test -vv` → 13/13 [PASS]

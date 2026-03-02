@@ -66,6 +66,7 @@ class AuthService {
       secondaryWardId,
       industryIds,
       goodsServiceIds,
+      messagingPlatforms,
     } = params;
 
     // Check if user exists
@@ -216,6 +217,22 @@ class AuthService {
             currentStep: 'EMAIL_VERIFICATION',
           },
         });
+
+        // Create messaging platform preferences if provided
+        if (messagingPlatforms?.length) {
+          await Promise.all(
+            messagingPlatforms.map((pref) =>
+              tx.userMessagingProfile.create({
+                data: {
+                  userId: newUser.id,
+                  platform: pref.platform as any,
+                  handle: pref.handle ?? null,
+                  isVerified: false,
+                },
+              })
+            )
+          );
+        }
 
         return newUser;
       });
