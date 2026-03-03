@@ -6,11 +6,14 @@
 
 ---
 
-**Last updated:** 2026-03-02 (session 22)
+**Last updated:** 2026-03-03 (session 23)
 **Branch:** `develop`
 **Last commits:**
-- `61b681b` feat(integration): Baraza messaging integration — Telegram, WhatsApp, Discord
-- `7c42cfc` docs: session 20 log — blockchain contracts written, Foundry tests green, backend wired
+- `236f2cc` fix(registration): normalise Kenyan phone 07/01 format to E.164 on submit
+- `4a266d0` fix(registration): surface field-level validation errors from backend
+- `f110f3b` fix(registration): baraza handle trim + phone space strip + context type
+- `4a9abb6` feat(session-22): GET endpoints for community & governance; frontend wiring
+- `e226e55` fix(observability): wire integrationQueue to Bull Board; audit docs fixes
 
 ---
 
@@ -25,29 +28,45 @@
 
 ---
 
-## What was completed in the last session (session 22)
+## What was completed in the last session (session 23)
+
+**Observability fixes:**
+- `backend/src/app.ts` — `integrationQueue` added to Bull Board dashboard (was created in session 21 but invisible in `/admin/queues`); `integration: '/api/v1/integration'` added to `/api/v1/docs` endpoint object
+- `ai_workflows/DECISIONS.md` — ADR-024 written (Baraza platform decisions: WhatsApp webhook-receive, Telegram/Discord bot-token, worker-only secrets)
+- `ai_workflows/CLAUDE.md` — §5 worker-only secrets convention; 4 new §7 issues; v3.9 version history
+
+**Registration flow bug fixes (`frontend/components/auth/register-form.tsx`):**
+- Baraza handle: `handle || undefined` → `handle.trim() || undefined` (space string was truthy, failing backend regex)
+- Phone number: `.replace(/\s+/g, '')` added on submit (spaces in phone caused backend E.164 rejection)
+- `auth-context.tsx`: `requestMagicLink` implementation params now include `messagingPlatforms` (was in interface but not in useCallback type)
+
+**Validation error surfacing:**
+- `frontend/lib/api.ts` — `ApiError` gains `errors?: Record<string, string>` field; `apiFetch` extracts `body.details?.validation?.errors` and passes it to thrown `ApiError`
+- `frontend/components/auth/register-form.tsx` — `fieldErrors` state + `<ul>` error list renders per-field backend messages instead of opaque "Validation failed"
+
+**Kenyan phone format normalisation:**
+- Submit handler: `.replace(/^0/, '+254')` converts `07XXXXXXXX`/`01XXXXXXXX` to E.164 automatically
+- Placeholder updated from `+254 700 000 000` to `0712 345 678`
+
+---
+
+## What was completed in the previous session (session 22)
 
 **Frontend wiring:**
 - `frontend/lib/api.ts` — 4 new API namespaces: `integrationApi` (baraza groups), `notificationsApi`, `communityApi` (mutations + GET), `governanceApi` (mutations + GET)
 - New DTOs exported: `BarazaGroupDto`, `RegisterBarazaGroupDto`, `NotificationDto`, `GroupMembershipDto`, `GroupMemberDto`, `ProposalDto`
 - `ApiClient.getGroups()` → calls real `communityApi.getMyGroups()` with response mapping
 - `ApiClient.getProposals()` → calls real `governanceApi.getProposals()` with status enum mapping
-- `ApiClient.markNotificationRead()` added (was missing, causing silent failures)
-- `components/layout/notifications-popover.tsx` (new) — real notification bell with unread count, popover, mark-read
-- `components/integration/baraza-groups-card.tsx` (new) — "My Barazas" dashboard card with platform badges
-- Topbar bell replaced with `<NotificationsPopover />`
-- Dashboard sidebar: `<GroupsList />` stub → `<BarazaGroupsCard />`
-- `auth-context.tsx` — pre-existing TS error fixed (`messagingPlatforms` type added to `requestMagicLink`)
+- `components/layout/notifications-popover.tsx` (new) — real notification bell; `components/integration/baraza-groups-card.tsx` (new) — "My Barazas" dashboard card
+- Topbar bell → `<NotificationsPopover />`; Dashboard sidebar → `<BarazaGroupsCard />`
 
 **Backend GET endpoints:**
-- `GET /community/my-groups` — returns all active group memberships for authenticated user
-- `GET /community/:groupId/members?limit&offset` — paginated member list
-- `GET /governance` — list proposals (filters: `groupId`, `status`, `limit`, `offset`)
-- `GET /governance/:proposalId` — single proposal with `votesSummary: { total, yesWeight, noWeight }`
+- `GET /community/my-groups`, `GET /community/:groupId/members?limit&offset`
+- `GET /governance` (list with filters), `GET /governance/:proposalId` (with votesSummary)
 
 ---
 
-## What was completed in the previous session (session 21)
+## What was completed in the session before that (session 21)
 
 - **Baraza messaging integration** — full backend + frontend feature:
   - `MessagingPlatform` enum + `UserMessagingProfile` model in auth schema
@@ -96,7 +115,7 @@
 
 ## Next tasks (priority order)
 
-1. **Governance module tests** — move governance `partial` → `tested`. GET endpoints added this session are the highest-value gap. Write `proposal.service.test.ts` + `proposal.routes.test.ts`.
+1. **Governance module tests** — move governance `partial` → `tested`. Write `proposal.service.test.ts` + `proposal.routes.test.ts` covering: createProposal, startVoting, castVote, tallyVotes, getProposal, listProposals + all HTTP routes.
 2. **Base Sepolia deploy** — fund minter wallet → `forge script script/Deploy.s.sol --rpc-url base_sepolia --broadcast` → set `PR_TOKEN_ADDRESS`/`UT_TOKEN_ADDRESS` in docker-compose
 3. **Fix `next build` 404 prerender error** — Next.js 15.3.3 bug. Low urgency — dev server works fine.
 
@@ -120,5 +139,5 @@ frontend/contexts/wallet-context.tsx            — Privy wallet (PrivyProvider,
 frontend/components/layout/notifications-popover.tsx  — Real notification bell (reads NotificationContext)
 frontend/components/integration/baraza-groups-card.tsx — "My Barazas" dashboard card
 frontend/next.config.mjs                        — Webpack stubs for Privy transitive deps
-ai_workflows/DECISIONS.md                       — All ADRs (ADR-001 through ADR-023)
+ai_workflows/DECISIONS.md                       — All ADRs (ADR-001 through ADR-024)
 ```

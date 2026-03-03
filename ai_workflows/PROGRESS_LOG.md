@@ -978,3 +978,46 @@ Move governance module from `partial` → `tested` by adding service + route tes
 
 **Token usage:**
 Sonnet 4.6 — heavy session (2-part: frontend wiring plan + GET endpoints plan, 8 files modified, 2 new frontend components)
+
+---
+
+## [2026-03-03] — Audit fixes, registration flow bugs fixed, field-level validation errors surfaced, Kenyan phone normalisation
+
+**What was built:**
+
+- **`backend/src/app.ts`** — 2 observability bugs fixed:
+  - Bug A: `integrationQueue` added to both the `@core/queue/index.js` import and the `createBullBoard` queues array — the queue was created in session 21 but was invisible in the `/admin/queues` dashboard
+  - Bug B: `integration: '/api/v1/integration'` added to the `/api/v1/docs` endpoint (route was mounted but missing from the documentation object)
+- **`ai_workflows/DECISIONS.md`** — ADR-024 written: Baraza integration platform decisions (WhatsApp webhook-receive vs Telegram/Discord bot-token, single `integrationQueue`, worker-only bot tokens, `@@unique([groupId, platform, externalId])` constraint, one `UserMessagingProfile` per platform per user)
+- **`ai_workflows/CLAUDE.md`** — §5 worker-only secrets convention added; 4 new §7 issues (Bull Board gap, DASHBOARD_PASSWORD double-default, Privy App ID not in docker-compose, WhatsApp webhook pattern); v3.9 version history entry
+- **Session 22 git housekeeping** — uncommitted session 22 changes (GET endpoints + frontend wiring, 12 modified files + 3 untracked) committed and pushed to `origin/develop`
+- **`frontend/components/auth/register-form.tsx`** — 3 registration flow bugs fixed:
+  - Bug 1: `setHandle` used `handle || undefined` — a handle of `" "` (single space) is truthy in JS, was sent to backend, failed regex `/^@?[\w.\-]+$/`. Fixed: `handle.trim() || undefined`
+  - Bug 2: phone number placeholder `+254 700 000 000` had spaces; `canAdvance()` only checked non-empty so user could reach submit with spaces in the number; backend regex `/^\+254[17]\d{8}$/` rejected it. Fixed: `.replace(/\s+/g, '')` on submit
+  - Bug 3: `auth-context.tsx requestMagicLink` implementation params were missing `messagingPlatforms` (added to `AuthContextType` interface in session 21 but not the `useCallback` type). Fixed: added `messagingPlatforms?` to implementation params
+- **`frontend/lib/api.ts`** — `ApiError` class gains `errors?: Record<string, string>` third constructor argument; `apiFetch` extracts `body.details?.validation?.errors` and passes it when throwing — backend field-level validation errors are no longer swallowed
+- **`frontend/components/auth/register-form.tsx`** — `fieldErrors` state added; `handleSubmit` catch sets it when `err.errors` is present; error display block renders field errors as a `<ul>` list under the heading "Please fix the following errors:"
+- **Phone format normalisation** — submit handler now chains `.replace(/^0/, '+254')` so users can type the natural Kenyan `07XXXXXXXX` / `01XXXXXXXX` format; placeholder updated to `0712 345 678`
+
+**Decisions made:**
+
+- **No ADR needed for phone normalisation** — it is a UX convention (strip spaces, leading-zero → +254), not an architectural choice. The backend E.164 regex remains unchanged; the frontend adapts to local input patterns.
+- **Field errors rendered as list, not inline** — the error box is shown at the bottom of the current step. Inline per-field highlighting would require step-aware field mapping (e.g. phone is on step 0 but submit is on step 4). Listing errors in the footer is robust regardless of which step the invalid field belongs to.
+- **`ApiError.errors` is optional, not required** — non-validation errors (401, 500, network) should not be forced to set `errors`. The pattern is: set `errors` only when backend returns `details.validation.errors`; all existing `throw new ApiError(status, message)` call sites remain unchanged.
+
+**What's still broken or incomplete:**
+
+- Auth test flakiness: 25/222 auth tests intermittent (unique constraint, JWT timing) — pre-existing, unrelated to this session
+- `next build` fails at `/404` (Next.js 15.3.3 bug, pre-existing)
+- `failedJobHandler` in `workers.ts` still dead code
+- No tests for integration, governance, projects, marketplace, notifications, onboarding, emergency, audit, admin
+- Governance proposal list returns `_count.votes` only — yesWeight/noWeight not broken out per proposal in the list
+- M-Pesa verification stubbed
+- Base Sepolia deploy pending (minter wallet not funded)
+
+**Next milestone:**
+
+Write governance module service + route tests to move governance from `partial` → `tested`.
+
+**Token usage:**
+Sonnet 4.6 — medium session (audit fixes + 3 registration bugs + validation error surfacing + phone normalisation; 5 commits)
