@@ -1063,3 +1063,52 @@ Write governance module service + route tests to move governance from `partial` 
 
 **Token usage:**
 Sonnet 4.6 — heavy session (2-part, cross-context: Next.js upgrade + group detail page; 8 files committed across backend + frontend)
+
+---
+
+## [2026-03-03] — Enrollment race condition fixed; all frontend stats wired to real data; orphaned users re-enrolled
+
+**What was built:**
+
+- **`backend/src/modules/community/services/groupMembership.service.ts` — enrollment race fix** — `ensureSystemGroupAndEnroll` and `ensureNationalGroupAndEnroll` both replaced the `findFirst → create` pattern with a single atomic `upsert` on `Group.name` (a `@unique` field). Root cause: `Promise.all` inside `prisma.$transaction` ran concurrent ward lookups for two simultaneous registrations; both saw `null` for the same system group name and both tried `tx.group.create()` → unique constraint violation on `Group.name`. `upsert` serialises this via PostgreSQL `INSERT ... ON CONFLICT DO UPDATE`.
+- **`frontend/lib/types.ts` + `frontend/contexts/auth-context.tsx`** — `utBalance: number` added to `User` type; mapped in `mapBackendUser()` from `raw.economic?.utilityTokens ?? raw.utilityTokens ?? 0`.
+- **`frontend/components/layout/topbar.tsx`** — `TokenChip` component + token stat strip added for desktop (`hidden md:flex`). Shows PR (amber), IP (tea-green), UT (warm-brown) chips between page title and action buttons. Auth-gated (`isAuthenticated && user`).
+- **`frontend/components/dashboard/dashboard-content.tsx`** — Three new `useQuery` calls: `proposalsMeta` (governance count via `governanceApi.getProposals({ limit:1 })`), `myGroups` (community count via `communityApi.getMyGroups`), `notifications` (real activity via `notificationsApi.getNotifications`). "Active Proposals" and "My Communities" stats now show real numbers. Recent Activity section replaced 3 hardcoded static items with `notifications.slice(0, 5)` mapped by type to icon; empty state shows "No recent activity yet." Mobile token bar (`md:hidden`) added below welcome greeting.
+- **`frontend/app/groups/page.tsx`** — Replaced `useState(loading)` + `useEffect(setTimeout 1000ms)` fake delay with real `useQuery(communityApi.getMyGroups, staleTime: 60_000)`. Four stats now computed from live data: My Groups (`groups.length`), Admin Roles (LEADER/ADMIN count), System Groups (`isSystem` count), Voluntary (`!isSystem` count). Icons updated to `Shield` and `Network`.
+- **`frontend/app/proposals/page.tsx`** — Replaced 4 hardcoded stats with 2 real counts from `governanceApi.getProposals()`: Active Proposals (status: VOTING) and Total Proposals. Two unachievable stats (votes cast, avg time) removed entirely.
+- **`frontend/components/user/user-profile.tsx`** — Token stats expanded from 2-col to 3-col grid. UT chip added alongside PR and IP using Zap icon + warm-brown colour.
+- **`ai_workflows/CLAUDE.md` + `ai_workflows/SESSION_STATE.md`** — PWA non-installability noted as a known issue with full diagnosis (package installed but not wired).
+- **`backend/scripts/re-enroll-orphaned-users.ts`** — One-time remediation script: queries for EMAIL_VERIFIED+ users with both ward IDs set and zero group memberships, skips test-email patterns (`/flowtest|e2e_test|ujamaa_admin/i`), calls `groupMembershipService.enrollInSystemGroups()` for each. Ran successfully: 7 real users re-enrolled (kisombe, joan, joe, waichari, jane + 2 e2e_v2 test users), all now have 5–7 group memberships. 1 test user (`e2e_test_*`) intentionally skipped.
+
+**Decisions made:**
+
+- **Upsert is the canonical pattern for system group creation** — `findFirst + create/update` is not safe under concurrent load because Prisma transactions do not isolate reads across concurrent transactions at the default isolation level. Any "find-or-create" pattern on a `@unique` field must use `upsert`. This applies to all future system group provisioning code.
+- **Mobile token balance on dashboard only, not topbar** — The topbar is too narrow on mobile (hamburger → title → bell) to accommodate 3 stat chips without overflow or layout break. The dashboard mobile token bar (`md:hidden`, below greeting, horizontally scrollable) is the correct placement. A future React Native app should use a sticky wallet header on the home screen.
+- **Re-enrollment script skips test users by email pattern** — Test accounts (`flowtest*`, `e2e_test*`, `ujamaa_admin*`) don't need real groups in production; enrolling them would create noise in the system group member counts. The skip list is encoded as regex patterns in the script itself for clarity.
+
+- **`backend/tests/governance/helpers.ts`** — `createGovernanceUser()` (no ward dependency), `seedGovernanceGroup()` (sets creator IP=1000 + adds dummy second member so WARD-scope 90th-percentile IP check passes), `addGroupMember()`, `seedProposal()` (inserts at any status, bypasses PR spend), `makeGovernanceToken()`.
+- **`backend/tests/governance/proposal.service.test.ts`** — 25 service unit tests covering all 6 methods: createProposal (happy path, emergency flag, not found, not member, insufficient PR), startVoting (DRAFT→VOTING, not creator, already voting, not found), castVote (YES + PR spend, NO, not member, not voting, duplicate 409, not found), tallyVotes (APPROVED, REJECTED, no-op on non-VOTING, not found), getProposal (votesSummary with yes/no weights, not found), listProposals (all, by groupId, by status, pagination).
+- **`backend/tests/governance/proposal.routes.test.ts`** — 22 route integration tests covering all 6 HTTP endpoints: auth gates (401 without token), validation gates (400 for short title/description, invalid UUID, bad vote option), success cases (200), and service-level error propagation (404, 409).
+- **Total tests: 269/269 green** (222 existing + 47 new governance). Governance status: `partial` → **`tested`**.
+
+**Decisions made:**
+
+- **Upsert is the canonical pattern for system group creation** — `findFirst + create/update` is not safe under concurrent load because Prisma transactions do not isolate reads across concurrent transactions at the default isolation level. Any "find-or-create" pattern on a `@unique` field must use `upsert`. This applies to all future system group provisioning code.
+- **Mobile token balance on dashboard only, not topbar** — The topbar is too narrow on mobile (hamburger → title → bell) to accommodate 3 stat chips without overflow or layout break. The dashboard mobile token bar (`md:hidden`, below greeting, horizontally scrollable) is the correct placement. A future React Native app should use a sticky wallet header on the home screen.
+- **Re-enrollment script skips test users by email pattern** — Test accounts (`flowtest*`, `e2e_test*`, `ujamaa_admin*`) don't need real groups in production; enrolling them would create noise in the system group member counts. The skip list is encoded as regex patterns in the script itself for clarity.
+- **Governance test helpers avoid ward dependency** — `createGovernanceUser()` does not set `primaryWardId`/`secondaryWardId`, so governance tests run without needing `seedLocation()`. The IP percentile check (WARD scope requires top-90%) is satisfied by setting creator `globalImpactPoints=1000` + a second dummy member at IP=0 → creator rank=1/2=0.5 < 0.9.
+
+**What's still broken or incomplete:**
+
+- Base Sepolia deploy pending (minter wallet not funded)
+- `next build` fails at `/404` static generation (pre-existing)
+- PWA not installable — `next-pwa` installed but not wired (deferred)
+- `failedJobHandler` in `workers.ts` is dead code (pre-existing)
+- `fetch-proposals.tsx`, `voting-interface.tsx`, `enhanced-proposals.tsx` have pre-existing scaffold TypeScript errors
+
+**Next milestone:**
+
+Fund minter wallet and deploy PrToken + UtToken contracts to Base Sepolia; set `PR_TOKEN_ADDRESS`/`UT_TOKEN_ADDRESS` in docker-compose.
+
+**Token usage:**
+Sonnet 4.6 — heavy session (cross-context continuation: enrollment bug fix + full frontend data wiring + re-enrollment remediation + governance tests; 269/269 green)

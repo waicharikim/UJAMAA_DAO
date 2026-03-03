@@ -6,7 +6,7 @@
 
 ---
 
-**Last updated:** 2026-03-03 (session 24)
+**Last updated:** 2026-03-03 (session 25)
 **Branch:** `develop`
 **Last commits:**
 - `3d034cc` feat(community): group detail page + signup button in topbar
@@ -24,59 +24,61 @@
 | Backend API | ✅ healthy | http://localhost:4000/health |
 | Frontend | ✅ running (Turbopack) | http://localhost:3000 |
 | MailHog | ✅ auto-started by `make dev` | http://localhost:8025 |
-| Tests | ⚠️ 197/222 green (25 auth flakes — pre-existing timing/DB state issues) | `cd backend && npx vitest run` |
+| Tests | ✅ 269/269 green | `cd backend && npx vitest run` |
 
 ---
 
-## What was completed in the last session (session 24)
+## What was completed in the last session (session 25)
+
+**Enrollment race condition fix:**
+- `groupMembership.service.ts` — `ensureSystemGroupAndEnroll` + `ensureNationalGroupAndEnroll` both replaced `findFirst → create` with atomic `upsert` on `Group.name`. Two simultaneous registrations were both inserting the same system group name → unique constraint violation. Upsert serialises via PostgreSQL `INSERT ... ON CONFLICT DO UPDATE`.
+
+**UT token balance:**
+- `frontend/lib/types.ts` — `utBalance: number` added to `User` type
+- `frontend/contexts/auth-context.tsx` — `mapBackendUser()` maps `raw.economic?.utilityTokens ?? raw.utilityTokens ?? 0`
+
+**Desktop topbar token chips:**
+- `components/layout/topbar.tsx` — `TokenChip` component + `hidden md:flex` strip showing PR/IP/UT between page title and action buttons (auth-gated)
+
+**Dashboard real data:**
+- `dashboard-content.tsx` — proposals count, community count, notifications (real activity) all wired via `useQuery`. Mobile token bar (`md:hidden`) below greeting.
+
+**Groups page real stats:**
+- `app/groups/page.tsx` — fake 1s delay + hardcoded stats replaced with `useQuery(communityApi.getMyGroups)`. 4 stats: My Groups, Admin Roles, System Groups, Voluntary.
+
+**Proposals page real stats:**
+- `app/proposals/page.tsx` — 4 hardcoded stats replaced with 2 real counts (Active = VOTING status, Total = all).
+
+**User profile UT chip:**
+- `user-profile.tsx` — 2-col token grid expanded to 3-col; UT chip (Zap icon, warm-brown) added alongside PR and IP.
+
+**PWA noted:**
+- `SESSION_STATE.md` + `CLAUDE.md §7` — PWA non-installability documented with full diagnosis (deferred until core features stable).
+
+**Orphaned user re-enrollment:**
+- `backend/scripts/re-enroll-orphaned-users.ts` — one-time remediation script. Ran successfully: 7 real users re-enrolled (kisombe, joan, joe, waichari, jane + 2 e2e_v2 users). All now have 5–7 group memberships. 1 test user skipped intentionally.
+
+---
+
+## What was completed in the previous session (session 24)
 
 **Frontend dev performance:**
 - Turbopack enabled: `package.json` `dev` script → `next dev --turbopack`
-- `next.config.mjs` gains `turbopack.resolveAlias` with relative paths (`'./stubs/empty.js'`) for `unstorage`, `x402/client`, `@base-org/account` — fixes 500 errors that appeared when Turbopack tried to resolve the Privy transitive deps
+- `next.config.mjs` gains `turbopack.resolveAlias` with relative paths (`'./stubs/empty.js'`) for `unstorage`, `x402/client`, `@base-org/account`
 - Webpack config retained unchanged for `next build`
 
 **Next.js upgrade:**
 - `next` 15.3.3 → 16.1.6, `eslint-config-next` 14.0.3 → 16.1.6, `eslint` ^8 → ^9
-- Docker node_modules volume purged (`docker volume prune -f`) and rebuilt via `docker compose up --build`
-- `tsconfig.json` auto-patched by Next.js 16 (`jsx: preserve` → `react-jsx`)
+- Docker node_modules volume purged and rebuilt via `docker compose up --build`
 
-**System groups dashboard card:**
-- `components/community/system-groups-card.tsx` — each community row now wraps a `<Link href="/groups/[groupId]">` with hover highlight. Previously displayed-only.
-
-**Group detail page (backend):**
-- `groupMembership.service.ts` — new `getGroupById(groupId, userId)` method returning `GroupDetailDto`-shaped object with ward/constituency/county relations + user membership role
-- `group.controller.ts` — new `getGroupDetail` static method
-- `group.routes.ts` — `GET /:groupId` route (placed after `/my-groups`, before `/:groupId/members`)
-
-**Group detail page (frontend):**
-- `frontend/lib/api.ts` — `GroupDetailDto` interface exported; `communityApi.getGroupDetail(groupId)` added; `apiClient.getGroup()` wired from `return null` stub to real API
-- `components/groups/group-detail.tsx` — full rewrite: level icon (NATIONAL/COUNTY/CONSTITUENCY/WARD), location breadcrumb, member count, created date, user role + joined date, description; join/leave `useMutation` for voluntary groups (invalidates group + system-groups + groups queries)
-- `components/groups/group-members.tsx` — full rewrite: uses `GroupMemberDto` fields directly (`userId`/`userName`/`avatarUrl`/`verificationLevel`/`role`/`joinedAt`); verification shield icon; role badges in Chai palette
+**Group detail page (backend + frontend):**
+- `groupMembership.service.ts` — `getGroupById(groupId, userId)` method returning `GroupDetailDto`
+- `group.controller.ts` + `group.routes.ts` — `GET /:groupId` route
+- `frontend/lib/api.ts` — `GroupDetailDto` interface + `communityApi.getGroupDetail(groupId)`
+- `components/groups/group-detail.tsx` + `group-members.tsx` — full rewrites using real DTO shapes; join/leave mutation for voluntary groups
 
 **Topbar signup button:**
-- `components/layout/topbar.tsx` — `useAuth().isAuthenticated` guards actions: authenticated → notifications + wallet; unauthenticated → "Get Started" (→ `/auth/register`) + "Sign In" (→ `/auth/callback`)
-
----
-
-## What was completed in the previous session (session 23)
-
-**Observability fixes:**
-- `backend/src/app.ts` — `integrationQueue` added to Bull Board dashboard (was invisible); `integration: '/api/v1/integration'` added to `/api/v1/docs` endpoint object
-- `ai_workflows/DECISIONS.md` — ADR-024 written (Baraza platform decisions)
-- `ai_workflows/CLAUDE.md` — §5 worker-only secrets convention; 4 new §7 issues; v3.9 version history
-
-**Registration flow bug fixes (`frontend/components/auth/register-form.tsx`):**
-- Baraza handle: `handle || undefined` → `handle.trim() || undefined`
-- Phone number: `.replace(/\s+/g, '')` added on submit
-- `auth-context.tsx`: `requestMagicLink` implementation params now include `messagingPlatforms`
-
-**Validation error surfacing:**
-- `ApiError` gains `errors?: Record<string, string>` field; `apiFetch` extracts `body.details?.validation?.errors`
-- `register-form.tsx` — `fieldErrors` state + `<ul>` renders per-field backend messages
-
-**Kenyan phone format normalisation:**
-- `.replace(/^0/, '+254')` converts `07XXXXXXXX`/`01XXXXXXXX` to E.164 on submit
-- Placeholder updated to `0712 345 678`
+- `components/layout/topbar.tsx` — `useAuth().isAuthenticated` guards: authenticated → notifications + wallet; unauthenticated → "Get Started" + "Sign In"
 
 ---
 
@@ -92,7 +94,7 @@
 - `PrToken.sol` + `UtToken.sol` written and tested ✅ — Base Sepolia deploy pending (need funded minter wallet)
 - Telegram/Discord bot tokens are placeholder values — real bots not configured yet
 - Audit not yet wired for: profile updates, group joins, governance actions
-- Groups page (`app/groups/page.tsx`) stats are still hardcoded placeholder values
+- PWA not installable — `next-pwa` package installed but not wired (`withPWA` missing from `next.config.mjs`), no `manifest.json`, no app icons in `public/`, no PWA metadata in `layout.tsx`. Defer until core features are stable.
 
 ---
 
@@ -100,8 +102,8 @@
 
 | Status | Modules |
 |---|---|
-| **tested** | auth (104 tests), user (35 tests), economy (34 tests), community (49 tests) |
-| **partial** | governance (GET+POST endpoints, no tests), integration (Baraza module, no tests), projects, marketplace, notifications, onboarding, emergency, audit, admin |
+| **tested** | auth (104 tests), user (35 tests), economy (34 tests), community (49 tests), governance (47 tests) |
+| **partial** | integration (Baraza module, no tests), projects, marketplace, notifications, onboarding, emergency, audit, admin |
 | **scaffold** | reputation, education, treasury, verification |
 | **not started** | M-Pesa |
 | **contracts written** | PrToken.sol, UtToken.sol (13 Foundry tests green; Base Sepolia deploy pending) |
@@ -110,9 +112,9 @@
 
 ## Next tasks (priority order)
 
-1. **Governance module tests** — move governance `partial` → `tested`. Write `proposal.service.test.ts` + `proposal.routes.test.ts` covering: createProposal, startVoting, castVote, tallyVotes, getProposal, listProposals + all HTTP routes.
-2. **Base Sepolia deploy** — fund minter wallet → `forge script script/Deploy.s.sol --rpc-url base_sepolia --broadcast` → set `PR_TOKEN_ADDRESS`/`UT_TOKEN_ADDRESS` in docker-compose
-3. **Fix `next build` 404 prerender error** — Next.js 16 upgrade did not resolve this. Low urgency — dev server works fine.
+1. **Base Sepolia deploy** — fund minter wallet → `forge script script/Deploy.s.sol --rpc-url base_sepolia --broadcast` → set `PR_TOKEN_ADDRESS`/`UT_TOKEN_ADDRESS` in docker-compose
+2. **Fix `next build` 404 prerender error** — Next.js 16 upgrade did not resolve this. Low urgency — dev server works fine.
+3. **Integration module tests** — move integration `partial` → `tested`. Test Baraza bot routes and reward job logic.
 
 ---
 
@@ -126,13 +128,17 @@ backend/src/core/jobs/register.ts               — All repeatable job registrat
 backend/src/core/rbac/roles.ts                  — SystemRoles, GroupRoles, RoleHierarchy, roleIncludes(), type guards
 backend/src/modules/integration/                — Baraza messaging module (Telegram, Discord, WhatsApp)
 backend/src/modules/governance/services/proposal.service.ts  — createProposal, startVoting, castVote, tallyVotes, getProposal, listProposals
-backend/src/modules/community/services/groupMembership.service.ts — enrollInSystemGroups, getGroupById, getUserGroups, getGroupMembers
+backend/src/modules/community/services/groupMembership.service.ts — enrollInSystemGroups (upsert), getGroupById, getUserGroups, getGroupMembers
+backend/scripts/re-enroll-orphaned-users.ts     — one-time remediation script (keep for reference)
 docker/docker-compose.yml                       — All services, env vars, healthchecks
 backend/vitest.config.ts                        — Test config (fileParallelism:false, resolve.alias, env block)
 frontend/lib/api.ts                             — HTTP client (authApi, userApi, economyApi, integrationApi, notificationsApi, communityApi, governanceApi + ApiClient)
-frontend/contexts/auth-context.tsx              — Auth state, magic link flow, token storage
+frontend/lib/types.ts                           — User interface (includes utBalance)
+frontend/contexts/auth-context.tsx              — Auth state, magic link flow, token storage, mapBackendUser()
 frontend/contexts/wallet-context.tsx            — Privy wallet (PrivyProvider, useWallet hook)
+frontend/components/layout/topbar.tsx           — TokenChip strip (desktop) + auth-gated nav buttons
 frontend/components/layout/notifications-popover.tsx  — Real notification bell (reads NotificationContext)
+frontend/components/dashboard/dashboard-content.tsx   — Real proposal count, community count, notification activity, mobile token bar
 frontend/components/integration/baraza-groups-card.tsx — "My Barazas" dashboard card
 frontend/components/community/system-groups-card.tsx  — "My Communities" dashboard card (links to /groups/[id])
 frontend/components/groups/group-detail.tsx     — Group detail with real GroupDetailDto, join/leave mutation
