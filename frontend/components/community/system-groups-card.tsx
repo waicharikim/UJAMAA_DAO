@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { useQuery } from "@tanstack/react-query"
 import { Globe, MapPin, Landmark, Home, Users } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -34,29 +35,31 @@ function GroupRow({ g }: { g: GroupMembershipDto }) {
   const { Icon, color, bg, label } = cfg
 
   return (
-    <div className="flex items-center gap-3 py-2.5 border-b border-black/[0.04] last:border-0">
-      {/* Level icon */}
-      <div
-        className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
-        style={{ background: bg }}
-      >
-        <Icon className="h-4 w-4" style={{ color }} />
-      </div>
+    <Link href={`/groups/${g.groupId}`} className="block">
+      <div className="flex items-center gap-3 py-2.5 border-b border-black/[0.04] last:border-0 rounded-lg px-1 hover:bg-black/[0.03] transition-colors cursor-pointer">
+        {/* Level icon */}
+        <div
+          className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+          style={{ background: bg }}
+        >
+          <Icon className="h-4 w-4" style={{ color }} />
+        </div>
 
-      {/* Name + level */}
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-chai truncate">{g.groupName}</p>
-        <p className="text-[11px]" style={{ color: "#7A6E60" }}>{label}</p>
-      </div>
+        {/* Name + level */}
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-chai truncate">{g.groupName}</p>
+          <p className="text-[11px]" style={{ color: "#7A6E60" }}>{label}</p>
+        </div>
 
-      {/* Member count */}
-      <div className="flex items-center gap-1 flex-shrink-0">
-        <Users className="h-3 w-3" style={{ color: "#7A6E60" }} />
-        <span className="text-[11px] font-medium" style={{ color: "#7A6E60" }}>
-          {g.memberCount.toLocaleString()}
-        </span>
+        {/* Member count */}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <Users className="h-3 w-3" style={{ color: "#7A6E60" }} />
+          <span className="text-[11px] font-medium" style={{ color: "#7A6E60" }}>
+            {g.memberCount.toLocaleString()}
+          </span>
+        </div>
       </div>
-    </div>
+    </Link>
   )
 }
 

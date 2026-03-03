@@ -496,6 +496,57 @@ class GroupMembershipService {
   }
 
   /**
+   * Get single group detail with the requesting user's membership role.
+   */
+  async getGroupById(groupId: string, userId: string) {
+    const group = await prisma.group.findUnique({
+      where: { id: groupId },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        isSystemGroup: true,
+        systemType: true,
+        voluntaryType: true,
+        locationScope: true,
+        status: true,
+        memberCount: true,
+        createdAt: true,
+        ward: { select: { id: true, name: true } },
+        constituency: { select: { id: true, name: true } },
+        county: { select: { id: true, name: true } },
+        members: {
+          where: { userId, active: true },
+          select: { role: true, joinedAt: true },
+          take: 1,
+        },
+      },
+    });
+
+    if (!group) {
+      throw ApiError.notFound('Group not found');
+    }
+
+    const userMembership = group.members[0] ?? null;
+    return {
+      groupId: group.id,
+      groupName: group.name,
+      description: group.description,
+      isSystem: group.isSystemGroup,
+      systemType: group.systemType,
+      voluntaryType: group.voluntaryType,
+      locationScope: group.locationScope,
+      memberCount: group.memberCount,
+      createdAt: group.createdAt.toISOString(),
+      ward: group.ward,
+      constituency: group.constituency,
+      county: group.county,
+      userRole: userMembership?.role ?? null,
+      userJoinedAt: userMembership?.joinedAt?.toISOString() ?? null,
+    };
+  }
+
+  /**
    * Get group members.
    */
   async getGroupMembers(

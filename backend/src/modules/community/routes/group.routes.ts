@@ -54,6 +54,8 @@ router.post(
 
 router.get('/my-groups', asyncHandler(GroupController.getMyGroups));
 
+router.get('/:groupId', asyncHandler(GroupController.getGroupDetail));
+
 router.get(
   '/:groupId/members',
   validateRequest({
