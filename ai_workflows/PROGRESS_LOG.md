@@ -1021,3 +1021,45 @@ Write governance module service + route tests to move governance from `partial` 
 
 **Token usage:**
 Sonnet 4.6 — medium session (audit fixes + 3 registration bugs + validation error surfacing + phone normalisation; 5 commits)
+
+---
+
+## [2026-03-03] — Group detail page functional, Turbopack enabled, Next.js 16, signup button in topbar
+
+**What was built:**
+
+- **Turbopack** — `package.json dev` script changed to `next dev --turbopack`; `turbopack.resolveAlias` block added to `frontend/next.config.mjs` with relative paths (`'./stubs/empty.js'`) for `unstorage`, `x402/client`, `@base-org/account`. Dev route compile time: 2-5s (webpack) → 100-500ms (Turbopack). Webpack config retained for `next build`.
+- **Next.js 16.1.6 upgrade** — bumped `next` 15.3.3 → 16.1.6, `eslint-config-next` 14.0.3 → 16.1.6, `eslint` ^8 → ^9. `tsconfig.json` auto-patched by Next.js 16 (`jsx: preserve` → `react-jsx`, added `.next/dev/types/**/*.ts` to include array). Node modules volume purged and rebuilt via `docker compose up --build`.
+- **`components/community/system-groups-card.tsx`** — Each community row (ward/constituency/county/national) is now a `<Link href="/groups/[groupId]">` with hover highlight. Previously the card displayed data but was not navigable.
+- **`backend/src/modules/community/services/groupMembership.service.ts`** — New `getGroupById(groupId, userId)` method: fetches single group with location relations + requesting user's membership row. Returns `GroupDetailDto`-shaped object: `groupId`, `groupName`, `description`, `isSystem`, `systemType`, `voluntaryType`, `locationScope`, `memberCount`, `createdAt`, `ward`, `constituency`, `county`, `userRole`, `userJoinedAt`.
+- **`backend/src/modules/community/controllers/group.controller.ts`** — New `getGroupDetail` static method delegates to `groupMembershipService.getGroupById(groupId, userId)`.
+- **`backend/src/modules/community/routes/group.routes.ts`** — `GET /:groupId` route registered between `/my-groups` and `/:groupId/members` to avoid path conflicts.
+- **`frontend/lib/api.ts`** — `GroupDetailDto` interface exported; `communityApi.getGroupDetail(groupId)` added; `apiClient.getGroup()` wired from `return null` stub to real `communityApi.getGroupDetail()`.
+- **`components/groups/group-detail.tsx`** — Full rewrite using `GroupDetailDto`: level icon + badge (NATIONAL/COUNTY/CONSTITUENCY/WARD), location breadcrumb (County → Constituency → Ward), member count stat, created date, user's role, joined date, description. Join/Leave mutation (TanStack useMutation) for voluntary groups only — invalidates `["group", groupId]`, `["system-groups"]`, and `["groups"]` queries on success.
+- **`components/groups/group-members.tsx`** — Full rewrite using `GroupMemberDto`: uses `member.userId`/`member.userName`/`member.avatarUrl`/`member.verificationLevel`/`member.role`/`member.joinedAt` directly. Verified users show a `ShieldCheck` icon. Role badges (LEADER/ADMIN/MEMBER) with Chai palette colours. Skeleton rows during load.
+- **`components/layout/topbar.tsx`** — Unauthenticated users now see "Get Started" (→ `/auth/register`, tea-green pill) and "Sign In" (→ `/auth/callback`, ghost) buttons instead of the notification bell and wallet button. `useAuth().isAuthenticated` guards which set of controls renders.
+
+**Decisions made:**
+
+- **Turbopack for dev only; webpack for build** — `next build` still uses webpack because Turbopack's production build pipeline is not yet stable in Next.js 16. The two configs coexist: `turbopack.resolveAlias` for dev, `webpack.resolve.alias` + `NormalModuleReplacementPlugin` for build. No user-visible difference at runtime.
+- **Join/Leave button only for voluntary groups** — System groups (ward/constituency/county/national) are auto-enrolled by the backend on registration and are non-optional. Showing a "Leave" button would confuse users or result in a 400 error from the backend (system groups cannot be left via the join/leave endpoint). The detail component checks `group.isSystem` and hides the button accordingly.
+- **Topbar signup button rather than separate page banner** — The topbar is the only global UI element visible across all authenticated-layout pages. Adding the button there ensures unauthenticated users who reach any route inside the app shell (e.g. via a shared link) always have a clear path to register. The landing page retains its own "Get Started" CTA.
+
+**What's still broken or incomplete:**
+
+- Auth test flakiness: 25/222 auth tests intermittent (pre-existing)
+- `next build` fails at `/404` (Next.js upgrade did not fix this — pre-existing)
+- `failedJobHandler` in `workers.ts` still dead code
+- No tests for integration, governance, projects, marketplace, notifications, onboarding, emergency, audit, admin
+- `fetch-proposals.tsx` + `voting-interface.tsx` + `enhanced-proposals.tsx` pre-existing scaffold TypeScript errors
+- Governance proposal list returns `_count.votes` only — yesWeight/noWeight not per-proposal in list endpoint
+- M-Pesa verification stubbed
+- Base Sepolia deploy pending (minter wallet not funded)
+- Groups page (`app/groups/page.tsx`) stats are still hardcoded values (3 groups, 1 admin, etc.)
+
+**Next milestone:**
+
+Write governance module service + route tests to move governance from `partial` → `tested`.
+
+**Token usage:**
+Sonnet 4.6 — heavy session (2-part, cross-context: Next.js upgrade + group detail page; 8 files committed across backend + frontend)
