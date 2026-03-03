@@ -316,7 +316,7 @@ export function RegisterForm() {
       await requestMagicLink({
         email: form.email.trim(),
         name: form.name.trim(),
-        phoneNumber: form.phoneNumber.trim().replace(/\s+/g, ''),
+        phoneNumber: form.phoneNumber.trim().replace(/\s+/g, '').replace(/^0/, '+254'),
         primaryWardId: form.primaryWardId,
         secondaryWardId: form.secondaryWardId,
         industryIds: form.industryIds,
@@ -413,7 +413,7 @@ export function RegisterForm() {
               <Input
                 id="phone"
                 type="tel"
-                placeholder="+254 700 000 000"
+                placeholder="0712 345 678"
                 className="pl-9"
                 value={form.phoneNumber}
                 onChange={(e) => set("phoneNumber", e.target.value)}
