@@ -76,3 +76,35 @@
 3. **Admin role-assignment endpoints** — assign/revoke system roles on users, promote group members
 
 ---
+
+---
+
+## 2026-03-03 — Session 23 smoke test
+
+### Docker services
+| Service | Status |
+|---|---|
+| ujamaa_web | ✅ Up |
+| ujamaa_worker | ✅ Up |
+| ujamaa_frontend | ✅ Up (Turbopack) |
+| ujamaa_postgres | ✅ Up (healthy) |
+| ujamaa_postgres_test | ✅ Up (healthy) |
+| ujamaa_redis | ✅ Up (healthy) |
+| ujamaa_mailhog | ✅ Up |
+
+### API health
+- `GET /health` → `{ success: true, status: "ok", version: "2.5" }` ✅
+- `GET /ready` → `{ success: true, status: "ready", database: "connected" }` ✅
+- `GET /api/v1/docs` → includes `community`, `governance`, `integration` endpoints ✅
+
+### Frontend
+- `GET http://localhost:3000` → HTTP 200 ✅
+- Turbopack active — `next dev --turbopack`, ready in ~2s, first compile ~95s (cold cache, expected)
+
+### Test suite
+```
+Test Files  17 passed (17)
+Tests       222 passed (222)
+Duration    402s
+```
+✅ All 222 tests green (104 auth · 35 user · 34 economy · 49 community)

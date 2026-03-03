@@ -20,9 +20,9 @@ const nextConfig = {
   // Turbopack equivalents of the webpack stubs below (used by `next dev --turbopack`)
   turbopack: {
     resolveAlias: {
-      unstorage: path.resolve(__dirname, "stubs/empty.js"),
-      "x402/client": path.resolve(__dirname, "stubs/empty.js"),
-      "@base-org/account": path.resolve(__dirname, "stubs/empty.js"),
+      unstorage: "./stubs/empty.js",
+      "x402/client": "./stubs/empty.js",
+      "@base-org/account": "./stubs/empty.js",
     },
   },
   webpack: (config) => {
