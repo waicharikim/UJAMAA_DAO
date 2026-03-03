@@ -27,6 +27,7 @@ export interface User {
     byLocation: Record<string, number>
   }
   tokenBalance: number
+  utBalance: number
 
   // Privacy and preferences
   privacySettings: PrivacySettings

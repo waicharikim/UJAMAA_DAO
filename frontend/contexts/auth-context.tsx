@@ -122,6 +122,10 @@ function mapBackendUser(raw: any): User {
       byLocation: {},  // not returned by any endpoint; fetch separately when needed
     },
     tokenBalance: prBalance,
+    utBalance:
+      raw.economic?.utilityTokens ??  // getMe shape
+      raw.utilityTokens ??            // auth login shape
+      0,
 
     // projectParticipation not tracked by backend yet
     projectParticipation: {

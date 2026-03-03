@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/contexts/auth-context"
-import { economyApi } from "@/lib/api"
+import { economyApi, governanceApi, communityApi, notificationsApi } from "@/lib/api"
 import { BarazaGroupsCard } from "@/components/integration/baraza-groups-card"
 import { SystemGroupsCard } from "@/components/community/system-groups-card"
 
@@ -104,8 +104,33 @@ export function DashboardContent() {
     enabled: isAuthenticated,
   })
 
+  // Active proposals count
+  const { data: proposalsMeta } = useQuery({
+    queryKey: ["proposals-count"],
+    queryFn: () => governanceApi.getProposals({ limit: 1 }),
+    enabled: isAuthenticated,
+    staleTime: 60_000,
+  })
+
+  // My communities count (reuse system-groups query key)
+  const { data: myGroups = [] } = useQuery({
+    queryKey: ["system-groups"],
+    queryFn: communityApi.getMyGroups,
+    enabled: isAuthenticated,
+    staleTime: 60_000,
+  })
+
+  // Recent activity from notifications
+  const { data: notifications = [] } = useQuery({
+    queryKey: ["notifications"],
+    queryFn: notificationsApi.getNotifications,
+    enabled: isAuthenticated,
+    staleTime: 30_000,
+  })
+
   const prBalance = prData?.balance ?? user?.tokenBalance ?? 0
   const impactPoints = user?.impactPoints?.global ?? 0
+  const recentActivity = notifications.slice(0, 5)
 
   return (
     <div className="px-4 md:px-8 py-6 space-y-8 max-w-6xl mx-auto">
@@ -117,6 +142,23 @@ export function DashboardContent() {
             <span style={{ color: "#C9922A" }}>{user.username || user.email?.split("@")[0] || "Mwanachama"}</span>
           </h2>
           <p className="text-sm text-[#0E0B08]/50 mt-1">Ward Sovereignty Platform — making every ward count</p>
+          {/* Mobile token bar — hidden on desktop (topbar handles it there) */}
+          <div className="flex items-center gap-2 mt-3 overflow-x-auto scrollbar-none md:hidden pb-0.5">
+            {[
+              { label: "PR", value: prBalance,              color: "#C9922A" },
+              { label: "IP", value: impactPoints,            color: "#1D4731" },
+              { label: "UT", value: user.utBalance ?? 0,    color: "#7A4F1E" },
+            ].map(({ label, value, color }) => (
+              <div
+                key={label}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold flex-shrink-0"
+                style={{ background: `${color}15`, color }}
+              >
+                <span>{typeof value === "number" ? value.toLocaleString() : value}</span>
+                <span className="opacity-60">{label}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -138,17 +180,17 @@ export function DashboardContent() {
               <StatCard
                 title="Mapendekezo Hai"
                 subtitle="Active Proposals"
-                value={12}
-                change="+3 this week"
+                value={proposalsMeta?.total ?? "—"}
+                change="All submitted"
                 changeType="positive"
                 icon={Vote}
                 colorClass="bg-[#C9922A]"
               />
               <StatCard
-                title="Wanachama"
-                subtitle="Community Members"
-                value={0}
-                change="Growing soon"
+                title="Makundi Yangu"
+                subtitle="My Communities"
+                value={myGroups.length}
+                change="Groups joined"
                 changeType="neutral"
                 icon={Users}
                 colorClass="bg-[#1E3D2F]"
@@ -275,65 +317,42 @@ export function DashboardContent() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {[
-                    {
-                      action: "Voted on proposal",
-                      title: "Community Solar Energy Initiative",
-                      time: "2h ago",
-                      type: "vote",
-                      status: "approved",
-                    },
-                    {
-                      action: "Completed milestone",
-                      title: "Digital Literacy Training — Phase 1",
-                      time: "1d ago",
-                      type: "milestone",
-                      status: "done",
-                    },
-                    {
-                      action: "Joined group",
-                      title: "Green Energy Collective",
-                      time: "3d ago",
-                      type: "group",
-                      status: "active",
-                    },
-                  ].map((activity, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center gap-3 p-3 rounded-xl transition-colors"
-                      style={{ background: "rgba(201,146,42,0.05)" }}
-                    >
-                      <div
-                        className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                        style={{
-                          background:
-                            activity.type === "vote"
-                              ? "rgba(201,146,42,0.12)"
-                              : activity.type === "milestone"
-                                ? "rgba(30,61,47,0.1)"
-                                : "rgba(176,58,30,0.1)",
-                        }}
-                      >
-                        {activity.type === "vote" && <Vote className="h-4 w-4" style={{ color: "#C9922A" }} />}
-                        {activity.type === "milestone" && <Target className="h-4 w-4" style={{ color: "#1E3D2F" }} />}
-                        {activity.type === "group" && <Users className="h-4 w-4" style={{ color: "#B03A1E" }} />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-[#0E0B08]/50">{activity.action}</p>
-                        <p className="text-sm font-medium text-[#0E0B08] truncate">{activity.title}</p>
-                      </div>
-                      <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                        <Badge
-                          variant="secondary"
-                          className="text-[10px] font-semibold px-2 py-0"
-                          style={{ background: "rgba(201,146,42,0.1)", color: "#C9922A", border: "none" }}
+                  {recentActivity.length === 0 ? (
+                    <p className="text-sm py-4 text-center" style={{ color: "rgba(14,11,8,0.35)" }}>
+                      No recent activity yet.
+                    </p>
+                  ) : (
+                    recentActivity.map((n: any) => {
+                      const isProposal = n.type?.startsWith("PROPOSAL")
+                      const isGroup    = n.type?.startsWith("GROUP") || n.type?.startsWith("COMMUNITY")
+                      const iconColor  = isProposal ? "#C9922A" : isGroup ? "#B03A1E" : "#1E3D2F"
+                      const iconBg     = isProposal ? "rgba(201,146,42,0.12)" : isGroup ? "rgba(176,58,30,0.1)" : "rgba(30,61,47,0.1)"
+                      const Icon       = isProposal ? Vote : isGroup ? Users : Target
+                      return (
+                        <div
+                          key={n.id}
+                          className="flex items-center gap-3 p-3 rounded-xl"
+                          style={{ background: "rgba(201,146,42,0.05)" }}
                         >
-                          {activity.status}
-                        </Badge>
-                        <span className="text-[10px] text-[#0E0B08]/40">{activity.time}</span>
-                      </div>
-                    </div>
-                  ))}
+                          <div
+                            className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                            style={{ background: iconBg }}
+                          >
+                            <Icon className="h-4 w-4" style={{ color: iconColor }} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-[#0E0B08] truncate">{n.title || n.message}</p>
+                            {n.message && n.title && (
+                              <p className="text-xs text-[#0E0B08]/50 truncate">{n.message}</p>
+                            )}
+                          </div>
+                          <span className="text-[10px] text-[#0E0B08]/40 flex-shrink-0">
+                            {new Date(n.createdAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                      )
+                    })
+                  )}
                 </div>
               </CardContent>
             </Card>
