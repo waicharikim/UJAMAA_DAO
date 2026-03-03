@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/contexts/auth-context"
 import { economyApi } from "@/lib/api"
 import { BarazaGroupsCard } from "@/components/integration/baraza-groups-card"
+import { SystemGroupsCard } from "@/components/community/system-groups-card"
 
 // ─── Stat card skeleton ───────────────────────────────────
 function StatSkeleton() {
@@ -338,7 +339,8 @@ export function DashboardContent() {
             </Card>
           </div>
 
-          <div>
+          <div className="space-y-4">
+            <SystemGroupsCard />
             <Suspense fallback={<Skeleton className="h-48 w-full rounded-xl" />}>
               <BarazaGroupsCard />
             </Suspense>
