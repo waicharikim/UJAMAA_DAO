@@ -39,6 +39,13 @@ export class GroupController {
     sendSuccess(res, groups, 'Groups retrieved');
   }
 
+  static async getGroupDetail(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const { groupId } = req.params;
+    const group = await groupMembershipService.getGroupById(groupId, userId);
+    sendSuccess(res, group, 'Group retrieved');
+  }
+
   static async getGroupMembers(req: AuthRequest, res: Response) {
     const { groupId } = req.params;
     const limit = parseInt(req.query.limit as string) || 50;

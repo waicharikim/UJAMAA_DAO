@@ -1,10 +1,12 @@
 "use client"
 
+import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { PanelLeft } from "lucide-react"
 import { WalletButton } from "@/components/auth/wallet-button"
 import { Button } from "@/components/ui/button"
 import { NotificationsPopover } from "./notifications-popover"
+import { useAuth } from "@/contexts/auth-context"
 
 const PAGE_TITLES: Record<string, string> = {
   "/dashboard": "Dashboard",
@@ -33,6 +35,7 @@ interface TopbarProps {
 export function Topbar({ collapsed, onToggle }: TopbarProps) {
   const pathname = usePathname()
   const title = resolveTitle(pathname)
+  const { isAuthenticated } = useAuth()
 
   return (
     <header
@@ -64,9 +67,34 @@ export function Topbar({ collapsed, onToggle }: TopbarProps) {
 
       {/* Actions */}
       <div className="flex items-center gap-2">
-        <NotificationsPopover />
-
-        <WalletButton />
+        {isAuthenticated ? (
+          <>
+            <NotificationsPopover />
+            <WalletButton />
+          </>
+        ) : (
+          <>
+            <Link href="/auth/register">
+              <Button
+                size="sm"
+                className="h-8 px-4 text-xs font-bold rounded-full"
+                style={{ background: "#1D4731", color: "#fff" }}
+              >
+                Get Started
+              </Button>
+            </Link>
+            <Link href="/auth/callback">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 px-3 text-xs font-semibold rounded-full"
+                style={{ color: "#7A4F1E" }}
+              >
+                Sign In
+              </Button>
+            </Link>
+          </>
+        )}
       </div>
     </header>
   )

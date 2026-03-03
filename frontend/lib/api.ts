@@ -657,6 +657,23 @@ export const notificationsApi = {
 // Community API  — /api/v1/community
 // ─────────────────────────────────────────────────────────
 
+export interface GroupDetailDto {
+  groupId: string
+  groupName: string
+  description: string | null
+  isSystem: boolean
+  systemType: string | null
+  voluntaryType: string | null
+  locationScope: string | null
+  memberCount: number
+  createdAt: string
+  ward: { id: string; name: string } | null
+  constituency: { id: string; name: string } | null
+  county: { id: string; name: string } | null
+  userRole: string | null
+  userJoinedAt: string | null
+}
+
 export interface GroupMembershipDto {
   groupId: string
   groupName: string
@@ -708,6 +725,9 @@ export const communityApi = {
 
   getMyGroups: (): Promise<GroupMembershipDto[]> =>
     apiFetch<GroupMembershipDto[]>("/community/my-groups"),
+
+  getGroupDetail: (groupId: string): Promise<GroupDetailDto> =>
+    apiFetch<GroupDetailDto>(`/community/${groupId}`),
 
   getGroupMembers: (groupId: string, limit = 50, offset = 0): Promise<GroupMemberDto[]> =>
     apiFetch<GroupMemberDto[]>(`/community/${groupId}/members?limit=${limit}&offset=${offset}`),
@@ -838,7 +858,9 @@ class ApiClient {
       return memberships.map((m) => ({
         id: m.groupId,
         name: m.groupName,
-        description: m.locationScope ?? "",
+        description: m.isSystem
+          ? `${m.systemType?.charAt(0) + (m.systemType?.slice(1).toLowerCase() ?? "")} community group`
+          : m.voluntaryType?.replace(/_/g, " ").toLowerCase() ?? "",
         memberCount: m.memberCount,
         userRole: m.role,
         isPrivate: false,
@@ -849,8 +871,12 @@ class ApiClient {
     }
   }
 
-  async getGroup(_id: string): Promise<any> {
-    return null
+  async getGroup(id: string): Promise<GroupDetailDto | null> {
+    try {
+      return await communityApi.getGroupDetail(id)
+    } catch {
+      return null
+    }
   }
 
   async getGroupMembers(id: string): Promise<any[]> {
