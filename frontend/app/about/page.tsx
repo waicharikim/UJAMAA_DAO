@@ -5,11 +5,11 @@ import { ArrowLeft, ArrowRight, Coins, Users, Vote, ShieldCheck } from "lucide-r
 
 const NGUZO_SABA = [
   { swahili: "Umoja",        english: "Unity",                       meaning: "Strive for and maintain unity in the family, community, nation, and race." },
-  { swahili: "Kujichagulia", english: "Self-Determination",          meaning: "Define ourselves, name ourselves, create for ourselves, and speak for ourselves." },
-  { swahili: "Ujima",        english: "Collective Work & Responsibility", meaning: "Build and maintain our community together and make our brother's and sister's problems our problems." },
+  { swahili: "Kujitambua",   english: "Self-Determination",          meaning: "Define ourselves, name ourselves, create for ourselves, and speak for ourselves." },
+  { swahili: "Haki",         english: "Justice & Rights",                meaning: "Uphold justice and the rights of every member of our community, holding ourselves accountable to one another." },
   { swahili: "Ujamaa",       english: "Cooperative Economics",       meaning: "Build and maintain our own stores, shops and businesses and profit from them together." },
   { swahili: "Nia",          english: "Purpose",                     meaning: "Make our collective vocation the building and developing of our community." },
-  { swahili: "Kuumba",       english: "Creativity",                  meaning: "Do always as much as we can, in the way we can, in order to leave our community more beautiful." },
+  { swahili: "Ubunifu",      english: "Creativity",                  meaning: "Do always as much as we can, in the way we can, in order to leave our community more beautiful." },
   { swahili: "Imani",        english: "Faith",                       meaning: "Believe with all our heart in our people, our parents, our teachers, our leaders, and the righteousness of our struggle." },
 ]
 

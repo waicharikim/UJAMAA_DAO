@@ -31,10 +31,10 @@ const IS_DEV = process.env.NODE_ENV === "development"
 const NGUZO_SABA = [
   "Umoja",        // Unity
   "Kujitambua", // Self-determination
-  "Ujima",        // Collective work & responsibility
+  "Haki",         // Justice & Rights
   "Ujamaa",       // Cooperative economics
   "Nia",          // Purpose
-  "Kuumba",       // Creativity
+  "Ubunifu",      // Creativity
   "Imani",        // Faith
 ]
 
@@ -382,6 +382,7 @@ const navLinks = [
   { label: "Vision",       href: "#vision"      },
   { label: "How It Works", href: "#how-it-works" },
   { label: "The Protocol", href: "#principles"   },
+  { label: "About",        href: "/about"        },
 ]
 
 function LandingNavbar({
@@ -1063,10 +1064,10 @@ function ProtocolSection() {
             {[
               { sw: "Umoja",        en: "Unity"                 },
               { sw: "Kujitambua", en: "Self-Determination"    },
-              { sw: "Ujima",        en: "Collective Work"       },
+              { sw: "Haki",         en: "Justice & Rights"      },
               { sw: "Ujamaa",       en: "Cooperative Economics" },
               { sw: "Nia",          en: "Purpose"               },
-              { sw: "Kuumba",       en: "Creativity"            },
+              { sw: "Ubunifu",      en: "Creativity"            },
               { sw: "Imani",        en: "Faith"                 },
             ].map(({ sw, en }, i) => {
               const colors = ["#C8851A", "#2E7D4F", "#A83220"]
