@@ -35,7 +35,7 @@ export async function discordSendDM(
       headers: discordHeaders(),
       body: JSON.stringify({ recipient_id: discordUserId }),
     });
-    const dmChannel = await dmRes.json() as { id?: string };
+    const dmChannel = (await dmRes.json()) as { id?: string };
     if (!dmChannel.id) return null;
 
     // Step 2: Send message
@@ -63,15 +63,12 @@ export async function discordGetInviteLink(
   if (!DISCORD_TOKEN) return null;
 
   try {
-    const res = await fetch(
-      `${DISCORD_BASE}/channels/${channelId}/invites`,
-      {
-        method: 'POST',
-        headers: discordHeaders(),
-        body: JSON.stringify({ max_age: 0, max_uses: 0, unique: false }),
-      }
-    );
-    const data = await res.json() as { code?: string };
+    const res = await fetch(`${DISCORD_BASE}/channels/${channelId}/invites`, {
+      method: 'POST',
+      headers: discordHeaders(),
+      body: JSON.stringify({ max_age: 0, max_uses: 0, unique: false }),
+    });
+    const data = (await res.json()) as { code?: string };
     return data.code ? `https://discord.gg/${data.code}` : null;
   } catch (err) {
     logger.warn(

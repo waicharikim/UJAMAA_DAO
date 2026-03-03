@@ -96,9 +96,9 @@ export const PR_CONFIG = {
   PROPOSAL_EXECUTED: 200,
 
   // Baraza
-  BARAZA_ATTENDED: 15,          // 1× per day per baraza (DB unique constraint enforces this)
-  BARAZA_FACILITATED: 25,       // extra for the person who hosts/organises
-  BARAZA_REPORT_SUBMITTED: 10,  // small incentive for coordinators keeping records
+  BARAZA_ATTENDED: 15, // 1× per day per baraza (DB unique constraint enforces this)
+  BARAZA_FACILITATED: 25, // extra for the person who hosts/organises
+  BARAZA_REPORT_SUBMITTED: 10, // small incentive for coordinators keeping records
 } as const;
 
 /**

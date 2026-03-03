@@ -57,7 +57,11 @@ async function shutdownWorkers(signal: string): Promise<void> {
     `${signal} received — draining and closing workers`
   );
   try {
-    await Promise.all([economyWorker.close(), userCleanupWorker.close(), integrationWorker.close()]);
+    await Promise.all([
+      economyWorker.close(),
+      userCleanupWorker.close(),
+      integrationWorker.close(),
+    ]);
     logger.info({ operationType: 'WORKER' }, 'All workers drained and closed');
   } catch (err) {
     logger.error(

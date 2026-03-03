@@ -24,9 +24,9 @@ export interface RegisterBarazaGroupDto {
 
 export interface MarkAttendanceDto {
   platform: 'TELEGRAM' | 'WHATSAPP' | 'DISCORD';
-  externalGroupId: string;   // platform's chat ID → look up BarazaGroup
-  sessionDate: string;       // "YYYY-MM-DD"
-  attendeeExternalIds: string[];       // platform user IDs
+  externalGroupId: string; // platform's chat ID → look up BarazaGroup
+  sessionDate: string; // "YYYY-MM-DD"
+  attendeeExternalIds: string[]; // platform user IDs
   facilitatorExternalId?: string;
   reportedBy?: string;
 }
@@ -55,10 +55,10 @@ export interface AttendanceRecordDto {
 // ─────────────────────────────────────────────
 
 export interface BarazaAttendanceRewardJobData {
-  attendanceId: string;   // BarazaAttendance UUID — idempotency key
+  attendanceId: string; // BarazaAttendance UUID — idempotency key
   userId: string;
   prAmount: number;
-  reason: string;         // ParticipationRightsReason value
+  reason: string; // ParticipationRightsReason value
   barazaGroupId: string;
   sessionDate: string;
 }

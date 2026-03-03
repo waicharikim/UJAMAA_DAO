@@ -63,7 +63,11 @@ export async function handleTelegramWebhook(
   try {
     // Find baraza group by Telegram chat ID
     const barazaGroup = await prisma.barazaGroup.findFirst({
-      where: { platform: 'TELEGRAM', externalId: String(chatId), isActive: true },
+      where: {
+        platform: 'TELEGRAM',
+        externalId: String(chatId),
+        isActive: true,
+      },
     });
     if (!barazaGroup) return;
 
@@ -93,7 +97,12 @@ export async function handleTelegramWebhook(
     });
 
     logger.info(
-      { operationType: 'TELEGRAM_WEBHOOK', chatId, externalUserId, sessionDate },
+      {
+        operationType: 'TELEGRAM_WEBHOOK',
+        chatId,
+        externalUserId,
+        sessionDate,
+      },
       'Attendance recorded via /present command'
     );
   } catch (err) {
@@ -121,7 +130,12 @@ export async function handleDiscordWebhook(
     const rawBody = JSON.stringify(req.body);
 
     try {
-      const isValid = verifyDiscordSignature(PUBLIC_KEY, signature, timestamp, rawBody);
+      const isValid = verifyDiscordSignature(
+        PUBLIC_KEY,
+        signature,
+        timestamp,
+        rawBody
+      );
       if (!isValid) {
         res.status(401).json({ error: 'Invalid signature' });
         return;
@@ -156,11 +170,16 @@ function verifyDiscordSignature(
     const signedData = Buffer.from(timestamp + body);
     const keyBuffer = Buffer.from(publicKey, 'hex');
     const sigBuffer = Buffer.from(signature, 'hex');
-    return crypto.verify(null, signedData, {
-      key: keyBuffer,
-      format: 'der',
-      type: 'spki',
-    }, sigBuffer);
+    return crypto.verify(
+      null,
+      signedData,
+      {
+        key: keyBuffer,
+        format: 'der',
+        type: 'spki',
+      },
+      sigBuffer
+    );
   } catch {
     // Fallback: deny request if verification fails or crypto.verify not available
     return false;
@@ -179,7 +198,10 @@ export async function registerBarazaGroup(
   try {
     const user = (req as any).user;
     const dto = req.body as RegisterBarazaGroupDto;
-    const barazaGroup = await barazaBotService.registerBarazaGroup(user.id, dto);
+    const barazaGroup = await barazaBotService.registerBarazaGroup(
+      user.id,
+      dto
+    );
     sendSuccess(res, barazaGroup, 'Baraza group registered', 201);
   } catch (err) {
     next(err);

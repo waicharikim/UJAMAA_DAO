@@ -150,7 +150,9 @@ router.patch(
  */
 router.get(
   '/users/:userId/security-events',
-  authorize({ allowedRoles: [SystemRoles.COMPLIANCE_OFFICER, SystemRoles.SUPER_ADMIN] }),
+  authorize({
+    allowedRoles: [SystemRoles.COMPLIANCE_OFFICER, SystemRoles.SUPER_ADMIN],
+  }),
   buildRateLimiter({ windowMs: 15 * 60 * 1000, max: 20 }),
   validateRequest({ schema: userIdParamSchema, target: 'params' }),
   asyncHandler(getUserSecurityEventsAdmin)

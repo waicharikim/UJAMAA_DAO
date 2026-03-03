@@ -44,57 +44,59 @@ class DuesService {
       throw ApiError.badRequest('Invalid tier or amount');
     }
 
-    const payment = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      // Record payment
-      const record = await tx.duesPayment.create({
-        data: {
+    const payment = await prisma.$transaction(
+      async (tx: Prisma.TransactionClient) => {
+        // Record payment
+        const record = await tx.duesPayment.create({
+          data: {
+            userId,
+            tier,
+            totalAmount: amountKes,
+            period,
+            mpesaReceipt,
+            paymentMethod: 'MPESA',
+            status: 'COMPLETED',
+            paidAt: new Date(),
+          },
+        });
+
+        // Award PR
+        await participationRightsService.award(
           userId,
-          tier,
-          totalAmount: amountKes,
-          period,
-          mpesaReceipt,
-          paymentMethod: 'MPESA',
-          status: 'COMPLETED',
-          paidAt: new Date(),
-        },
-      });
+          tierConfig.prReward,
+          ParticipationRightsReason[
+            `DUES_${tier}` as keyof typeof ParticipationRightsReason
+          ],
+          { period, tier, amountKes }
+        );
 
-      // Award PR
-      await participationRightsService.award(
-        userId,
-        tierConfig.prReward,
-        ParticipationRightsReason[
-          `DUES_${tier}` as keyof typeof ParticipationRightsReason
-        ],
-        { period, tier, amountKes }
-      );
+        // Award UT (1:1 KES to UT)
+        await tx.user.update({
+          where: { id: userId },
+          data: { utilityTokens: { increment: amountKes } },
+        });
 
-      // Award UT (1:1 KES to UT)
-      await tx.user.update({
-        where: { id: userId },
-        data: { utilityTokens: { increment: amountKes } },
-      });
+        // If user has an active dues commitment, mark as fulfilled for this period
+        await tx.commitment.updateMany({
+          where: {
+            userId,
+            type: 'DUES',
+            status: CommitmentStatus.ACTIVE,
+          },
+          data: {
+            totalPaidKes: { increment: amountKes },
+            // Could add period fulfillment tracking here if needed
+          },
+        });
 
-      // If user has an active dues commitment, mark as fulfilled for this period
-      await tx.commitment.updateMany({
-        where: {
-          userId,
-          type: 'DUES',
-          status: CommitmentStatus.ACTIVE,
-        },
-        data: {
-          totalPaidKes: { increment: amountKes },
-          // Could add period fulfillment tracking here if needed
-        },
-      });
+        logger.info(
+          { userId, tier, amountKes, period, prReward: tierConfig.prReward },
+          '[DUES] Payment recorded — UT + PR awarded'
+        );
 
-      logger.info(
-        { userId, tier, amountKes, period, prReward: tierConfig.prReward },
-        '[DUES] Payment recorded — UT + PR awarded'
-      );
-
-      return record;
-    });
+        return record;
+      }
+    );
 
     await auditService.log(
       userId,
@@ -145,7 +147,13 @@ class DuesService {
       AuditAction.COMMITMENT_CREATED,
       'commitment',
       commitment.id,
-      { tier, amountKes: tierConfig.amountKes, frequency: 'MONTHLY', startPeriod, durationMonths }
+      {
+        tier,
+        amountKes: tierConfig.amountKes,
+        frequency: 'MONTHLY',
+        startPeriod,
+        durationMonths,
+      }
     );
 
     return commitment;

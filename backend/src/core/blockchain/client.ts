@@ -33,7 +33,10 @@ function loadAbis(): void {
     prAbi = prArtifact.abi;
     utAbi = utArtifact.abi;
   } catch (err) {
-    logger.warn({ err }, '[Blockchain] ABI artifacts not found — run `forge build` in contracts/');
+    logger.warn(
+      { err },
+      '[Blockchain] ABI artifacts not found — run `forge build` in contracts/'
+    );
   }
 }
 
@@ -47,7 +50,10 @@ function isPlaceholderKey(key: string): boolean {
 let provider: ethers.JsonRpcProvider | null = null;
 let signer: ethers.Wallet | null = null;
 
-function getSignerAndProvider(): { provider: ethers.JsonRpcProvider; signer: ethers.Wallet } | null {
+function getSignerAndProvider(): {
+  provider: ethers.JsonRpcProvider;
+  signer: ethers.Wallet;
+} | null {
   if (provider && signer) return { provider, signer };
 
   const rpcUrl = process.env.BASE_RPC_URL;

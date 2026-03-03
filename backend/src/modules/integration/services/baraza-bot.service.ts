@@ -37,12 +37,18 @@ class BarazaBotService {
         inviteLink: dto.inviteLink ?? undefined,
         isActive: true,
         registeredBy: adminUserId,
-        metadata: dto.metadata ? JSON.parse(JSON.stringify(dto.metadata)) : undefined,
+        metadata: dto.metadata
+          ? JSON.parse(JSON.stringify(dto.metadata))
+          : undefined,
       },
     });
 
     logger.info(
-      { operationType: 'BARAZA', barazaGroupId: barazaGroup.id, platform: dto.platform },
+      {
+        operationType: 'BARAZA',
+        barazaGroupId: barazaGroup.id,
+        platform: dto.platform,
+      },
       'Baraza group registered — fanning out invite jobs'
     );
 
@@ -90,14 +96,24 @@ class BarazaBotService {
   /**
    * Records attendance for a baraza session and queues PR reward jobs.
    */
-  async recordAttendance(dto: MarkAttendanceDto): Promise<AttendanceRecordDto[]> {
+  async recordAttendance(
+    dto: MarkAttendanceDto
+  ): Promise<AttendanceRecordDto[]> {
     const barazaGroup = await prisma.barazaGroup.findFirst({
-      where: { platform: dto.platform as any, externalId: dto.externalGroupId, isActive: true },
+      where: {
+        platform: dto.platform as any,
+        externalId: dto.externalGroupId,
+        isActive: true,
+      },
     });
 
     if (!barazaGroup) {
       logger.warn(
-        { operationType: 'BARAZA', platform: dto.platform, externalGroupId: dto.externalGroupId },
+        {
+          operationType: 'BARAZA',
+          platform: dto.platform,
+          externalGroupId: dto.externalGroupId,
+        },
         'BarazaGroup not found for attendance recording'
       );
       return [];

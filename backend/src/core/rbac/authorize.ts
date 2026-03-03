@@ -192,7 +192,8 @@ const requireOwnershipOrAdmin =
 // CONVENIENCE SHORTCUTS (match guide examples)
 // ==========================================================================
 
-export const requireSuperAdmin = () => requireSystemRole(SystemRoles.SUPER_ADMIN);
+export const requireSuperAdmin = () =>
+  requireSystemRole(SystemRoles.SUPER_ADMIN);
 export const requireAdmin = () => requireSystemRole(SystemRoles.SUPER_ADMIN);
 
 export const requireWardLeader = (
