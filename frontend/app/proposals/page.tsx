@@ -1,16 +1,27 @@
 "use client"
 
+import { useQuery } from "@tanstack/react-query"
 import { PageHeader } from "@/components/layout/page-header"
 import { StatsGrid } from "@/components/layout/stats-grid"
 import { FetchProposals } from "@/components/proposals/fetch-proposals"
 import { VotingProvider } from "@/contexts/voting-context"
-import { useAuth } from "@/contexts/auth-context"
 import { useRole } from "@/contexts/role-context"
-import { Plus, Vote, TrendingUp, Users, Clock } from "lucide-react"
+import { governanceApi } from "@/lib/api"
+import { Plus, Vote, TrendingUp } from "lucide-react"
 
 export default function ProposalsPage() {
-  const { user } = useAuth()
   const { hasScope } = useRole()
+
+  const { data: allMeta } = useQuery({
+    queryKey: ["proposals-total"],
+    queryFn: () => governanceApi.getProposals({ limit: 1 }),
+    staleTime: 60_000,
+  })
+  const { data: activeMeta } = useQuery({
+    queryKey: ["proposals-voting"],
+    queryFn: () => governanceApi.getProposals({ status: "VOTING", limit: 1 }),
+    staleTime: 60_000,
+  })
 
   const handleCreateProposal = () => {
     window.location.href = "/proposals/create"
@@ -19,39 +30,21 @@ export default function ProposalsPage() {
   const stats = [
     {
       title: "Active Proposals",
-      value: 3,
-      change: "+2 this week",
+      value: activeMeta?.total ?? "—",
+      change: "Open for voting",
       changeType: "positive" as const,
       icon: Vote,
       color: "bg-[#C9922A]",
       description: "Currently voting",
     },
     {
-      title: "Total Votes Cast",
-      value: 111,
-      change: "+45 today",
-      changeType: "positive" as const,
+      title: "Total Proposals",
+      value: allMeta?.total ?? "—",
+      change: "All time",
+      changeType: "neutral" as const,
       icon: TrendingUp,
       color: "bg-[#1E3D2F]",
-      description: "Community participation",
-    },
-    {
-      title: "Participants",
-      value: 156,
-      change: "+12 this month",
-      changeType: "positive" as const,
-      icon: Users,
-      color: "bg-[#B03A1E]",
-      description: "Active voters",
-    },
-    {
-      title: "Avg. Voting Time",
-      value: "2.3 days",
-      change: "Faster than usual",
-      changeType: "positive" as const,
-      icon: Clock,
-      color: "bg-[#2A5240]",
-      description: "Decision speed",
+      description: "Proposals submitted",
     },
   ]
 

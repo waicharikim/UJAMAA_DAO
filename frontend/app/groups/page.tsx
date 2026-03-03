@@ -1,19 +1,22 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useQuery } from "@tanstack/react-query"
 import { PageHeader } from "@/components/layout/page-header"
 import { StatsGrid } from "@/components/layout/stats-grid"
 import { GroupsList } from "@/components/groups/groups-list"
-import { useAuth } from "@/contexts/auth-context"
-import { Plus, Users, Crown, TrendingUp, MessageCircle } from "lucide-react"
+import { communityApi } from "@/lib/api"
+import { Plus, Users, Crown, Shield, Network } from "lucide-react"
 
 export default function GroupsPage() {
-  const { user } = useAuth()
-  const [loading, setLoading] = useState(true)
+  const { data: groups = [], isLoading } = useQuery({
+    queryKey: ["my-groups-stats"],
+    queryFn: communityApi.getMyGroups,
+    staleTime: 60_000,
+  })
 
-  useEffect(() => {
-    setTimeout(() => setLoading(false), 1000)
-  }, [])
+  const adminCount    = groups.filter((g) => g.role === "LEADER" || g.role === "ADMIN").length
+  const systemCount   = groups.filter((g) => g.isSystem).length
+  const voluntaryCount = groups.filter((g) => !g.isSystem).length
 
   const handleCreateGroup = () => {
     window.location.href = "/groups/create"
@@ -22,8 +25,8 @@ export default function GroupsPage() {
   const stats = [
     {
       title: "My Groups",
-      value: 3,
-      change: "+1 this month",
+      value: isLoading ? "—" : groups.length,
+      change: "Active memberships",
       changeType: "positive" as const,
       icon: Users,
       color: "bg-[#C9922A]",
@@ -31,34 +34,34 @@ export default function GroupsPage() {
     },
     {
       title: "Admin Roles",
-      value: 1,
-      change: "Leadership position",
+      value: isLoading ? "—" : adminCount,
+      change: "Leadership positions",
       changeType: "neutral" as const,
       icon: Crown,
       color: "bg-[#1E3D2F]",
       description: "Groups you manage",
     },
     {
-      title: "Group Impact",
-      value: 2450,
-      change: "+320 this month",
-      changeType: "positive" as const,
-      icon: TrendingUp,
+      title: "System Groups",
+      value: isLoading ? "—" : systemCount,
+      change: "Ward, constituency, county",
+      changeType: "neutral" as const,
+      icon: Shield,
       color: "bg-[#B03A1E]",
-      description: "Collective points",
+      description: "Official community groups",
     },
     {
-      title: "Active Discussions",
-      value: 8,
-      change: "2 need response",
-      changeType: "neutral" as const,
-      icon: MessageCircle,
+      title: "Voluntary",
+      value: isLoading ? "—" : voluntaryCount,
+      change: "Interest & project groups",
+      changeType: "positive" as const,
+      icon: Network,
       color: "bg-[#2A5240]",
-      description: "Ongoing conversations",
+      description: "Groups you chose to join",
     },
   ]
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-center min-h-[400px]">

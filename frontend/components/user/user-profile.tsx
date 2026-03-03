@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
-import { Edit, Settings, Award, Coins, MapPin, Briefcase } from "lucide-react"
+import { Edit, Settings, Award, Coins, MapPin, Briefcase, Zap } from "lucide-react"
 import { ProfileEditForm } from "./profile-edit-form"
 import { PrivacySettings } from "./privacy-settings"
 
@@ -97,25 +97,35 @@ export function UserProfile() {
 
       <CardContent className="px-5 pb-5 space-y-4">
         {/* Token stats */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-2">
           <div
             className="flex items-center gap-2 p-3 rounded-xl"
             style={{ background: "rgba(201,146,42,0.06)", border: "1px solid rgba(201,146,42,0.12)" }}
           >
             <Award className="h-4 w-4 flex-shrink-0" style={{ color: "#C9922A" }} />
-            <div>
-              <p className="text-[18px] font-bold text-[#0E0B08] leading-none">{user.impactPoints?.global ?? 0}</p>
-              <p className="text-[10px] text-[#0E0B08]/50 mt-0.5">Impact Points</p>
+            <div className="min-w-0">
+              <p className="text-[16px] font-bold text-[#0E0B08] leading-none">{(user.impactPoints?.global ?? 0).toLocaleString()}</p>
+              <p className="text-[10px] text-[#0E0B08]/50 mt-0.5">IP</p>
             </div>
           </div>
           <div
             className="flex items-center gap-2 p-3 rounded-xl"
             style={{ background: "rgba(30,61,47,0.06)", border: "1px solid rgba(30,61,47,0.12)" }}
           >
-            <Coins className="h-4 w-4 flex-shrink-0" style={{ color: "#1E3D2F" }} />
-            <div>
-              <p className="text-[18px] font-bold text-[#0E0B08] leading-none">{user.tokenBalance ?? 0}</p>
-              <p className="text-[10px] text-[#0E0B08]/50 mt-0.5">PR Balance</p>
+            <Coins className="h-4 w-4 flex-shrink-0" style={{ color: "#1D4731" }} />
+            <div className="min-w-0">
+              <p className="text-[16px] font-bold text-[#0E0B08] leading-none">{(user.tokenBalance ?? 0).toLocaleString()}</p>
+              <p className="text-[10px] text-[#0E0B08]/50 mt-0.5">PR</p>
+            </div>
+          </div>
+          <div
+            className="flex items-center gap-2 p-3 rounded-xl"
+            style={{ background: "rgba(122,79,30,0.06)", border: "1px solid rgba(122,79,30,0.12)" }}
+          >
+            <Zap className="h-4 w-4 flex-shrink-0" style={{ color: "#7A4F1E" }} />
+            <div className="min-w-0">
+              <p className="text-[16px] font-bold text-[#0E0B08] leading-none">{(user.utBalance ?? 0).toLocaleString()}</p>
+              <p className="text-[10px] text-[#0E0B08]/50 mt-0.5">UT</p>
             </div>
           </div>
         </div>

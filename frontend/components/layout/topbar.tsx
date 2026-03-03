@@ -2,11 +2,26 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { PanelLeft } from "lucide-react"
+import { PanelLeft, Coins, Award, Zap } from "lucide-react"
 import { WalletButton } from "@/components/auth/wallet-button"
 import { Button } from "@/components/ui/button"
 import { NotificationsPopover } from "./notifications-popover"
 import { useAuth } from "@/contexts/auth-context"
+
+// ── Token stat chip ─────────────────────────────────────────
+interface TokenChipProps { icon: React.ElementType; label: string; value: number; color: string }
+function TokenChip({ icon: Icon, label, value, color }: TokenChipProps) {
+  return (
+    <div
+      className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold flex-shrink-0"
+      style={{ background: `${color}18`, color }}
+    >
+      <Icon className="h-3 w-3 flex-shrink-0" />
+      <span>{value.toLocaleString()}</span>
+      <span className="font-medium opacity-60">{label}</span>
+    </div>
+  )
+}
 
 const PAGE_TITLES: Record<string, string> = {
   "/dashboard": "Dashboard",
@@ -35,7 +50,7 @@ interface TopbarProps {
 export function Topbar({ collapsed, onToggle }: TopbarProps) {
   const pathname = usePathname()
   const title = resolveTitle(pathname)
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, user } = useAuth()
 
   return (
     <header
@@ -64,6 +79,15 @@ export function Topbar({ collapsed, onToggle }: TopbarProps) {
       <h1 className="font-serif font-semibold text-[18px] text-chai leading-none tracking-tight flex-1">
         {title}
       </h1>
+
+      {/* Token stats — desktop only */}
+      {isAuthenticated && user && (
+        <div className="hidden md:flex items-center gap-1.5 flex-shrink-0">
+          <TokenChip icon={Coins} label="PR" value={user.tokenBalance}        color="#C9922A" />
+          <TokenChip icon={Award} label="IP" value={user.impactPoints.global}  color="#1D4731" />
+          <TokenChip icon={Zap}   label="UT" value={user.utBalance}            color="#7A4F1E" />
+        </div>
+      )}
 
       {/* Actions */}
       <div className="flex items-center gap-2">
