@@ -300,7 +300,7 @@ export function RegisterForm() {
     setForm((prev) => ({
       ...prev,
       messagingPlatforms: prev.messagingPlatforms.map((p) =>
-        p.platform === platform ? { ...p, handle: handle || undefined } : p
+        p.platform === platform ? { ...p, handle: handle.trim() || undefined } : p
       ),
     }))
   }
@@ -314,7 +314,7 @@ export function RegisterForm() {
       await requestMagicLink({
         email: form.email.trim(),
         name: form.name.trim(),
-        phoneNumber: form.phoneNumber.trim(),
+        phoneNumber: form.phoneNumber.trim().replace(/\s+/g, ''),
         primaryWardId: form.primaryWardId,
         secondaryWardId: form.secondaryWardId,
         industryIds: form.industryIds,
