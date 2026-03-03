@@ -6,7 +6,7 @@
 
 ---
 
-**Last updated:** 2026-03-03 (session 25)
+**Last updated:** 2026-03-03 (session 26 — planning only)
 **Branch:** `develop`
 **Last commits:**
 - `3d034cc` feat(community): group detail page + signup button in topbar
@@ -14,6 +14,8 @@
 - `f502869` chore(frontend): upgrade Next.js 15.3.3 → 16.1.6, ESLint 8 → 9
 - `a9eff07` fix(frontend): turbopack resolveAlias needs relative paths not absolute
 - `53b6ae6` perf(frontend): enable Turbopack for next dev; add resolveAlias stubs
+
+*(No new commits this session — planning only)*
 
 ---
 
@@ -28,73 +30,60 @@
 
 ---
 
-## What was completed in the last session (session 25)
+## What was done in the last session (session 26 — planning)
 
-**Enrollment race condition fix:**
-- `groupMembership.service.ts` — `ensureSystemGroupAndEnroll` + `ensureNationalGroupAndEnroll` both replaced `findFirst → create` with atomic `upsert` on `Group.name`. Two simultaneous registrations were both inserting the same system group name → unique constraint violation. Upsert serialises via PostgreSQL `INSERT ... ON CONFLICT DO UPDATE`.
+**No code committed.** This was a pure planning session.
 
-**UT token balance:**
-- `frontend/lib/types.ts` — `utBalance: number` added to `User` type
-- `frontend/contexts/auth-context.tsx` — `mapBackendUser()` maps `raw.economic?.utilityTokens ?? raw.utilityTokens ?? 0`
+**Onboarding lifecycle analysed:**
+- `OnboardingProgress` created at registration (`currentStep: 'EMAIL_VERIFICATION'`, `profileCompleted/industriesSelected/goodsServicesSelected: true`)
+- Advances once at email verification (`currentStep: 'PLATFORM_INTRO'`, `emailVerified: true`)
+- After that: **nothing** — `joinedWardGroup`, `joinedVoluntaryGroup`, `castFirstVote`, `phoneVerified`, `communityVerified`, `walletConnected` are all designed but never written by any code path
 
-**Desktop topbar token chips:**
-- `components/layout/topbar.tsx` — `TokenChip` component + `hidden md:flex` strip showing PR/IP/UT between page title and action buttons (auth-gated)
+**Community module gaps identified:**
+- `Group.memberCount` never incremented/decremented by `joinGroup`/`leaveGroup`/`createVoluntaryGroup`
+- No `GET /community/groups` discovery endpoint — users can't browse all groups
+- Group admin routes commented out — no settings update, member role change, or kick
+- Community listener enrolls users in system groups but never sets `OnboardingProgress.joinedWardGroup`
 
-**Dashboard real data:**
-- `dashboard-content.tsx` — proposals count, community count, notifications (real activity) all wired via `useQuery`. Mobile token bar (`md:hidden`) below greeting.
-
-**Groups page real stats:**
-- `app/groups/page.tsx` — fake 1s delay + hardcoded stats replaced with `useQuery(communityApi.getMyGroups)`. 4 stats: My Groups, Admin Roles, System Groups, Voluntary.
-
-**Proposals page real stats:**
-- `app/proposals/page.tsx` — 4 hardcoded stats replaced with 2 real counts (Active = VOTING status, Total = all).
-
-**User profile UT chip:**
-- `user-profile.tsx` — 2-col token grid expanded to 3-col; UT chip (Zap icon, warm-brown) added alongside PR and IP.
-
-**PWA noted:**
-- `SESSION_STATE.md` + `CLAUDE.md §7` — PWA non-installability documented with full diagnosis (deferred until core features stable).
-
-**Orphaned user re-enrollment:**
-- `backend/scripts/re-enroll-orphaned-users.ts` — one-time remediation script. Ran successfully: 7 real users re-enrolled (kisombe, joan, joe, waichari, jane + 2 e2e_v2 users). All now have 5–7 group memberships. 1 test user skipped intentionally.
+**Plan saved** at `.claude/plans/wiggly-conjuring-nygaard.md` — ready to execute next session.
 
 ---
 
-## What was completed in the previous session (session 24)
+## What was completed in the previous session (session 25)
 
-**Frontend dev performance:**
-- Turbopack enabled: `package.json` `dev` script → `next dev --turbopack`
-- `next.config.mjs` gains `turbopack.resolveAlias` with relative paths (`'./stubs/empty.js'`) for `unstorage`, `x402/client`, `@base-org/account`
-- Webpack config retained unchanged for `next build`
+**Enrollment race condition fix:**
+- `groupMembership.service.ts` — `ensureSystemGroupAndEnroll` + `ensureNationalGroupAndEnroll` both replaced `findFirst → create` with atomic `upsert` on `Group.name`.
 
-**Next.js upgrade:**
-- `next` 15.3.3 → 16.1.6, `eslint-config-next` 14.0.3 → 16.1.6, `eslint` ^8 → ^9
-- Docker node_modules volume purged and rebuilt via `docker compose up --build`
+**Frontend data wiring:**
+- `utBalance` added to User type + mapped in `mapBackendUser()`
+- Topbar PR/IP/UT `TokenChip` strip (desktop `hidden md:flex`)
+- Dashboard: real proposals count, real community count, real notification activity, mobile token bar
+- Groups page: real stats from `useQuery(communityApi.getMyGroups)`
+- Proposals page: 2 real counts (Active VOTING, Total)
+- Profile: UT chip in 3-col grid
 
-**Group detail page (backend + frontend):**
-- `groupMembership.service.ts` — `getGroupById(groupId, userId)` method returning `GroupDetailDto`
-- `group.controller.ts` + `group.routes.ts` — `GET /:groupId` route
-- `frontend/lib/api.ts` — `GroupDetailDto` interface + `communityApi.getGroupDetail(groupId)`
-- `components/groups/group-detail.tsx` + `group-members.tsx` — full rewrites using real DTO shapes; join/leave mutation for voluntary groups
+**Governance tests:**
+- 47 new tests (25 service unit + 22 route integration) — 269/269 green total
+- Governance status: `partial` → `tested`
 
-**Topbar signup button:**
-- `components/layout/topbar.tsx` — `useAuth().isAuthenticated` guards: authenticated → notifications + wallet; unauthenticated → "Get Started" + "Sign In"
+**Orphaned user re-enrollment:**
+- `backend/scripts/re-enroll-orphaned-users.ts` ran: 7 real users re-enrolled
 
 ---
 
 ## Known open issues
 
-- `next build` fails at `/404` static generation — pre-existing bug (unrelated to Next.js upgrade)
-- Auth test flakiness: 25 tests intermittently fail — pre-existing, unrelated to recent changes. Community + Economy: 83/83 green.
-- `failedJobHandler` in `workers.ts` is dead code — needs `worker.on('failed', failedJobHandler)` wired
-- No tests for integration, governance, projects, marketplace, notifications, onboarding, emergency, audit, admin
-- `fetch-proposals.tsx` + `voting-interface.tsx` + `enhanced-proposals.tsx` have pre-existing scaffold TypeScript errors (wrong internal `Proposal` interface shape)
-- Governance `listProposals` returns `_count.votes` only — yesWeight/noWeight not broken out per proposal in list endpoint
+- `next build` fails at `/404` static generation — pre-existing
+- Auth test flakiness: ~25 tests intermittently fail — pre-existing
+- `failedJobHandler` in `workers.ts` is dead code — needs `worker.on('failed', ...)` wired
+- `fetch-proposals.tsx` + `voting-interface.tsx` + `enhanced-proposals.tsx` have pre-existing scaffold TypeScript errors
 - M-Pesa verification in `user.service.ts` is stubbed — always returns success
 - `PrToken.sol` + `UtToken.sol` written and tested ✅ — Base Sepolia deploy pending (need funded minter wallet)
-- Telegram/Discord bot tokens are placeholder values — real bots not configured yet
+- Telegram/Discord bot tokens are placeholder values — real bots not configured
 - Audit not yet wired for: profile updates, group joins, governance actions
-- PWA not installable — `next-pwa` package installed but not wired (`withPWA` missing from `next.config.mjs`), no `manifest.json`, no app icons in `public/`, no PWA metadata in `layout.tsx`. Defer until core features are stable.
+- PWA not installable — `next-pwa` installed but not wired (deferred)
+- `Group.memberCount` stale for existing groups — will self-correct after fix on next join/leave
+- `OnboardingProgress.joinedWardGroup` is `false` for all existing users — will need one-time backfill if progress UI is ever surfaced
 
 ---
 
@@ -112,9 +101,15 @@
 
 ## Next tasks (priority order)
 
-1. **Base Sepolia deploy** — fund minter wallet → `forge script script/Deploy.s.sol --rpc-url base_sepolia --broadcast` → set `PR_TOKEN_ADDRESS`/`UT_TOKEN_ADDRESS` in docker-compose
-2. **Fix `next build` 404 prerender error** — Next.js 16 upgrade did not resolve this. Low urgency — dev server works fine.
-3. **Integration module tests** — move integration `partial` → `tested`. Test Baraza bot routes and reward job logic.
+1. **Community + onboarding plan** (plan saved, ready to execute):
+   - Fix `Group.memberCount` increment/decrement in `group.service.ts`
+   - Add `GET /community/groups` discovery endpoint with filters + pagination
+   - Add group admin: `PATCH /:groupId/settings`, role change, kick member
+   - Wire onboarding booleans: `joinedWardGroup` (community listener), `joinedVoluntaryGroup` (joinGroup), `castFirstVote` (castVote)
+   - Frontend: "Explore" tab on groups page
+   - Tests: extend 49 community tests; target ~70+ new tests
+2. **Base Sepolia deploy** — fund minter wallet → `forge script script/Deploy.s.sol --rpc-url base_sepolia --broadcast`
+3. **Fix `next build` 404 prerender error** — low urgency, dev server works fine
 
 ---
 
@@ -126,9 +121,14 @@ backend/src/index.ts                            — Server entry, startup assert
 backend/src/workers.ts                          — BullMQ worker + integrationWorker
 backend/src/core/jobs/register.ts               — All repeatable job registrations
 backend/src/core/rbac/roles.ts                  — SystemRoles, GroupRoles, RoleHierarchy, roleIncludes(), type guards
+backend/src/core/events/listener-registry.ts    — registerAllListeners() — called in app.ts initializeServices()
 backend/src/modules/integration/                — Baraza messaging module (Telegram, Discord, WhatsApp)
 backend/src/modules/governance/services/proposal.service.ts  — createProposal, startVoting, castVote, tallyVotes, getProposal, listProposals
+backend/src/modules/community/services/group.service.ts      — createVoluntaryGroup, joinGroup, leaveGroup (memberCount BUG: not maintained)
 backend/src/modules/community/services/groupMembership.service.ts — enrollInSystemGroups (upsert), getGroupById, getUserGroups, getGroupMembers
+backend/src/modules/community/listeners/user-events.listeners.ts  — email.verified → enrollInSystemGroups (does NOT update joinedWardGroup yet)
+backend/src/modules/onboarding/services/onboarding.service.ts — getProgress, completeTutorial, markMilestone
+backend/src/modules/user/prisma/schema.prisma   — OnboardingProgress model (lines 126-173) — all boolean fields
 backend/scripts/re-enroll-orphaned-users.ts     — one-time remediation script (keep for reference)
 docker/docker-compose.yml                       — All services, env vars, healthchecks
 backend/vitest.config.ts                        — Test config (fileParallelism:false, resolve.alias, env block)
@@ -145,4 +145,5 @@ frontend/components/groups/group-detail.tsx     — Group detail with real Group
 frontend/components/groups/group-members.tsx    — Group members with real GroupMemberDto
 frontend/next.config.mjs                        — Turbopack resolveAlias stubs + webpack stubs for Privy deps
 ai_workflows/DECISIONS.md                       — All ADRs (ADR-001 through ADR-024)
+.claude/plans/wiggly-conjuring-nygaard.md       — Community + onboarding plan (ready to execute next session)
 ```

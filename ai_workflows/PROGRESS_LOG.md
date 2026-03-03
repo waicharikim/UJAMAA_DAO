@@ -1112,3 +1112,37 @@ Fund minter wallet and deploy PrToken + UtToken contracts to Base Sepolia; set `
 
 **Token usage:**
 Sonnet 4.6 — heavy session (cross-context continuation: enrollment bug fix + full frontend data wiring + re-enrollment remediation + governance tests; 269/269 green)
+
+---
+
+## [2026-03-03] — Planning session: community module gaps + onboarding lifecycle analysis
+
+**What was built:**
+
+- **Plan only — no code committed this session.** Full implementation plan written and saved to `.claude/plans/wiggly-conjuring-nygaard.md` for execution in the next session.
+- **Onboarding lifecycle analysed:** `OnboardingProgress` is created at registration with 3 flags pre-set (`profileCompleted`, `industriesSelected`, `goodsServicesSelected`, `currentStep: 'EMAIL_VERIFICATION'`). It advances once on email verification to `currentStep: 'PLATFORM_INTRO'`. After that, nothing ever writes to the remaining 15+ boolean fields (`joinedWardGroup`, `joinedVoluntaryGroup`, `castFirstVote`, `phoneVerified`, `communityVerified`, `walletConnected`, etc.) — these were designed but never wired to any actions.
+- **Community module gaps identified:**
+  - `Group.memberCount` never incremented/decremented — `joinGroup`, `leaveGroup`, and `createVoluntaryGroup` all bypass it
+  - No `GET /community/groups` endpoint — users cannot discover or browse groups
+  - Group admin routes commented out — no settings update, member role change, or member removal
+  - Community listener (`user-events.listeners.ts`) enrolls users in system groups but never updates `OnboardingProgress.joinedWardGroup`
+
+**Decisions made:**
+
+- **Onboarding step progression defined:** `EMAIL_VERIFICATION` → (email verified) → `PLATFORM_INTRO` → (joinedWardGroup) → `EXPLORE_COMMUNITY` → (joinedVoluntaryGroup or castFirstVote) → progression continues. Steps are free strings (not an enum) — advancement logic will be encoded in the event listeners.
+- **Onboarding wiring via `updateMany` not `update`** — using `updateMany` (instead of `update`) makes the call silently idempotent; if `OnboardingProgress` row doesn't exist yet, it does nothing rather than throwing "Record not found". Safe for all event-triggered updates outside the auth transaction scope.
+- **`castFirstVote` filter:** `updateMany` with `where: { castFirstVote: false }` ensures the onboarding update only fires on the very first vote, not on every subsequent vote — avoids unnecessary DB writes.
+- **Group discovery scoped to ACTIVE groups only** — `getGroups()` filters `status: GroupStatus.ACTIVE` to exclude FORMING/DISBANDED groups from the discovery UI. System groups are always ACTIVE; voluntary groups may be FORMING.
+
+**What's still broken or incomplete:**
+
+- All items from previous session unchanged: Base Sepolia deploy pending, `next build` 404 error, PWA not wired, `failedJobHandler` dead code
+- Community `memberCount` is stale for all existing groups (will be correct after fix, but historical data is wrong — no migration needed, counts will self-correct on next join/leave)
+- Onboarding `joinedWardGroup` is `false` for all existing users even though they are in system groups (will be correct for new registrations after fix; existing users need a one-time backfill if the progress UI is ever surfaced)
+
+**Next milestone:**
+
+Implement the community + onboarding plan: fix memberCount, add group discovery + admin endpoints, wire onboarding progress booleans, add frontend Explore tab, write tests — targeting ~70+ new tests on top of the 269 baseline.
+
+**Token usage:**
+Sonnet 4.6 — planning session only (codebase exploration + plan writing; no code committed)
