@@ -59,7 +59,9 @@ router.post('/discord/webhook', handleDiscordWebhook);
 router.post(
   '/baraza-groups',
   authenticate,
-  authorize({ allowedRoles: [SystemRoles.WARD_ADMIN, SystemRoles.SUPER_ADMIN] }),
+  authorize({
+    allowedRoles: [SystemRoles.WARD_ADMIN, SystemRoles.SUPER_ADMIN],
+  }),
   validateRequest({ schema: registerBarazaGroupSchema, target: 'body' }),
   registerBarazaGroup
 );
@@ -69,7 +71,9 @@ router.get('/baraza-groups', authenticate, getBarazaGroups);
 router.post(
   '/baraza-groups/:id/attendance',
   authenticate,
-  authorize({ allowedRoles: [SystemRoles.WARD_ADMIN, SystemRoles.SUPER_ADMIN] }),
+  authorize({
+    allowedRoles: [SystemRoles.WARD_ADMIN, SystemRoles.SUPER_ADMIN],
+  }),
   validateRequest({ schema: attendanceSchema, target: 'body' }),
   recordAttendance
 );
@@ -77,7 +81,9 @@ router.post(
 router.post(
   '/baraza-groups/:id/deactivate',
   authenticate,
-  authorize({ allowedRoles: [SystemRoles.WARD_ADMIN, SystemRoles.SUPER_ADMIN] }),
+  authorize({
+    allowedRoles: [SystemRoles.WARD_ADMIN, SystemRoles.SUPER_ADMIN],
+  }),
   deactivateBarazaGroup
 );
 

@@ -50,7 +50,11 @@ export class GroupController {
     const { groupId } = req.params;
     const limit = parseInt(req.query.limit as string) || 50;
     const offset = parseInt(req.query.offset as string) || 0;
-    const members = await groupMembershipService.getGroupMembers(groupId, limit, offset);
+    const members = await groupMembershipService.getGroupMembers(
+      groupId,
+      limit,
+      offset
+    );
     sendSuccess(res, members, 'Members retrieved');
   }
 }

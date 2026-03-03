@@ -61,33 +61,37 @@ export class ParticipationRightsService {
   ): Promise<ParticipationRightsLog> {
     if (amount <= 0) throw new Error('Award amount must be positive');
 
-    const log = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const current = await this.getBalanceWithTx(tx, userId);
-      const newBalance = Math.min(current + amount, MAX_BALANCE);
+    const log = await this.prisma.$transaction(
+      async (tx: Prisma.TransactionClient) => {
+        const current = await this.getBalanceWithTx(tx, userId);
+        const newBalance = Math.min(current + amount, MAX_BALANCE);
 
-      const entry = await tx.participationRightsLog.create({
-        data: {
-          userId,
-          amount,
-          balance: newBalance,
-          reason: reason,
-          metadata: metadata ? JSON.parse(JSON.stringify(metadata)) : undefined,
-        },
-      });
+        const entry = await tx.participationRightsLog.create({
+          data: {
+            userId,
+            amount,
+            balance: newBalance,
+            reason: reason,
+            metadata: metadata
+              ? JSON.parse(JSON.stringify(metadata))
+              : undefined,
+          },
+        });
 
-      // Update user field for quick access (denormalized)
-      await tx.user.update({
-        where: { id: userId },
-        data: { participationRights: newBalance },
-      });
+        // Update user field for quick access (denormalized)
+        await tx.user.update({
+          where: { id: userId },
+          data: { participationRights: newBalance },
+        });
 
-      logger.info(
-        { userId, amount, reason, newBalance, metadata },
-        '[PR] Awarded Participation Rights'
-      );
+        logger.info(
+          { userId, amount, reason, newBalance, metadata },
+          '[PR] Awarded Participation Rights'
+        );
 
-      return entry;
-    });
+        return entry;
+      }
+    );
 
     await auditService.log(
       userId,
@@ -111,7 +115,10 @@ export class ParticipationRightsService {
             await prContract.mint(user.walletAddress, amountWei);
             logger.info({ userId, amount }, '[PR] On-chain mint succeeded');
           } catch (err) {
-            logger.warn({ userId, err }, '[PR] On-chain mint failed — off-chain record intact');
+            logger.warn(
+              { userId, err },
+              '[PR] On-chain mint failed — off-chain record intact'
+            );
           }
         }
       }
@@ -131,41 +138,45 @@ export class ParticipationRightsService {
   ): Promise<ParticipationRightsLog> {
     if (amount <= 0) throw new Error('Spend amount must be positive');
 
-    const log = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const current = await this.getBalanceWithTx(tx, userId);
+    const log = await this.prisma.$transaction(
+      async (tx: Prisma.TransactionClient) => {
+        const current = await this.getBalanceWithTx(tx, userId);
 
-      if (current < amount) {
-        throw ApiError.insufficientParticipationRights(
-          'Insufficient Participation Rights',
-          amount,
-          current
+        if (current < amount) {
+          throw ApiError.insufficientParticipationRights(
+            'Insufficient Participation Rights',
+            amount,
+            current
+          );
+        }
+
+        const newBalance = current - amount;
+
+        const entry = await tx.participationRightsLog.create({
+          data: {
+            userId,
+            amount: -amount,
+            balance: newBalance,
+            reason: reason,
+            metadata: metadata
+              ? JSON.parse(JSON.stringify(metadata))
+              : undefined,
+          },
+        });
+
+        await tx.user.update({
+          where: { id: userId },
+          data: { participationRights: newBalance },
+        });
+
+        logger.info(
+          { userId, amount: -amount, reason, newBalance, metadata },
+          '[PR] Spent Participation Rights'
         );
+
+        return entry;
       }
-
-      const newBalance = current - amount;
-
-      const entry = await tx.participationRightsLog.create({
-        data: {
-          userId,
-          amount: -amount,
-          balance: newBalance,
-          reason: reason,
-          metadata: metadata ? JSON.parse(JSON.stringify(metadata)) : undefined,
-        },
-      });
-
-      await tx.user.update({
-        where: { id: userId },
-        data: { participationRights: newBalance },
-      });
-
-      logger.info(
-        { userId, amount: -amount, reason, newBalance, metadata },
-        '[PR] Spent Participation Rights'
-      );
-
-      return entry;
-    });
+    );
 
     await auditService.log(
       userId,

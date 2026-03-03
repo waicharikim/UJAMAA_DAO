@@ -242,7 +242,10 @@ class ProposalService {
       .reduce((s, v) => s + v.voteWeight, 0);
 
     const { votes, ...rest } = proposal;
-    return { ...rest, votesSummary: { total: votes.length, yesWeight, noWeight } };
+    return {
+      ...rest,
+      votesSummary: { total: votes.length, yesWeight, noWeight },
+    };
   }
 
   async listProposals(params: {

@@ -630,13 +630,15 @@ async function seedRoles() {
     {
       name: 'system:county_coordinator',
       namespace: 'system',
-      description: 'County-level elected observer and coordinator (one per county, 47 total)',
+      description:
+        'County-level elected observer and coordinator (one per county, 47 total)',
       builtin: true,
     },
     {
       name: 'system:blockchain_admin',
       namespace: 'system',
-      description: 'Manages smart contracts — deploy, upgrade governor contracts, emergency pauses. Technical only, no governance override.',
+      description:
+        'Manages smart contracts — deploy, upgrade governor contracts, emergency pauses. Technical only, no governance override.',
       builtin: true,
     },
     {
@@ -648,7 +650,8 @@ async function seedRoles() {
     {
       name: 'system:multisig_signer',
       namespace: 'system',
-      description: 'Signs critical on-chain transactions, required for treasury operations',
+      description:
+        'Signs critical on-chain transactions, required for treasury operations',
       builtin: true,
     },
 
