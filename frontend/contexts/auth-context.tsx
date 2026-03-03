@@ -222,7 +222,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ── step 1: request magic link ──
   const requestMagicLink = useCallback(
-    async (params: { email: string; name?: string; phoneNumber?: string; primaryWardId?: string; secondaryWardId?: string; industryIds?: string[]; goodsServiceIds?: string[] }) => {
+    async (params: { email: string; name?: string; phoneNumber?: string; primaryWardId?: string; secondaryWardId?: string; industryIds?: string[]; goodsServiceIds?: string[]; messagingPlatforms?: Array<{ platform: "TELEGRAM" | "WHATSAPP" | "DISCORD"; handle?: string }> }) => {
       setIsLoading(true)
       try {
         await authApi.requestMagicLink(params)
