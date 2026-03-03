@@ -17,6 +17,14 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  // Turbopack equivalents of the webpack stubs below (used by `next dev --turbopack`)
+  turbopack: {
+    resolveAlias: {
+      unstorage: path.resolve(__dirname, "stubs/empty.js"),
+      "x402/client": path.resolve(__dirname, "stubs/empty.js"),
+      "@base-org/account": path.resolve(__dirname, "stubs/empty.js"),
+    },
+  },
   webpack: (config) => {
     // Stub missing optional transitive deps from @privy-io/react-auth:
     //
