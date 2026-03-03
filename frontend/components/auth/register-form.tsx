@@ -233,6 +233,7 @@ export function RegisterForm() {
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
   const [error, setError] = useState("")
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string> | null>(null)
 
   const [counties, setCounties] = useState<RefItem[]>([])
   const [industries, setIndustries] = useState<RefItem[]>([])
@@ -309,6 +310,7 @@ export function RegisterForm() {
 
   const handleSubmit = async () => {
     setError("")
+    setFieldErrors(null)
     setSubmitting(true)
     try {
       await requestMagicLink({
@@ -323,7 +325,12 @@ export function RegisterForm() {
       })
       setDone(true)
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.")
+      if (err instanceof ApiError && err.errors && Object.keys(err.errors).length > 0) {
+        setFieldErrors(err.errors)
+        setError("Please fix the following errors:")
+      } else {
+        setError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.")
+      }
     } finally {
       setSubmitting(false)
     }
@@ -581,9 +588,16 @@ export function RegisterForm() {
 
       {/* Error */}
       {error && (
-        <p className="text-sm rounded-md px-3 py-2" style={{ color: "#C43D28", background: "rgba(196,61,40,0.08)", border: "1px solid rgba(196,61,40,0.15)" }}>
-          {error}
-        </p>
+        <div className="text-sm rounded-md px-3 py-2" style={{ color: "#C43D28", background: "rgba(196,61,40,0.08)", border: "1px solid rgba(196,61,40,0.15)" }}>
+          <p>{error}</p>
+          {fieldErrors && (
+            <ul className="mt-1 list-disc list-inside space-y-0.5">
+              {Object.entries(fieldErrors).map(([field, msg]) => (
+                <li key={field}>{msg}</li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
 
       {/* Navigation */}

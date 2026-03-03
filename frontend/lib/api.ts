@@ -123,7 +123,8 @@ async function apiFetch<T>(
 
   if (!res.ok) {
     const message = body?.message || body?.error || `HTTP ${res.status}`
-    throw new ApiError(res.status, message)
+    const errors = body?.details?.validation?.errors as Record<string, string> | undefined
+    throw new ApiError(res.status, message, errors)
   }
 
   // Backend wraps all responses in { success, data, message }
@@ -136,7 +137,8 @@ async function apiFetch<T>(
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
-    message: string
+    message: string,
+    public readonly errors?: Record<string, string>
   ) {
     super(message)
     this.name = "ApiError"
