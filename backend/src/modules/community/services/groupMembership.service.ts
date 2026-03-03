@@ -197,8 +197,8 @@ class GroupMembershipService {
 
   /**
    * PRIVATE: Ensure system group exists and enroll user.
-   * Uses findFirst + create pattern since there is no named unique constraint
-   * on the Group model for (locationScope, wardId, constituencyId, countyId).
+   * Uses upsert on group name (unique constraint) to avoid race conditions
+   * when concurrent registrations hit the same geographic group.
    */
   private async ensureSystemGroupAndEnroll(
     tx: any,
@@ -207,43 +207,25 @@ class GroupMembershipService {
     locationScope: LocationScope,
     groupName: string
   ): Promise<void> {
-    const whereClause = {
-      isSystemGroup: true,
-      locationScope,
-      wardId: locationScope === LocationScope.WARD ? locationId : null,
-      constituencyId:
-        locationScope === LocationScope.CONSTITUENCY ? locationId : null,
-      countyId: locationScope === LocationScope.COUNTY ? locationId : null,
-    };
-
-    // Find or create the system group (no named unique constraint exists)
-    let group = await tx.group.findFirst({
-      where: whereClause,
+    // Upsert is atomic — avoids race condition when concurrent registrations
+    // both see null from findFirst and both attempt create() on the same group name.
+    const group = await tx.group.upsert({
+      where: { name: groupName },
+      create: {
+        name: groupName,
+        description: `Official ${locationScope.toLowerCase()} community group`,
+        locationScope,
+        isSystemGroup: true,
+        systemType: this.getSystemGroupType(locationScope),
+        status: GroupStatus.ACTIVE,
+        wardId: locationScope === LocationScope.WARD ? locationId : null,
+        constituencyId:
+          locationScope === LocationScope.CONSTITUENCY ? locationId : null,
+        countyId: locationScope === LocationScope.COUNTY ? locationId : null,
+      },
+      update: { lastActivity: new Date() },
       select: { id: true, memberCount: true },
     });
-
-    if (!group) {
-      group = await tx.group.create({
-        data: {
-          name: groupName,
-          description: `Official ${locationScope.toLowerCase()} community group`,
-          locationScope,
-          isSystemGroup: true,
-          systemType: this.getSystemGroupType(locationScope),
-          status: GroupStatus.ACTIVE,
-          wardId: locationScope === LocationScope.WARD ? locationId : null,
-          constituencyId:
-            locationScope === LocationScope.CONSTITUENCY ? locationId : null,
-          countyId: locationScope === LocationScope.COUNTY ? locationId : null,
-        },
-        select: { id: true, memberCount: true },
-      });
-    } else {
-      await tx.group.update({
-        where: { id: group.id },
-        data: { lastActivity: new Date() },
-      });
-    }
 
     // Check if user is already a member
     const existingMembership = await tx.groupMember.findUnique({
@@ -286,37 +268,19 @@ class GroupMembershipService {
     tx: any,
     userId: string
   ): Promise<void> {
-    const whereClause = {
-      isSystemGroup: true,
-      locationScope: LocationScope.NATIONAL,
-      wardId: null,
-      constituencyId: null,
-      countyId: null,
-    };
-
-    let group = await tx.group.findFirst({
-      where: whereClause,
+    const group = await tx.group.upsert({
+      where: { name: 'Kenya National Community' },
+      create: {
+        name: 'Kenya National Community',
+        description: 'Official national community group for all citizens',
+        locationScope: LocationScope.NATIONAL,
+        isSystemGroup: true,
+        systemType: SystemGroupType.NATIONAL,
+        status: GroupStatus.ACTIVE,
+      },
+      update: { lastActivity: new Date() },
       select: { id: true, memberCount: true },
     });
-
-    if (!group) {
-      group = await tx.group.create({
-        data: {
-          name: 'Kenya National Community',
-          description: 'Official national community group for all citizens',
-          locationScope: LocationScope.NATIONAL,
-          isSystemGroup: true,
-          systemType: SystemGroupType.NATIONAL,
-          status: GroupStatus.ACTIVE,
-        },
-        select: { id: true, memberCount: true },
-      });
-    } else {
-      await tx.group.update({
-        where: { id: group.id },
-        data: { lastActivity: new Date() },
-      });
-    }
 
     const existingMembership = await tx.groupMember.findUnique({
       where: {
