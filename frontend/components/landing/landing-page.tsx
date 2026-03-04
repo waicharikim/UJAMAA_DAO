@@ -425,20 +425,10 @@ function LandingNavbar({
               Dashboard
             </Link>
           ) : (
-            <>
-              <button
-                onClick={onSignIn}
-                className="text-[13px] font-medium text-cream/60 transition-colors hover:text-cream"
-              >
-                Sign In
-              </button>
-              <Link
-                href="/auth/register"
-                className="rounded-full bg-amber px-5 py-2 text-[13px] font-bold text-tea-dark transition-all hover:bg-amber-bright hover:scale-[1.03] active:scale-[0.97]"
-              >
-                Get Started
-              </Link>
-            </>
+            <span className="inline-flex items-center gap-2 rounded-full border border-amber/30 bg-amber/10 px-5 py-2 text-[13px] font-bold text-amber-bright cursor-default select-none">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-bright" />
+              Coming Soon
+            </span>
           )}
         </div>
 
@@ -478,21 +468,10 @@ function LandingNavbar({
                 Dashboard
               </Link>
             ) : (
-              <>
-                <button
-                  onClick={() => { setOpen(false); onSignIn() }}
-                  className="rounded-lg px-3 py-2.5 text-center text-sm font-medium text-cream/60 hover:text-cream"
-                >
-                  Sign In
-                </button>
-                <Link
-                  href="/auth/register"
-                  className="rounded-full bg-amber px-4 py-2.5 text-center text-sm font-bold text-tea-dark"
-                  onClick={() => setOpen(false)}
-                >
-                  Get Started
-                </Link>
-              </>
+              <span className="inline-flex items-center justify-center gap-2 rounded-full border border-amber/30 bg-amber/10 px-4 py-2.5 text-sm font-bold text-amber-bright cursor-default select-none">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-bright" />
+                Coming Soon
+              </span>
             )}
           </div>
         </div>
@@ -575,23 +554,10 @@ function HeroSection({
               </svg>
             </Link>
           ) : (
-            <>
-              <Link
-                href="/auth/register"
-                className="group relative inline-flex h-12 items-center gap-2.5 overflow-hidden rounded-full bg-amber px-8 text-sm font-bold text-tea-dark shadow-[0_0_20px_rgba(212,145,30,0.30)] transition-all hover:bg-amber-bright hover:shadow-[0_0_32px_rgba(233,165,46,0.40)] hover:scale-[1.03] active:scale-[0.98]"
-              >
-                <span className="relative z-10">Join the Movement</span>
-                <svg className="relative z-10 h-4 w-4 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
-              </Link>
-              <button
-                onClick={onSignIn}
-                className="inline-flex h-12 items-center rounded-full border border-cream/20 px-8 text-sm font-semibold text-cream/80 transition-colors hover:border-amber/40 hover:text-amber"
-              >
-                Sign In
-              </button>
-            </>
+            <span className="inline-flex h-12 items-center gap-2.5 rounded-full border border-amber/30 bg-amber/10 px-8 text-sm font-bold text-amber-bright cursor-default select-none shadow-[0_0_20px_rgba(212,145,30,0.15)]">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-amber-bright" />
+              Coming Soon
+            </span>
           )}
         </div>
 
