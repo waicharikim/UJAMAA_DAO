@@ -1,597 +1,254 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import Link from "next/link"
+import { useState } from "react"
 import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
-import { useAuth } from "@/contexts/auth-context"
-import { useRole } from "@/contexts/role-context"
-import { apiClient } from "@/lib/api"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
-import { formatDate, formatRelativeTime } from "@/lib/utils"
+import { useAuth } from "@/contexts/auth-context"
+import { governanceApi, type ProposalDto } from "@/lib/api"
 import {
-  Search,
-  Plus,
   Vote,
-  EyeOff,
-  MapPin,
   Clock,
   CheckCircle,
   XCircle,
-  AlertCircle,
-  TrendingUp,
-  Filter,
+  MinusCircle,
+  ChevronRight,
+  Loader2,
 } from "lucide-react"
-
-// Types
-interface Proposal {
-  id: string
-  title: string
-  description: string
-  purpose: "business" | "nonprofit" | "bill"
-  locationScope: "local" | "constituency" | "county" | "national"
-  isPrivate: boolean
-  status: "draft" | "active" | "passed" | "rejected" | "expired"
-  createdBy: {
-    id: string
-    name: string
-    avatar?: string
-  }
-  groupId?: string
-  groupName?: string
-  votingDeadline: string
-  tokenCost: number
-  impactPointsRequired: number
-  votingStats: {
-    totalVotes: number
-    yesVotes: number
-    noVotes: number
-    abstainVotes: number
-    quorumRequired: number
-    consensusRequired: number
-    currentQuorum: number
-    currentConsensus: number
-  }
-  userVote?: "yes" | "no" | "abstain"
-  canVote: boolean
-  canEdit: boolean
-  createdAt: string
-  updatedAt: string
-}
-
-interface ProposalFilters {
-  search: string
-  locationScope: string
-  purpose: string
-  status: string
-}
 
 interface FetchProposalsProps {
   onCreateProposal?: () => void
 }
 
-export function FetchProposals({ onCreateProposal }: FetchProposalsProps) {
-  const [proposals, setProposals] = useState<Proposal[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState("all")
-  const [filters, setFilters] = useState<ProposalFilters>({
-    search: "",
-    locationScope: "all",
-    purpose: "all",
-    status: "all",
-  })
+type TabStatus = "ALL" | "VOTING" | "APPROVED" | "REJECTED"
 
-  const { user, isAuthenticated } = useAuth()
-  const { hasScope } = useRole()
-  const { toast } = useToast()
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      loadProposals()
-    }
-  }, [isAuthenticated])
-
-  const loadProposals = async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      const response = await apiClient.getProposals()
-
-      // Handle different response structures
-      let proposalsData: Proposal[] = []
-      if (Array.isArray(response)) {
-        proposalsData = response
-      } else if (response && Array.isArray(response.proposals)) {
-        proposalsData = response.proposals
-      } else if (response && response.data && Array.isArray(response.data)) {
-        proposalsData = response.data
-      } else {
-        console.warn("Unexpected API response structure:", response)
-        proposalsData = []
-      }
-
-      setProposals(proposalsData)
-    } catch (err: any) {
-      console.error("Failed to load proposals:", err)
-      setError(err.message || "Failed to load proposals")
-      setProposals([]) // Ensure proposals is always an array
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleVote = async (proposalId: string, vote: "yes" | "no" | "abstain") => {
-    if (!user) {
-      toast({
-        title: "Authentication Required",
-        description: "Please connect your wallet to vote.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    try {
-      await apiClient.voteOnProposal(proposalId, vote)
-      toast({
-        title: "Vote Cast Successfully",
-        description: `Your ${vote} vote has been recorded.`,
-      })
-      // Reload proposals to get updated vote counts
-      await loadProposals()
-    } catch (error: any) {
-      toast({
-        title: "Voting Failed",
-        description: error.message || "Failed to cast vote. Please try again.",
-        variant: "destructive",
-      })
-    }
-  }
-
-  // Filter proposals based on current filters and active tab
-  const filteredProposals = (proposals || []).filter((proposal) => {
-    // Tab filtering
-    if (activeTab === "active" && proposal.status !== "active") return false
-    if (activeTab === "my-votes" && !proposal.userVote) return false
-    if (activeTab === "my-proposals" && proposal.createdBy.id !== user?.id) return false
-
-    // Search filter
-    if (
-      filters.search &&
-      !proposal.title.toLowerCase().includes(filters.search.toLowerCase()) &&
-      !proposal.description.toLowerCase().includes(filters.search.toLowerCase())
-    ) {
-      return false
-    }
-
-    // Location scope filter
-    if (filters.locationScope !== "all" && proposal.locationScope !== filters.locationScope) {
-      return false
-    }
-
-    // Purpose filter
-    if (filters.purpose !== "all" && proposal.purpose !== filters.purpose) {
-      return false
-    }
-
-    // Status filter
-    if (filters.status !== "all" && proposal.status !== filters.status) {
-      return false
-    }
-
-    return true
-  })
-
-  const handleFilterChange = (key: keyof ProposalFilters, value: string) => {
-    setFilters((prev) => ({ ...prev, [key]: value }))
-  }
-
-  const clearFilters = () => {
-    setFilters({
-      search: "",
-      locationScope: "all",
-      purpose: "all",
-      status: "all",
-    })
-  }
-
-  if (!isAuthenticated) {
-    return (
-      <Card>
-        <CardContent className="p-8 text-center">
-          <Vote className="h-16 w-16 text-slate-400 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold mb-2">Governance Participation</h3>
-          <p className="text-slate-600 mb-4">Connect your wallet to view and participate in proposals.</p>
-          <Button>Connect Wallet</Button>
-        </CardContent>
-      </Card>
-    )
-  }
-
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="h-8 bg-gray-200 rounded w-64 animate-pulse"></div>
-            <div className="h-4 bg-gray-200 rounded w-96 mt-2 animate-pulse"></div>
-          </div>
-          <div className="h-10 bg-gray-200 rounded w-32 animate-pulse"></div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Card key={i}>
-              <CardContent className="p-4">
-                <div className="h-12 bg-gray-200 rounded animate-pulse"></div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        <div className="space-y-4">
-          {[1, 2, 3].map((i) => (
-            <Card key={i} className="animate-pulse">
-              <CardHeader>
-                <div className="h-6 bg-gray-200 rounded w-3/4"></div>
-                <div className="flex gap-2">
-                  <div className="h-4 bg-gray-200 rounded w-20"></div>
-                  <div className="h-4 bg-gray-200 rounded w-24"></div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="h-4 bg-gray-200 rounded w-full mb-2"></div>
-                <div className="h-4 bg-gray-200 rounded w-2/3"></div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <Card>
-        <CardContent className="p-8 text-center">
-          <div className="text-red-500 mb-4">Error: {error}</div>
-          <Button onClick={loadProposals}>Retry</Button>
-        </CardContent>
-      </Card>
-    )
-  }
-
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Governance Proposals</h1>
-          <p className="text-slate-600">Participate in community governance and shape the future</p>
-        </div>
-        {hasScope("proposals:create") && (
-          <Button onClick={onCreateProposal} size="lg">
-            <Plus className="h-4 w-4 mr-2" />
-            Create Proposal
-          </Button>
-        )}
-      </div>
-
-      {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2">
-              <Vote className="h-5 w-5 text-blue-600" />
-              <div>
-                <div className="text-2xl font-bold">{proposals.filter((p) => p.status === "active").length}</div>
-                <div className="text-sm text-slate-600">Active Proposals</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-green-600" />
-              <div>
-                <div className="text-2xl font-bold">
-                  {proposals.reduce((sum, p) => sum + p.votingStats.totalVotes, 0)}
-                </div>
-                <div className="text-sm text-slate-600">Total Votes</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2">
-              <Vote className="h-5 w-5 text-purple-600" />
-              <div>
-                <div className="text-2xl font-bold">
-                  {Object.keys(proposals.reduce((acc, p) => ({ ...acc, [p.createdBy.id]: true }), {})).length}
-                </div>
-                <div className="text-sm text-slate-600">Participants</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2">
-              <Vote className="h-5 w-5 text-orange-600" />
-              <div>
-                <div className="text-2xl font-bold">{proposals.filter((p) => p.userVote).length}</div>
-                <div className="text-sm text-slate-600">Your Votes</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filters */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <Filter className="h-5 w-5" />
-              Filters
-            </CardTitle>
-            <Button variant="outline" size="sm" onClick={clearFilters}>
-              Clear All
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div>
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
-                <Input
-                  placeholder="Search proposals..."
-                  value={filters.search}
-                  onChange={(e) => handleFilterChange("search", e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-
-            <Select value={filters.locationScope} onValueChange={(value) => handleFilterChange("locationScope", value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Location Scope" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Locations</SelectItem>
-                <SelectItem value="local">Local</SelectItem>
-                <SelectItem value="constituency">Constituency</SelectItem>
-                <SelectItem value="county">County</SelectItem>
-                <SelectItem value="national">National</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select value={filters.purpose} onValueChange={(value) => handleFilterChange("purpose", value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Purpose" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Purposes</SelectItem>
-                <SelectItem value="business">Business</SelectItem>
-                <SelectItem value="nonprofit">Nonprofit</SelectItem>
-                <SelectItem value="bill">Bill</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select value={filters.status} onValueChange={(value) => handleFilterChange("status", value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="passed">Passed</SelectItem>
-                <SelectItem value="rejected">Rejected</SelectItem>
-                <SelectItem value="expired">Expired</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="all">All Proposals</TabsTrigger>
-          <TabsTrigger value="active">Active Voting</TabsTrigger>
-          <TabsTrigger value="my-votes">My Votes</TabsTrigger>
-          <TabsTrigger value="my-proposals">My Proposals</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value={activeTab} className="space-y-4">
-          {filteredProposals.length === 0 ? (
-            <Card>
-              <CardContent className="p-8 text-center">
-                <Vote className="h-12 w-12 text-slate-400 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No Proposals Found</h3>
-                <p className="text-slate-600">No proposals match your current filters.</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-6">
-              {filteredProposals.map((proposal) => (
-                <ProposalCard key={proposal.id} proposal={proposal} onVote={handleVote} />
-              ))}
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
-    </div>
-  )
+const STATUS_LABEL: Record<string, { label: string; className: string }> = {
+  DRAFT:    { label: "Draft",    className: "bg-warm-gray/20 text-warm-gray" },
+  VOTING:   { label: "Voting",   className: "bg-amber/20 text-amber" },
+  APPROVED: { label: "Approved", className: "bg-tea-green/20 text-tea-green" },
+  REJECTED: { label: "Rejected", className: "bg-red-100 text-red-700" },
 }
 
-// Individual Proposal Card Component
-interface ProposalCardProps {
-  proposal: Proposal
-  onVote: (proposalId: string, vote: "yes" | "no" | "abstain") => void
+const TYPE_LABEL: Record<string, string> = {
+  STANDARD:  "Standard",
+  EMERGENCY: "Emergency",
+  BUDGET:    "Budget",
 }
 
-function ProposalCard({ proposal, onVote }: ProposalCardProps) {
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "active":
-        return "bg-blue-100 text-blue-800"
-      case "passed":
-        return "bg-green-100 text-green-800"
-      case "rejected":
-        return "bg-red-100 text-red-800"
-      case "expired":
-        return "bg-gray-100 text-gray-800"
-      default:
-        return "bg-slate-100 text-slate-800"
-    }
-  }
+function statusBadge(status: string) {
+  const s = STATUS_LABEL[status] ?? { label: status, className: "bg-gray-100 text-gray-600" }
+  return <Badge className={`text-xs font-semibold ${s.className}`}>{s.label}</Badge>
+}
 
-  const getPurposeColor = (purpose: string) => {
-    switch (purpose) {
-      case "business":
-        return "bg-purple-100 text-purple-800"
-      case "nonprofit":
-        return "bg-green-100 text-green-800"
-      case "bill":
-        return "bg-blue-100 text-blue-800"
-      default:
-        return "bg-slate-100 text-slate-800"
-    }
-  }
+function relativeTime(iso: string | null): string {
+  if (!iso) return "—"
+  const diff = new Date(iso).getTime() - Date.now()
+  const abs = Math.abs(diff)
+  const mins  = Math.floor(abs / 60_000)
+  const hours = Math.floor(abs / 3_600_000)
+  const days  = Math.floor(abs / 86_400_000)
+  if (days > 0)  return diff > 0 ? `${days}d left`  : `${days}d ago`
+  if (hours > 0) return diff > 0 ? `${hours}h left` : `${hours}h ago`
+  return diff > 0 ? `${mins}m left` : `${mins}m ago`
+}
 
-  const quorumProgress = (proposal.votingStats.currentQuorum / proposal.votingStats.quorumRequired) * 100
-  const consensusProgress = proposal.votingStats.currentConsensus
+// ── Proposal card ────────────────────────────────────────────────────────────
+
+function ProposalCard({
+  proposal,
+  onVote,
+  voting,
+}: {
+  proposal: ProposalDto
+  onVote: (id: string, option: "YES" | "NO" | "ABSTAIN") => void
+  voting: boolean
+}) {
+  const total = proposal._count?.votes ?? proposal.votesSummary?.total ?? 0
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-2">
-              <h3 className="text-xl font-semibold">{proposal.title}</h3>
-              {proposal.isPrivate && <EyeOff className="h-4 w-4 text-slate-500" />}
+    <Card className="border-0 shadow-sm bg-white hover:shadow-md transition-shadow">
+      <CardContent className="p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            {/* badges */}
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              {statusBadge(proposal.status)}
+              {proposal.proposalType && (
+                <Badge variant="outline" className="text-xs">
+                  {TYPE_LABEL[proposal.proposalType] ?? proposal.proposalType}
+                </Badge>
+              )}
+              {proposal.group && (
+                <Badge variant="outline" className="text-xs">
+                  {proposal.group.name}
+                </Badge>
+              )}
             </div>
-            <div className="flex items-center gap-2 mb-2">
-              <Badge className={getStatusColor(proposal.status)}>{proposal.status}</Badge>
-              <Badge className={getPurposeColor(proposal.purpose)}>{proposal.purpose}</Badge>
-              <Badge variant="outline">
-                <MapPin className="h-3 w-3 mr-1" />
-                {proposal.locationScope}
-              </Badge>
-            </div>
-            <p className="text-slate-600 mb-4">{proposal.description}</p>
-          </div>
-        </div>
 
-        <div className="flex items-center justify-between text-sm text-slate-500">
-          <div className="flex items-center gap-4">
-            <span>By {proposal.createdBy.name}</span>
-            {proposal.groupName && <span>• {proposal.groupName}</span>}
-            <span>• {formatRelativeTime(proposal.createdAt)}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Clock className="h-4 w-4" />
-            <span>Ends {formatDate(proposal.votingDeadline)}</span>
-          </div>
-        </div>
-      </CardHeader>
-
-      <CardContent className="space-y-4">
-        {/* Voting Progress */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between text-sm">
-            <span>Quorum Progress</span>
-            <span>
-              {proposal.votingStats.currentQuorum}% / {proposal.votingStats.quorumRequired}%
-            </span>
-          </div>
-          <Progress value={quorumProgress} className="h-2" />
-
-          <div className="flex items-center justify-between text-sm">
-            <span>Consensus</span>
-            <span>
-              {consensusProgress}% (need {proposal.votingStats.consensusRequired}%)
-            </span>
-          </div>
-          <Progress value={consensusProgress} className="h-2" />
-        </div>
-
-        {/* Vote Breakdown */}
-        <div className="grid grid-cols-3 gap-4 text-center">
-          <div>
-            <div className="text-2xl font-bold text-green-600">{proposal.votingStats.yesVotes}</div>
-            <div className="text-sm text-slate-600">Yes</div>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-red-600">{proposal.votingStats.noVotes}</div>
-            <div className="text-sm text-slate-600">No</div>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-slate-600">{proposal.votingStats.abstainVotes}</div>
-            <div className="text-sm text-slate-600">Abstain</div>
-          </div>
-        </div>
-
-        {/* Voting Actions */}
-        {proposal.canVote && proposal.status === "active" && (
-          <div className="flex gap-2 pt-4 border-t">
-            <Button
-              size="sm"
-              variant={proposal.userVote === "yes" ? "default" : "outline"}
-              onClick={() => onVote(proposal.id, "yes")}
-              className="flex-1"
+            {/* title */}
+            <Link
+              href={`/proposals/${proposal.id}`}
+              className="text-base font-semibold text-[#0A1F14] hover:text-amber transition-colors line-clamp-2"
             >
-              <CheckCircle className="h-4 w-4 mr-2" />
+              {proposal.title}
+            </Link>
+
+            {/* description */}
+            {proposal.description && (
+              <p className="mt-1 text-sm text-warm-gray line-clamp-2">
+                {proposal.description}
+              </p>
+            )}
+
+            {/* meta row */}
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-warm-gray">
+              {proposal.creator && <span>By {proposal.creator.name}</span>}
+              <span>{total} vote{total !== 1 ? "s" : ""}</span>
+              {proposal.votingEndsAt && (
+                <span className="flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  {relativeTime(proposal.votingEndsAt)}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* detail arrow */}
+          <Link href={`/proposals/${proposal.id}`} className="mt-1 shrink-0">
+            <ChevronRight className="h-5 w-5 text-warm-gray hover:text-amber transition-colors" />
+          </Link>
+        </div>
+
+        {/* vote buttons — only for VOTING proposals */}
+        {proposal.status === "VOTING" && (
+          <div className="mt-4 flex gap-2 pt-4 border-t border-cream">
+            <button
+              onClick={() => onVote(proposal.id, "YES")}
+              disabled={voting}
+              className="flex-1 flex items-center justify-center gap-1.5 rounded-full py-2 text-sm font-semibold bg-tea-green/10 text-tea-green hover:bg-tea-green/20 transition-colors disabled:opacity-50"
+            >
+              <CheckCircle className="h-4 w-4" />
               Yes
-            </Button>
-            <Button
-              size="sm"
-              variant={proposal.userVote === "no" ? "destructive" : "outline"}
-              onClick={() => onVote(proposal.id, "no")}
-              className="flex-1"
+            </button>
+            <button
+              onClick={() => onVote(proposal.id, "NO")}
+              disabled={voting}
+              className="flex-1 flex items-center justify-center gap-1.5 rounded-full py-2 text-sm font-semibold bg-red-50 text-red-600 hover:bg-red-100 transition-colors disabled:opacity-50"
             >
-              <XCircle className="h-4 w-4 mr-2" />
+              <XCircle className="h-4 w-4" />
               No
-            </Button>
-            <Button
-              size="sm"
-              variant={proposal.userVote === "abstain" ? "secondary" : "outline"}
-              onClick={() => onVote(proposal.id, "abstain")}
-              className="flex-1"
+            </button>
+            <button
+              onClick={() => onVote(proposal.id, "ABSTAIN")}
+              disabled={voting}
+              className="flex-1 flex items-center justify-center gap-1.5 rounded-full py-2 text-sm font-semibold bg-warm-gray/10 text-warm-gray hover:bg-warm-gray/20 transition-colors disabled:opacity-50"
             >
-              <AlertCircle className="h-4 w-4 mr-2" />
+              <MinusCircle className="h-4 w-4" />
               Abstain
-            </Button>
-          </div>
-        )}
-
-        {/* Vote History */}
-        {proposal.userVote && (
-          <div className="pt-4 border-t">
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-slate-600">Your vote:</span>
-              <Badge
-                variant={
-                  proposal.userVote === "yes" ? "default" : proposal.userVote === "no" ? "destructive" : "secondary"
-                }
-              >
-                {proposal.userVote}
-              </Badge>
-            </div>
+            </button>
           </div>
         )}
       </CardContent>
     </Card>
+  )
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+
+export function FetchProposals({ onCreateProposal: _onCreateProposal }: FetchProposalsProps) {
+  const [tab, setTab] = useState<TabStatus>("ALL")
+  const { isAuthenticated } = useAuth()
+  const { toast } = useToast()
+  const queryClient = useQueryClient()
+
+  const queryKey = ["proposals", tab]
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey,
+    queryFn: () =>
+      governanceApi.getProposals(tab === "ALL" ? {} : { status: tab }),
+    enabled: isAuthenticated,
+    staleTime: 30_000,
+  })
+
+  const { mutate: castVote, isPending: voting } = useMutation({
+    mutationFn: ({ proposalId, option }: { proposalId: string; option: "YES" | "NO" | "ABSTAIN" }) =>
+      governanceApi.castVote({ proposalId, option }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["proposals"] })
+      toast({ title: "Vote recorded" })
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Vote failed",
+        description: err?.message ?? "Please try again.",
+        variant: "destructive",
+      })
+    },
+  })
+
+  const proposals = data?.proposals ?? []
+
+  if (!isAuthenticated) {
+    return (
+      <Card className="border-0 shadow-sm">
+        <CardContent className="p-10 text-center">
+          <Vote className="h-12 w-12 text-warm-gray mx-auto mb-3" />
+          <p className="text-sm text-warm-gray">Sign in to view governance proposals.</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <Tabs value={tab} onValueChange={(v) => setTab(v as TabStatus)}>
+        <TabsList className="bg-cream border border-cream rounded-full h-9 p-1">
+          {(["ALL", "VOTING", "APPROVED", "REJECTED"] as TabStatus[]).map((t) => (
+            <TabsTrigger
+              key={t}
+              value={t}
+              className="rounded-full text-xs font-semibold px-4 data-[state=active]:bg-[#1D4731] data-[state=active]:text-cream"
+            >
+              {t === "ALL" ? "All" : t.charAt(0) + t.slice(1).toLowerCase()}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+
+      {isLoading ? (
+        <div className="flex justify-center py-12">
+          <Loader2 className="h-6 w-6 animate-spin text-warm-gray" />
+        </div>
+      ) : isError ? (
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-8 text-center text-sm text-red-600">
+            Failed to load proposals.
+          </CardContent>
+        </Card>
+      ) : proposals.length === 0 ? (
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-10 text-center">
+            <Vote className="h-12 w-12 text-warm-gray mx-auto mb-3" />
+            <p className="text-sm text-warm-gray">No proposals yet.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {proposals.map((p) => (
+            <ProposalCard
+              key={p.id}
+              proposal={p}
+              onVote={(id, option) => castVote({ proposalId: id, option })}
+              voting={voting}
+            />
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
