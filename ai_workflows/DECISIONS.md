@@ -53,13 +53,18 @@
 
 ---
 
-## [ADR-004] — UT earned in-app has no cash-out path
+## [ADR-004] — UT has two separate pools; only fiat-backed UT is cashable
 
-**Date:** 2026-02-19
+**Date:** 2026-02-19 (clarified 2026-03-10)
 **Status:** Decided (non-negotiable)
-**Decision:** UT earned through platform activity (completing education, contributing to projects) cannot be exchanged for M-Pesa or any real-world currency. Only user-deposited UT (if that feature ships) may have a withdrawal path.
-**Why:** An in-app cash-out path for earned UT would immediately create farming incentives and speculative behavior. Users would optimize for earning UT rather than for real contribution. The token's value must stay internal and cosmetic.
-**Consequences:** Any endpoint or feature that converts earned UT to currency is rejected. UT uses are limited to visibility boosts, cosmetic features, and internal platform perks.
+**Decision:** UT exists in two distinct, non-interchangeable pools. **Earned UT** (from education, referrals, contributions) has no cash-out path — ever. **Fiat-backed UT** (from M-Pesa deposits, 1 UT = 1 KES) can be withdrawn back to M-Pesa.
+**Why:** An in-app cash-out path for earned UT creates farming incentives and speculative behavior — users would optimize for earning UT rather than real contribution. Fiat-backed UT must be cashable because it represents real money the user deposited; preventing withdrawal would be unacceptable and likely illegal. The two-pool design preserves the integrity of earned UT while respecting user ownership of deposited funds.
+**Consequences:**
+- DB schema must track `fiatBackedUtBalance` and `earnedUtBalance` as separate columns (never merged).
+- Withdrawal endpoints draw only from `fiatBackedUtBalance`.
+- UI must label earned UT clearly as "platform perks only" with no cash-out option shown.
+- Any endpoint or feature that converts earned UT to currency is rejected.
+- See `docs/treasury.md` for full cash-out flow design.
 
 ---
 
@@ -278,6 +283,29 @@ per-group) — one `UserMessagingProfile` row per platform per user.
 **Why:** Traefik was included early for production readiness but was never functional in dev — its ports (80, 443, 8080) were not binding to the host, routing through `localhost` was not working, and the dashboard was unreachable. It added a confusing non-functional container without providing any dev benefit. Direct port access is simpler, more debuggable, and sufficient for all current development work.
 **Consequences:** In dev, access services at their direct ports — do not expect `app.localhost` or Traefik-routed hostnames to work. The `traefik.enable=true` labels and router labels on `web` and `frontend` services are harmless and stay in place — they will be picked up automatically when Traefik is re-enabled. Config files (`traefik/traefik.yml`, `traefik/acme.json`) are retained in the repo.
 **To re-enable for production:** Uncomment the `traefik` service block in `docker/docker-compose.yml`, update `traefik/traefik.yml` with the production domain and Let's Encrypt email, ensure `traefik/acme.json` has `chmod 600`, remove direct `ports:` mappings from `web` and `frontend` services (or keep them alongside Traefik — both work), and run `make prod`.
+
+---
+
+## [ADR-025] — Activity-gated PR regeneration (prevents inactive whale accumulation)
+
+**Date:** 2026-03-10
+**Status:** Decided
+**Decision:** Monthly PR regeneration is only awarded to users who meet a minimum activity threshold in the prior month. Users who fail the threshold receive 0 regen that month.
+**Why:** A pure additive regeneration model (everyone gets +X PR regardless of activity) creates a free-riding problem: inactive users slowly accumulate governance power over active contributors, because they never spend PR or incur penalties. This is the opposite of what a healthy DAO wants. Activity-gating ensures regeneration rewards continued participation, not mere existence.
+**Activity threshold (must meet all of):**
+- Logged in at least once in the prior 30 days
+- AND at least one of: cast a vote / paid dues on time / made a marketplace transaction / gave a vouch
+**Consequences:** Monthly regen job (`monthly-pr-regeneration`) must query for eligible users before awarding. Users should see a clear indicator in-app of whether they are on track to receive regen this month. See `docs/economy-design.md` for full regeneration table.
+
+---
+
+## [ADR-026] — Soft PR inactivity decay (60-day threshold, 5%/month, 100 PR floor)
+
+**Date:** 2026-03-10
+**Status:** Decided
+**Decision:** After 60 consecutive days of no qualifying activity (same threshold as ADR-025), a user's PR balance decays by 5% per month until they return to activity. Decay stops at a minimum floor of 100 PR.
+**Why:** Activity-gated regen (ADR-025) prevents inactive users from growing. Soft decay ensures that long-term inactive users also lose relative influence — their existing balance slowly decreases, not just stagnates. This preserves meritocracy without being punitive (100 PR floor means a returning user is never completely locked out of governance).
+**Consequences:** `daily-commitment-penalties` job (or a new `monthly-inactivity-decay` job) must calculate decay for users past the 60-day threshold. Decay must be logged in the audit trail with reason `PR_INACTIVITY_DECAY`. Users approaching the 60-day mark should receive a notification warning. See `docs/economy-design.md` for full decay mechanics.
 
 ---
 

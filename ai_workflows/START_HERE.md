@@ -24,18 +24,18 @@ Full rules are in CLAUDE.md section 2.
 
 ---
 
-## Where is the project right now? (Updated 2026-02-26)
+## Where is the project right now? (Updated 2026-03-10)
 
 **Read `SESSION_STATE.md` for the live snapshot** — it always has the current state, known bugs, and next task.
 
 Quick summary:
-- **Backend**: running ✅ — Express API + BullMQ worker, 80 Prisma models, 12 routes mounted
-- **Tests**: 173/173 green — auth (104), user (35), economy (34). All other modules: zero tests.
-- **Modules tested**: auth, user, economy. **Partial** (code, no tests): community, governance, projects, marketplace, notifications, onboarding, emergency, audit, admin. **Scaffold**: reputation, education, treasury, integration, verification.
-- **Frontend**: partial — landing, 4-step registration, sign-in, auth callback, dashboard, profile. Build green (15 routes). E2E auth flow verified 2026-02-26.
-- **Blockchain**: ADRs decided (Privy, Foundry, Base), `contracts/` scaffold exists. No Solidity written yet.
+- **Backend**: running ✅ — Express API + BullMQ worker, 80 Prisma models, 13 routes mounted
+- **Tests**: 269/269 green — auth (104), user (35), economy (34), community (49), governance (47). All other modules: zero tests.
+- **Modules tested**: auth, user, economy, community, governance. **Partial** (code, no tests): integration, projects, marketplace, notifications, onboarding, emergency, audit, admin. **Scaffold**: reputation, education, treasury, verification.
+- **Frontend**: partial — landing, 4-step registration, sign-in, auth callback, dashboard, profile, groups detail, proposals. Build green (15+ routes). E2E auth flow verified.
+- **Blockchain**: PrToken.sol + UtToken.sol written, 13 Foundry tests green. Base Sepolia deploy pending (minter wallet not yet funded).
 - **M-Pesa**: not started.
-- **Next priorities**: community module tests → PrToken.sol + UtToken.sol → Privy frontend.
+- **Next priorities**: community module gaps (memberCount fix, discovery endpoint, admin routes) → Base Sepolia deploy.
 
 Full picture in CLAUDE.md section 3.
 
@@ -54,6 +54,14 @@ Full picture in CLAUDE.md section 3.
 | Deciding which model to use | MODEL_STRATEGY.md |
 | Why a decision was made a certain way | DECISIONS.md |
 | What happened in past sessions | PROGRESS_LOG.md |
+| Full system design and architecture | docs/architecture.md |
+| API reference (auth, user, community, governance, economy) | docs/auth-api.md · docs/user-api.md · docs/group-api.md · docs/proposal-api.md · docs/economy-api.md |
+| PR/UT/IP token mechanics and earning rules | docs/economy-design.md |
+| Treasury structure, M-Pesa flows, UT cash-out | docs/treasury.md |
+| Feature inventory by module (status table) | docs/features.md |
+| Full project whitepaper | docs/whitepaper.md |
+| Ecosystem overview + improvement roadmap | docs/ecosystem.md |
+| Payment UX principles + screen mockups | docs/frontend-payment-ux.md |
 
 ---
 
@@ -82,7 +90,7 @@ Output in markdown with full file paths in code blocks.
 - **Architect plans before Developer codes** for anything Standard or Major
 - **SESSION_STATE.md + PROGRESS_LOG.md get updated** at the end of every session that changes code
 - **`make dev` must work** after any Docker or infrastructure change
-- **MailHog must be started manually** — `docker compose -f docker/docker-compose.yml up -d mailhog`
+- **MailHog auto-starts with `make dev`** — web UI at `http://localhost:8025`, no manual start needed
 - **Module readiness checklist** (CLAUDE.md section 6) defines "done"
 
 ---

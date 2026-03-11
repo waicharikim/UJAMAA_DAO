@@ -1,157 +1,129 @@
 # Contributing to UjamaaDAO
 
-Thank you for your interest in contributing to UjamaaDAO! We welcome contributions from the community that help improve the platform’s security, functionality, documentation, and user experience.
-
-This document outlines our guidelines and best practices to help you contribute effectively while keeping the codebase consistent and maintainable.
-
----
-
-## Table of Contents
-
-- [How to Contribute](#how-to-contribute)  
-- [Code of Conduct](#code-of-conduct)  
-- [Getting Started](#getting-started)  
-- [Branching and Workflow](#branching-and-workflow)  
-- [Coding Guidelines](#coding-guidelines)  
-- [Commit Messages](#commit-messages)  
-- [Testing](#testing)  
-- [Documentation](#documentation)  
-- [Reporting Issues](#reporting-issues)  
-- [Communication](#communication)  
-
----
-
-## How to Contribute
-
-Contributions can take many forms:
-
-- Bug reports and feature requests
-- Code contributions (features, bug fixes, refactors)
-- Improving or adding documentation
-- Writing tests or improving test coverage
-- Help with triaging issues or answering questions
-
-To contribute, please fork the repository and create a feature branch for your work.
-
----
-
-## Code of Conduct
-
-Please adhere to high standards of respect, inclusion, and professionalism. We expect all contributors to follow the [Code of Conduct](CODE_OF_CONDUCT.md) (if separate).
-
-Be respectful when giving and receiving feedback.
+Thank you for contributing. This document covers the conventions, workflow, and tools you need to contribute effectively.
 
 ---
 
 ## Getting Started
 
-1. **Fork and Clone**  
-   Fork the repo on GitHub, then clone locally:
-
+1. **Fork and clone**
 ```bash
-   git clone https://github.com/your-username/ujamaadao.git
-   cd ujamaadao
-```
-2. **Set up local environment**
-    Follow the instructions in README.md to install dependencies, configure .env, and run the backend/docker environment.
-
-3. **Run the stack with Docker**
-    All development runs via Docker Compose. From the `backend/` directory:
-```bash
-    make dev          # Start all services
-    make db-migrate   # Run migrations inside the web container
-    # Verify: http://localhost:4000/health
+git clone https://github.com/your-username/ujamaadao.git
+cd ujamaadao
 ```
 
-4. **Run tests** (once tests exist — zero currently written):
+2. **Start the full stack**
 ```bash
-    npx vitest run
+cd backend
+make dev          # starts all 8 services (web, worker, postgres, postgres_test, redis, frontend, mailhog, anvil)
+make db-migrate   # run migrations inside the web container
 ```
-## Branching and Workflow
 
-- Use the `main` branch for stable, production-ready code only.
-- Use the `develop` branch for ongoing development — all feature branches come from here.
-- Create feature branches from `develop` named with a clear prefix, e.g., `feature/`, `fix/`, or `chore/`.
-- Example: `feature/group-membership-management`
-- Open a pull request (PR) against `develop`. PRs to `main` represent production releases.
-- PRs should be small, focused, and contain clear descriptions.
-- Ensure your branch is up to date with the latest main before merging.
+3. **Verify it's running**
+```
+http://localhost:4000/health   → { "success": true, "status": "ok" }
+http://localhost:4000/ready    → { "success": true, "status": "ready" }
+http://localhost:3000          → frontend
+http://localhost:8025          → MailHog (dev email catcher)
+```
+
+> Everything runs in Docker — no bare-metal Node.js, no local Postgres. Use service names (`postgres`, `redis`, `web`) not `localhost` in Docker env vars. (ADR-005)
+
+---
+
+## Branching & Workflow
+
+- `main` — stable, production-ready code only.
+- `develop` — integration branch. All feature branches come from here.
+- `feature/`, `fix/`, `chore/` — branch naming prefix.
+- Open PRs against `develop`. PRs to `main` = production releases.
+- Keep PRs small and focused.
+
+---
 
 ## Coding Guidelines
 
-- Use TypeScript and follow existing project patterns.
+- TypeScript strict mode everywhere — no `any` without justification.
+- Prisma for all DB access — no raw SQL.
+- `ApiError` for all HTTP errors — no `res.status(500).json(...)` directly.
+- BullMQ for all async/scheduled work — no `setInterval` for recurring jobs.
+- Event bus for cross-module communication — no direct imports between modules (with one ADR-021 exception).
+- Centralized logger — no `console.log`.
 
-- Formatting & linting:
-
-    - Use Prettier and ESLint as configured. Run:
+**Run linting before pushing** (CI will catch it):
 ```bash
-        npm run lint
-        npm run lint:fix
+cd backend
+npm run lint        # check
+npm run lint:fix    # auto-fix prettier issues
+npx tsc --noEmit    # TypeScript check
 ```
-- Comments and Documentation:
-    - Write clear JSDoc/TSDoc comments for all public functions and complex logic.
-    - Add or update documentation in /docs/ for any new APIs or features.
 
-- Error Handling:
-    - Use the ApiError class for any throw-able HTTP errors with meaningful messages and status codes.
-
-- Logging:
-    - Use the centralized logger utility instead of console.log.
-    - Log at appropriate levels (info, warn, error).
+---
 
 ## Commit Messages
 
-- Use Conventional Commits style for commit messages.
+Use [Conventional Commits](https://www.conventionalcommits.org/):
 
-    - Examples:
-        ```bash
-        feat(auth): add wallet-signature login endpoint
-        fix(user): handle case-insensitive wallet address matching
-        docs(group): add API docs for group membership
-        test(voting): add unit tests for quorum calculation
-        chore(deps): update pino logger to v8
-        ```
+```
+feat(auth): add wallet-signature login endpoint
+fix(community): fix memberCount not updating on join/leave
+docs(group): rewrite group-api.md to match current routes
+test(economy): add unit tests for dues opt-in validator
+chore(deps): update pino to v8
+```
 
-    - Use present tense and be clear and concise.
-
-    - Separate subject and body with blank line if needed.
+---
 
 ## Testing
 
-- Write tests for any new features or bug fixes.
-
-- Existing code is tested with Vitest and Supertest.
-
-- Run tests locally before submitting:
+**Run the test suite:**
 ```bash
-    npx vitest run
+cd backend
+npx vitest run
 ```
-- Ensure no warnings or errors.
 
-- Tests should be deterministic and isolated; use database cleanup hooks.
+> Run from `backend/` — not root. Tests require `fileParallelism: false` (already set in `vitest.config.ts`) because they share a test DB (`ujamaa_postgres_test` on port 5433).
+
+**Current status:** 269 tests green — 104 auth · 35 user · 34 economy · 49 community · 47 governance.
+
+- Write tests for any new feature or bug fix.
+- New service-level tests go in `backend/tests/<module>/`.
+- Test helpers (seed data, token helpers) are in `backend/tests/<module>/helpers.ts` — reuse these.
+- Tests are deterministic and isolated — use `beforeEach` cleanup hooks, never share state between tests.
+
+---
+
+## Adding a New Module
+
+1. Create `backend/src/modules/<name>/` with: `services/`, `controllers/`, `routes/`, `handlers/`, `validators/`, `prisma/schema.prisma`.
+2. Add the route to `backend/src/app.ts`.
+3. Register any new jobs in `backend/src/core/jobs/register.ts`.
+4. Add any new events to the event bus types file.
+5. Run `npm run db:merge` from `backend/` to regenerate `prisma/schema.prisma` from per-module schemas.
+6. Update `docs/features.md` module status table.
+7. Update `ai_workflows/CLAUDE.md` module status table.
+
+---
 
 ## Documentation
 
-- Update or add API documentation in /docs/.
-- Keep architecture and environment documents current.
-- Document any new environment variables, build or deployment steps.
-- Consider generating OpenAPI specs for new endpoints.
+- Update the relevant `docs/*.md` file for any new or changed API endpoint.
+- Update `docs/features.md` module status after any module status change.
+- Update `ai_workflows/CLAUDE.md` section 3 at the end of every session that changes module status.
+- Log the session in `ai_workflows/PROGRESS_LOG.md`.
+- New significant architectural decisions go in `ai_workflows/DECISIONS.md` as an ADR.
+
+---
 
 ## Reporting Issues
 
-- Use GitHub Issues to report bugs, suggest features, or ask questions.
-- Provide clear, concise descriptions and reproduction steps if possible.
-- Attach logs or screenshots if helpful.
+Use [GitHub Issues](https://github.com/anthropics/claude-code/issues). Include:
+- What you expected vs. what happened.
+- Reproduction steps.
+- Relevant logs (`make logs` or `make logs-worker`).
+
+---
 
 ## Communication
 
-- Use your organization’s preferred communication channels (Slack, Discord, email).
-- Engage respectfully and constructively.
-- Ask for help or clarification if unsure about any process or code.
-
-Thank you for helping make UjamaaDAO secure, robust, and community-driven!
-
-This file is maintained by the core development team.
-
-
----
+Use the project's communication channels (Discord/Slack/email). Ask before making large structural changes — `ai_workflows/CLAUDE.md` is the project brain, read it first.

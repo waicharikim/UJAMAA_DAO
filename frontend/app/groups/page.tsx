@@ -1,11 +1,107 @@
 "use client"
 
-import { useQuery } from "@tanstack/react-query"
+import { useState } from "react"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { PageHeader } from "@/components/layout/page-header"
 import { StatsGrid } from "@/components/layout/stats-grid"
 import { GroupsList } from "@/components/groups/groups-list"
-import { communityApi } from "@/lib/api"
-import { Plus, Users, Crown, Shield, Network } from "lucide-react"
+import { communityApi, GroupDiscoveryDto } from "@/lib/api"
+import { Plus, Users, Crown, Shield, Network, Search, Globe } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Input } from "@/components/ui/input"
+
+// ─── Explore tab ───────────────────────────────────────────────────────────
+
+function ExploreGroups() {
+  const [search, setSearch] = useState("")
+  const queryClient = useQueryClient()
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["groups-discover", search],
+    queryFn: () => communityApi.getGroups({ isSystem: false, search: search || undefined, limit: 50 }),
+    staleTime: 30_000,
+  })
+
+  const joinMutation = useMutation({
+    mutationFn: (groupId: string) => communityApi.joinGroup(groupId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["groups-discover"] })
+      queryClient.invalidateQueries({ queryKey: ["my-groups-stats"] })
+    },
+  })
+
+  const groups = data?.groups ?? []
+
+  return (
+    <div className="space-y-4">
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6B5E4E]" />
+        <Input
+          placeholder="Search groups…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9 bg-white border-[#C9922A]/30 focus:border-[#C9922A]"
+        />
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center py-16">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#C9922A] border-t-transparent" />
+        </div>
+      ) : groups.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-[#6B5E4E]">
+          <Globe className="h-10 w-10 mb-3 opacity-40" />
+          <p className="text-sm">{search ? "No groups match your search." : "No voluntary groups yet."}</p>
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {groups.map((g: GroupDiscoveryDto) => (
+            <div
+              key={g.id}
+              className="rounded-xl border border-[#C9922A]/20 bg-white p-5 space-y-3 hover:shadow-md transition-shadow"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="font-semibold text-[#0A1F14] leading-tight">{g.name}</p>
+                  {g.voluntaryType && (
+                    <p className="text-xs text-[#6B5E4E] mt-0.5">
+                      {g.voluntaryType.replace(/_/g, " ")}
+                    </p>
+                  )}
+                </div>
+                <span className="shrink-0 flex items-center gap-1 text-xs text-[#6B5E4E]">
+                  <Users className="h-3.5 w-3.5" />
+                  {g.memberCount}
+                </span>
+              </div>
+
+              {g.description && (
+                <p className="text-xs text-[#6B5E4E] line-clamp-2">{g.description}</p>
+              )}
+
+              {g.isMember ? (
+                <span className="inline-block text-xs font-medium text-[#1E3D2F] bg-[#1E3D2F]/10 rounded-full px-3 py-1">
+                  {g.myRole ?? "Member"}
+                </span>
+              ) : (
+                <button
+                  onClick={() => joinMutation.mutate(g.id)}
+                  disabled={joinMutation.isPending}
+                  className="w-full rounded-full py-1.5 text-xs font-bold transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+                  style={{ background: "#D4911E", color: "#0A1F14" }}
+                >
+                  {joinMutation.isPending ? "Joining…" : "Join"}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Page ──────────────────────────────────────────────────────────────────
 
 export default function GroupsPage() {
   const { data: groups = [], isLoading } = useQuery({
@@ -14,13 +110,9 @@ export default function GroupsPage() {
     staleTime: 60_000,
   })
 
-  const adminCount    = groups.filter((g) => g.role === "LEADER" || g.role === "ADMIN").length
-  const systemCount   = groups.filter((g) => g.isSystem).length
+  const adminCount     = groups.filter((g) => g.role === "LEADER").length
+  const systemCount    = groups.filter((g) => g.isSystem).length
   const voluntaryCount = groups.filter((g) => !g.isSystem).length
-
-  const handleCreateGroup = () => {
-    window.location.href = "/groups/create"
-  }
 
   const stats = [
     {
@@ -61,16 +153,6 @@ export default function GroupsPage() {
     },
   ]
 
-  if (isLoading) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="h-10 w-10 animate-spin rounded-full border-2 border-[#C9922A] border-t-transparent" />
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="container mx-auto px-4 py-8 space-y-8">
       <PageHeader
@@ -78,7 +160,7 @@ export default function GroupsPage() {
         description="Join groups, collaborate with like-minded individuals, and build stronger communities together."
         actions={
           <button
-            onClick={handleCreateGroup}
+            onClick={() => { window.location.href = "/groups/create" }}
             className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold transition-all hover:scale-[1.02] active:scale-[0.98]"
             style={{ background: "#D4911E", color: "#0A1F14" }}
           >
@@ -90,7 +172,24 @@ export default function GroupsPage() {
 
       <StatsGrid stats={stats} />
 
-      <GroupsList />
+      <Tabs defaultValue="my-groups">
+        <TabsList className="bg-[#F7F2E8] border border-[#C9922A]/20">
+          <TabsTrigger value="my-groups" className="data-[state=active]:bg-[#1E3D2F] data-[state=active]:text-[#F7F2E8]">
+            My Groups
+          </TabsTrigger>
+          <TabsTrigger value="explore" className="data-[state=active]:bg-[#1E3D2F] data-[state=active]:text-[#F7F2E8]">
+            Explore
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="my-groups" className="mt-6">
+          <GroupsList />
+        </TabsContent>
+
+        <TabsContent value="explore" className="mt-6">
+          <ExploreGroups />
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

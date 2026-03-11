@@ -57,4 +57,50 @@ export class GroupController {
     );
     sendSuccess(res, members, 'Members retrieved');
   }
+
+  static async getGroups(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const { isSystem, voluntaryType, search, limit, offset } =
+      req.query as Record<string, string>;
+    const result = await groupMembershipService.getGroups(userId, {
+      isSystem:
+        isSystem === 'true' ? true : isSystem === 'false' ? false : undefined,
+      voluntaryType,
+      search,
+      limit: limit ? parseInt(limit) : undefined,
+      offset: offset ? parseInt(offset) : undefined,
+    });
+    sendSuccess(res, result, 'Groups retrieved');
+  }
+
+  static async updateGroupSettings(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const { groupId } = req.params;
+    const group = await groupService.updateGroupSettings(
+      userId,
+      groupId,
+      req.body
+    );
+    sendSuccess(res, group, 'Group settings updated');
+  }
+
+  static async changeMemberRole(req: AuthRequest, res: Response) {
+    const actorId = req.user!.userId;
+    const { groupId, userId: targetUserId } = req.params;
+    const { role } = req.body;
+    const result = await groupService.changeMemberRole(
+      actorId,
+      groupId,
+      targetUserId,
+      role
+    );
+    sendSuccess(res, result, 'Member role updated');
+  }
+
+  static async removeMember(req: AuthRequest, res: Response) {
+    const actorId = req.user!.userId;
+    const { groupId, userId: targetUserId } = req.params;
+    await groupService.removeMember(actorId, groupId, targetUserId);
+    sendSuccess(res, null, 'Member removed');
+  }
 }

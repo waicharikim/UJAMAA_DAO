@@ -1146,3 +1146,89 @@ Implement the community + onboarding plan: fix memberCount, add group discovery 
 
 **Token usage:**
 Sonnet 4.6 — planning session only (codebase exploration + plan writing; no code committed)
+
+---
+
+## Session 27 — 2026-03-10
+
+**Mode:** Documentation
+**Tier:** Standard
+
+**What was built:**
+
+- **docs/white.docx extracted** into 6 new documentation files:
+  - `docs/whitepaper.md` — UjamaaDAO white paper v1.3 (vision, problem, solution, token design, roadmap)
+  - `docs/features.md` — Feature inventory by module (all 13 modules, March 2026 status)
+  - `docs/ecosystem.md` — Ecosystem overview + prioritised improvement roadmap
+  - `docs/economy-design.md` — Full PR/UT/IP token mechanics: earning tables, monthly regen, decay, education rewards, anti-exploit rules
+  - `docs/treasury.md` — Treasury structure, M-Pesa deposit/withdrawal flows, fiat-backed UT cash-out design
+  - `docs/frontend-payment-ux.md` — Payment UX principles + screen mockups (M-Pesa default, UT as secondary)
+  - `docs/white.docx` deleted after extraction
+- **7 existing docs files rewritten** to match the real codebase (cross-referenced against live route files):
+  - `docs/auth-api.md` — was describing a non-existent OTP flow (`/send-otp`, `/verify-otp`); rewritten with real magic link endpoints, full 30+ endpoint reference
+  - `docs/user-api.md` — was describing fake `POST /users` registration with `walletAddress`; rewritten with real 25+ endpoints
+  - `docs/group-api.md` — was describing a completely different API (walletAddress, invite/accept flow); rewritten with real 6 endpoints
+  - `docs/proposal-api.md` — had wrong vote options (`For/Against`), wrong endpoints (`PATCH`); rewritten with real `YES/NO/ABSTAIN`, correct 6 endpoints
+  - `docs/economy-api.md` — had wrong paths (`/impact-points`, `/token-balance`); rewritten with correct 4 endpoints, UT two-pool rule
+  - `docs/architecture.md` — had ADR-009 still unresolved, wrong primary auth; fully rewritten with real 13-module table, correct middleware chain, verification ladder
+  - `docs/contributing.md` — said "zero tests written"; updated to 269 green tests, correct test command
+- **Workflow files updated** to fix stale/wrong references:
+  - `commands/orient.md` — `docs/START_HERE.md` + `docs/CLAUDE.md` → correct `ai_workflows/` paths
+  - `commands/audit-docs.md` — all 7 file paths corrected (`docs/`, `src/`, bare filenames → real backend/ paths)
+  - `ai_workflows/START_HERE.md` — test count (173→269), blockchain status, MailHog note, 8 new docs entries in navigation table
+  - `ai_workflows/SESSION_STATE.md` — ADR count (ADR-024→ADR-026), 13 new docs paths in key file paths section
+  - `ai_workflows/AGENTS.md` — Developer hat Traefik reference fixed (ADR-023: disabled in dev); bumped to v2.4
+
+**Decisions made:**
+
+- **UT two-pool confirmed (ADR-004 clarified):** `fiatBackedUtBalance` (M-Pesa deposits, 1 UT = 1 KES, fully cashable) vs `earnedUtBalance` (platform activity, no cash-out path, ever). These must be tracked as separate DB columns — never merge them into a single balance. UI must label them separately: "Savings" vs "Earned Rewards".
+- **Activity-gated PR regeneration (ADR-025 new):** Monthly PR regen requires minimum activity threshold (login + at least one qualifying action in the past 30 days: vote cast, dues paid, M-Pesa transaction, vouch given). Zero-activity users receive no regen.
+- **Soft PR inactivity decay (ADR-026 new):** After 60 days of no qualifying activity: -5% PR per month, floor of 100 PR (never below). Qualifying activity resets the decay clock. Decay only runs on users who have been through full email verification.
+
+**What's still broken or incomplete:**
+
+- Same as previous session — no code changes, no new issues
+- Community `memberCount` bug still pending
+- `next build` 404 prerender error still pending
+- Base Sepolia deploy still pending
+
+**Next milestone:**
+
+Execute community + onboarding plan from `.claude/plans/wiggly-conjuring-nygaard.md`: fix memberCount, add group discovery endpoint, wire onboarding booleans, add frontend Explore tab, extend tests to ~70+ community tests.
+
+**Token usage:**
+Sonnet 4.6 — documentation session (codebase read + docs extraction + 7 rewrites + workflow fixes; no code committed)
+
+---
+
+## 2026-03-11 — Community plan executed end-to-end; 302 tests green
+
+**What was built:**
+- Fixed `Group.memberCount`: `createVoluntaryGroup` sets to 1, `joinGroup` increments, `leaveGroup` decrements (was never touched before)
+- Added `getGroups()` discovery endpoint to `groupMembership.service.ts` — paginated, filterable by `isSystem`, `voluntaryType`, `search`; returns `isMember` + `myRole` per requesting user; filters by `status: ACTIVE`
+- Added group admin methods to `group.service.ts`: `updateGroupSettings`, `changeMemberRole`, `removeMember` (all LEADER-only, service-level guard via Prisma lookup)
+- Added controller handlers for all new methods in `group.controller.ts`
+- Added routes: `GET /community` (discovery, placed before `/:groupId`), `PATCH /:groupId/settings`, `PATCH /:groupId/members/:userId/role`, `DELETE /:groupId/members/:userId`
+- Wired onboarding progress flags: `joinedWardGroup` in `user-events.listeners.ts` after `enrollInSystemGroups`; `joinedVoluntaryGroup` in `group.service.ts joinGroup`; `castFirstVote` in `proposal.service.ts castVote` (uses `updateMany` with `where: { castFirstVote: false }` for idempotency)
+- Frontend: added `GroupDiscoveryDto` interface + `communityApi.getGroups()` to `frontend/lib/api.ts`
+- Frontend: rewrote `frontend/app/groups/page.tsx` — added shadcn `Tabs` (My Groups / Explore); `ExploreGroups` component with search input, card grid, `useMutation` join button
+- Updated workflow/command files: `orient.md`, `audit-docs.md`, `START_HERE.md`, `SESSION_STATE.md`, `AGENTS.md`, `CLAUDE.md` — all stale paths and counts corrected
+- Written and passing: 82 community tests (38 routes + 30 group service + 14 groupMembership service). Total suite: **302 green tests** across 19 files.
+
+**Decisions made:**
+- Route tests mock `groupMembershipService`; `isMember` flag business-logic coverage moved to `group.service.test.ts` (uses real Prisma, no mocks) — avoids mocking per-test overrides in route tests
+- `GroupRole` enum has no `ADMIN` value — removed from route validator `z.enum([...])` and from `removeMember` guard (only `LEADER` can remove)
+- `seedVoluntaryGroup()` helper now sets `status: 'ACTIVE'` explicitly (schema default is `FORMING`; `getGroups` filters by `ACTIVE`)
+- `onboardingProgress` updates in service methods use `.catch(() => {})` — failures are non-critical and must never fail the primary operation
+
+**What's still broken or incomplete:**
+- Frontend: `next build` has a 404 prerender issue (low priority — dev server works fine)
+- Base Sepolia deploy: blocked on real-world action (fund minter wallet)
+- Governance, Projects, Marketplace modules: zero tests
+- Group admin edge cases not tested in routes: self-role-change (400), system group settings update (400) — covered by service tests but not route integration tests
+
+**Next milestone:**
+Governance module tests + frontend vote/proposal UI — `castVote` onboarding flag is now wired, governance service/routes exist, next is writing the ~40 governance tests and adding proposal creation + vote UI to the frontend.
+
+**Token usage:**
+Sonnet 4.6

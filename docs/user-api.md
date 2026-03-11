@@ -1,155 +1,203 @@
 # User API Documentation
 
-> **Module status:** `partial` — routes mounted at `/api/v1/users` in `app.ts`.
-> Base URL: `http://localhost:4000/api/v1`
+> **Module status:** `tested` — 35 green tests across 2 files.
+> Base URL: `http://localhost:4000/api/v1/users`
+
+---
 
 ## Overview
 
-The User API handles registration, profile management, and public user lookup by wallet address. It provides both public and authenticated endpoints for managing user data.
+The User module handles profile management, industry/goods-services selection, residence and location, privacy settings, and community verification (vouching + M-Pesa payment path).
+
+**Important:** User registration is handled by `/api/v1/auth/magic-link/send`, not this module. There is no `POST /users` endpoint.
 
 ---
 
-## Endpoints
+## Verification Levels
 
-### POST `/api/v1/users`
-
-**Description:**  
-Registers a new user.
-
-**Authentication:**  
-None (public endpoint).
-
-**Request Body:**  
-| Field             | Type         | Required | Description                        |
-| ----------------- | ------------ | -------- | -------------------------------- |
-| `walletAddress`    | string       | Yes      | User's Ethereum wallet address    |
-| `email`            | string       | Yes      | User's email address (unique)     |
-| `name`             | string       | Yes      | User's full name                  |
-| `phoneNumber`      | string       | No       | Optional contact phone number     |
-| `constituencyOrigin` | string     | Yes      | User's origin constituency         |
-| `countyOrigin`     | string       | Yes      | User's origin county              |
-| `constituencyLive` | string       | Yes      | User's current constituency        |
-| `countyLive`       | string       | Yes      | User's current county             |
-| `industry`         | string       | No       | Industry or sector affiliation    |
-| `goodsServices`    | string[]     | No       | Goods or services provided by user |
-
-**Responses:**  
-- `201 Created`: User successfully registered. Returns created user object.  
-- `409 Conflict`: Email or wallet address already registered.  
-- `400 Bad Request`: Validation errors.
+| Level | Unlocks |
+|---|---|
+| `EMAIL_VERIFIED` | `GET /me`, `PATCH /me/profile`, `DELETE /me` |
+| `PHONE_VERIFIED` | Vouching, residence change, ward members |
+| `COMMUNITY_VERIFIED` | Industries, goods/services, location, privacy, accessibility |
 
 ---
 
-### GET `/api/v1/users/wallet/:walletAddress`
+## Public Reference Endpoints (no auth required)
 
-**Description:**  
-Fetches user details by their wallet address.
+These are needed during registration — intentionally public.
 
-**Authentication:**  
-None (public endpoint).
+#### `GET /users/reference/counties`
+List all counties.
 
-**Path Parameters:**  
-| Parameter        | Type   | Description                      |
-| ---------------- | ------ | ------------------------------- |
-| `walletAddress`  | string | Ethereum wallet address (case-insensitive) |
+#### `GET /users/reference/constituencies?countyId=<uuid>`
+List constituencies, optionally filtered by county.
 
-**Responses:**  
-- `200 OK`: Return user object matching wallet address.  
-- `404 Not Found`: User with given wallet address not found.
+#### `GET /users/reference/wards?constituencyId=<uuid>`
+List wards, optionally filtered by constituency.
 
----
+#### `GET /users/reference/industries`
+List all available industries.
 
-### GET `/api/v1/users/me`
-
-**Description:**  
-Gets the profile of the authenticated user.
-
-**Authentication:**  
-Bearer JWT token required.
-
-**Responses:**  
-- `200 OK`: Returns authenticated user profile.  
-- `401 Unauthorized`: Missing or invalid authentication token.
+#### `GET /users/reference/goods-services?industryId=<uuid>`
+List goods/services, optionally filtered by industry.
 
 ---
 
-### PATCH `/api/v1/users/me`
+## Profile
 
-**Description:**  
-Updates profile of the authenticated user.
+#### `GET /users/me`
+Get the authenticated user's full profile.
+**Auth:** `EMAIL_VERIFIED`
 
-**Authentication:**  
-Bearer JWT token required.
+**Response `200`** includes geographic, economic (PR/UT/IP), verification level, industries, roles.
 
-**Request Body:** (any subset of below fields, all validated)  
-| Field             | Type         | Description                    |
-| ----------------- | ------------ | ------------------------------ |
-| `email`            | string       | User's email address           |
-| `name`             | string       | User's name                   |
-| `phoneNumber`      | string       | Contact phone number          |
-| `constituencyOrigin` | string     | Origin constituency            |
-| `countyOrigin`     | string       | Origin county                |
-| `constituencyLive` | string       | Current constituency           |
-| `countyLive`       | string       | Current county                |
-| `industry`         | string       | Industry/sector              |
-| `goodsServices`    | string[]     | Goods or services offered      |
+---
 
-**Responses:**  
-- `200 OK`: Updated user object returned.  
-- `400 Bad Request`: Validation error on input.  
-- `401 Unauthorized`: Missing or invalid token.
+#### `PATCH /users/me/profile`
+Update profile fields. Partial update — only send fields you want to change.
+**Auth:** `EMAIL_VERIFIED`
+**Rate limit:** 10/min global + 3/min per user
+
+**Body (all optional):**
+| Field | Type |
+|---|---|
+| `name` | string |
+| `avatarUrl` | string (URL) |
+| `privacySettings` | object |
+| `accessibility` | object |
+
+> Phone number updates use `POST /auth/phone/send-code` flow, not this endpoint.
+
+---
+
+#### `DELETE /users/me`
+Permanently delete own account.
+**Auth:** `EMAIL_VERIFIED`
+**Rate limit:** 3/hr global + 1/hr per user
+
+---
+
+#### `GET /users/:userId`
+View another user's public profile.
+**Auth:** `COMMUNITY_VERIFIED`
+
+---
+
+## Industries & Goods/Services
+
+#### `GET /users/me/industries`
+**Auth:** `COMMUNITY_VERIFIED`
+
+#### `POST /users/me/industries`
+Select up to 3 industries (one primary).
+**Auth:** `COMMUNITY_VERIFIED`
+**Rate limit:** 5/min global + 2/min per user
+
+**Body:**
+```json
+{
+  "primaryIndustryId": "<uuid>",
+  "industryIds": ["<uuid>", "<uuid>"]
+}
+```
+
+---
+
+#### `GET /users/me/goods-services`
+**Auth:** `COMMUNITY_VERIFIED`
+
+#### `POST /users/me/goods-services`
+Select goods/services you can provide or request.
+**Auth:** `COMMUNITY_VERIFIED`
+**Rate limit:** 5/min global + 2/min per user
+
+**Body:**
+```json
+{
+  "canProvide": ["<goodsServiceId>"],
+  "canRequest": ["<goodsServiceId>"]
+}
+```
+
+---
+
+## Residence & Location
+
+#### `GET /users/me/residence-change-requests`
+**Auth:** `COMMUNITY_VERIFIED`
+
+#### `POST /users/me/request-residence-change`
+Request a primary ward change. Cooldown: 6 months. 7-day review period.
+**Auth:** `COMMUNITY_VERIFIED` + `minParticipationRights: 50`
+**Rate limit:** 1/day
+
+**Body:** `{ "newWardId": "<uuid>", "reason": "..." }`
+
+---
+
+#### `POST /users/me/temporary-location`
+Set a temporary ward (valid up to 6 months).
+**Auth:** `COMMUNITY_VERIFIED`
+**Rate limit:** 10/hr global + 5/hr per user
+
+**Body:** `{ "wardId": "<uuid>", "expiresAt": "YYYY-MM-DD" }`
+
+#### `DELETE /users/me/temporary-location`
+Clear temporary location.
+**Auth:** `COMMUNITY_VERIFIED`
+
+---
+
+## Privacy & Accessibility
+
+#### `GET /users/me/privacy-settings`
+**Auth:** `COMMUNITY_VERIFIED`
+
+#### `GET /users/me/accessibility`
+**Auth:** `COMMUNITY_VERIFIED`
+
+---
+
+## Community Verification
+
+Community verification requires 3 vouches from existing `COMMUNITY_VERIFIED` ward members, OR a payment via M-Pesa (currently stubbed to auto-succeed in dev).
+
+#### `POST /users/verify-community/request`
+Initiate community verification request.
+**Auth:** `PHONE_VERIFIED`
+**Rate limit:** 3 per 30 days
+
+#### `POST /users/verify-community/vouch`
+Vouch for another user. Voucher must be `COMMUNITY_VERIFIED`.
+**Auth:** `COMMUNITY_VERIFIED`
+**Rate limit:** 5/day
+
+**Body:** `{ "targetUserId": "<uuid>" }`
+
+#### `POST /users/verify-community/payment`
+M-Pesa payment path for verification (alternative to 3 vouches).
+**Auth:** `PHONE_VERIFIED`
+**Rate limit:** 3/day
+
+**Body:** `{ "mpesaTransactionId": "...", "amount": 500 }`
+
+#### `GET /users/verify-community/status`
+Check current verification request status.
+**Auth:** `PHONE_VERIFIED`
+
+---
+
+## Ward Members
+
+#### `GET /users/wards/:wardId/members`
+List verified members of a ward. Used for vouching discovery.
+**Auth:** `PHONE_VERIFIED`
 
 ---
 
 ## Notes
 
-- All wallet addresses are normalized to lowercase internally to avoid case-sensitivity issues. Input casing variations are accepted but normalized on storage and lookup.
-- Registration automatically assigns a nonce used in wallet signature challenge for authentication.
-- Authentication tokens are JWTs signed with a secure secret (`JWT_SECRET`).
-- JWT tokens are sent in `Authorization` header as `Bearer <token>`.
-- Input validation is rigorously performed using Zod schemas to ensure data correctness.
-- Profile updates allow partial fields, validating only provided keys.
-
----
-
-## Example cURL Requests
-
-**Register a new user:**
-
-```bash
-curl -X POST http://localhost:4000/api/v1/users \
--H "Content-Type: application/json" \
--d '{
-  "walletAddress": "0xabcdef1234567890abcdef1234567890abcdef12",
-  "email": "user@example.com",
-  "name": "Jane Doe",
-  "constituencyOrigin": "Nairobi West",
-  "countyOrigin": "Nairobi",
-  "constituencyLive": "Nairobi West",
-  "countyLive": "Nairobi",
-  "industry": "Education",
-  "goodsServices": ["Teaching", "Books"]
-}'
-```
-**Get user by wallet address:**
-
-```bash
-curl http://localhost:4000/api/v1/users/wallet/0xabcdef1234567890abcdef1234567890abcdef12
-```
-
-**Get own profile (authenticated):**
-
-```bash
-curl http://localhost:4000/api/v1/users/me \
--H "Authorization: Bearer <your_jwt_token>"
-```
-
-
-**Update profile (authenticated):**
-
-```bash
-curl -X PATCH http://localhost:4000/api/v1/users/me \
--H "Authorization: Bearer <your_jwt_token>" \
--H "Content-Type: application/json" \
--d '{"name": "Jane Updated"}'
-```
+- All rate-limited write endpoints use dual limiting: global IP limit + per-user limit.
+- `GET /users/me/industries` and all economy-gated endpoints require `COMMUNITY_VERIFIED` — a user at `EMAIL_VERIFIED` will get `403`.
+- Profile update only accepts `name`, `avatarUrl`, `privacySettings`, `accessibility` — not `email`, `phone`, or location fields directly.

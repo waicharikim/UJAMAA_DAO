@@ -9,6 +9,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { prisma } from '../../src/core/database/client.js';
 import { groupService } from '../../src/modules/community/services/group.service.js';
+import { groupMembershipService } from '../../src/modules/community/services/groupMembership.service.js';
 import { VOLUNTARY_GROUP_PR_COST } from '../../src/modules/community/types.js';
 import {
   seedLocation,
@@ -237,5 +238,247 @@ describe('leaveGroup()', () => {
     await expect(
       groupService.leaveGroup(user.id, group.id)
     ).rejects.toMatchObject({ statusCode: 403 });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// memberCount correctness
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('memberCount tracking', () => {
+  it('createVoluntaryGroup sets memberCount to 1', async () => {
+    const user = await createCommunityTestUser('mc-create@example.com');
+    await awardPR(user.id, 200);
+
+    const group = await groupService.createVoluntaryGroup(user.id, {
+      name: 'MC Create Group',
+      voluntaryType: 'BUSINESS_COLLECTIVE',
+    });
+
+    const updated = await prisma.group.findUnique({ where: { id: group.id }, select: { memberCount: true } });
+    expect(updated!.memberCount).toBe(1);
+  });
+
+  it('joinGroup increments memberCount', async () => {
+    const owner = await createCommunityTestUser('mc-owner@example.com');
+    const joiner = await createCommunityTestUser('mc-joiner@example.com');
+    await awardPR(owner.id, 200);
+    const group = await seedVoluntaryGroup(owner.id, 'MC Join Group');
+
+    const before = await prisma.group.findUnique({ where: { id: group.id }, select: { memberCount: true } });
+    await groupService.joinGroup(joiner.id, group.id);
+    const after = await prisma.group.findUnique({ where: { id: group.id }, select: { memberCount: true } });
+
+    expect(after!.memberCount).toBe(before!.memberCount + 1);
+  });
+
+  it('leaveGroup decrements memberCount', async () => {
+    const owner = await createCommunityTestUser('mc-leave-owner@example.com');
+    const member = await createCommunityTestUser('mc-leave-member@example.com');
+    await awardPR(owner.id, 200);
+    const group = await seedVoluntaryGroup(owner.id, 'MC Leave Group');
+    await groupService.joinGroup(member.id, group.id);
+
+    const before = await prisma.group.findUnique({ where: { id: group.id }, select: { memberCount: true } });
+    await groupService.leaveGroup(member.id, group.id);
+    const after = await prisma.group.findUnique({ where: { id: group.id }, select: { memberCount: true } });
+
+    expect(after!.memberCount).toBe(before!.memberCount - 1);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// updateGroupSettings()
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('updateGroupSettings()', () => {
+  it('updates name and description for LEADER', async () => {
+    const leader = await createCommunityTestUser('us-leader@example.com');
+    await awardPR(leader.id, 200);
+    const group = await seedVoluntaryGroup(leader.id, 'Settings Test Group');
+
+    const updated = await groupService.updateGroupSettings(leader.id, group.id, {
+      name: 'Renamed Group',
+      description: 'New description',
+    });
+
+    expect(updated.name).toBe('Renamed Group');
+    expect(updated.description).toBe('New description');
+  });
+
+  it('throws 403 for MEMBER', async () => {
+    const owner = await createCommunityTestUser('us-owner@example.com');
+    const member = await createCommunityTestUser('us-member@example.com');
+    await awardPR(owner.id, 200);
+    const group = await seedVoluntaryGroup(owner.id, 'Member Cannot Change');
+    await groupService.joinGroup(member.id, group.id);
+
+    await expect(
+      groupService.updateGroupSettings(member.id, group.id, { name: 'Hacked Name' })
+    ).rejects.toMatchObject({ statusCode: 403 });
+  });
+
+  it('throws 400 for system group', async () => {
+    const user = await createCommunityTestUser('us-sys@example.com');
+    const sysGroup = await prisma.group.create({
+      data: { name: 'Official Ward', isSystemGroup: true, locationScope: 'WARD', status: 'ACTIVE' },
+    });
+    await prisma.groupMember.create({
+      data: { userId: user.id, groupId: sysGroup.id, role: 'LEADER', autoEnrolled: true, canLeave: false, joinedAt: new Date(), active: true },
+    });
+
+    await expect(
+      groupService.updateGroupSettings(user.id, sysGroup.id, { name: 'Cannot Rename' })
+    ).rejects.toMatchObject({ statusCode: 400 });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// changeMemberRole()
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('changeMemberRole()', () => {
+  it('LEADER can promote a member to TREASURER', async () => {
+    const leader = await createCommunityTestUser('cr-leader@example.com');
+    const member = await createCommunityTestUser('cr-member@example.com');
+    await awardPR(leader.id, 200);
+    const group = await seedVoluntaryGroup(leader.id, 'Role Test Group');
+    await groupService.joinGroup(member.id, group.id);
+
+    const result = await groupService.changeMemberRole(leader.id, group.id, member.id, 'TREASURER');
+
+    expect(result.role).toBe('TREASURER');
+    expect(result.userId).toBe(member.id);
+  });
+
+  it('throws 403 when MEMBER tries to change role', async () => {
+    const owner = await createCommunityTestUser('cr-owner@example.com');
+    const member = await createCommunityTestUser('cr-actor@example.com');
+    const target = await createCommunityTestUser('cr-target@example.com');
+    await awardPR(owner.id, 200);
+    const group = await seedVoluntaryGroup(owner.id, 'Role 403 Group');
+    await groupService.joinGroup(member.id, group.id);
+    await groupService.joinGroup(target.id, group.id);
+
+    await expect(
+      groupService.changeMemberRole(member.id, group.id, target.id, 'TREASURER')
+    ).rejects.toMatchObject({ statusCode: 403 });
+  });
+
+  it('throws 400 when trying to change own role', async () => {
+    const leader = await createCommunityTestUser('cr-self@example.com');
+    await awardPR(leader.id, 200);
+    const group = await seedVoluntaryGroup(leader.id, 'Self Role Group');
+
+    await expect(
+      groupService.changeMemberRole(leader.id, group.id, leader.id, 'MEMBER')
+    ).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it('throws 404 when target is not a member', async () => {
+    const leader = await createCommunityTestUser('cr-404leader@example.com');
+    const nonMember = await createCommunityTestUser('cr-nonmember@example.com');
+    await awardPR(leader.id, 200);
+    const group = await seedVoluntaryGroup(leader.id, 'Role 404 Group');
+
+    await expect(
+      groupService.changeMemberRole(leader.id, group.id, nonMember.id, 'TREASURER')
+    ).rejects.toMatchObject({ statusCode: 404 });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// removeMember()
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('removeMember()', () => {
+  it('LEADER can remove a member', async () => {
+    const leader = await createCommunityTestUser('rm-leader@example.com');
+    const target = await createCommunityTestUser('rm-target@example.com');
+    await awardPR(leader.id, 200);
+    const group = await seedVoluntaryGroup(leader.id, 'Remove Test Group');
+    await groupService.joinGroup(target.id, group.id);
+
+    const result = await groupService.removeMember(leader.id, group.id, target.id);
+
+    expect(result.success).toBe(true);
+
+    const membership = await prisma.groupMember.findUnique({
+      where: { userId_groupId: { userId: target.id, groupId: group.id } },
+    });
+    expect(membership).toBeNull();
+  });
+
+  it('decrements memberCount after removal', async () => {
+    const leader = await createCommunityTestUser('rm-count@example.com');
+    const target = await createCommunityTestUser('rm-count-target@example.com');
+    await awardPR(leader.id, 200);
+    const group = await seedVoluntaryGroup(leader.id, 'Remove Count Group');
+    await groupService.joinGroup(target.id, group.id);
+
+    const before = await prisma.group.findUnique({ where: { id: group.id }, select: { memberCount: true } });
+    await groupService.removeMember(leader.id, group.id, target.id);
+    const after = await prisma.group.findUnique({ where: { id: group.id }, select: { memberCount: true } });
+
+    expect(after!.memberCount).toBe(before!.memberCount - 1);
+  });
+
+  it('throws 403 when MEMBER tries to remove another member', async () => {
+    const owner = await createCommunityTestUser('rm-owner@example.com');
+    const aggressor = await createCommunityTestUser('rm-aggressor@example.com');
+    const victim = await createCommunityTestUser('rm-victim@example.com');
+    await awardPR(owner.id, 200);
+    const group = await seedVoluntaryGroup(owner.id, 'Remove 403 Group');
+    await groupService.joinGroup(aggressor.id, group.id);
+    await groupService.joinGroup(victim.id, group.id);
+
+    await expect(
+      groupService.removeMember(aggressor.id, group.id, victim.id)
+    ).rejects.toMatchObject({ statusCode: 403 });
+  });
+
+  it('throws 400 when leader tries to remove themselves', async () => {
+    const leader = await createCommunityTestUser('rm-self@example.com');
+    await awardPR(leader.id, 200);
+    const group = await seedVoluntaryGroup(leader.id, 'Remove Self Group');
+
+    await expect(
+      groupService.removeMember(leader.id, group.id, leader.id)
+    ).rejects.toMatchObject({ statusCode: 400 });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// getGroups() — discovery with isMember flag
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('getGroups() — isMember flag', () => {
+  it('sets isMember=true and myRole for groups the user has joined', async () => {
+    const owner = await createCommunityTestUser('gm-owner@example.com');
+    const viewer = await createCommunityTestUser('gm-viewer@example.com');
+    await awardPR(owner.id, 200);
+    const group = await seedVoluntaryGroup(owner.id, 'GetGroups Test Group');
+    await groupService.joinGroup(viewer.id, group.id);
+
+    const result = await groupMembershipService.getGroups(viewer.id);
+
+    const found = result.groups.find((g) => g.id === group.id);
+    expect(found).toBeDefined();
+    expect(found!.isMember).toBe(true);
+    expect(found!.myRole).toBe('MEMBER');
+  });
+
+  it('sets isMember=false for groups the user has not joined', async () => {
+    const owner = await createCommunityTestUser('gm-owner2@example.com');
+    const other = await createCommunityTestUser('gm-other@example.com');
+    await awardPR(owner.id, 200);
+    const group = await seedVoluntaryGroup(owner.id, 'GetGroups Other Group');
+
+    const result = await groupMembershipService.getGroups(other.id);
+
+    const found = result.groups.find((g) => g.id === group.id);
+    expect(found).toBeDefined();
+    expect(found!.isMember).toBe(false);
+    expect(found!.myRole).toBeNull();
   });
 });

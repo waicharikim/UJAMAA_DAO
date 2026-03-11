@@ -36,6 +36,8 @@ vi.mock('../../src/modules/community/services/groupMembership.service.js', () =>
     updateResidenceGroups: vi.fn().mockResolvedValue(undefined),
     getUserGroups: vi.fn().mockResolvedValue([]),
     getGroupMembers: vi.fn().mockResolvedValue([]),
+    getGroupById: vi.fn().mockResolvedValue(null),
+    getGroups: vi.fn().mockResolvedValue({ groups: [], total: 0, limit: 20, offset: 0 }),
   },
 }));
 
@@ -58,6 +60,7 @@ import {
   seedVoluntaryGroup,
   makeCommunityToken,
 } from './helpers.js';
+import { groupService } from '../../src/modules/community/services/group.service.js';
 
 const BASE = '/api/v1/community';
 
@@ -438,5 +441,272 @@ describe('POST /community/leave', () => {
       where: { userId_groupId: { userId: member.id, groupId: group.id } },
     });
     expect(membership).toBeNull();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /community  (group discovery)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('GET /community', () => {
+  it('returns 401 without auth token', async () => {
+    const res = await request(app).get(BASE);
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 200 with paginated groups list', async () => {
+    const owner = await createCommunityTestUser('disc-owner@example.com');
+    await awardPR(owner.id, 200);
+    await seedVoluntaryGroup(owner.id, 'Discovery Group A');
+    await seedVoluntaryGroup(owner.id, 'Discovery Group B');
+    const token = makeCommunityToken(owner.id);
+
+    const res = await request(app)
+      .get(BASE)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(Array.isArray(res.body.data.groups)).toBe(true);
+    expect(typeof res.body.data.total).toBe('number');
+  });
+
+  it('accepts isSystem=false filter', async () => {
+    const user = await createCommunityTestUser('disc-filter@example.com');
+    const token = makeCommunityToken(user.id);
+
+    const res = await request(app)
+      .get(`${BASE}?isSystem=false`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
+
+  it('accepts search query param', async () => {
+    const user = await createCommunityTestUser('disc-search@example.com');
+    const token = makeCommunityToken(user.id);
+
+    const res = await request(app)
+      .get(`${BASE}?search=savings`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
+
+  it('passes isMember and myRole from service to response', async () => {
+    const { groupMembershipService } = await import('../../src/modules/community/services/groupMembership.service.js');
+    const user = await createCommunityTestUser('ismem-route@example.com');
+    const token = makeCommunityToken(user.id);
+    const fakeGroupId = 'aaaaaaaa-bbbb-cccc-dddd-ffffffffffff';
+
+    vi.mocked(groupMembershipService.getGroups).mockResolvedValueOnce({
+      groups: [{ id: fakeGroupId, name: 'Test', isMember: true, myRole: 'MEMBER' } as any],
+      total: 1,
+      limit: 20,
+      offset: 0,
+    });
+
+    const res = await request(app)
+      .get(BASE)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    const found = res.body.data.groups.find((g: any) => g.id === fakeGroupId);
+    expect(found).toBeDefined();
+    expect(found.isMember).toBe(true);
+    expect(found.myRole).toBe('MEMBER');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PATCH /community/:groupId/settings
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('PATCH /community/:groupId/settings', () => {
+  it('returns 401 without auth token', async () => {
+    const res = await request(app)
+      .patch(`${BASE}/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/settings`)
+      .send({ name: 'New Name' });
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 200 and updates name for LEADER', async () => {
+    const leader = await createCommunityTestUser('settings-leader@example.com');
+    await awardPR(leader.id, 200);
+    const group = await seedVoluntaryGroup(leader.id, 'Original Name');
+    const token = makeCommunityToken(leader.id);
+
+    const res = await request(app)
+      .patch(`${BASE}/${group.id}/settings`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Updated Name' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.name).toBe('Updated Name');
+  });
+
+  it('returns 403 for MEMBER trying to update settings', async () => {
+    const owner = await createCommunityTestUser('settings-owner@example.com');
+    const member = await createCommunityTestUser('settings-member@example.com');
+    await awardPR(owner.id, 200);
+    const group = await seedVoluntaryGroup(owner.id, 'Members Cannot Edit');
+    await groupService.joinGroup(member.id, group.id);
+    const token = makeCommunityToken(member.id);
+
+    const res = await request(app)
+      .patch(`${BASE}/${group.id}/settings`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Hijacked Name' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.success).toBe(false);
+  });
+
+  it('returns 400 when name is too short', async () => {
+    const leader = await createCommunityTestUser('settings-short@example.com');
+    await awardPR(leader.id, 200);
+    const group = await seedVoluntaryGroup(leader.id, 'Short Name Test');
+    const token = makeCommunityToken(leader.id);
+
+    const res = await request(app)
+      .patch(`${BASE}/${group.id}/settings`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'AB' });
+
+    expect(res.status).toBe(400);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PATCH /community/:groupId/members/:userId/role
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('PATCH /community/:groupId/members/:userId/role', () => {
+  it('returns 401 without auth token', async () => {
+    const res = await request(app)
+      .patch(`${BASE}/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/members/bbbbbbbb-cccc-dddd-eeee-ffffffffffff/role`)
+      .send({ role: 'TREASURER' });
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 200 and updates role for LEADER', async () => {
+    const leader = await createCommunityTestUser('role-leader@example.com');
+    const member = await createCommunityTestUser('role-member@example.com');
+    await awardPR(leader.id, 200);
+    const group = await seedVoluntaryGroup(leader.id, 'Role Change Group');
+    await groupService.joinGroup(member.id, group.id);
+    const token = makeCommunityToken(leader.id);
+
+    const res = await request(app)
+      .patch(`${BASE}/${group.id}/members/${member.id}/role`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ role: 'TREASURER' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.role).toBe('TREASURER');
+  });
+
+  it('returns 403 when non-LEADER tries to change role', async () => {
+    const owner = await createCommunityTestUser('role-owner@example.com');
+    const member = await createCommunityTestUser('role-nonleader@example.com');
+    const target = await createCommunityTestUser('role-target@example.com');
+    await awardPR(owner.id, 200);
+    const group = await seedVoluntaryGroup(owner.id, 'Role 403 Group');
+    await groupService.joinGroup(member.id, group.id);
+    await groupService.joinGroup(target.id, group.id);
+    const token = makeCommunityToken(member.id);
+
+    const res = await request(app)
+      .patch(`${BASE}/${group.id}/members/${target.id}/role`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ role: 'TREASURER' });
+
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 400 for invalid role value', async () => {
+    const leader = await createCommunityTestUser('role-badval@example.com');
+    await awardPR(leader.id, 200);
+    const group = await seedVoluntaryGroup(leader.id, 'Role Bad Val Group');
+    const token = makeCommunityToken(leader.id);
+
+    const res = await request(app)
+      .patch(`${BASE}/${group.id}/members/${leader.id}/role`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ role: 'SUPERUSER' });
+
+    expect(res.status).toBe(400);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DELETE /community/:groupId/members/:userId
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('DELETE /community/:groupId/members/:userId', () => {
+  it('returns 401 without auth token', async () => {
+    const res = await request(app)
+      .delete(`${BASE}/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/members/bbbbbbbb-cccc-dddd-eeee-ffffffffffff`);
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 200 and removes the member for LEADER', async () => {
+    const leader = await createCommunityTestUser('kick-leader@example.com');
+    const target = await createCommunityTestUser('kick-target@example.com');
+    await awardPR(leader.id, 200);
+    const group = await seedVoluntaryGroup(leader.id, 'Kick Test Group');
+    await groupService.joinGroup(target.id, group.id);
+    const token = makeCommunityToken(leader.id);
+
+    const res = await request(app)
+      .delete(`${BASE}/${group.id}/members/${target.id}`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+
+    const membership = await prisma.groupMember.findUnique({
+      where: { userId_groupId: { userId: target.id, groupId: group.id } },
+    });
+    expect(membership).toBeNull();
+  });
+
+  it('returns 403 when MEMBER tries to remove another member', async () => {
+    const owner = await createCommunityTestUser('kick-owner@example.com');
+    const aggressor = await createCommunityTestUser('kick-aggressor@example.com');
+    const victim = await createCommunityTestUser('kick-victim@example.com');
+    await awardPR(owner.id, 200);
+    const group = await seedVoluntaryGroup(owner.id, 'Kick 403 Group');
+    await groupService.joinGroup(aggressor.id, group.id);
+    await groupService.joinGroup(victim.id, group.id);
+    const token = makeCommunityToken(aggressor.id);
+
+    const res = await request(app)
+      .delete(`${BASE}/${group.id}/members/${victim.id}`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(403);
+  });
+
+  it('decrements memberCount after removal', async () => {
+    const leader = await createCommunityTestUser('kick-count-leader@example.com');
+    const target = await createCommunityTestUser('kick-count-target@example.com');
+    await awardPR(leader.id, 200);
+    const group = await seedVoluntaryGroup(leader.id, 'Kick Count Group');
+    await groupService.joinGroup(target.id, group.id);
+    const token = makeCommunityToken(leader.id);
+
+    const before = await prisma.group.findUnique({ where: { id: group.id }, select: { memberCount: true } });
+
+    await request(app)
+      .delete(`${BASE}/${group.id}/members/${target.id}`)
+      .set('Authorization', `Bearer ${token}`);
+
+    const after = await prisma.group.findUnique({ where: { id: group.id }, select: { memberCount: true } });
+    expect(after!.memberCount).toBe(before!.memberCount - 1);
   });
 });

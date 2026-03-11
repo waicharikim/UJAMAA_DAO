@@ -1,212 +1,136 @@
-# Group API Documentation
+# Community / Groups API Documentation
 
-> **Module status:** `partial` — code exists, not yet mounted in `app.ts`, no tests written.
-> Routes will be available at `/api/v1/community/groups` when connected.
+> **Module status:** `tested` — 49 green tests across 4 files.
+> Base URL: `http://localhost:4000/api/v1/community`
+
+---
 
 ## Overview
 
-The Group API manages group creation, membership, invitations, role management, and group data retrieval. All group-related endpoints require authentication.
+The Community module manages two kinds of groups:
+
+- **System groups** — created automatically by the platform (ward groups, etc.). Users are auto-enrolled on email verification. Cannot be manually joined.
+- **Voluntary groups** — created by users, costs PR to create, users can join/leave freely.
+
+All endpoints require authentication.
+
+---
+
+## Group Types
+
+Voluntary groups have a `voluntaryType` field. Valid types include:
+`BUSINESS_COLLECTIVE`, `SAVINGS_CREDIT`, `YOUTH_ORGANIZATION`, `PROJECT_EXECUTION`, `TECHNOLOGY_HUB` (and 35+ others seeded from spec).
 
 ---
 
 ## Endpoints
 
-### POST `/api/v1/community/groups`
+### `POST /community/voluntary/create`
+Create a new voluntary group. Costs `VOLUNTARY_GROUP_PR_COST` PR (deducted at creation).
+**Auth:** required
 
-**Description:**  
-Create a new group. The authenticated user is automatically assigned as the group admin.
+**Body:**
+| Field | Type | Required |
+|---|---|---|
+| `name` | string (min 3) | Yes |
+| `voluntaryType` | string (enum) | Yes |
+| `description` | string | No |
+| `avatarUrl` | string (URL) | No |
 
-**Authentication:**  
-Bearer JWT token required.
-
-**Request Body:**  
-| Field             | Type       | Required | Description                    |
-| ----------------- | ---------- | -------- | ------------------------------ |
-| `name`            | string     | Yes      | Unique group name              |
-| `description`     | string     | No       | Optional group description      |
-| `walletAddress`   | string     | Yes      | Group's Ethereum wallet address |
-| `constituency`    | string     | Yes      | Group's registered constituency |
-| `county`          | string     | Yes      | Group's registered county      |
-| `industryFocus`   | string     | No       | Group's industry focus         |
-| `productsServices`| string[]   | No       | List of products or services    |
-
-**Responses:**  
-- `201 Created`: Returns created group object.  
-- `409 Conflict`: Group name already exists.  
-- `400 Bad Request`: Validation errors.  
-- `401 Unauthorized`: Missing or invalid authentication.
+**Responses:**
+- `201 Created` — group object returned. Creator is auto-added as `LEADER`.
+- `400 Bad Request` — invalid `voluntaryType` or validation failure.
+- `402/403` — insufficient PR.
 
 ---
 
-### GET `/api/v1/community/groups/:id`
+### `POST /community/join`
+Join a voluntary group. Cannot join system groups this way.
+**Auth:** required
 
-**Description:**  
-Retrieve group details by ID, including active members and their user info.
+**Body:** `{ "groupId": "<uuid>" }`
 
-**Authentication:**  
-Bearer JWT token required.
-
-**Path Parameters:**  
-| Parameter | Type   | Description           |
-| --------- | ------ | --------------------- |
-| `id`      | string | Unique ID of the group |
-
-**Responses:**  
-- `200 OK`: Returns group object with members.  
-- `404 Not Found`: Group not found.  
-- `401 Unauthorized`: Missing or invalid authentication.
+**Responses:**
+- `200 OK` — membership record returned.
+- `400 Bad Request` — group is a system group.
+- `409 Conflict` — already a member.
+- `404 Not Found` — group not found.
 
 ---
 
-### PATCH `/api/v1/community/groups/:id`
+### `POST /community/leave`
+Leave a voluntary group. Cannot leave groups where `canLeave: false` (system groups or auto-enrolled).
+**Auth:** required
 
-**Description:**  
-Update group details partially.
+**Body:** `{ "groupId": "<uuid>" }`
 
-**Authentication:**  
-Bearer JWT token required.
-
-**Request Body:** (any combination of fields below)
-
-| Field             | Type       | Description                |
-| ----------------- | ---------- | -------------------------- |
-| `name`            | string     | Group name (unique)         |
-| `description`     | string     | Group description           |
-| `walletAddress`   | string     | Group wallet address        |
-| `constituency`    | string     | Group constituency          |
-| `county`          | string     | Group county                |
-| `industryFocus`   | string     | Industry focus              |
-| `productsServices`| string[]   | Products or services list   |
-
-**Responses:**  
-- `200 OK`: Returns updated group object.  
-- `400 Bad Request`: Validation errors.  
-- `404 Not Found`: Group not found.  
-- `401 Unauthorized`: Missing or invalid authentication.
+**Responses:**
+- `200 OK` — `{ "success": true }`
+- `403 Forbidden` — group membership has `canLeave: false`.
+- `404 Not Found` — membership not found.
 
 ---
 
-### POST `/api/v1/community/groups/:id/invite`
+### `GET /community/my-groups`
+List all groups the authenticated user belongs to (system + voluntary, active only).
+**Auth:** required
 
-**Description:**  
-Invite a user to join the group. Requires admin privileges (enforced in backend).
-
-**Authentication:**  
-Bearer JWT token required.
-
-**Path Parameters:**  
-| Parameter | Type   | Description           |
-| --------- | ------ | --------------------- |
-| `id`      | string | ID of the group       |
-
-**Request Body:**  
-| Field  | Type   | Description          |
-| ------ | ------ | -------------------- |
-| `userId`| string | ID of user to invite |
-
-**Responses:**  
-- `201 Created`: Invitation created (pending membership).  
-- `400 Bad Request`: User already a member or invited.  
-- `404 Not Found`: Group not found.  
-- `401 Unauthorized`: Missing or invalid authentication.
+**Response `200`:** array of group objects with membership details.
 
 ---
 
-### POST `/api/v1/community/groups/:id/accept`
+### `GET /community/:groupId`
+Get full detail for a single group including user's own membership status.
+**Auth:** required
 
-**Description:**  
-Authenticated user accepts a pending invitation to join the group.
+**Response `200`:**
+```json
+{
+  "id": "...",
+  "name": "...",
+  "isSystemGroup": false,
+  "voluntaryType": "SAVINGS_CREDIT",
+  "memberCount": 12,
+  "userMembership": {
+    "role": "MEMBER",
+    "joinedAt": "...",
+    "canLeave": true
+  }
+}
+```
 
-**Authentication:**  
-Bearer JWT token required.
-
-**Path Parameters:**  
-| Parameter | Type   | Description           |
-| --------- | ------ | --------------------- |
-| `id`      | string | ID of the group       |
-
-**Responses:**  
-- `200 OK`: Invitation accepted, membership activated.  
-- `404 Not Found`: No pending invitation found.  
-- `401 Unauthorized`: Missing or invalid authentication.
+**Responses:** `200 OK` · `404 Not Found`
 
 ---
 
-### POST `/api/v1/community/groups/:id/role`
+### `GET /community/:groupId/members?limit=&offset=`
+Paginated member list for a group.
+**Auth:** required
 
-**Description:**  
-Change the role of a group member (e.g., promote/demote admin/member). Requires admin privileges.
+**Query params:**
+| Param | Type | Default |
+|---|---|---|
+| `limit` | number | 20 |
+| `offset` | number | 0 |
 
-**Authentication:**  
-Bearer JWT token required.
-
-**Path Parameters:**  
-| Parameter | Type   | Description           |
-| --------- | ------ | --------------------- |
-| `id`      | string | ID of the group       |
-
-**Request Body:**  
-| Field  | Type          | Description       |
-| ------ | ------------- | ----------------- |
-| `userId`| string       | ID of member      |
-| `role` | 'ADMIN' \| 'MEMBER' | New role        |
-
-**Responses:**  
-- `200 OK`: Member role updated.  
-- `404 Not Found`: Member not found or group not found.  
-- `401 Unauthorized`: Missing or invalid authentication.
+**Response `200`:** array of `GroupMemberDto`:
+```json
+{
+  "userId": "...",
+  "userName": "...",
+  "avatarUrl": "...",
+  "verificationLevel": "COMMUNITY_VERIFIED",
+  "role": "LEADER",
+  "joinedAt": "..."
+}
+```
 
 ---
 
 ## Notes
 
-- All routes under `/api/v1/community/groups` require valid JWT tokens.
-- Group names must be unique across the platform.
-- User invitations create `GroupMember` entries with `active=false` until accepted.
-- Role changes are restricted to admins (logic enforced server-side).
-- Group data includes active members only.
-- Constituency and county must be valid predefined locations.
-
----
-
-## Example cURL Requests
-
-**Create a group:**
-
-```bash
-curl -X POST http://localhost:4000/api/v1/community/groups \
--H "Authorization: Bearer <your_jwt_token>" \
--H "Content-Type: application/json" \
--d '{
-  "name": "Test Group",
-  "walletAddress": "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdef",
-  "constituency": "Nairobi West",
-  "county": "Nairobi",
-  "industryFocus": "Tech",
-  "productsServices": ["Consulting", "Development"]
-}'
-```
-
-**Invite a user to group:**
-```bash
-curl -X POST http://localhost:4000/api/v1/community/groups/<group_id>/invite \
--H "Authorization: Bearer <your_jwt_token>" \
--H "Content-Type: application/json" \
--d '{"userId": "<user_id>"}'
-```
-
-
-**Accept an invitation:**
-```bash
-curl -X POST http://localhost:4000/api/v1/community/groups/<group_id>/accept \
--H "Authorization: Bearer <your_jwt_token>"
-```
-
-
-**Change member role:**
-```bash
-curl -X POST http://localhost:4000/api/v1/community/groups/<group_id>/role \
--H "Authorization: Bearer <your_jwt_token>" \
--H "Content-Type: application/json" \
--d '{"userId": "<user_id>", "role": "ADMIN"}'
-```
+- System groups are auto-created from seed data. Users are enrolled via the `registerCommunityListeners()` event — triggered on `user.email.verified`.
+- Group roles: `LEADER` (creator of voluntary group) or `MEMBER`.
+- `canLeave: false` is set for system group memberships and auto-enrolled members who cannot opt out.
+- `memberCount` on the `Group` model is currently a known bug — it is not updated atomically when members join/leave. Fix pending.
+- Group admin routes (settings update, role change, kick member) are planned but commented out — see `group.routes.ts`.

@@ -54,6 +54,21 @@ router.post(
 
 router.get('/my-groups', asyncHandler(GroupController.getMyGroups));
 
+router.get(
+  '/',
+  validateRequest({
+    schema: z.object({
+      isSystem: z.enum(['true', 'false']).optional(),
+      voluntaryType: z.string().optional(),
+      search: z.string().optional(),
+      limit: z.string().optional(),
+      offset: z.string().optional(),
+    }),
+    target: 'query',
+  }),
+  asyncHandler(GroupController.getGroups)
+);
+
 router.get('/:groupId', asyncHandler(GroupController.getGroupDetail));
 
 router.get(
@@ -68,28 +83,41 @@ router.get(
   asyncHandler(GroupController.getGroupMembers)
 );
 
-// FUTURE: Group admin actions — only LEADER of the group
-// Example:
-// router.post(
-//   "/:groupId/start-voting",
-//   authorize({
-//     scopeCheck: async (req) => {
-//       const groupId = req.params.groupId;
-//       return roleService.hasGroupRole(req.user!.userId, groupId, "LEADER");
-//     },
-//   }),
-//   asyncHandler(GroupController.startProposalVoting)
-// );
+router.patch(
+  '/:groupId/settings',
+  validateRequest({
+    schema: z.object({
+      name: z.string().min(3).max(100).optional(),
+      description: z.string().max(500).optional(),
+    }),
+    target: 'body',
+  }),
+  asyncHandler(GroupController.updateGroupSettings)
+);
 
-// router.patch(
-//   "/:groupId/settings",
-//   authorize({
-//     scopeCheck: async (req) => {
-//       const groupId = req.params.groupId;
-//       return roleService.hasGroupRole(req.user!.userId, groupId, "LEADER");
-//     },
-//   }),
-//   asyncHandler(GroupController.updateGroupSettings)
-// );
+router.patch(
+  '/:groupId/members/:userId/role',
+  validateRequest({
+    schema: z.object({
+      role: z.enum([
+        'MEMBER',
+        'LEADER',
+        'TREASURER',
+        'SECRETARY',
+        'AUDITOR',
+        'FACILITATOR',
+        'MENTOR',
+        'MODERATOR',
+      ]),
+    }),
+    target: 'body',
+  }),
+  asyncHandler(GroupController.changeMemberRole)
+);
+
+router.delete(
+  '/:groupId/members/:userId',
+  asyncHandler(GroupController.removeMember)
+);
 
 export default router;

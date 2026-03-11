@@ -140,7 +140,7 @@ File: [next file path]
 - Never use raw SQL — Prisma only
 - Never use `setTimeout` for jobs — BullMQ only
 - Every new endpoint needs an `ApiError` import and proper error handling
-- After writing code, provide a verification snippet: `make dev` first, then a curl against the Traefik-exposed port (check `docker/docker-compose.yml` for port mappings)
+- After writing code, provide a verification snippet: `make dev` first, then a curl against the direct port — API at `:4000`, frontend at `:3000` (Traefik is disabled in dev per ADR-023; check `docker/docker-compose.yml` for full port map)
 - If you're unsure about a design decision, flag it — don't silently choose
 - If adding a Prisma schema change, note the migration command: run `make db-migrate` inside the backend container
 
@@ -271,3 +271,4 @@ Test command: [how to verify after applying changes]
 | v2.1 | Fixed file paths (backend/ prefix, workers.ts not worker.ts) |
 | v2.2 | Added Testing hat, fixed Developer output format path, added migration and Docker verification notes |
 | v2.3 | Added Orient hat (new session startup), referencing SESSION_STATE.md as primary context source |
+| v2.4 | Developer hat: fixed Traefik reference (disabled in dev per ADR-023) — use direct ports :4000/:3000 |

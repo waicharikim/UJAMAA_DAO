@@ -511,6 +511,76 @@ class GroupMembershipService {
   }
 
   /**
+   * Discover all groups (paginated, filterable).
+   * Returns isMember + myRole for the requesting user.
+   */
+  async getGroups(
+    userId: string,
+    filters: {
+      isSystem?: boolean;
+      voluntaryType?: string;
+      search?: string;
+      limit?: number;
+      offset?: number;
+    } = {}
+  ) {
+    const { isSystem, voluntaryType, search, limit = 20, offset = 0 } = filters;
+
+    const where: Prisma.GroupWhereInput = {
+      status: GroupStatus.ACTIVE,
+      ...(isSystem !== undefined && { isSystemGroup: isSystem }),
+      ...(voluntaryType && { voluntaryType: voluntaryType as any }),
+      ...(search && {
+        name: { contains: search, mode: 'insensitive' as const },
+      }),
+    };
+
+    const [groups, total] = await Promise.all([
+      prisma.group.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          isSystemGroup: true,
+          systemType: true,
+          voluntaryType: true,
+          locationScope: true,
+          memberCount: true,
+          status: true,
+          members: {
+            where: { userId, active: true },
+            select: { role: true },
+          },
+        },
+        orderBy: [{ isSystemGroup: 'desc' }, { memberCount: 'desc' }],
+        take: limit,
+        skip: offset,
+      }),
+      prisma.group.count({ where }),
+    ]);
+
+    return {
+      groups: groups.map((g) => ({
+        id: g.id,
+        name: g.name,
+        description: g.description,
+        isSystemGroup: g.isSystemGroup,
+        systemType: g.systemType,
+        voluntaryType: g.voluntaryType,
+        locationScope: g.locationScope,
+        memberCount: g.memberCount,
+        status: g.status,
+        isMember: g.members.length > 0,
+        myRole: g.members[0]?.role ?? null,
+      })),
+      total,
+      limit,
+      offset,
+    };
+  }
+
+  /**
    * Get group members.
    */
   async getGroupMembers(
