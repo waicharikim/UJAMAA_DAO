@@ -1,132 +1,222 @@
-# UjamaaDAO - System Architecture
+# UjamaaDAO – System Architecture
 
-## Introduction
-
-UjamaaDAO is a decentralized autonomous organization platform tailored for multi-level governance with geographic and role-based layers. This document provides a detailed architecture overview of all major system components, data flows, and integration points spanning backend, frontend, and blockchain.
+**Last updated:** March 2026
 
 ---
 
-## High-Level Architecture Overview
+## High-Level Overview
 
-+-------------------+ +---------------------+ +----------------------+
-| | | | | |
-| Frontend UI / | <------> | Backend REST | <------> | Blockchain Layer |
-| Wallets (Web, | | API + Business | | (Smart contracts and |
-| Mobile, SMS) | | Logic + Database | | on-chain logic) |
-| | | | | |
-+-------------------+ +---------------------+ +----------------------+
-| | |
-User Interactions Data / Requests State & Governance
-
-
----
-
-## Core Components
-
-### 1. Frontend & User Interaction Layer
-
-- Responsive Web & Mobile UI for user registration, governance participation, and project collaboration.
-- Embedded wallet integrations (Privy or Dynamic — decision pending ADR-009) for cryptographic identity without seed phrase management. MetaMask is not required.
-- SMS gateway integration for rural/low-connectivity user access.
-- Real-time updates via WebSockets or polling for votes, proposals, and project status.
-
-### 2. Backend API & Business Logic
-
-- Express-based REST API covering:
-
-  - User management with wallet-based login using nonce + signature.
-  - Group and county group governance modules with membership, roles, and proposal management.
-  - Voting system combining individual and group votes with dynamic quorum and consensus.
-  - Project and milestone management, including funding disbursement control.
-  - Token and impact point economy managing reputation and governance participation incentives.
-  - Notification service delivering multi-channel updates.
-
-- PostgreSQL database accessed via Prisma ORM with comprehensive data modeling for multi-level geography and user roles.
-
-- Robust error handling with `ApiError` (`backend/src/core/errors/ApiError.ts`) and structured logging via Pino (`backend/src/core/logger/logger.ts`).
-
-- Authentication and authorization middleware enforcing JWT-based access and role-based permissions.
-
-- Comprehensive testing with Vitest and Supertest ensuring high confidence in logic correctness.
-
-### 3. Blockchain Layer
-
-- Smart contracts deployed on **Base L2** (Coinbase L2, EVM-compatible) — Sepolia testnet for dev, Mainnet for prod. Enforces:
-
-  - Token economcis (minting, transfers, staking).
-  - On-chain voting and proposal approvals.
-  - Reputation tokens (soulbound or similar).
-  - Milestone funding and release conditions.
-
-- Backend listens to contract events, synchronizes on-chain state to off-chain DB, ensuring transparency and auditability.
-
-- Wallets sign transactions and vote delegation messages on-chain.
+```
+┌─────────────────┐     ┌──────────────────────────┐     ┌──────────────────────┐
+│   Frontend      │────▶│   Backend REST API        │────▶│   Blockchain Layer   │
+│   (Next.js)     │     │   Node.js / Express       │     │   Base L2 (Sepolia)  │
+│   Port :3000    │     │   Port :4000              │     │   PrToken + UtToken  │
+└─────────────────┘     └──────────────────────────┘     └──────────────────────┘
+                                    │
+                         ┌──────────┴──────────┐
+                         │   Worker Process    │
+                         │   BullMQ queues     │
+                         │   (background jobs) │
+                         └─────────────────────┘
+```
 
 ---
 
-## Geographic & Governance Hierarchy
+## Runtime Processes
 
-- **Local (Group) Level**: Private or public groups organized by legal entities; members participate in group-only governance and projects.
-- **Constituency Level**: Collections of groups & individuals mapped via user residency or origin; propositions and votes scoped accordingly.
-- **County Level**: Federation of constituencies; county groups formed automatically based on reputation; intermediate governance body.
-- **National Level**: Highest governance level where county groups propose and vote on national initiatives.
+Two fully decoupled processes run via Docker Compose:
 
----
+| Process | Entry point | Purpose |
+|---|---|---|
+| `web` | `backend/src/index.ts` | REST API, serves all HTTP traffic |
+| `worker` | `backend/src/workers.ts` | Background jobs + event listeners (no HTTP) |
 
-## Data Flow Highlights
-
-1. **User Registration & Authentication**
-
-   - Users register with wallet address and dual locations.
-   - Backend generates nonce; frontend requests nonce and signs it.
-   - Backend verifies signature, issues JWT, facilitating secure session management.
-
-2. **Group & Proposal Management**
-
-   - Groups created and managed via APIs.
-   - Proposals created at varying scopes with customizable privacy.
-   - Voting combines individual weighted votes and group block votes subject to quorum.
-
-3. **Project Execution**
-
-   - Approved proposals transition into projects.
-   - Projects have milestones monitored and verified.
-   - Funds released based on milestone approvals.
-
-4. **Blockchain Synchronization**
-
-   - Key governance events written on-chain.
-   - Backend tracks on-chain state and updates database.
-   - Ensures trust and immutability for critical governance actions.
+Both connect to the same Postgres and Redis. Secrets with blast radius (`MINTER_PRIVATE_KEY`, `TELEGRAM_BOT_TOKEN`, `DISCORD_BOT_TOKEN`) are on the `worker` env only — never `web`.
 
 ---
 
-## Security & Compliance
+## Data Stores
 
-- Wallet-based auth eliminates passwords; nonce used to prevent replay.
-- Role-Based Access Control applied throughout backend.
-- Secure data in transit and at rest with HTTPS and encryption.
-- Audit logs for vote, proposal, financial transactions.
-- Regional and global data privacy considerations integrated.
-
----
-
-## Development & Deployment
-
-- Containerized microservices via Docker Compose.
-- Multi-stage builds for dev and production.
-- Continuous Integration configured with linting, tests, and deployment.
-- Modular service design with clear API contracts for future extensibility.
+| Store | Docker service | Host port | Purpose |
+|---|---|---|---|
+| PostgreSQL | `postgres` | 5432 | Primary database (Prisma ORM) |
+| PostgreSQL test | `postgres_test` | 5433 | Isolated test DB |
+| Redis | `redis` | 6380 | Rate limiting, sessions, BullMQ queues |
+| MailHog | `mailhog` | 1025 (SMTP) · 8025 (UI) | Dev email catcher |
+| Anvil | `ujamaa_anvil` | 8545 | Local EVM for blockchain dev |
 
 ---
 
-## Future Extensions
+## API Routes
 
-- Proxy and delegated voting mechanisms.
-- Cross-chain interoperability.
-- Advanced analytics and reputation dashboards.
-- Comprehensive dispute resolution workflow.
-- Expanded notification and engagement features.
+All routes are mounted at `/api/v1/` in `backend/src/app.ts`.
+
+| Module | Prefix | Status | Tests |
+|---|---|---|---|
+| auth | `/api/v1/auth` | tested | 104 |
+| user | `/api/v1/users` | tested | 35 |
+| economy | `/api/v1/economy` | tested | 34 |
+| community | `/api/v1/community` | tested | 49 |
+| governance | `/api/v1/governance` | tested | 47 |
+| admin | `/api/v1/admin` | partial | 0 |
+| projects | `/api/v1/projects` | partial | 0 |
+| marketplace | `/api/v1/marketplace` | partial | 0 |
+| notifications | `/api/v1/notifications` | partial | 0 |
+| emergency | `/api/v1/emergency` | partial | 0 |
+| audit | `/api/v1/audit` | partial | 0 |
+| onboarding | `/api/v1/onboarding` | partial | 0 |
+| integration | `/api/v1/integration` | partial | 0 |
+
+Health endpoints: `GET /health` · `GET /ready` · `GET /api/v1/docs`
 
 ---
 
+## Middleware Chain (Critical — order enforced in `app.ts`)
+
+```
+trust proxy → helmet/CORS → body parsing (10 MB limit)
+→ context + correlation ID → request logging
+→ global rate limiting → routes
+→ cleanup → 404 handler → error handler
+```
+
+---
+
+## Authentication
+
+Primary authentication is **magic link (email-based)**:
+- New users: `POST /auth/magic-link/send` → `GET /auth/verify-email?token=<hex>`
+- Existing users: `POST /auth/magic-link/send` → `GET /auth/login?token=<jwt>`
+- Token field: always `sessionToken`. Lifetime: 7 days. No short-lived/refresh rotation (ADR-022).
+
+Secondary: wallet signature (`POST /auth/wallet/nonce` + `POST /auth/wallet/verify`).
+
+---
+
+## Verification Levels
+
+```
+UNVERIFIED
+  └── EMAIL_VERIFIED        (after magic link verification)
+       └── PHONE_VERIFIED   (after OTP)
+            └── COMMUNITY_VERIFIED  (3 vouches or M-Pesa payment)
+                 └── FULL_VERIFIED  (location proof — planned)
+```
+
+Most protected routes require `COMMUNITY_VERIFIED`. 2FA and wallet routes require `FULL_VERIFIED`.
+
+---
+
+## Background Jobs & Queues
+
+Four BullMQ queues, all visible on Bull Board at `/admin/queues`:
+
+| Queue | Jobs |
+|---|---|
+| `economy` | `monthly-pr-regeneration` (1st of month), `daily-commitment-penalties` (02:00) |
+| `user-cleanup` | `user-cleanup` (every 4h), `auth-cleanup` (03:00) |
+| `integration` | `baraza-attendance-reward`, `baraza-send-invite` |
+| `dead-letter` | Failed jobs after max retries |
+
+All new repeatable jobs must register in `backend/src/core/jobs/register.ts`.
+
+---
+
+## Event Bus
+
+Cross-module communication uses the internal event bus (`backend/src/core/utils/eventBus.ts`).
+Direct imports between modules are forbidden — use events.
+
+| Event | Emitted by | Listeners |
+|---|---|---|
+| `user.created` | auth | economy, community, audit |
+| `user.email.verified` | auth | economy (awards PR), community (enrolls system groups), audit |
+| `auth.login` | auth | audit |
+| `economy.commitment.breached` | economy | (no listeners yet) |
+
+All new events must be typed in the event bus types file and documented here.
+
+---
+
+## Blockchain (Base L2)
+
+**Status:** Contracts written and tested. Base Sepolia deploy pending (minter wallet not yet funded).
+
+| Component | Status |
+|---|---|
+| `PrToken.sol` — soulbound ERC-20 | Written, 9 Foundry tests green |
+| `UtToken.sol` — standard ERC-20 | Written, 4 Foundry tests green |
+| `Deploy.s.sol` | Written, reads `MINTER_WALLET_ADDRESS` |
+| Backend `getPrContract()` / `getUtContract()` | Live with null-guard |
+| On-chain mint (PR award) | Wired in `participationRights.service.ts`, triple-guarded |
+| Local dev via Anvil | `ujamaa_anvil` container on :8545 |
+
+**Hybrid model (ADR-002):** On-chain = PR token, UT token, governance votes, treasury. Off-chain = profiles, discovery, education, emergency, chat, notifications.
+
+**Embedded wallets:** Privy (`@privy-io/react-auth` v3.14.1) — ADR-009.
+
+---
+
+## Frontend
+
+Next.js 16.1.6, React 18, TypeScript, Tailwind CSS, shadcn/ui, TanStack Query, Privy.
+
+**Dev:** `next dev --turbopack` (port 3000)
+**API client:** `frontend/lib/api.ts` — `authApi`, `userApi`, `economyApi`, `communityApi`, `governanceApi`, `integrationApi`, `notificationsApi`
+**Auth context:** `frontend/contexts/auth-context.tsx` — magic link flow, auto-hydrate from localStorage
+**Wallet context:** `frontend/contexts/wallet-context.tsx` — Privy integration
+
+---
+
+## Security
+
+- **Helmet** — CSP/HSTS only in production.
+- **CORS** — `ALLOWED_ORIGINS` env var (comma-separated). Defaults to `localhost:3000/3001`.
+- **Rate limiting** — global + per-endpoint + dual (IP + per-user) on write endpoints.
+- **RBAC** — `backend/src/core/rbac/roles.ts` — system roles: `SUPER_ADMIN`, `COMPLIANCE_OFFICER`, `COUNTY_COORDINATOR`, `BLOCKCHAIN_ADMIN`, `CONTRACT_DEPLOYER`, `MULTISIG_SIGNER`.
+- **Correlation IDs** — `X-Correlation-ID` header generated per request, exposed in response.
+- **Request body limit** — 10 MB.
+- **Secrets** — `ENCRYPTION_KEY` (64-char hex) required for TOTP/2FA. Generate: `openssl rand -hex 32`.
+
+---
+
+## Dev Port Map
+
+| Service | Host Port |
+|---|---|
+| Backend API | 4000 |
+| Frontend | 3000 |
+| Postgres | 5432 |
+| Postgres test | 5433 |
+| Redis | 6380 |
+| MailHog SMTP | 1025 |
+| MailHog UI | 8025 |
+| Anvil (EVM) | 8545 |
+
+Traefik is **disabled** in dev (ADR-023). Direct port access only.
+
+---
+
+## Key File Paths
+
+| What | Path |
+|---|---|
+| App entry | `backend/src/app.ts` |
+| Web server | `backend/src/index.ts` |
+| Worker entry | `backend/src/workers.ts` |
+| Docker Compose | `docker/docker-compose.yml` |
+| Makefile | `backend/Makefile` |
+| Jobs registry | `backend/src/core/jobs/register.ts` |
+| Blockchain client | `backend/src/core/blockchain/client.ts` |
+| Contracts | `contracts/src/PrToken.sol`, `contracts/src/UtToken.sol` |
+| Frontend API client | `frontend/lib/api.ts` |
+| Frontend auth context | `frontend/contexts/auth-context.tsx` |
+
+---
+
+## Observability
+
+- **Logging** — Pino structured JSON, `operationType` field on every log line.
+- **Bull Board** — `/admin/queues` (HTTP basic auth: `admin` / `DASHBOARD_PASSWORD`).
+- **Audit log** — `GET /api/v1/audit/search` returns real records for active events.
+- Prometheus + Grafana + Loki + Jaeger are configured but **disabled by default**.

@@ -1,51 +1,129 @@
 # Economy API Documentation
 
-> **Module status:** `partial` — economy routes mounted at `/api/v1/economy` in `app.ts`.
-> Tests not yet written.
+> **Module status:** `tested` — 34 green tests across 3 files (18 service unit + 16 route integration).
+> Base URL: `http://localhost:4000/api/v1/economy`
+
+---
 
 ## Overview
 
-The Economy module manages the token and impact points system:
+The Economy module manages the three-token system:
 
-- **PR (Participation Rights)**: Soulbound governance token. Non-transferable. Monthly regen gated by activity. Weighted voting.
-- **UT (Utility Token)**: Internal points. Cosmetic and visibility use only. Earned UT has no cash-out path.
-- **Impact Points**: Reputation score. Not spendable, not transferable.
+| Token | Type | Purpose | Cashable? |
+|---|---|---|---|
+| **PR (Participation Rights)** | Soulbound ERC-20 (on-chain) | Governance voting weight | No |
+| **UT (Utility Token)** | ERC-20 (on-chain) | Internal perks; fiat-backed pool is cashable | Fiat-backed only |
+| **Impact Points** | Off-chain (DB) | Reputation signal | No |
 
-Base URL: `http://localhost:4000/api/v1/economy`
+All economy endpoints require `COMMUNITY_VERIFIED`. Users at `EMAIL_VERIFIED` get `403`.
 
----
-
-## Non-Negotiable Rules (Economy)
-
-- PR is soulbound — no transfer, no trade, no send. Any endpoint that moves PR between users is rejected.
-- Earned UT cannot be converted to M-Pesa or any currency. No withdrawal path.
-- Incentives must reflect real value creation — no grinding or farming.
+For full token mechanics and design decisions see `docs/economy-design.md`.
 
 ---
 
-## Key Endpoint Areas
+## Non-Negotiable Rules
 
-> Full endpoint documentation is pending. The economy service at
-> `backend/src/modules/economy/` is the source of truth.
+- PR is soulbound — non-transferable, non-tradeable. Any endpoint that moves PR between users is rejected.
+- **Earned UT** (from education, referrals, contributions) has no cash-out path. Ever.
+- **Fiat-backed UT** (from M-Pesa deposits, 1 UT = 1 KES) can be withdrawn back to M-Pesa.
+- Incentives must reflect real value creation — no grinding, no farming.
 
-| Area | Path Prefix | Description |
-|------|-------------|-------------|
-| Impact Points | `/api/v1/economy/impact-points` | Read/update impact point balances |
-| Token Balance | `/api/v1/economy/token-balance` | Read/update UT balances |
-| PR Awards | `/api/v1/economy/pr` | PR regen and award endpoints |
-| Dues | `/api/v1/economy/dues` | Dues payment tracking |
+---
+
+## Endpoints
+
+### `GET /economy/pr`
+Get the authenticated user's PR balance and recent award/penalty history.
+**Auth:** `COMMUNITY_VERIFIED`
+
+**Response `200`:**
+```json
+{
+  "balance": 250,
+  "history": [
+    {
+      "id": "...",
+      "amount": 50,
+      "reason": "EMAIL_VERIFIED",
+      "createdAt": "..."
+    }
+  ]
+}
+```
+
+---
+
+### `GET /economy/dues/history`
+Get the user's dues payment history and totals.
+**Auth:** `COMMUNITY_VERIFIED`
+
+**Response `200`:**
+```json
+{
+  "totalPaid": 2500,
+  "history": [
+    { "period": "2026-02", "amountKes": 500, "paidAt": "...", "tier": "ORDINARY" }
+  ]
+}
+```
+
+---
+
+### `GET /economy/commitments`
+Get the user's active and past commitment records.
+**Auth:** `COMMUNITY_VERIFIED`
+
+**Response `200`:** array of commitment objects with `type`, `tier`, `startPeriod`, `status`, `nextDueDate`.
+
+---
+
+### `POST /economy/commitments/dues`
+Opt in to a monthly dues commitment (voluntary). Can only be called once per month per user.
+**Auth:** `COMMUNITY_VERIFIED`
+**Rate limit:** 1 per 30 days
+
+**Body:**
+| Field | Type | Values |
+|---|---|---|
+| `tier` | string (enum) | `ORDINARY` · `SUPPORTER` · `SPONSOR` |
+| `startPeriod` | string | `YYYY-MM` format |
+| `durationMonths` | number | positive integer |
+
+**Responses:**
+- `201 Created` — commitment created.
+- `400 Bad Request` — validation failure or invalid tier.
+- `429 Too Many Requests` — already opted in this month.
 
 ---
 
 ## Background Jobs (Economy Module)
 
-The economy module uses BullMQ for:
-- Monthly PR regen (cron, gated by activity)
-- Dues penalty application (cron, for overdue members)
-- Impact point award on verified actions
+All jobs are registered in `backend/src/core/jobs/register.ts` and run on the `economy` queue.
 
-All jobs registered in `backend/src/core/jobs/register.ts`.
+| Job | Schedule | Description |
+|---|---|---|
+| `monthly-pr-regeneration` | 1st of month, 00:05 | Awards PR regen to eligible users (activity-gated per ADR-025) |
+| `daily-commitment-penalties` | Daily 02:00 | Deducts PR for users with overdue commitments |
 
 ---
 
-*This document is a stub. Full endpoint documentation will be added when economy reaches `production-ready` status.*
+## Audit Trail
+
+The following economy events are written to the audit log:
+- `PR_AWARDED` — on every PR award
+- `PR_SPENT` — on every PR spend (e.g. group creation)
+- `DUES_PAID` — on successful dues payment
+- `COMMITMENT_CREATED` — on dues opt-in
+
+Query audit records at `GET /api/v1/audit/search`.
+
+---
+
+## Planned Endpoints (not yet implemented)
+
+```
+POST /economy/pr/spend          — spend PR for group creation, proposals
+GET  /economy/transactions      — full transaction history across PR + UT
+POST /economy/deposit           — M-Pesa → fiat-backed UT deposit
+POST /economy/withdraw          — fiat-backed UT → M-Pesa withdrawal
+```

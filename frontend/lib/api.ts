@@ -674,6 +674,20 @@ export interface GroupDetailDto {
   userJoinedAt: string | null
 }
 
+export interface GroupDiscoveryDto {
+  id: string
+  name: string
+  description: string | null
+  isSystemGroup: boolean
+  systemType: string | null
+  voluntaryType: string | null
+  locationScope: string
+  memberCount: number
+  status: string
+  isMember: boolean
+  myRole: string | null
+}
+
 export interface GroupMembershipDto {
   groupId: string
   groupName: string
@@ -725,6 +739,23 @@ export const communityApi = {
 
   getMyGroups: (): Promise<GroupMembershipDto[]> =>
     apiFetch<GroupMembershipDto[]>("/community/my-groups"),
+
+  getGroups: (params?: {
+    isSystem?: boolean
+    voluntaryType?: string
+    search?: string
+    limit?: number
+    offset?: number
+  }): Promise<{ groups: GroupDiscoveryDto[]; total: number }> => {
+    const q = new URLSearchParams()
+    if (params?.isSystem !== undefined) q.set("isSystem", String(params.isSystem))
+    if (params?.voluntaryType) q.set("voluntaryType", params.voluntaryType)
+    if (params?.search) q.set("search", params.search)
+    if (params?.limit) q.set("limit", String(params.limit))
+    if (params?.offset) q.set("offset", String(params.offset))
+    const qs = q.toString()
+    return apiFetch<{ groups: GroupDiscoveryDto[]; total: number }>(`/community${qs ? `?${qs}` : ""}`)
+  },
 
   getGroupDetail: (groupId: string): Promise<GroupDetailDto> =>
     apiFetch<GroupDetailDto>(`/community/${groupId}`),

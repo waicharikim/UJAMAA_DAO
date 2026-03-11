@@ -173,6 +173,15 @@ class ProposalService {
       },
     });
 
+    await prisma.onboardingProgress
+      .updateMany({
+        where: { userId, castFirstVote: false },
+        data: { castFirstVote: true },
+      })
+      .catch(() => {
+        /* non-critical */
+      });
+
     logger.info(
       { userId, proposalId: dto.proposalId, option: dto.option, weight },
       'Vote cast'

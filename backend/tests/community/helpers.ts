@@ -109,6 +109,7 @@ export async function seedVoluntaryGroup(
       isSystemGroup: false,
       locationScope: 'WARD',
       voluntaryType: 'BUSINESS_COLLECTIVE',
+      status: 'ACTIVE',
     },
   });
 

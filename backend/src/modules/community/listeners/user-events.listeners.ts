@@ -12,6 +12,7 @@
 import { eventBus } from '../../../core/utils/eventBus.js';
 import { logger } from '../../../core/logger/logger.js';
 import { groupMembershipService } from '../services/groupMembership.service.js';
+import { prisma } from '../../../core/database/client.js';
 
 /**
  * Register all community-related event listeners
@@ -44,6 +45,18 @@ export async function registerCommunityListeners(): Promise<void> {
           data.primaryWardId,
           data.secondaryWardId
         );
+
+        await prisma.onboardingProgress
+          .update({
+            where: { userId: data.userId },
+            data: { joinedWardGroup: true, currentStep: 'EXPLORE_COMMUNITY' },
+          })
+          .catch((err: Error) =>
+            logger.error(
+              { userId: data.userId, err: err.message },
+              'Failed to update onboarding: joinedWardGroup'
+            )
+          );
 
         logger.info(
           {
