@@ -1,27 +1,22 @@
-import { Suspense } from "react"
+import { Suspense, use } from "react"
 import { GroupDetail } from "@/components/groups/group-detail"
 import { GroupMembers } from "@/components/groups/group-members"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 
-interface GroupPageProps {
-  params: {
-    id: string
-  }
-}
-
-export default function GroupPage({ params }: GroupPageProps) {
+export default function GroupPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params)
   return (
     <ProtectedRoute>
       <div className="container mx-auto px-4 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2">
             <Suspense fallback={<GroupDetailSkeleton />}>
-              <GroupDetail groupId={params.id} />
+              <GroupDetail groupId={id} />
             </Suspense>
           </div>
           <div>
             <Suspense fallback={<GroupMembersSkeleton />}>
-              <GroupMembers groupId={params.id} />
+              <GroupMembers groupId={id} />
             </Suspense>
           </div>
         </div>
