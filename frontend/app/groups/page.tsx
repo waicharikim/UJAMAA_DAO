@@ -2,13 +2,96 @@
 
 import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import Link from "next/link"
 import { PageHeader } from "@/components/layout/page-header"
 import { StatsGrid } from "@/components/layout/stats-grid"
-import { GroupsList } from "@/components/groups/groups-list"
-import { communityApi, GroupDiscoveryDto } from "@/lib/api"
-import { Plus, Users, Crown, Shield, Network, Search, Globe } from "lucide-react"
+import { communityApi, GroupDiscoveryDto, GroupMembershipDto } from "@/lib/api"
+import { Plus, Users, Crown, Shield, Network, Search, Globe, ChevronRight } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
+
+// ─── My Groups tab ──────────────────────────────────────────────────────────
+
+function MyGroupsList() {
+  const { data: groups = [], isLoading } = useQuery<GroupMembershipDto[]>({
+    queryKey: ["my-groups-list"],
+    queryFn: communityApi.getMyGroups,
+    staleTime: 60_000,
+  })
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#C9922A] border-t-transparent" />
+      </div>
+    )
+  }
+
+  if (groups.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-[#6B5E4E]">
+        <Users className="h-10 w-10 mb-3 opacity-40" />
+        <p className="text-sm">You haven&apos;t joined any groups yet.</p>
+        <p className="text-xs mt-1 opacity-70">Explore the Explore tab to find and join groups.</p>
+      </div>
+    )
+  }
+
+  const system    = groups.filter((g) => g.isSystem)
+  const voluntary = groups.filter((g) => !g.isSystem)
+
+  function GroupRow({ g }: { g: GroupMembershipDto }) {
+    return (
+      <Link
+        href={`/groups/${g.groupId}`}
+        className="flex items-center justify-between gap-3 rounded-xl border border-[#C9922A]/20 bg-white p-4 hover:shadow-md transition-shadow"
+      >
+        <div className="min-w-0">
+          <p className="font-semibold text-[#0A1F14] truncate leading-tight">{g.groupName}</p>
+          {(g.voluntaryType ?? g.systemType) && (
+            <p className="text-xs text-[#6B5E4E] mt-0.5">
+              {(g.voluntaryType ?? g.systemType)!.replace(/_/g, " ")}
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span
+            className="text-xs font-medium rounded-full px-2.5 py-0.5"
+            style={
+              g.role === "LEADER"
+                ? { background: "#C9922A22", color: "#C9922A" }
+                : { background: "#1E3D2F22", color: "#1E3D2F" }
+            }
+          >
+            {g.role}
+          </span>
+          <ChevronRight className="h-4 w-4 text-[#C9922A]/60" />
+        </div>
+      </Link>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {system.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#6B5E4E]">Geographic Groups</p>
+          <div className="space-y-2">
+            {system.map((g) => <GroupRow key={g.groupId} g={g} />)}
+          </div>
+        </div>
+      )}
+      {voluntary.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#6B5E4E]">Voluntary Groups</p>
+          <div className="space-y-2">
+            {voluntary.map((g) => <GroupRow key={g.groupId} g={g} />)}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 // ─── Explore tab ───────────────────────────────────────────────────────────
 
@@ -27,6 +110,7 @@ function ExploreGroups() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["groups-discover"] })
       queryClient.invalidateQueries({ queryKey: ["my-groups-stats"] })
+      queryClient.invalidateQueries({ queryKey: ["my-groups-list"] })
     },
   })
 
@@ -60,24 +144,28 @@ function ExploreGroups() {
               key={g.id}
               className="rounded-xl border border-[#C9922A]/20 bg-white p-5 space-y-3 hover:shadow-md transition-shadow"
             >
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="font-semibold text-[#0A1F14] leading-tight">{g.name}</p>
-                  {g.voluntaryType && (
-                    <p className="text-xs text-[#6B5E4E] mt-0.5">
-                      {g.voluntaryType.replace(/_/g, " ")}
+              <Link href={`/groups/${g.id}`} className="block">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="font-semibold text-[#0A1F14] leading-tight hover:text-[#C9922A] transition-colors">
+                      {g.name}
                     </p>
-                  )}
+                    {g.voluntaryType && (
+                      <p className="text-xs text-[#6B5E4E] mt-0.5">
+                        {g.voluntaryType.replace(/_/g, " ")}
+                      </p>
+                    )}
+                  </div>
+                  <span className="shrink-0 flex items-center gap-1 text-xs text-[#6B5E4E]">
+                    <Users className="h-3.5 w-3.5" />
+                    {g.memberCount}
+                  </span>
                 </div>
-                <span className="shrink-0 flex items-center gap-1 text-xs text-[#6B5E4E]">
-                  <Users className="h-3.5 w-3.5" />
-                  {g.memberCount}
-                </span>
-              </div>
 
-              {g.description && (
-                <p className="text-xs text-[#6B5E4E] line-clamp-2">{g.description}</p>
-              )}
+                {g.description && (
+                  <p className="text-xs text-[#6B5E4E] line-clamp-2">{g.description}</p>
+                )}
+              </Link>
 
               {g.isMember ? (
                 <span className="inline-block text-xs font-medium text-[#1E3D2F] bg-[#1E3D2F]/10 rounded-full px-3 py-1">
@@ -104,7 +192,7 @@ function ExploreGroups() {
 // ─── Page ──────────────────────────────────────────────────────────────────
 
 export default function GroupsPage() {
-  const { data: groups = [], isLoading } = useQuery({
+  const { data: groups = [], isLoading } = useQuery<GroupMembershipDto[]>({
     queryKey: ["my-groups-stats"],
     queryFn: communityApi.getMyGroups,
     staleTime: 60_000,
@@ -159,14 +247,14 @@ export default function GroupsPage() {
         title="Community Groups"
         description="Join groups, collaborate with like-minded individuals, and build stronger communities together."
         actions={
-          <button
-            onClick={() => { window.location.href = "/groups/create" }}
+          <Link
+            href="/groups/create"
             className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold transition-all hover:scale-[1.02] active:scale-[0.98]"
             style={{ background: "#D4911E", color: "#0A1F14" }}
           >
             <Plus className="h-4 w-4" />
             Create Group
-          </button>
+          </Link>
         }
       />
 
@@ -183,7 +271,7 @@ export default function GroupsPage() {
         </TabsList>
 
         <TabsContent value="my-groups" className="mt-6">
-          <GroupsList />
+          <MyGroupsList />
         </TabsContent>
 
         <TabsContent value="explore" className="mt-6">

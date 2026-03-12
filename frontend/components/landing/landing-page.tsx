@@ -219,8 +219,13 @@ function OrbitalSystem() {
     }
 
     let t = 0
+    let lastTime = 0
 
-    function draw() {
+    function draw(time: number = 0) {
+      animId = requestAnimationFrame(draw)
+      // Cap to ~30fps — halves paint work on slow devices
+      if (time - lastTime < 33) return
+      lastTime = time
       if (!canvas || !ctx) return
       const W = canvas.width  / dpr
       const H = canvas.height / dpr
@@ -353,17 +358,29 @@ function OrbitalSystem() {
       ctx.fillStyle = "#FFF0A0"
       ctx.fill()
 
-      animId = requestAnimationFrame(draw)
+    }
+
+    // Pause animation when tab is hidden — prevents Lighthouse from accumulating
+    // 100s of main-thread rendering time during background audits
+    function onVisibilityChange() {
+      if (document.hidden) {
+        cancelAnimationFrame(animId)
+      } else {
+        lastTime = 0
+        animId = requestAnimationFrame(draw)
+      }
     }
 
     resize()
-    draw()
+    animId = requestAnimationFrame(draw)
     window.addEventListener("resize", resize)
     window.addEventListener("mousemove", onMouseMove)
+    document.addEventListener("visibilitychange", onVisibilityChange)
     return () => {
       cancelAnimationFrame(animId)
       window.removeEventListener("resize", resize)
       window.removeEventListener("mousemove", onMouseMove)
+      document.removeEventListener("visibilitychange", onVisibilityChange)
     }
   }, [])
 

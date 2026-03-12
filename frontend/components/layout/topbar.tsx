@@ -3,8 +3,14 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { PanelLeft, Coins, Award, Zap } from "lucide-react"
-import { WalletButton } from "@/components/auth/wallet-button"
+import dynamic from "next/dynamic"
 import { Button } from "@/components/ui/button"
+
+// Lazy-load WalletButton — keeps @privy-io/react-auth out of the topbar bundle
+const WalletButton = dynamic(
+  () => import("@/components/auth/wallet-button").then((m) => ({ default: m.WalletButton })),
+  { ssr: false, loading: () => <div className="h-8 w-20 rounded-full bg-[#C9922A]/10 animate-pulse" /> },
+)
 import { NotificationsPopover } from "./notifications-popover"
 import { useAuth } from "@/contexts/auth-context"
 

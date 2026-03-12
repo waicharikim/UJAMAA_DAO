@@ -14,10 +14,10 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  images: {
-    unoptimized: true,
-  },
   // Turbopack equivalents of the webpack stubs below (used by `next dev --turbopack`)
+  // NOTE: modularizeImports for lucide-react was removed — Privy imports icons
+  // (e.g. FingerprintIcon) that don't exist in our pinned lucide-react v0.294,
+  // causing "module not found" errors when the path transform is applied.
   turbopack: {
     resolveAlias: {
       unstorage: "./stubs/empty.js",
