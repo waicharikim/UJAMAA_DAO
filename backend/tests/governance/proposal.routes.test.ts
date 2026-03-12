@@ -445,4 +445,163 @@ describe('POST /governance/:proposalId/tally', () => {
     );
     expect(res.status).toBe(401);
   });
+
+  it('returns REJECTED when quorum is not met', async () => {
+    const creator = await createGovernanceUser('tally-rej-creator@example.com');
+    const token = makeGovernanceToken(creator.id);
+    const group = await seedGovernanceGroup(creator.id);
+    // Add extra members so quorum threshold is high
+    for (let i = 0; i < 5; i++) {
+      const m = await createGovernanceUser(`tally-rej-m${i}@example.com`);
+      await addGroupMember(m.id, group.id);
+    }
+    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.VOTING);
+    // No votes cast → totalVoteWeight=0 → quorum fails
+
+    const res = await request(app)
+      .post(`${BASE}/${proposal.id}/tally`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.newStatus).toBe('REJECTED');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Additional coverage — vote options, missing fields, filters, auth guard
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('POST /governance/vote — NO and ABSTAIN options', () => {
+  async function setupVoter(emailPrefix: string) {
+    const creator = await createGovernanceUser(`${emailPrefix}-creator@example.com`);
+    const voter = await createGovernanceUser(`${emailPrefix}-voter@example.com`);
+    const group = await seedGovernanceGroup(creator.id);
+    await addGroupMember(voter.id, group.id);
+    await awardPR(voter.id, 50);
+    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.VOTING);
+    return { voter, proposal, token: makeGovernanceToken(voter.id) };
+  }
+
+  it('returns 200 and records a NO vote', async () => {
+    const { token, proposal } = await setupVoter('route-no');
+
+    const res = await request(app)
+      .post(`${BASE}/vote`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ proposalId: proposal.id, option: 'NO' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+
+    const voteRow = await prisma.groupMemberVote.findFirst({
+      where: { proposalId: proposal.id },
+    });
+    expect(voteRow).not.toBeNull();
+    expect(voteRow!.vote).toBe(false);
+  });
+
+  it('returns 200 and records an ABSTAIN vote (stored as vote=false)', async () => {
+    const { token, proposal } = await setupVoter('route-abstain');
+
+    const res = await request(app)
+      .post(`${BASE}/vote`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ proposalId: proposal.id, option: 'ABSTAIN' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+
+    const voteRow = await prisma.groupMemberVote.findFirst({
+      where: { proposalId: proposal.id },
+    });
+    expect(voteRow).not.toBeNull();
+    expect(voteRow!.vote).toBe(false);
+  });
+
+  it('returns 400 when proposalId is missing', async () => {
+    const user = await createGovernanceUser('vote-noid@example.com');
+    const token = makeGovernanceToken(user.id);
+
+    const res = await request(app)
+      .post(`${BASE}/vote`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ option: 'YES' });
+
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('GET /governance — groupId filter and pagination', () => {
+  it('filters proposals by groupId', async () => {
+    const creator = await createGovernanceUser('route-filter-grp@example.com');
+    const token = makeGovernanceToken(creator.id);
+    const groupA = await seedGovernanceGroup(creator.id);
+    const groupB = await prisma.group.create({
+      data: {
+        name: 'Route Filter Group B',
+        description: 'Second group for route filter test',
+        isSystemGroup: false,
+        locationScope: 'WARD',
+        voluntaryType: 'SAVINGS_CREDIT',
+      },
+    });
+    await prisma.groupMember.create({
+      data: {
+        userId: creator.id,
+        groupId: groupB.id,
+        role: 'LEADER',
+        autoEnrolled: false,
+        canLeave: true,
+        joinedAt: new Date(),
+        active: true,
+      },
+    });
+
+    await seedProposal(creator.id, groupA.id, ProposalStatus.DRAFT, 'Group A proposal');
+    await seedProposal(creator.id, groupB.id, ProposalStatus.DRAFT, 'Group B proposal');
+
+    const res = await request(app)
+      .get(`${BASE}?groupId=${groupA.id}`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.total).toBe(1);
+    expect(res.body.data.proposals[0].groupId).toBe(groupA.id);
+  });
+
+  it('respects limit and offset query params', async () => {
+    const creator = await createGovernanceUser('route-page@example.com');
+    const token = makeGovernanceToken(creator.id);
+    const group = await seedGovernanceGroup(creator.id);
+
+    for (let i = 1; i <= 4; i++) {
+      await seedProposal(creator.id, group.id, ProposalStatus.DRAFT, `Paginated Proposal ${i}`);
+    }
+
+    const res = await request(app)
+      .get(`${BASE}?limit=2&offset=0`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.proposals).toHaveLength(2);
+    expect(res.body.data.total).toBe(4);
+  });
+});
+
+describe('POST /governance/start-voting — non-creator forbidden', () => {
+  it('returns 403 when a non-creator group member tries to start voting', async () => {
+    const creator = await createGovernanceUser('sv-creator2@example.com');
+    const member = await createGovernanceUser('sv-member2@example.com');
+    const memberToken = makeGovernanceToken(member.id);
+    const group = await seedGovernanceGroup(creator.id);
+    await addGroupMember(member.id, group.id);
+    const proposal = await seedProposal(creator.id, group.id);
+
+    const res = await request(app)
+      .post(`${BASE}/start-voting`)
+      .set('Authorization', `Bearer ${memberToken}`)
+      .send({ proposalId: proposal.id });
+
+    expect(res.status).toBe(403);
+  });
 });

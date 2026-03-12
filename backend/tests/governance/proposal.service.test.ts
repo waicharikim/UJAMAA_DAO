@@ -574,3 +574,100 @@ describe('listProposals()', () => {
     expect(ids1.every((id) => !ids2.includes(id))).toBe(true);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// castVote() — additional coverage
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('castVote() — additional', () => {
+  it('ABSTAIN is stored as vote=false (same as NO)', async () => {
+    const creator = await createGovernanceUser('abstain-creator@example.com');
+    const voter = await createGovernanceUser('abstain-voter@example.com');
+    const group = await seedGovernanceGroup(creator.id);
+    await addGroupMember(voter.id, group.id);
+    await awardPR(voter.id, 50);
+    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.VOTING);
+
+    await proposalService.castVote(voter.id, { proposalId: proposal.id, option: 'ABSTAIN' });
+
+    const voteRow = await prisma.groupMemberVote.findFirst({
+      where: { proposalId: proposal.id, memberId: voter.id },
+    });
+    expect(voteRow).not.toBeNull();
+    expect(voteRow!.vote).toBe(false); // ABSTAIN stored as false (non-yes)
+  });
+
+  it('sets castFirstVote=true on OnboardingProgress after first vote', async () => {
+    const creator = await createGovernanceUser('cfv-creator@example.com');
+    const voter = await createGovernanceUser('cfv-voter@example.com');
+    const group = await seedGovernanceGroup(creator.id);
+    await addGroupMember(voter.id, group.id);
+    await awardPR(voter.id, 50);
+
+    // Seed an OnboardingProgress row for the voter
+    await prisma.onboardingProgress.create({
+      data: { userId: voter.id, castFirstVote: false },
+    });
+
+    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.VOTING);
+    await proposalService.castVote(voter.id, { proposalId: proposal.id, option: 'YES' });
+
+    const progress = await prisma.onboardingProgress.findUnique({
+      where: { userId: voter.id },
+    });
+    expect(progress!.castFirstVote).toBe(true);
+  });
+
+  it('does not update castFirstVote when it is already true', async () => {
+    const creator = await createGovernanceUser('cfv2-creator@example.com');
+    const voter = await createGovernanceUser('cfv2-voter@example.com');
+    const group = await seedGovernanceGroup(creator.id);
+    await addGroupMember(voter.id, group.id);
+    await awardPR(voter.id, 50);
+
+    await prisma.onboardingProgress.create({
+      data: { userId: voter.id, castFirstVote: true },
+    });
+
+    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.VOTING);
+    // Should succeed without error even when castFirstVote=true already
+    const result = await proposalService.castVote(voter.id, {
+      proposalId: proposal.id,
+      option: 'NO',
+    });
+
+    expect(result.weight).toBeDefined();
+    const progress = await prisma.onboardingProgress.findUnique({
+      where: { userId: voter.id },
+    });
+    expect(progress!.castFirstVote).toBe(true); // unchanged
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// createProposal() — budget field
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('createProposal() — budget', () => {
+  it('stores fundingAmountKes as the budget field', async () => {
+    const creator = await createGovernanceUser('budget-creator@example.com');
+    const other = await createGovernanceUser('budget-other@example.com');
+    const group = await seedGovernanceGroup(creator.id);
+    await addGroupMember(other.id, group.id);
+    await awardPR(creator.id, 200);
+
+    const proposal = await proposalService.createProposal(creator.id, {
+      groupId: group.id,
+      title: 'Borehole funding proposal for the community',
+      description:
+        'This proposal requests funding for a borehole to serve over 500 households currently walking 3km daily for water.',
+      fundingAmountKes: 250000,
+    });
+
+    const saved = await prisma.proposal.findUnique({
+      where: { id: proposal.id },
+      select: { budget: true },
+    });
+    expect(Number(saved!.budget)).toBe(250000);
+  });
+});

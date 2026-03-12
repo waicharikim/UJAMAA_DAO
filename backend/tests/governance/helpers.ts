@@ -72,7 +72,7 @@ export async function awardPR(userId: string, amount = 200) {
  */
 export async function seedGovernanceGroup(
   creatorId: string,
-  name = 'Governance Test Group'
+  name = `Governance Test Group ${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
 ) {
   // Give creator high impact points to pass the 90th-percentile check
   await prisma.user.update({

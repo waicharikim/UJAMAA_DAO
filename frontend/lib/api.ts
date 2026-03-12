@@ -572,6 +572,20 @@ export const economyApi = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+
+  /**
+   * GET /economy/transactions
+   * Transaction history (fiat-backed UT deposits, withdrawals).
+   * Backend route exists but handler not yet implemented — returns 404 until wired.
+   */
+  getTransactions: (params?: { limit?: number; offset?: number }) => {
+    const q = new URLSearchParams()
+    if (params?.limit) q.set("limit", String(params.limit))
+    if (params?.offset) q.set("offset", String(params.offset))
+    return apiFetch<{ transactions: any[]; total: number }>(
+      `/economy/transactions${q.toString() ? `?${q}` : ""}`
+    )
+  },
 }
 
 // ─────────────────────────────────────────────────────────
@@ -762,6 +776,23 @@ export const communityApi = {
 
   getGroupMembers: (groupId: string, limit = 50, offset = 0): Promise<GroupMemberDto[]> =>
     apiFetch<GroupMemberDto[]>(`/community/${groupId}/members?limit=${limit}&offset=${offset}`),
+
+  updateGroupSettings: (groupId: string, dto: { name?: string; description?: string }) =>
+    apiFetch<{ id: string; name: string; description: string | null }>(`/community/${groupId}/settings`, {
+      method: "PATCH",
+      body: JSON.stringify(dto),
+    }),
+
+  changeMemberRole: (groupId: string, userId: string, role: string) =>
+    apiFetch<{ userId: string; role: string }>(`/community/${groupId}/members/${userId}/role`, {
+      method: "PATCH",
+      body: JSON.stringify({ role }),
+    }),
+
+  removeMember: (groupId: string, userId: string) =>
+    apiFetch<{ success: boolean }>(`/community/${groupId}/members/${userId}`, {
+      method: "DELETE",
+    }),
 }
 
 // ─────────────────────────────────────────────────────────

@@ -25,17 +25,10 @@ class GroupService {
    * Create voluntary group — spend PR
    */
   async createVoluntaryGroup(userId: string, dto: CreateVoluntaryGroupDto) {
-    // Validate voluntaryType exists in enum (from seed or config)
-    const validTypes = [
-      'BUSINESS_COLLECTIVE',
-      'SAVINGS_CREDIT',
-      'YOUTH_ORGANIZATION',
-      'PROJECT_EXECUTION',
-      'TECHNOLOGY_HUB',
-      // ... 35+ from spec
-    ];
+    // Validate voluntaryType against the full Prisma enum
+    const validTypes = Object.values(VoluntaryGroupType);
 
-    if (!validTypes.includes(dto.voluntaryType)) {
+    if (!validTypes.includes(dto.voluntaryType as VoluntaryGroupType)) {
       throw ApiError.badRequest('Invalid voluntary group type');
     }
 
