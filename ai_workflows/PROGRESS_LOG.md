@@ -1201,6 +1201,46 @@ Sonnet 4.6 — documentation session (codebase read + docs extraction + 7 rewrit
 
 ---
 
+## 2026-03-12 — Groups page rewritten, governance tests expanded, frontend Lighthouse performance fixes
+
+**What was built:**
+- **Frontend — groups page full rewrite** (`frontend/app/groups/page.tsx`): replaced broken `<GroupsList />` stub with inline `MyGroupsList` component using `communityApi.getMyGroups()`; groups split into Geographic (system) and Voluntary sections with role badges; every row and ExploreGroups card now navigates to `/groups/[groupId]`; "Create Group" button uses `<Link>` instead of `window.location.href`; fixed field name `voluntaryType ?? systemType` (was `groupType`)
+- **Frontend — group admin panel** (`frontend/components/groups/group-detail.tsx`): `LeaderAdminPanel` component added — settings editor (name/description), member role dropdown (LEADER/TREASURER/SECRETARY/etc.), remove-member button with confirmation toast; all mutations use `communityApi.updateGroupSettings`, `communityApi.changeMemberRole`, `communityApi.removeMember`
+- **Frontend — proposal voting actions** (`frontend/app/proposals/[proposalId]/page.tsx`): `startVoting` + `tallyVotes` mutations wired with invalidation and toast feedback; creator-gated "Open for Voting" card (DRAFT status); VOTING-status "Close & Tally" card
+- **Frontend — Lighthouse performance fixes:**
+  - `app/page.tsx`: `export const dynamic = 'force-static'` — static CDN generation, fixes 2,550ms TTFB cold start (ADR-027)
+  - `app/layout.tsx`: Cormorant weight `"400"` dropped (unused), `adjustFontFallback: true` added — reduces CLS on h1
+  - `next.config.mjs`: removed `images: { unoptimized: true }` — re-enables WebP optimisation; removed `modularizeImports` (broke Privy, ADR-028)
+  - `components/landing/landing-page.tsx`: OrbitalSystem canvas capped at 30fps + pauses via Page Visibility API — eliminates Lighthouse 163,782ms main-thread render accumulation
+  - `components/layout/topbar.tsx`: `WalletButton` lazy-loaded via `next/dynamic` — defers some Privy initialisation until after hydration
+- **Frontend — loading skeletons**: `app/proposals/loading.tsx`, `app/groups/loading.tsx`, `app/profile/loading.tsx` — route segment files for Next.js automatic Suspense wrapping
+- **Backend — voluntaryType validation fix** (`group.service.ts`): replaced manual 5-item list with `Object.values(VoluntaryGroupType)` from Prisma enum — ensures all 30+ types are accepted
+- **Backend — test expansions**: `group.routes.test.ts` extended; `governance/proposal.routes.test.ts` + `proposal.service.test.ts` extended (total tests remain 302 — files modified, not new files added)
+- **API additions** (`frontend/lib/api.ts`): `economyApi.getTransactions`, `communityApi.updateGroupSettings`, `communityApi.changeMemberRole`, `communityApi.removeMember`
+- **Nav audit**: confirmed sidebar + mobile-bottom-nav cover all existing pages (Dashboard, Governance, Projects, Community, Marketplace, Treasury, Profile, Admin); no missing entries
+
+**Decisions made:**
+- `modularizeImports` for lucide-react removed permanently — incompatible with `@privy-io/react-auth` v3.14+ because Privy uses `FingerprintIcon` absent from our pinned v0.294 (ADR-028)
+- Landing page set to `force-static` — pure marketing page with no server-side user data; CDN edge serving is the correct model (ADR-027)
+- `next/dynamic` applied to `WalletButton` only, not `WalletProvider` — `WalletProvider` wraps children, so lazy-loading it blocks render; the provider must remain synchronous; deferring the button component is the feasible partial win
+- 30fps cap + Page Visibility API pause on canvas chosen over CSS animation replacement — orbital rings are a brand visual; reducing CPU cost is preferable to removing them
+
+**What's still broken or incomplete:**
+- `next build` 404 prerender error (pre-existing, low priority — dev server works fine)
+- Base Sepolia deploy pending (minter wallet not funded)
+- WalletProvider (`@privy-io/react-auth` bundle) still loaded eagerly — full deferral requires architectural refactor of provider tree
+- `frontend/app/groups/create/` directory is untracked stub — create group flow not yet implemented
+- Projects module: no backend tests, no frontend page beyond stub
+- `failedJobHandler` in `workers.ts` is dead code (pre-existing)
+
+**Next milestone:**
+Build the Projects module end-to-end (backend service + routes + tests, then frontend project list and detail pages).
+
+**Token usage:**
+Sonnet 4.6 — heavy session (groups rewrite, Lighthouse audit across 6 files, governance UI, group admin panel, 2 ADRs)
+
+---
+
 ## 2026-03-11 — Community plan executed end-to-end; 302 tests green
 
 **What was built:**

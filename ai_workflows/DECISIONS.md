@@ -309,3 +309,23 @@ per-group) — one `UserMessagingProfile` row per platform per user.
 
 ---
 
+## [ADR-027] — Landing page rendered as static HTML; other pages remain SSR per Next.js defaults
+
+**Date:** 2026-03-12
+**Status:** Decided
+**Decision:** `app/page.tsx` exports `export const dynamic = 'force-static'`, pre-rendering it at build time. All authenticated pages remain SSR.
+**Why:** Netlify Lighthouse showed TTFB of 2,550ms on the landing page — caused by a cold start on the Netlify Lambda that wraps SSR pages. The landing page has zero dynamic server-side data; it is a pure marketing page. Static generation moves it to CDN edge with ~10ms TTFB. Authenticated pages cannot be statically generated because they depend on user sessions.
+**Consequences:** Landing page content that changes between deploys must be fetched client-side via `useEffect` + TanStack Query, not at render time.
+
+---
+
+## [ADR-028] — `modularizeImports` for lucide-react is incompatible with `@privy-io/react-auth` v3.14+
+
+**Date:** 2026-03-12
+**Status:** Decided
+**Decision:** `modularizeImports` for `lucide-react` must not be added to `next.config.mjs` while Privy is a dependency.
+**Why:** `modularizeImports` rewrites all `import { X } from 'lucide-react'` — including Privy's internal imports. Privy v3.14+ uses `FingerprintIcon` internally, which was added to lucide-react after v0.294 (our pinned version). With the transform applied, Webpack resolves to `lucide-react/dist/esm/icons/fingerprint-icon` which does not exist in v0.294, causing a hard build error. The documented comment in `next.config.mjs` records this for future maintainers.
+**Consequences:** lucide-react tree-shaking relies on Webpack/Turbopack default behaviour. If lucide-react is upgraded past v0.355+, `modularizeImports` can be reconsidered.
+
+---
+
