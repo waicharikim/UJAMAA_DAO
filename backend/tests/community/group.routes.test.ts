@@ -51,6 +51,7 @@ import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import request from 'supertest';
 import app, { servicesReady } from '../../src/app.js';
 import { prisma } from '../../src/core/database/client.js';
+import { ApiError } from '../../src/core/errors/ApiError.js';
 import { participationRightsService } from '../../src/modules/economy/services/participationRights.service.js';
 import { ParticipationRightsReason } from '../../src/modules/economy/types.js';
 import {
@@ -708,5 +709,173 @@ describe('DELETE /community/:groupId/members/:userId', () => {
 
     const after = await prisma.group.findUnique({ where: { id: group.id }, select: { memberCount: true } });
     expect(after!.memberCount).toBe(before!.memberCount - 1);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /community/my-groups
+// NOTE: groupMembershipService is mocked at module level — getUserGroups returns []
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('GET /community/my-groups', () => {
+  it('returns 401 without auth token', async () => {
+    const res = await request(app).get(`${BASE}/my-groups`);
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 200 with an empty array (default mock)', async () => {
+    const user = await createCommunityTestUser('mygroups-user@example.com');
+    const token = makeCommunityToken(user.id);
+
+    const res = await request(app)
+      .get(`${BASE}/my-groups`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(Array.isArray(res.body.data)).toBe(true);
+  });
+
+  it('returns membership entries when mock provides them', async () => {
+    const { groupMembershipService } = await import('../../src/modules/community/services/groupMembership.service.js');
+    const user = await createCommunityTestUser('mygroups-mock@example.com');
+    const token = makeCommunityToken(user.id);
+    const fakeGroupId = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
+
+    vi.mocked(groupMembershipService.getUserGroups).mockResolvedValueOnce([
+      {
+        groupId: fakeGroupId,
+        groupName: 'Mock Savings Group',
+        systemType: null,
+        voluntaryType: 'SAVINGS_CREDIT',
+        isSystem: false,
+        locationScope: 'WARD',
+        role: 'LEADER',
+        joinedAt: new Date().toISOString(),
+        memberCount: 1,
+        ward: null,
+        constituency: null,
+        county: null,
+      } as any,
+    ]);
+
+    const res = await request(app)
+      .get(`${BASE}/my-groups`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    const found = res.body.data.find((g: any) => g.groupId === fakeGroupId);
+    expect(found).toBeDefined();
+    expect(found.role).toBe('LEADER');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /community/:groupId
+// NOTE: groupMembershipService.getGroupById is mocked — override per test
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('GET /community/:groupId', () => {
+  it('returns 401 without auth token', async () => {
+    const res = await request(app).get(
+      `${BASE}/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee`
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 404 when service throws not-found', async () => {
+    const { groupMembershipService } = await import('../../src/modules/community/services/groupMembership.service.js');
+    const user = await createCommunityTestUser('getgroup-404@example.com');
+    const token = makeCommunityToken(user.id);
+
+    vi.mocked(groupMembershipService.getGroupById).mockRejectedValueOnce(
+      ApiError.notFound('Group not found')
+    );
+
+    const res = await request(app)
+      .get(`${BASE}/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 200 with group detail shape', async () => {
+    const { groupMembershipService } = await import('../../src/modules/community/services/groupMembership.service.js');
+    const user = await createCommunityTestUser('getgroup-200@example.com');
+    const token = makeCommunityToken(user.id);
+    const fakeGroupId = 'cccccccc-dddd-eeee-ffff-aaaaaaaaaaaa';
+
+    vi.mocked(groupMembershipService.getGroupById).mockResolvedValueOnce({
+      groupId: fakeGroupId,
+      groupName: 'GetGroup Detail Test',
+      description: null,
+      isSystem: false,
+      systemType: null,
+      voluntaryType: 'BUSINESS_COLLECTIVE',
+      locationScope: 'WARD',
+      memberCount: 1,
+      createdAt: new Date().toISOString(),
+      ward: null,
+      constituency: null,
+      county: null,
+      userRole: 'LEADER',
+      userJoinedAt: new Date().toISOString(),
+    } as any);
+
+    const res = await request(app)
+      .get(`${BASE}/${fakeGroupId}`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.groupId).toBe(fakeGroupId);
+    expect(res.body.data.groupName).toBe('GetGroup Detail Test');
+    expect(res.body.data.userRole).toBe('LEADER');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /community/:groupId/members
+// NOTE: groupMembershipService.getGroupMembers is mocked — returns [] by default
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('GET /community/:groupId/members', () => {
+  it('returns 401 without auth token', async () => {
+    const res = await request(app).get(
+      `${BASE}/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/members`
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 200 with an array (default mock)', async () => {
+    const user = await createCommunityTestUser('members-basic@example.com');
+    const token = makeCommunityToken(user.id);
+
+    const res = await request(app)
+      .get(`${BASE}/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/members`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(Array.isArray(res.body.data)).toBe(true);
+  });
+
+  it('returns members when mock provides them', async () => {
+    const { groupMembershipService } = await import('../../src/modules/community/services/groupMembership.service.js');
+    const user = await createCommunityTestUser('members-mock@example.com');
+    const token = makeCommunityToken(user.id);
+
+    vi.mocked(groupMembershipService.getGroupMembers).mockResolvedValueOnce([
+      { userId: 'u1', userName: 'Alice', avatarUrl: null, verificationLevel: 'COMMUNITY_VERIFIED', participationRights: 100, role: 'LEADER', joinedAt: new Date().toISOString() },
+      { userId: 'u2', userName: 'Bob',   avatarUrl: null, verificationLevel: 'COMMUNITY_VERIFIED', participationRights: 50,  role: 'MEMBER', joinedAt: new Date().toISOString() },
+    ] as any);
+
+    const res = await request(app)
+      .get(`${BASE}/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/members`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(2);
+    expect(res.body.data[0].userName).toBe('Alice');
   });
 });

@@ -66,7 +66,7 @@ function VoteBar({ yes, no, total }: { yes: number; no: number; total: number })
 
 export default function ProposalDetailPage({ params }: { params: Promise<{ proposalId: string }> }) {
   const { proposalId } = use(params)
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, user } = useAuth()
   const { toast } = useToast()
   const queryClient = useQueryClient()
 
@@ -91,6 +91,30 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
         description: err?.message ?? "Please try again.",
         variant: "destructive",
       })
+    },
+  })
+
+  const { mutate: startVoting, isPending: startingVote } = useMutation({
+    mutationFn: () => governanceApi.startVoting(proposalId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["proposal", proposalId] })
+      queryClient.invalidateQueries({ queryKey: ["proposals"] })
+      toast({ title: "Voting opened", description: "Members can now cast their votes." })
+    },
+    onError: (err: any) => {
+      toast({ title: "Failed to start voting", description: err?.message ?? "Please try again.", variant: "destructive" })
+    },
+  })
+
+  const { mutate: tallyVotes, isPending: tallying } = useMutation({
+    mutationFn: () => governanceApi.tallyVotes(proposalId),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["proposal", proposalId] })
+      queryClient.invalidateQueries({ queryKey: ["proposals"] })
+      toast({ title: `Proposal ${data?.newStatus === "APPROVED" ? "approved" : "rejected"}` })
+    },
+    onError: (err: any) => {
+      toast({ title: "Tally failed", description: err?.message ?? "Please try again.", variant: "destructive" })
     },
   })
 
@@ -229,6 +253,47 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
           </div>
         </CardContent>
       </Card>
+
+      {/* Start Voting — only for creator when proposal is DRAFT */}
+      {proposal.status === "DRAFT" && user?.id === proposal.creatorId && (
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-6 space-y-3">
+            <h2 className="text-sm font-bold text-[#0A1F14]">Open for Voting</h2>
+            <p className="text-xs text-warm-gray">
+              Once you start voting, members of the group can cast their votes. This action cannot be undone.
+            </p>
+            <button
+              onClick={() => startVoting()}
+              disabled={startingVote}
+              className="w-full flex items-center justify-center gap-2 rounded-full py-2.5 text-sm font-bold transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ background: "#D4911E", color: "#0A1F14" }}
+            >
+              {startingVote ? <Loader2 className="h-4 w-4 animate-spin" /> : <TrendingUp className="h-4 w-4" />}
+              {startingVote ? "Opening…" : "Start Voting"}
+            </button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Tally Votes — for VOTING proposals (any authenticated user can trigger) */}
+      {proposal.status === "VOTING" && (
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-4 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold text-[#0A1F14]">Close & Tally</p>
+              <p className="text-xs text-warm-gray">Finalise the result once the voting deadline has passed.</p>
+            </div>
+            <button
+              onClick={() => tallyVotes()}
+              disabled={tallying}
+              className="flex-shrink-0 flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-bold border border-warm-gray/30 text-warm-gray hover:border-amber hover:text-amber transition-colors disabled:opacity-50"
+            >
+              {tallying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <TrendingUp className="h-3.5 w-3.5" />}
+              {tallying ? "Tallying…" : "Tally Votes"}
+            </button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Vote actions — only for VOTING proposals */}
       {proposal.status === "VOTING" && (
