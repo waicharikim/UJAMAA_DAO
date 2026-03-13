@@ -19,6 +19,31 @@ const router = Router();
 
 router.use(authenticate);
 
+const listQuerySchema = z.object({
+  ownerGroupId: z.string().uuid().optional(),
+  ownerUserId: z.string().uuid().optional(),
+  status: z
+    .enum(['PLANNING', 'ACTIVE', 'ON_HOLD', 'CANCELLED', 'COMPLETED'])
+    .optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+  offset: z.coerce.number().int().min(0).optional(),
+});
+
+router.get(
+  '/',
+  validateRequest({ schema: listQuerySchema, target: 'query' }),
+  asyncHandler(ProjectController.listProjects)
+);
+
+router.get(
+  '/:projectId',
+  validateRequest({
+    schema: z.object({ projectId: z.string().uuid() }),
+    target: 'params',
+  }),
+  asyncHandler(ProjectController.getProject)
+);
+
 router.post(
   '/from-proposal',
   validateRequest({

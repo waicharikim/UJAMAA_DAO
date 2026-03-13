@@ -868,6 +868,95 @@ export const governanceApi = {
 }
 
 // ─────────────────────────────────────────────────────────
+// Projects API
+// ─────────────────────────────────────────────────────────
+
+export interface ProjectMilestoneDto {
+  id: string
+  projectId: string
+  title: string
+  description: string | null
+  status: "PENDING" | "IN_PROGRESS" | "AWAITING_VERIFICATION" | "VERIFIED" | "REJECTED"
+  dueDate: string | null
+  orderIndex: number
+  proposalMilestoneId: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ProjectListItemDto {
+  id: string
+  title: string
+  description: string | null
+  status: "PLANNING" | "ACTIVE" | "ON_HOLD" | "CANCELLED" | "COMPLETED"
+  ownerGroupId: string | null
+  ownerUserId: string | null
+  proposalId: string | null
+  milestonesCount: number
+  completedMilestonesCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ProjectDetailDto extends ProjectListItemDto {
+  milestones: ProjectMilestoneDto[]
+  members: Array<{
+    userId: string
+    role: string
+    joinedAt: string
+    user: { id: string; name: string | null; avatarUrl: string | null }
+  }>
+  ownerGroup: { id: string; name: string } | null
+  ownerUser: { id: string; name: string | null; avatarUrl: string | null } | null
+  proposal: { id: string; title: string; status: string } | null
+}
+
+export const projectApi = {
+  getProjects: (params?: {
+    ownerGroupId?: string
+    ownerUserId?: string
+    status?: string
+    limit?: number
+    offset?: number
+  }): Promise<{ projects: ProjectListItemDto[]; total: number; limit: number; offset: number }> => {
+    const q = new URLSearchParams()
+    if (params?.ownerGroupId) q.set("ownerGroupId", params.ownerGroupId)
+    if (params?.ownerUserId) q.set("ownerUserId", params.ownerUserId)
+    if (params?.status) q.set("status", params.status)
+    if (params?.limit) q.set("limit", String(params.limit))
+    if (params?.offset) q.set("offset", String(params.offset))
+    return apiFetch(`/projects${q.toString() ? `?${q}` : ""}`)
+  },
+
+  getProject: (id: string): Promise<ProjectDetailDto> =>
+    apiFetch<ProjectDetailDto>(`/projects/${id}`),
+
+  createFromProposal: (proposalId: string) =>
+    apiFetch<unknown>("/projects/from-proposal", {
+      method: "POST",
+      body: JSON.stringify({ proposalId }),
+    }),
+
+  startMilestone: (milestoneId: string) =>
+    apiFetch<unknown>("/projects/milestone/start", {
+      method: "POST",
+      body: JSON.stringify({ milestoneId }),
+    }),
+
+  submitMilestone: (dto: { milestoneId: string; proofUrl: string; description: string }) =>
+    apiFetch<unknown>("/projects/milestone/submit", {
+      method: "POST",
+      body: JSON.stringify(dto),
+    }),
+
+  verifyMilestone: (dto: { milestoneId: string; approved: boolean; feedback?: string }) =>
+    apiFetch<unknown>("/projects/milestone/verify", {
+      method: "POST",
+      body: JSON.stringify(dto),
+    }),
+}
+
+// ─────────────────────────────────────────────────────────
 // Legacy compat — keep apiClient export so existing code doesn't break
 // while we migrate page by page.
 // ─────────────────────────────────────────────────────────

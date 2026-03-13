@@ -1,13 +1,7 @@
-// @ts-nocheck — scaffold: schema field names not yet aligned (ownerGroupId, MilestoneStatus, etc.)
 /**
  * @file src/modules/projects/services/project.service.ts
  * @description
- * Project Service — Execution of Passed Proposals (Funded or Non-Funded)
- *
- * All work comes from passed proposals
- * Non-funded proposals allowed (budget = 0)
- *
- * Version: 2.0 — December 2025
+ * Project Service — Execution of Approved Proposals (Funded or Non-Funded)
  */
 
 import { prisma } from '../../../core/database/client.js';
@@ -16,74 +10,86 @@ import { globalImpactPointService } from '../../reputation/service/impactPoint.s
 import { roleService } from '../../../core/services/role.service.js';
 import { ApiError } from '../../../core/errors/ApiError.js';
 import { logger } from '../../../core/logger/logger.js';
+import { ParticipationRightsReason } from '../../economy/types.js';
+import { ImpactPointReason } from '../../reputation/types.js';
+import type {
+  CreateProjectFromProposalDto,
+  StartMilestoneDto,
+  SubmitMilestoneDto,
+  VerifyMilestoneDto,
+  ListProjectsDto,
+  ProjectDetailDto,
+  ProjectDto,
+  MilestoneResponseDto,
+  ProjectMemberResponseDto,
+} from '../types.js';
+import { ProjectStatus, MilestoneStatus } from '../types.js';
 
-const DEFAULT_REWARDS = {
-  IP: 50,
-  PR: 25,
-};
+const DEFAULT_REWARDS = { IP: 50, PR: 25 };
 
-class ProjectService {
+export class ProjectService {
   /**
-   * Create project from PASSED proposal (funded or non-funded)
+   * Create project from an APPROVED proposal (funded or non-funded)
    */
   async createFromProposal(userId: string, dto: CreateProjectFromProposalDto) {
     const proposal = await prisma.proposal.findUnique({
       where: { id: dto.proposalId },
-      include: { group: true },
+      include: { group: true, milestones: { orderBy: { orderIndex: 'asc' } } },
     });
 
     if (!proposal) throw ApiError.notFound('Proposal');
-    if (proposal.status !== 'PASSED')
-      throw ApiError.badRequest('Proposal must be passed');
+    if (proposal.status !== 'APPROVED')
+      throw ApiError.badRequest('Proposal must be approved');
     if (proposal.creatorId !== userId)
-      throw ApiError.forbidden('Only creator can create project');
+      throw ApiError.forbidden(
+        'Only the proposal creator can create a project'
+      );
 
     const existing = await prisma.project.findFirst({
       where: { proposalId: dto.proposalId },
     });
-
-    if (existing) throw ApiError.conflict('Project already exists');
+    if (existing)
+      throw ApiError.conflict('Project already exists for this proposal');
 
     const project = await prisma.project.create({
       data: {
         proposalId: dto.proposalId,
-        groupId: proposal.groupId,
+        ownerGroupId: proposal.groupId,
+        ownerUserId: userId,
         title: proposal.title,
         description: proposal.description,
-        budgetKes: proposal.fundingAmountKes || 0, // 0 for non-funded
-        status: 'PLANNING',
-        createdById: userId,
+        status: ProjectStatus.PLANNING,
       },
     });
 
-    // Auto-create milestones from executionPlan if provided
-    if (proposal.executionPlan) {
-      const plan = proposal.executionPlan as any;
-      if (Array.isArray(plan.milestones)) {
-        await prisma.milestone.createMany({
-          data: plan.milestones.map((m: any, index: number) => ({
-            projectId: project.id,
-            title: m.title,
-            description: m.description,
-            order: index + 1,
-            status: 'PENDING',
-            rewardIP: m.ipReward || DEFAULT_REWARDS.IP,
-            rewardPR: m.prReward || DEFAULT_REWARDS.PR,
-          })),
-        });
-      }
+    // Add creator as LEAD member
+    await prisma.projectMember.create({
+      data: { projectId: project.id, userId, role: 'LEAD' },
+    });
+
+    // Auto-create milestones from linked ProposalMilestones if any
+    if (proposal.milestones.length > 0) {
+      await prisma.milestone.createMany({
+        data: proposal.milestones.map((m) => ({
+          projectId: project.id,
+          proposalMilestoneId: m.id,
+          title: m.title,
+          description: m.description ?? null,
+          orderIndex: m.orderIndex,
+          status: MilestoneStatus.PENDING,
+        })),
+      });
     }
 
     logger.info(
       { userId, proposalId: dto.proposalId, projectId: project.id },
       'Project created'
     );
-
     return project;
   }
 
   /**
-   * Start a milestone
+   * Transition a milestone from PENDING → IN_PROGRESS (project leader only)
    */
   async startMilestone(userId: string, dto: StartMilestoneDto) {
     const milestone = await prisma.milestone.findUnique({
@@ -92,27 +98,26 @@ class ProjectService {
     });
 
     if (!milestone) throw ApiError.notFound('Milestone');
-    if (milestone.status !== 'PENDING')
-      throw ApiError.badRequest('Milestone not pending');
+    if (milestone.status !== MilestoneStatus.PENDING)
+      throw ApiError.badRequest('Milestone is not pending');
 
     const isLeader = await roleService.isProjectLeader(
       userId,
       milestone.projectId
     );
-
     if (!isLeader)
-      throw ApiError.forbidden('Only project leader can start milestone');
+      throw ApiError.forbidden('Only the project leader can start a milestone');
 
     await prisma.milestone.update({
       where: { id: dto.milestoneId },
-      data: { status: 'IN_PROGRESS', startedAt: new Date() },
+      data: { status: MilestoneStatus.IN_PROGRESS, startedAt: new Date() },
     });
 
-    return { status: 'IN_PROGRESS' };
+    return { status: MilestoneStatus.IN_PROGRESS };
   }
 
   /**
-   * Submit milestone completion
+   * Submit milestone for verification (IN_PROGRESS → AWAITING_VERIFICATION)
    */
   async submitMilestone(userId: string, dto: SubmitMilestoneDto) {
     const milestone = await prisma.milestone.findUnique({
@@ -120,13 +125,13 @@ class ProjectService {
     });
 
     if (!milestone) throw ApiError.notFound('Milestone');
-    if (milestone.status !== 'IN_PROGRESS')
-      throw ApiError.badRequest('Milestone not in progress');
+    if (milestone.status !== MilestoneStatus.IN_PROGRESS)
+      throw ApiError.badRequest('Milestone is not in progress');
 
     await prisma.milestone.update({
       where: { id: dto.milestoneId },
       data: {
-        status: 'SUBMITTED',
+        status: MilestoneStatus.AWAITING_VERIFICATION,
         submittedById: userId,
         submittedAt: new Date(),
         proofUrl: dto.proofUrl,
@@ -134,33 +139,33 @@ class ProjectService {
       },
     });
 
-    return { status: 'SUBMITTED' };
+    return { status: MilestoneStatus.AWAITING_VERIFICATION };
   }
 
   /**
-   * Verify milestone — project leader or verifier
+   * Verify milestone — project leader or designated verifier
+   * Approved milestones trigger PR + IP rewards for the submitter
    */
   async verifyMilestone(verifierId: string, dto: VerifyMilestoneDto) {
     const milestone = await prisma.milestone.findUnique({
       where: { id: dto.milestoneId },
-      include: { project: true, submittedBy: true },
+      include: { project: true },
     });
 
     if (!milestone) throw ApiError.notFound('Milestone');
-    if (milestone.status !== 'SUBMITTED')
-      throw ApiError.badRequest('Milestone not submitted');
+    if (milestone.status !== MilestoneStatus.AWAITING_VERIFICATION)
+      throw ApiError.badRequest('Milestone is not awaiting verification');
 
-    const isLeader = await roleService.isProjectLeader(
-      verifierId,
-      milestone.projectId
-    );
-    const isVerifier = await roleService.isVerifier(verifierId);
+    const [isLeader, isVerifier] = await Promise.all([
+      roleService.isProjectLeader(verifierId, milestone.projectId),
+      roleService.isVerifier(verifierId),
+    ]);
+    if (!isLeader && !isVerifier)
+      throw ApiError.forbidden('Not authorised to verify milestones');
 
-    if (!isLeader && !isVerifier) {
-      throw ApiError.forbidden('Not authorized to verify');
-    }
-
-    const newStatus = dto.approved ? 'VERIFIED' : 'REJECTED';
+    const newStatus = dto.approved
+      ? MilestoneStatus.VERIFIED
+      : MilestoneStatus.REJECTED;
 
     await prisma.milestone.update({
       where: { id: dto.milestoneId },
@@ -168,34 +173,177 @@ class ProjectService {
         status: newStatus,
         verifiedById: verifierId,
         verifiedAt: new Date(),
-        feedback: dto.feedback,
+        feedback: dto.feedback ?? null,
       },
     });
 
     if (dto.approved && milestone.submittedById) {
-      const ipReward = milestone.rewardIP || DEFAULT_REWARDS.IP;
-      const prReward = milestone.rewardPR || DEFAULT_REWARDS.PR;
-
-      if (prReward > 0) {
-        await participationRightsService.award(
+      await participationRightsService
+        .award(
           milestone.submittedById,
-          prReward,
-          'MILESTONE_VERIFIED',
+          DEFAULT_REWARDS.PR,
+          ParticipationRightsReason.MILESTONE_VERIFIED,
           { projectId: milestone.projectId, milestoneId: dto.milestoneId }
+        )
+        .catch((err) =>
+          logger.warn({ err }, 'PR award failed after milestone verify')
         );
-      }
 
-      if (ipReward > 0) {
-        await globalImpactPointService.award(
+      await globalImpactPointService
+        .award(
           milestone.submittedById,
-          ipReward,
-          'MILESTONE_VERIFIED',
-          { projectId: milestone.projectId }
+          DEFAULT_REWARDS.IP,
+          ImpactPointReason.MILESTONE_ACHIEVED,
+          { projectId: milestone.projectId, milestoneId: dto.milestoneId }
+        )
+        .catch((err) =>
+          logger.warn({ err }, 'IP award failed after milestone verify')
         );
-      }
     }
 
     return { status: newStatus };
+  }
+
+  /**
+   * List projects with optional filters and pagination
+   */
+  async listProjects(params: {
+    ownerGroupId?: string;
+    ownerUserId?: string;
+    status?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<ListProjectsDto> {
+    const {
+      ownerGroupId,
+      ownerUserId,
+      status,
+      limit = 20,
+      offset = 0,
+    } = params;
+
+    const where: Record<string, unknown> = {};
+    if (ownerGroupId) where.ownerGroupId = ownerGroupId;
+    if (ownerUserId) where.ownerUserId = ownerUserId;
+    if (status) where.status = status;
+
+    const [projects, total] = await Promise.all([
+      prisma.project.findMany({
+        where,
+        include: { _count: { select: { milestones: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
+      }),
+      prisma.project.count({ where }),
+    ]);
+
+    // Fetch completed milestone counts in one grouped query
+    const completedCounts = await prisma.milestone.groupBy({
+      by: ['projectId'],
+      where: {
+        projectId: { in: projects.map((p) => p.id) },
+        status: MilestoneStatus.VERIFIED,
+      },
+      _count: { id: true },
+    });
+    const completedMap: Record<string, number> = {};
+    for (const r of completedCounts) completedMap[r.projectId] = r._count.id;
+
+    return {
+      projects: projects.map((p) => ({
+        id: p.id,
+        title: p.title,
+        description: p.description,
+        status: p.status as ProjectStatus,
+        ownerGroupId: p.ownerGroupId,
+        ownerUserId: p.ownerUserId,
+        proposalId: p.proposalId,
+        milestonesCount: p._count.milestones,
+        completedMilestonesCount: completedMap[p.id] ?? 0,
+        createdAt: p.createdAt.toISOString(),
+        updatedAt: p.updatedAt.toISOString(),
+      })),
+      total,
+      limit,
+      offset,
+    };
+  }
+
+  /**
+   * Get full project detail including milestones, members, and linked entities
+   */
+  async getProject(projectId: string): Promise<ProjectDetailDto> {
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      include: {
+        milestones: { orderBy: { orderIndex: 'asc' } },
+        members: {
+          include: {
+            user: { select: { id: true, name: true, avatarUrl: true } },
+          },
+        },
+        ownerGroup: { select: { id: true, name: true } },
+        ownerUser: { select: { id: true, name: true, avatarUrl: true } },
+        proposal: { select: { id: true, title: true, status: true } },
+        _count: { select: { milestones: true } },
+      },
+    });
+
+    if (!project) throw ApiError.notFound('Project');
+
+    const completedMilestonesCount = project.milestones.filter(
+      (m) => m.status === MilestoneStatus.VERIFIED
+    ).length;
+
+    const milestones: MilestoneResponseDto[] = project.milestones.map((m) => ({
+      id: m.id,
+      projectId: m.projectId,
+      title: m.title,
+      description: m.description,
+      status: m.status as MilestoneStatus,
+      dueDate: m.dueDate?.toISOString() ?? null,
+      orderIndex: m.orderIndex,
+      proposalMilestoneId: m.proposalMilestoneId,
+      createdAt: m.createdAt.toISOString(),
+      updatedAt: m.updatedAt.toISOString(),
+    }));
+
+    const members: ProjectMemberResponseDto[] = project.members.map((m) => ({
+      userId: m.userId,
+      role: m.role,
+      joinedAt: m.joinedAt.toISOString(),
+      user: m.user,
+    }));
+
+    const base: ProjectDto = {
+      id: project.id,
+      title: project.title,
+      description: project.description,
+      status: project.status as ProjectStatus,
+      ownerGroupId: project.ownerGroupId,
+      ownerUserId: project.ownerUserId,
+      proposalId: project.proposalId,
+      milestonesCount: project._count.milestones,
+      completedMilestonesCount,
+      createdAt: project.createdAt.toISOString(),
+      updatedAt: project.updatedAt.toISOString(),
+    };
+
+    return {
+      ...base,
+      milestones,
+      members,
+      ownerGroup: project.ownerGroup,
+      ownerUser: project.ownerUser,
+      proposal: project.proposal
+        ? {
+            id: project.proposal.id,
+            title: project.proposal.title,
+            status: project.proposal.status,
+          }
+        : null,
+    };
   }
 }
 
