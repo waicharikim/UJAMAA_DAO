@@ -14,6 +14,12 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  // Prevent @privy-io/react-auth (browser-only) from being bundled server-side.
+  // Components that use it are all "use client" + ssr:false, so this package
+  // is never actually executed on the server — but Turbopack's static analysis
+  // still tries to initialise it, triggering "Cannot read properties of null
+  // (reading 'useContext')". Marking it external skips that initialisation.
+  serverExternalPackages: ["@privy-io/react-auth"],
   // Turbopack equivalents of the webpack stubs below (used by `next dev --turbopack`)
   // NOTE: modularizeImports for lucide-react was removed — Privy imports icons
   // (e.g. FingerprintIcon) that don't exist in our pinned lucide-react v0.294,

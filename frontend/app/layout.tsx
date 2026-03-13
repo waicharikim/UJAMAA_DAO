@@ -1,3 +1,7 @@
+// Force dynamic rendering for all pages — avoids a Next.js 16 Turbopack build
+// issue where React is null during static pre-rendering of client components.
+export const dynamic = "force-dynamic"
+
 import type React from "react"
 import type { Metadata } from "next"
 import { Inter, Cormorant_Garamond } from "next/font/google"
