@@ -34,3 +34,13 @@ export interface SendNotificationDto {
   data?: Record<string, any>;
   channels?: NotificationChannel[];
 }
+
+export interface NotificationResponseDto {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  isRead: boolean;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}

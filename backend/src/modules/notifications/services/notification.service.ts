@@ -3,8 +3,8 @@
  * @description
  * Notification Service — Multi-Channel Alerts
  *
- * Version: 2.1 — February 2026
- * Updated: Align with actual Prisma schema field names
+ * Version: 2.2 — March 2026
+ * Updated: Export class for testability; map read → isRead in responses
  */
 
 import { NotificationType as PrismaNotificationType } from '@prisma/client';
@@ -15,9 +15,10 @@ import {
   NotificationType,
   NotificationChannel,
   SendNotificationDto,
+  NotificationResponseDto,
 } from '../types.js';
 
-class NotificationService {
+export class NotificationService {
   /**
    * Send notification with preference check
    */
@@ -76,6 +77,49 @@ class NotificationService {
     );
   }
 
+  /**
+   * Mark notification as read
+   */
+  async markAsRead(userId: string, notificationId: string) {
+    await prisma.notification.updateMany({
+      where: { id: notificationId, userId },
+      data: { read: true },
+    });
+  }
+
+  /**
+   * Get user's notifications, mapping Prisma `read` → `isRead` for frontend
+   */
+  async getUserNotifications(
+    userId: string,
+    unreadOnly = false
+  ): Promise<NotificationResponseDto[]> {
+    const rows = await prisma.notification.findMany({
+      where: { userId, ...(unreadOnly && { read: false }) },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+
+    return rows.map((n) => ({
+      id: n.id,
+      type: n.type,
+      title: n.title,
+      message: n.message,
+      isRead: n.read,
+      metadata: n.metadata as Record<string, unknown> | null,
+      createdAt: n.createdAt.toISOString(),
+    }));
+  }
+
+  /**
+   * Count unread notifications for the bell badge
+   */
+  async getUnreadCount(userId: string): Promise<number> {
+    return prisma.notification.count({
+      where: { userId, read: false },
+    });
+  }
+
   private toPrismaType(type: NotificationType): PrismaNotificationType {
     switch (type) {
       case NotificationType.DUES_REMINDER:
@@ -106,27 +150,6 @@ class NotificationService {
       default:
         return [NotificationChannel.IN_APP];
     }
-  }
-
-  /**
-   * Mark notification as read
-   */
-  async markAsRead(userId: string, notificationId: string) {
-    await prisma.notification.updateMany({
-      where: { id: notificationId, userId },
-      data: { read: true },
-    });
-  }
-
-  /**
-   * Get user's notifications
-   */
-  async getUserNotifications(userId: string, unreadOnly = false) {
-    return prisma.notification.findMany({
-      where: { userId, ...(unreadOnly && { read: false }) },
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-    });
   }
 }
 

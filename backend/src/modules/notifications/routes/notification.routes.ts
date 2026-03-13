@@ -18,6 +18,11 @@ router.use(authenticate);
 
 router.get('/', asyncHandler(NotificationController.getNotifications));
 
+router.get(
+  '/unread-count',
+  asyncHandler(NotificationController.getUnreadCount)
+);
+
 router.post(
   '/mark-read',
   validateRequest({

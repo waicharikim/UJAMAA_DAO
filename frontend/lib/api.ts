@@ -657,8 +657,11 @@ export interface NotificationDto {
 }
 
 export const notificationsApi = {
-  getNotifications: () =>
-    apiFetch<NotificationDto[]>("/notifications"),
+  getNotifications: (unreadOnly = false) =>
+    apiFetch<NotificationDto[]>(`/notifications${unreadOnly ? "?unread=true" : ""}`),
+
+  getUnreadCount: () =>
+    apiFetch<{ count: number }>("/notifications/unread-count"),
 
   markRead: (notificationId: string) =>
     apiFetch<void>("/notifications/mark-read", {

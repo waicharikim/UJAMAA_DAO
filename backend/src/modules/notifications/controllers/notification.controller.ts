@@ -27,4 +27,10 @@ export class NotificationController {
     await notificationService.markAsRead(userId, notificationId);
     sendSuccess(res, null, 'Notification marked as read');
   }
+
+  static async getUnreadCount(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const count = await notificationService.getUnreadCount(userId);
+    sendSuccess(res, { count });
+  }
 }
