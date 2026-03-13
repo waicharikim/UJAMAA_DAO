@@ -11,6 +11,25 @@ import { sendSuccess } from '../../../core/utils/response.js';
 import { projectService } from '../services/project.service.js';
 
 export class ProjectController {
+  static async listProjects(req: AuthRequest, res: Response) {
+    const { ownerGroupId, ownerUserId, status, limit, offset } =
+      req.query as Record<string, string | undefined>;
+    const result = await projectService.listProjects({
+      ownerGroupId,
+      ownerUserId,
+      status,
+      limit: limit ? parseInt(limit, 10) : undefined,
+      offset: offset ? parseInt(offset, 10) : undefined,
+    });
+    sendSuccess(res, result);
+  }
+
+  static async getProject(req: AuthRequest, res: Response) {
+    const { projectId } = req.params;
+    const result = await projectService.getProject(projectId);
+    sendSuccess(res, result);
+  }
+
   static async createFromProposal(req: AuthRequest, res: Response) {
     const userId = req.user!.userId;
     const dto = req.body;

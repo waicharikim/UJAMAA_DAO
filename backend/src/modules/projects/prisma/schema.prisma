@@ -84,10 +84,22 @@ model Milestone {
   // NEW: Link to original proposal milestone
   proposalMilestoneId String?           @unique @db.Uuid
 
+  // Submission & verification tracking
+  startedAt             DateTime?
+  submittedById         String?           @db.Uuid
+  submittedAt           DateTime?
+  proofUrl              String?
+  submissionDescription String?           @db.Text
+  verifiedById          String?           @db.Uuid
+  verifiedAt            DateTime?
+  feedback              String?           @db.Text
+
   // RELATIONS
   project           Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
   proposalMilestone ProposalMilestone?  @relation("ProposalToProjectMilestone", fields: [proposalMilestoneId], references: [id]) // NEW
-  
+  submittedByUser   User?               @relation("MilestoneSubmitter", fields: [submittedById], references: [id])
+  verifiedByUser    User?               @relation("MilestoneVerifier_VerifiedBy", fields: [verifiedById], references: [id])
+
   tasks     Task[]
   verifiers MilestoneVerifier[]
   workLogs  PhysicalWorkLog[]
