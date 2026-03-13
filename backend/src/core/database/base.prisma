@@ -256,6 +256,8 @@ model User {
   assignedTasks             Task[]
   verifierAssignments       MilestoneVerifier[]    @relation("MilestoneVerifier_Verifier")
   assignedVerifications     MilestoneVerifier[]    @relation("MilestoneVerifier_AssignedBy")
+  submittedMilestones       Milestone[]            @relation("MilestoneSubmitter")
+  verifiedMilestones        Milestone[]            @relation("MilestoneVerifier_VerifiedBy")
 
   // ---- Economy module ----
   duesPayments              DuesPayment[]
