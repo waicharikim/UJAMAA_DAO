@@ -60,7 +60,7 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 | economy | tested | PR service (award/spend/balance/hasSufficient), dues history, commitments. **34 green tests** (2 files: 18 service unit + 16 route integration). Bug fixed: duesOptInSchema added (validator/handler mismatch on POST /commitments/dues). Audit wired: PR_AWARDED, PR_SPENT, DUES_PAID, COMMITMENT_CREATED. |
 | community | tested | Group management: controllers, services, routes, member event listeners. **82 green tests** (5 files: 30 service unit + 16 membership service unit + 36 route integration). Event listener registration fixed: `registerCommunityListeners()` now active — users auto-enroll in system groups on email verification. Full endpoint set: `GET /community` (discovery, paginated, filterable, returns `isMember`+`myRole`), `GET /community/my-groups`, `GET /community/:groupId`, `GET /community/:groupId/members`, `PATCH /:groupId/settings` (LEADER-only), `PATCH /:groupId/members/:userId/role` (LEADER-only), `DELETE /:groupId/members/:userId` (LEADER-only). Group `memberCount` tracking fixed. Onboarding flags wired: `joinedWardGroup`, `joinedVoluntaryGroup`, `castFirstVote`. |
 | governance | tested | Proposal controllers, services, routes, prisma schema. All 6 endpoints: `GET /governance`, `GET /governance/:proposalId`, `POST /create`, `POST /start-voting`, `POST /vote`, `POST /:proposalId/tally`. **47 green tests** (25 service unit + 22 route integration across 2 files). |
-| projects | partial | Project lifecycle: controllers, services, routes, prisma schema |
+| projects | tested | Project lifecycle: controllers, services, routes, prisma schema. Schema migration adds submission tracking to `Milestone`. `GET /projects` (paginated, filterable) + `GET /projects/:projectId` (full detail). **41 green tests** (20 service unit + 21 route integration). Frontend `projectApi` + projects page wired to real API. |
 | marketplace | partial | Listing controllers, services, routes, prisma schema. Discovery-only per Rule 1. |
 | notifications | partial | Controllers, services, routes, prisma schema. Type-loss bug fixed: `toPrismaType()` maps DUES_* → ECONOMIC, PROPOSAL_* → PROPOSAL. Only emergency module sends notifications — no scheduled jobs, no preference routes yet. |
 | onboarding | partial | Controllers, listeners, routes, services, seed data |
@@ -74,7 +74,7 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 | verification | scaffold | Empty directory |
 
 **Cross-cutting gaps (apply to all modules):**
-- Tests: auth **104 green** (11 files), user **35 green** (2 files), economy **34 green** (3 files), community **82 green** (5 files), governance **47 green** (2 files). All other modules: zero tests. Total: **302 green tests**.
+- Tests: auth **104 green** (11 files), user **35 green** (2 files), economy **34 green** (3 files), community **82 green** (5 files), governance **47 green** (2 files), projects **41 green** (2 files). All other modules: zero tests. Total: **343 green tests**.
 - `make dev` → `/health` ✅ verified 2026-02-22 — server responds `{"success":true,"status":"ok"}`
 - `make dev` → `/ready` ✅ verified 2026-02-22 — Prisma connected, migration applied
 - Worker container: `redischeck.sh` needs `chmod +x docker/*.sh` on host after fresh clone
@@ -110,7 +110,7 @@ No bare-metal instructions. Use service names (`postgres`, `redis`, `web`, `work
 - Structured logging — `backend/src/core/logger/logger.ts` with `operationType`
 - Error handling — `ApiError` class (`backend/src/core/errors/ApiError.ts`)
 - RBAC — `backend/src/core/rbac/` (roles, authorize middleware, integration)
-- Testing — Vitest + Supertest (`backend/vitest.config.ts`) — **302 tests green** (104 auth across 11 files + 35 user across 2 files + 34 economy across 3 files + 82 community across 5 files + 47 governance across 2 files); `fileParallelism: false` required (shared test DB); `resolve.alias` for `@core/*` and `@modules/*` required in vitest config
+- Testing — Vitest + Supertest (`backend/vitest.config.ts`) — **343 tests green** (104 auth across 11 files + 35 user across 2 files + 34 economy across 3 files + 82 community across 5 files + 47 governance across 2 files + 41 projects across 2 files); `fileParallelism: false` required (shared test DB); `resolve.alias` for `@core/*` and `@modules/*` required in vitest config
 
 ### Infrastructure (active)
 - Docker Compose: `docker/docker-compose.yml` — active services: `web`, `worker`, `postgres`, `postgres_test`, `redis`, `frontend`, `mailhog`. (`traefik` service is commented out — see ADR-023.)

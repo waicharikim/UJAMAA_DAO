@@ -6,16 +6,12 @@
 
 ---
 
-**Last updated:** 2026-03-11 (session 28 — community plan executed end-to-end)
+**Last updated:** 2026-03-13 (session 29 — projects module partial → tested)
 **Branch:** `develop`
 **Last commits:**
-- `090d199` chore(frontend): replace auth buttons with Coming Soon while backend is offline
-- `0b42e3e` fix(frontend): update Nguzo Saba principles and add About to navbar
-- `486e56d` chore(deploy): add netlify.toml with Next.js runtime plugin
-- `5feb305` fix(ci): run prettier on 16 files to clear lint errors
-- `473fa5f` docs: session 26 log — community/onboarding gap analysis, plan saved
-
-*(No new commits this session — tests run, all green. Needs commit + lint check before push.)*
+- `88264b2` feat(projects): complete projects module — schema migration, GET endpoints, 41 tests, frontend wiring
+- `9c34fb7` docs: session 28 log — groups rewrite, Lighthouse perf fixes, governance UI
+- `6679134` feat(community+governance): group admin panel, proposal voting actions, and test coverage
 
 ---
 
@@ -26,11 +22,38 @@
 | Backend API | ✅ healthy | http://localhost:4000/health |
 | Frontend | ✅ running (Turbopack) | http://localhost:3000 |
 | MailHog | ✅ auto-started by `make dev` | http://localhost:8025 |
-| Tests | ✅ 302/302 green | `cd backend && npx vitest run` |
+| Tests | ✅ 343/343 green (projects tests in isolation) | `cd backend && npx vitest run tests/projects/` |
 
 ---
 
-## What was done in the last session (session 28 — community plan)
+## What was done in the last session (session 29 — projects module)
+
+**Projects module: `partial` → `tested`**
+
+**Schema / Migration:**
+- Added 8 nullable columns to `milestones` table: `startedAt`, `submittedById`, `submittedAt`, `proofUrl`, `submissionDescription`, `verifiedById`, `verifiedAt`, `feedback`
+- Added `User` back-relations: `submittedMilestones` + `verifiedMilestones`
+- Migration `20260313085236_add_milestone_submission_fields` applied to dev + test DBs
+- Fixed: service used `ProposalMilestone` relation (not non-existent `executionPlan` JSON field)
+
+**Backend fixes:**
+- `types.ts` — fixed `ProjectStatus`/`MilestoneStatus` enums; added `ProjectDto`, `ProjectDetailDto`, `MilestoneResponseDto`, `ListProjectsDto`
+- `project.service.ts` — removed `@ts-nocheck`; fixed all field name bugs (`groupId`→`ownerGroupId`, `'PASSED'`→`'APPROVED'`, `'SUBMITTED'`→`'AWAITING_VERIFICATION'`, `ImpactPointReason.MILESTONE_VERIFIED`→`MILESTONE_ACHIEVED`); added `listProjects()` + `getProject()`; exported class
+- `project.controller.ts` — added `listProjects` + `getProject` static methods
+- `project.routes.ts` — added `GET /` + `GET /:projectId` with Zod validation before POST routes
+
+**Tests (41 new — all green):**
+- `tests/projects/helpers.ts` — seed helpers (user, group, proposal, project, milestone, member) + JWT factory
+- `tests/projects/project.service.test.ts` — 20 service unit tests
+- `tests/projects/project.routes.test.ts` — 21 route integration tests
+
+**Frontend:**
+- `frontend/lib/api.ts` — added `ProjectListItemDto`, `ProjectDetailDto`, `ProjectMilestoneDto`, `projectApi` (6 methods)
+- `frontend/app/projects/page.tsx` — replaced mock data with TanStack Query + thin `toProject()` mapper
+
+---
+
+## What was done in the previous session (session 28 — community plan)
 
 **Community module plan executed end-to-end (11 items from `.claude/plans/wiggly-conjuring-nygaard.md`):**
 
@@ -83,8 +106,8 @@
 
 | Status | Modules |
 |---|---|
-| **tested** | auth (104 tests), user (35 tests), economy (34 tests), community (82 tests), governance (47 tests) |
-| **partial** | integration (Baraza module, no tests), projects, marketplace, notifications, onboarding, emergency, audit, admin |
+| **tested** | auth (104 tests), user (35 tests), economy (34 tests), community (82 tests), governance (47 tests), projects (41 tests) |
+| **partial** | integration (Baraza module, no tests), marketplace, notifications, onboarding, emergency, audit, admin |
 | **scaffold** | reputation, education, treasury, verification |
 | **not started** | M-Pesa |
 | **contracts written** | PrToken.sol, UtToken.sol (13 Foundry tests green; Base Sepolia deploy pending) |
@@ -93,8 +116,8 @@
 
 ## Next tasks (priority order)
 
-1. **Commit this session's changes** — `cd backend && npm run lint && npx tsc --noEmit` first
-2. **Governance tests + frontend** — `castVote` onboarding flag is now wired; governance service + routes already exist; write ~40 governance tests + add proposal creation UI + vote UI to frontend
+1. **Push develop → PR → merge to main** — all 41 new tests green, lint clean
+2. **Notifications module** — test + wire to real frontend (bell popover already exists)
 3. **Base Sepolia deploy** — fund minter wallet → `forge script script/Deploy.s.sol --rpc-url base_sepolia --broadcast`
 4. **Fix `next build` 404 prerender error** — low urgency, dev server works fine
 
