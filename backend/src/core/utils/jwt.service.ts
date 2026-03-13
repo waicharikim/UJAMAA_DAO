@@ -216,7 +216,7 @@ export function signRefreshToken(payload: JwtPayload): string {
  * Includes 30s notBefore for clock skew protection
  */
 export function signMagicLinkToken(payload: JwtPayload): string {
-  return signJwtToken({ ...payload, type: 'magic-link' }, '15m', 30);
+  return signJwtToken({ ...payload, type: 'magic-link' }, '15m', 0);
 }
 
 /**

@@ -122,18 +122,19 @@ export async function sendVerificationEmail(
   await sendEmail({
     to,
     subject: 'Welcome to UjamaaDAO - Verify Your Email',
-    html: `<!-- [Your beautiful HTML template from before] -->`,
-    text: `
-      Karibu UjamaaDAO, ${name}!
-      
-      Thank you for joining UjamaaDAO.
-      
-      Click this link to verify your email: ${verificationLink}
-      
-      This link expires in 24 hours.
-      
-      If you didn't sign up, ignore this email.
-    `,
+    html: `
+<!DOCTYPE html>
+<html>
+<body style="font-family:sans-serif;background:#F7F2E8;padding:40px 20px;margin:0">
+  <div style="max-width:480px;margin:0 auto;background:#142F22;border-radius:16px;padding:40px;text-align:center">
+    <h2 style="color:#F7F2E8;font-size:22px;margin:0 0 8px">Karibu UjamaaDAO, ${name}!</h2>
+    <p style="color:rgba(247,242,232,0.65);font-size:15px;margin:0 0 32px">Thank you for joining. Click the button below to verify your email address. This link expires in 24 hours.</p>
+    <a href="${verificationLink}" style="display:inline-block;background:#D4911E;color:#142F22;font-weight:700;font-size:15px;padding:14px 36px;border-radius:50px;text-decoration:none">Verify Email</a>
+    <p style="color:rgba(247,242,232,0.35);font-size:12px;margin:32px 0 0">If you didn't sign up for UjamaaDAO, you can safely ignore this email.</p>
+  </div>
+</body>
+</html>`,
+    text: `Karibu UjamaaDAO, ${name}!\n\nVerify your email here: ${verificationLink}\n\nExpires in 24 hours. If you didn't sign up, ignore this.`,
   });
 }
 
@@ -148,16 +149,19 @@ export async function sendLoginEmail(
   await sendEmail({
     to,
     subject: 'Your UjamaaDAO Login Link',
-    html: `<!-- [Your beautiful login HTML template] -->`,
-    text: `
-      Karibu tena, ${name}!
-      
-      Click this link to log in: ${loginLink}
-      
-      Expires in 15 minutes.
-      
-      If you didn't request this, ignore.
-    `,
+    html: `
+<!DOCTYPE html>
+<html>
+<body style="font-family:sans-serif;background:#F7F2E8;padding:40px 20px;margin:0">
+  <div style="max-width:480px;margin:0 auto;background:#142F22;border-radius:16px;padding:40px;text-align:center">
+    <h2 style="color:#F7F2E8;font-size:22px;margin:0 0 8px">Karibu tena, ${name}!</h2>
+    <p style="color:rgba(247,242,232,0.65);font-size:15px;margin:0 0 32px">Click the button below to sign in to UjamaaDAO. This link expires in 15 minutes.</p>
+    <a href="${loginLink}" style="display:inline-block;background:#D4911E;color:#142F22;font-weight:700;font-size:15px;padding:14px 36px;border-radius:50px;text-decoration:none">Sign In to UjamaaDAO</a>
+    <p style="color:rgba(247,242,232,0.35);font-size:12px;margin:32px 0 0">If you didn't request this, you can safely ignore it.</p>
+  </div>
+</body>
+</html>`,
+    text: `Karibu tena, ${name}!\n\nSign in here: ${loginLink}\n\nExpires in 15 minutes. If you didn't request this, ignore it.`,
   });
 }
 

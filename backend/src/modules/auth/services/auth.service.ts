@@ -73,7 +73,21 @@ class AuthService {
     let user = await prisma.user.findUnique({ where: { email } });
 
     if (!user) {
-      // New user - validate all required fields present
+      // Sign-in attempt (only email provided) → user doesn't exist
+      if (
+        !name &&
+        !phoneNumber &&
+        !primaryWardId &&
+        !secondaryWardId &&
+        !industryIds &&
+        !goodsServiceIds
+      ) {
+        throw ApiError.notFound(
+          'No account found with that email. Please register first.'
+        );
+      }
+
+      // New user registration — validate all required fields present
       if (
         !name ||
         !phoneNumber ||
