@@ -166,6 +166,8 @@ export interface UserProfileResponse {
 
   industries: { id: string; name: string; isPrimary: boolean }[];
 
+  roles: string[];
+
   metadata: {
     createdAt: Date;
     lastLoginAt: Date | null;

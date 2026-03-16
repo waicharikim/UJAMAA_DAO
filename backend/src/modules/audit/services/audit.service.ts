@@ -47,7 +47,9 @@ class AuditService {
     // In future: scope check (admin can only see logs in their scope)
     // For now: super_admin or ward_admin+
 
-    const skip = ((dto.page || 1) - 1) * (dto.limit || 50);
+    const limit = parseInt(String(dto.limit || 50), 10);
+    const page = parseInt(String(dto.page || 1), 10);
+    const skip = (page - 1) * limit;
 
     const where: any = {};
 
@@ -68,7 +70,7 @@ class AuditService {
         },
         orderBy: { createdAt: 'desc' },
         skip,
-        take: dto.limit || 50,
+        take: limit,
       }),
       prisma.auditLog.count({ where }),
     ]);
@@ -76,10 +78,10 @@ class AuditService {
     return {
       logs,
       pagination: {
-        page: dto.page || 1,
-        limit: dto.limit || 50,
+        page,
+        limit,
         total,
-        totalPages: Math.ceil(total / (dto.limit || 50)),
+        totalPages: Math.ceil(total / limit),
       },
     };
   }

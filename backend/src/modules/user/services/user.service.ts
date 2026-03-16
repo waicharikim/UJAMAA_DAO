@@ -87,6 +87,10 @@ class UserService {
           include: { industry: { select: { id: true, name: true } } },
           orderBy: { isPrimary: 'desc' },
         },
+        userRoles: {
+          where: { active: true },
+          include: { role: { select: { id: true, name: true } } },
+        },
       },
     });
 
@@ -161,6 +165,8 @@ class UserService {
         name: ui.industry.name,
         isPrimary: ui.isPrimary,
       })),
+
+      roles: user.userRoles.map((ur) => ur.role.name),
 
       metadata: {
         createdAt: user.createdAt,

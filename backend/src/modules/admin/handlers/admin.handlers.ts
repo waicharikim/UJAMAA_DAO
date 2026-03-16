@@ -210,3 +210,33 @@ export async function updateSystemConfig(req: AuthRequest, res: Response) {
 
   sendSuccess(res, result, 'System configuration updated', 200);
 }
+
+export async function getStats(req: AuthRequest, res: Response) {
+  const stats = await adminService.getStats();
+  sendSuccess(res, stats, 'Stats retrieved');
+}
+
+export async function listUsers(req: AuthRequest, res: Response) {
+  const { search, status, verificationLevel } = req.query as Record<
+    string,
+    string
+  >;
+  const limit = Math.min(
+    parseInt((req.query.limit as string) || '20', 10),
+    100
+  );
+  const offset = parseInt((req.query.offset as string) || '0', 10);
+  const result = await adminService.listUsers({
+    search,
+    status,
+    verificationLevel,
+    limit,
+    offset,
+  });
+  sendSuccess(res, result, 'Users retrieved');
+}
+
+export async function getSystemConfig(req: AuthRequest, res: Response) {
+  const configs = await adminService.getConfig();
+  sendSuccess(res, configs, 'Config retrieved');
+}

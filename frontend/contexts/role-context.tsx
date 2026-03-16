@@ -26,8 +26,12 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     },
   ]
 
+  // Normalize role names: strip namespace prefix so "super_admin" matches "system:super_admin"
+  const normalizeRole = (name: string) => name.includes(":") ? name.split(":")[1] : name
+
   const hasRole = (roleName: string): boolean => {
-    return userRoles.some((role) => role.name === roleName)
+    const normalized = normalizeRole(roleName)
+    return userRoles.some((role) => normalizeRole(role.name) === normalized)
   }
 
   const hasScope = (scope: string): boolean => {

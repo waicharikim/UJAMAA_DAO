@@ -20,7 +20,7 @@ import { SystemRoles } from './roles.js';
 type Scope = string | null;
 
 // Input validation
-const isValidRole = (role: string): boolean => /^[a-zA-Z_]{2,50}$/i.test(role);
+const isValidRole = (role: string): boolean => /^[a-zA-Z_:]{2,50}$/i.test(role);
 const isValidScope = (scope: string): boolean =>
   /^[a-z]{2,20}(:[0-9a-f-]{8,36})?$/i.test(scope);
 

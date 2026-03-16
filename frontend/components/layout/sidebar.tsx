@@ -46,7 +46,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { user, isAuthenticated, logout } = useAuth()
   const { hasAnyRole } = useRole()
 
-  const showAdmin = hasAnyRole(["admin", "super_admin", "county_admin"])
+  const showAdmin = hasAnyRole(["admin", "super_admin", "county_coordinator", "compliance_officer"])
 
   return (
     <aside

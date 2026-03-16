@@ -1113,3 +1113,123 @@ class ApiClient {
 }
 
 export const apiClient = new ApiClient()
+
+// ─────────────────────────────────────────────────────────
+// Admin types
+// ─────────────────────────────────────────────────────────
+
+export interface AdminStatsDto {
+  users: {
+    total: number
+    active: number
+    suspended: number
+    byVerification: Record<string, number>
+  }
+  governance: { activeProposals: number }
+  pendingActions: { verifications: number; residenceChanges: number; total: number }
+  economy: { totalParticipationRights: number; totalUtilityTokens: number }
+}
+
+export interface AdminUserDto {
+  id: string
+  name: string | null
+  email: string | null
+  status: string
+  verificationLevel: string
+  roles: string[]
+  county: string | null
+  constituency: string | null
+  participationRights: number
+  globalImpactPoints: number
+  createdAt: string
+  lastLoginAt: string | null
+}
+
+export interface AdminConfigItemDto {
+  id: string
+  key: string
+  value: string
+  category: string
+  dataType: string
+  updatedAt: string
+}
+
+export interface AuditLogDto {
+  id: string
+  userId: string | null
+  action: string
+  entityType: string
+  entityId: string | null
+  metadata: Record<string, any> | null
+  createdAt: string
+  user: { id: string; name: string | null; email: string | null } | null
+}
+
+// ─────────────────────────────────────────────────────────
+// adminApi
+// ─────────────────────────────────────────────────────────
+
+export const adminApi = {
+  getStats: () =>
+    apiFetch<AdminStatsDto>("/admin/stats"),
+
+  getUsers: (params?: { search?: string; status?: string; verificationLevel?: string; limit?: number; offset?: number }) => {
+    const q = new URLSearchParams()
+    if (params?.search) q.set("search", params.search)
+    if (params?.status && params.status !== "all") q.set("status", params.status)
+    if (params?.verificationLevel && params.verificationLevel !== "all") q.set("verificationLevel", params.verificationLevel)
+    if (params?.limit) q.set("limit", String(params.limit))
+    if (params?.offset) q.set("offset", String(params.offset))
+    const qs = q.toString()
+    return apiFetch<{ users: AdminUserDto[]; total: number; limit: number; offset: number }>(`/admin/users${qs ? `?${qs}` : ""}`)
+  },
+
+  getConfig: () =>
+    apiFetch<AdminConfigItemDto[]>("/admin/config"),
+
+  updateConfig: (key: string, value: string) =>
+    apiFetch<AdminConfigItemDto>("/admin/config/update", {
+      method: "POST",
+      body: JSON.stringify({ key, value }),
+    }),
+
+  suspendUser: (userId: string, body: { suspend: boolean; reason: string; durationDays?: number }) =>
+    apiFetch<{ suspended: boolean }>(`/admin/users/${userId}/suspend`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  getPendingVerifications: (params?: { page?: number; pageSize?: number }) => {
+    const q = new URLSearchParams()
+    if (params?.page) q.set("page", String(params.page))
+    if (params?.pageSize) q.set("pageSize", String(params.pageSize))
+    const qs = q.toString()
+    return apiFetch<{ requests: any[]; pagination: { total: number } }>(`/admin/verification/community/pending${qs ? `?${qs}` : ""}`)
+  },
+
+  getPendingResidenceChanges: (params?: { page?: number; pageSize?: number }) => {
+    const q = new URLSearchParams()
+    if (params?.page) q.set("page", String(params.page))
+    if (params?.pageSize) q.set("pageSize", String(params.pageSize))
+    const qs = q.toString()
+    return apiFetch<{ requests: any[]; pagination: { total: number } }>(`/admin/residence/pending${qs ? `?${qs}` : ""}`)
+  },
+}
+
+// ─────────────────────────────────────────────────────────
+// auditApi
+// ─────────────────────────────────────────────────────────
+
+export const auditApi = {
+  search: (params?: { page?: number; limit?: number; userId?: string; action?: string; fromDate?: string; toDate?: string }) => {
+    const q = new URLSearchParams()
+    if (params?.page) q.set("page", String(params.page))
+    if (params?.limit) q.set("limit", String(params.limit))
+    if (params?.userId) q.set("userId", params.userId)
+    if (params?.action) q.set("action", params.action)
+    if (params?.fromDate) q.set("fromDate", params.fromDate)
+    if (params?.toDate) q.set("toDate", params.toDate)
+    const qs = q.toString()
+    return apiFetch<{ logs: AuditLogDto[]; pagination: { page: number; limit: number; total: number; totalPages: number } }>(`/audit/search${qs ? `?${qs}` : ""}`)
+  },
+}

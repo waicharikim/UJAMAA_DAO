@@ -425,6 +425,156 @@ class AdminService {
       take: 50,
     });
   }
+
+  // ============================================================================
+  // PLATFORM STATS
+  // ============================================================================
+
+  async getStats() {
+    const [
+      totalUsers,
+      activeUsers,
+      suspendedUsers,
+      byVerification,
+      activeProposals,
+      pendingVerifications,
+      pendingResidenceChanges,
+      prAggregate,
+      utAggregate,
+    ] = await Promise.all([
+      prisma.user.count(),
+      prisma.user.count({ where: { status: 'ACTIVE' } }),
+      prisma.user.count({ where: { status: 'SUSPENDED' } }),
+      prisma.user.groupBy({ by: ['verificationLevel'], _count: { id: true } }),
+      prisma.proposal.count({ where: { status: 'VOTING' } }),
+      prisma.verificationRequest.count({
+        where: {
+          status: {
+            in: [
+              'PENDING',
+              'ADMIN_REVIEW',
+              'VOUCHING_COMPLETED',
+              'PAYMENT_PENDING',
+            ],
+          },
+        },
+      }),
+      prisma.residenceChangeRequest.count({ where: { status: 'PENDING' } }),
+      prisma.user.aggregate({ _sum: { participationRights: true } }),
+      prisma.user.aggregate({ _sum: { utilityTokens: true } }),
+    ]);
+
+    const verificationBreakdown: Record<string, number> = {};
+    for (const v of byVerification) {
+      verificationBreakdown[v.verificationLevel] = v._count.id;
+    }
+
+    return {
+      users: {
+        total: totalUsers,
+        active: activeUsers,
+        suspended: suspendedUsers,
+        byVerification: verificationBreakdown,
+      },
+      governance: { activeProposals },
+      pendingActions: {
+        verifications: pendingVerifications,
+        residenceChanges: pendingResidenceChanges,
+        total: pendingVerifications + pendingResidenceChanges,
+      },
+      economy: {
+        totalParticipationRights: prAggregate._sum.participationRights ?? 0,
+        totalUtilityTokens: utAggregate._sum.utilityTokens ?? 0,
+      },
+    };
+  }
+
+  // ============================================================================
+  // USER LIST (ADMIN)
+  // ============================================================================
+
+  async listUsers(params: {
+    search?: string;
+    status?: string;
+    verificationLevel?: string;
+    limit?: number;
+    offset?: number;
+  }) {
+    const {
+      search,
+      status,
+      verificationLevel,
+      limit = 20,
+      offset = 0,
+    } = params;
+
+    const where: any = {};
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+    if (status) where.status = status;
+    if (verificationLevel) where.verificationLevel = verificationLevel;
+
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        include: {
+          primaryWard: {
+            select: {
+              name: true,
+              constituency: {
+                select: {
+                  name: true,
+                  county: { select: { name: true } },
+                },
+              },
+            },
+          },
+          userRoles: {
+            where: { active: true },
+            include: { role: { select: { name: true } } },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: offset,
+        take: limit,
+      }),
+      prisma.user.count({ where }),
+    ]);
+
+    return {
+      users: users.map((u) => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        status: u.status,
+        verificationLevel: u.verificationLevel,
+        roles: u.userRoles.map((ur) => ur.role.name),
+        county: u.primaryWard?.constituency?.county?.name ?? null,
+        constituency: u.primaryWard?.constituency?.name ?? null,
+        participationRights: u.participationRights,
+        globalImpactPoints: u.globalImpactPoints,
+        createdAt: u.createdAt,
+        lastLoginAt: u.lastLoginAt,
+      })),
+      total,
+      limit,
+      offset,
+    };
+  }
+
+  // ============================================================================
+  // SYSTEM CONFIG READ
+  // ============================================================================
+
+  async getConfig() {
+    return prisma.systemConfiguration.findMany({
+      orderBy: [{ category: 'asc' }, { key: 'asc' }],
+    });
+  }
 }
 
 export const adminService = new AdminService();

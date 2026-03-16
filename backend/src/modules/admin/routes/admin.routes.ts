@@ -45,6 +45,9 @@ import {
   resolveSecurityEvent,
   updateSystemConfig,
   getUserSecurityEventsAdmin, // NEW
+  getStats,
+  listUsers,
+  getSystemConfig,
 } from '../handlers/admin.handlers.js';
 
 const router = Router();
@@ -69,6 +72,14 @@ router.use(
     max: 60,
   })
 );
+
+// ============================================================================
+// PLATFORM STATS / USER LIST / CONFIG READ
+// ============================================================================
+
+router.get('/stats', asyncHandler(getStats));
+router.get('/users', asyncHandler(listUsers));
+router.get('/config', asyncHandler(getSystemConfig));
 
 // ============================================================================
 // COMMUNITY VERIFICATION
