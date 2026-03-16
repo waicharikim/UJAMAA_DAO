@@ -26,3 +26,8 @@ export interface SearchListingsDto {
   page?: number;
   limit?: number;
 }
+
+export interface MyListingsDto {
+  page?: number;
+  limit?: number;
+}
