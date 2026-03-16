@@ -11,12 +11,19 @@ enum ProposalType {
 
 enum ProposalStatus {
   DRAFT
+  PENDING_REVIEW       // LEADER forwarded — awaiting location admin approval
+  APPROVED_FOR_VOTING  // Location admin approved — LEADER can open voting
   VOTING
   APPROVED
   REJECTED
   EXECUTING
   COMPLETED
   CANCELLED
+}
+
+enum ProposalScope {
+  GROUP      // Internal to the voluntary group only
+  COMMUNITY  // Public / community-wide
 }
 
 
@@ -54,6 +61,15 @@ model Proposal {
   dependencies      Json?          // [{ name, description, status }]
   risks             Json?          // [{ risk, impact, mitigation }]
   
+  // SCOPE & FUNDING
+  proposalScope          ProposalScope  @default(COMMUNITY)
+  groupFundingAmount     Decimal?       @db.Decimal(20, 2)
+  locationFundingRequest Decimal?       @db.Decimal(20, 2)
+
+  // REVIEW
+  reviewedById      String?        @db.Uuid
+  reviewNote        String?        @db.Text
+
   // VOTING
   votesFor          Int            @default(0)
   votesAgainst      Int            @default(0)
@@ -72,6 +88,7 @@ model Proposal {
   // RELATIONS
   group              Group?              @relation("GroupProposals", fields: [groupId], references: [id], onDelete: SetNull)
   creator            User                @relation("UserProposals", fields: [creatorId], references: [id], onDelete: Cascade)
+  reviewer           User?               @relation("ProposalReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
   votes              GroupMemberVote[]   @relation("ProposalVotes")
   walletTransactions WalletTransaction[] @relation("ProposalTransactions")
   escrows            Escrow[]            @relation("ProposalEscrows")
@@ -81,6 +98,7 @@ model Proposal {
 
   @@index([groupId, status])
   @@index([creatorId])
+  @@index([reviewedById])
   @@index([status, votingEndsAt])
   @@index([proposalType])
 }

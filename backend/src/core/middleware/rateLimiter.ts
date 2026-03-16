@@ -163,8 +163,11 @@ interface RateLimiterConfig {
  * Build a rate limiter with custom configuration
  */
 export function buildRateLimiter(config: RateLimiterConfig) {
-  // In test environment, return a no-op middleware to prevent rate-limit interference
-  if (process.env.NODE_ENV === 'test') {
+  // In test or development environment, return a no-op middleware
+  if (
+    process.env.NODE_ENV === 'test' ||
+    process.env.NODE_ENV === 'development'
+  ) {
     return (_req: Request, _res: Response, next: NextFunction) => next();
   }
 

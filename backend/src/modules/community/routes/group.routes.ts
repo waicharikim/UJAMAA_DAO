@@ -24,6 +24,9 @@ router.post(
       voluntaryType: z.string(),
       description: z.string().optional(),
       avatarUrl: z.string().url().optional(),
+      wardId: z.string().uuid().optional(),
+      constituencyId: z.string().uuid().optional(),
+      countyId: z.string().uuid().optional(),
     }),
     target: 'body',
   }),
@@ -68,6 +71,8 @@ router.get(
   }),
   asyncHandler(GroupController.getGroups)
 );
+
+router.get('/:groupId/my-role', asyncHandler(GroupController.getMyRole));
 
 router.get('/:groupId', asyncHandler(GroupController.getGroupDetail));
 

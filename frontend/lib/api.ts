@@ -782,6 +782,9 @@ export const communityApi = {
   getGroupDetail: (groupId: string): Promise<GroupDetailDto> =>
     apiFetch<GroupDetailDto>(`/community/${groupId}`),
 
+  getMyRoleInGroup: (groupId: string): Promise<{ role: string | null }> =>
+    apiFetch<{ role: string | null }>(`/community/${groupId}/my-role`),
+
   getGroupMembers: (groupId: string, limit = 50, offset = 0): Promise<GroupMemberDto[]> =>
     apiFetch<GroupMemberDto[]>(`/community/${groupId}/members?limit=${limit}&offset=${offset}`),
 
@@ -807,21 +810,47 @@ export const communityApi = {
 // Governance API  — /api/v1/governance
 // ─────────────────────────────────────────────────────────
 
+export type ProposalStatus =
+  | "DRAFT"
+  | "PENDING_REVIEW"
+  | "APPROVED_FOR_VOTING"
+  | "VOTING"
+  | "APPROVED"
+  | "REJECTED"
+  | "EXECUTING"
+  | "COMPLETED"
+  | "CANCELLED"
+
+export type ProposalScope = "GROUP" | "COMMUNITY"
+
 export interface ProposalDto {
   id: string
   title: string
   description: string
   proposalType: string
-  status: string
+  status: ProposalStatus
+  proposalScope: ProposalScope
   groupId: string | null
   creatorId: string
   budget: string | null
+  groupFundingAmount: string | null
+  locationFundingRequest: string | null
+  reviewedById: string | null
+  reviewNote: string | null
   votingStartsAt: string | null
   votingEndsAt: string | null
   createdAt: string
   updatedAt: string
   creator: { id: string; name: string; avatarUrl?: string } | null
-  group: { id: string; name: string; locationScope?: string } | null
+  group: {
+    id: string
+    name: string
+    locationScope?: string
+    wardId?: string | null
+    constituencyId?: string | null
+    countyId?: string | null
+    voluntaryType?: string | null
+  } | null
   votesSummary?: { total: number; yesWeight: number; noWeight: number }
   _count?: { votes: number }
 }
@@ -833,6 +862,9 @@ export const governanceApi = {
     description: string
     fundingAmountKes?: number
     isEmergency?: boolean
+    proposalScope?: ProposalScope
+    groupFundingAmount?: number
+    locationFundingRequest?: number
   }) =>
     apiFetch<unknown>("/governance/create", {
       method: "POST",
@@ -873,6 +905,15 @@ export const governanceApi = {
 
   getProposal: (proposalId: string): Promise<ProposalDto> =>
     apiFetch<ProposalDto>(`/governance/${proposalId}`),
+
+  reviewProposal: (proposalId: string, decision: "APPROVE" | "REJECT", note?: string) =>
+    apiFetch<unknown>(`/governance/${proposalId}/review`, {
+      method: "POST",
+      body: JSON.stringify({ decision, note }),
+    }),
+
+  getNeedsAction: (): Promise<{ proposals: ProposalDto[]; total: number }> =>
+    apiFetch("/governance/needs-action"),
 }
 
 // ─────────────────────────────────────────────────────────

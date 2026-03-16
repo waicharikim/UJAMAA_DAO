@@ -26,6 +26,9 @@ export interface CreateProposalDto {
   description: string;
   fundingAmountKes?: number;
   isEmergency?: boolean;
+  proposalScope?: 'GROUP' | 'COMMUNITY';
+  groupFundingAmount?: number;
+  locationFundingRequest?: number;
 }
 
 export interface CastVoteDto {
@@ -35,6 +38,11 @@ export interface CastVoteDto {
 
 export interface StartVotingDto {
   proposalId: string;
+}
+
+export interface ReviewProposalDto {
+  decision: 'APPROVE' | 'REJECT';
+  note?: string;
 }
 
 export const PR_COST_BY_SCOPE = {

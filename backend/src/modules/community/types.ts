@@ -17,6 +17,10 @@ export interface CreateVoluntaryGroupDto {
   voluntaryType: string; // BUSINESS_COLLECTIVE, SAVINGS_CREDIT, etc.
   description?: string;
   avatarUrl?: string;
+  // Optional location affiliation — required for COMMUNITY-scoped proposals
+  wardId?: string;
+  constituencyId?: string;
+  countyId?: string;
 }
 
 export interface JoinGroupDto {

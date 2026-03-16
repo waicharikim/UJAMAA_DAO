@@ -134,10 +134,14 @@ describe('createProposal()', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('startVoting()', () => {
-  it('moves a DRAFT proposal to VOTING and returns voting window', async () => {
+  it('moves an APPROVED_FOR_VOTING proposal to VOTING (called by LEADER)', async () => {
     const creator = await createGovernanceUser('voter-start@example.com');
     const group = await seedGovernanceGroup(creator.id);
-    const proposal = await seedProposal(creator.id, group.id);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.APPROVED_FOR_VOTING
+    );
 
     const result = await proposalService.startVoting(creator.id, proposal.id);
 
@@ -153,25 +157,29 @@ describe('startVoting()', () => {
     expect(updated!.votingEndsAt).not.toBeNull();
   });
 
-  it('throws 403 when called by someone who is not the creator', async () => {
+  it('throws 403 when called by a non-LEADER member', async () => {
     const creator = await createGovernanceUser('sv-creator@example.com');
     const other = await createGovernanceUser('sv-other@example.com');
     const group = await seedGovernanceGroup(creator.id);
     await addGroupMember(other.id, group.id);
-    const proposal = await seedProposal(creator.id, group.id);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.APPROVED_FOR_VOTING
+    );
 
     await expect(
       proposalService.startVoting(other.id, proposal.id)
     ).rejects.toMatchObject({ statusCode: 403 });
   });
 
-  it('throws 400 when proposal is already in VOTING status', async () => {
+  it('throws 400 when proposal is not in APPROVED_FOR_VOTING status', async () => {
     const creator = await createGovernanceUser('already-voting@example.com');
     const group = await seedGovernanceGroup(creator.id);
     const proposal = await seedProposal(
       creator.id,
       group.id,
-      ProposalStatus.VOTING
+      ProposalStatus.DRAFT
     );
 
     await expect(

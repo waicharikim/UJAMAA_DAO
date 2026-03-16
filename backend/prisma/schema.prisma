@@ -31,6 +31,7 @@ enum GroupStatus {
 enum GroupRole {
   MEMBER       // Regular member
   LEADER       // Group leader/chairperson
+  ADMIN        // Group administrator — approves/rejects proposals under review
   TREASURER    // Financial manager
   SECRETARY    // Records keeper
   AUDITOR      // Financial oversight
@@ -248,6 +249,7 @@ model User {
 
   // ---- Governance module ----
   proposals                 Proposal[]             @relation("UserProposals")
+  reviewedProposals         Proposal[]             @relation("ProposalReviewer")
   votes                     GroupMemberVote[]      @relation("UserVotes")
 
   // ---- Projects module ----
@@ -1547,12 +1549,19 @@ enum ProposalType {
 
 enum ProposalStatus {
   DRAFT
+  PENDING_REVIEW       // LEADER forwarded — awaiting location admin approval
+  APPROVED_FOR_VOTING  // Location admin approved — LEADER can open voting
   VOTING
   APPROVED
   REJECTED
   EXECUTING
   COMPLETED
   CANCELLED
+}
+
+enum ProposalScope {
+  GROUP      // Internal to the voluntary group only
+  COMMUNITY  // Public / community-wide
 }
 
 
@@ -1590,6 +1599,15 @@ model Proposal {
   dependencies      Json?          // [{ name, description, status }]
   risks             Json?          // [{ risk, impact, mitigation }]
   
+  // SCOPE & FUNDING
+  proposalScope          ProposalScope  @default(COMMUNITY)
+  groupFundingAmount     Decimal?       @db.Decimal(20, 2)  // committed from group treasury
+  locationFundingRequest Decimal?       @db.Decimal(20, 2)  // requested from location treasury
+
+  // REVIEW
+  reviewedById      String?        @db.Uuid  // Location admin who approved or rejected
+  reviewNote        String?        @db.Text  // Rejection reason or approval note
+
   // VOTING
   votesFor          Int            @default(0)
   votesAgainst      Int            @default(0)
@@ -1608,6 +1626,7 @@ model Proposal {
   // RELATIONS
   group              Group?              @relation("GroupProposals", fields: [groupId], references: [id], onDelete: SetNull)
   creator            User                @relation("UserProposals", fields: [creatorId], references: [id], onDelete: Cascade)
+  reviewer           User?               @relation("ProposalReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
   votes              GroupMemberVote[]   @relation("ProposalVotes")
   walletTransactions WalletTransaction[] @relation("ProposalTransactions")
   escrows            Escrow[]            @relation("ProposalEscrows")
@@ -1617,6 +1636,7 @@ model Proposal {
 
   @@index([groupId, status])
   @@index([creatorId])
+  @@index([reviewedById])
   @@index([status, votingEndsAt])
   @@index([proposalType])
 }

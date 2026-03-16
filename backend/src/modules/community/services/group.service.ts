@@ -39,13 +39,22 @@ class GroupService {
       { groupType: dto.voluntaryType }
     );
 
+    // Derive locationScope from whichever location ID is provided
+    let locationScope: LocationScope = LocationScope.WARD;
+    if (dto.countyId) locationScope = LocationScope.COUNTY;
+    else if (dto.constituencyId) locationScope = LocationScope.CONSTITUENCY;
+    else if (dto.wardId) locationScope = LocationScope.WARD;
+
     const group = await prisma.group.create({
       data: {
         name: dto.name,
         description: dto.description,
         isSystemGroup: false,
-        locationScope: LocationScope.WARD,
+        locationScope,
         voluntaryType: dto.voluntaryType as VoluntaryGroupType,
+        wardId: dto.wardId ?? null,
+        constituencyId: dto.constituencyId ?? null,
+        countyId: dto.countyId ?? null,
       },
     });
 

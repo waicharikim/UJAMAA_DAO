@@ -7,7 +7,7 @@
  * Updated: Align with actual Prisma schema (GroupMemberVote, ProposalStatus, budget)
  */
 
-import { ProposalStatus, ProposalType } from '@prisma/client';
+import { ProposalStatus, ProposalType, ProposalScope } from '@prisma/client';
 import { prisma } from '../../../core/database/client.js';
 import { participationRightsService } from '../../economy/services/participationRights.service.js';
 import { ParticipationRightsReason } from '../../economy/types.js';
@@ -19,8 +19,10 @@ import {
   IP_PERCENTILE_THRESHOLD,
   CastVoteDto,
   CreateProposalDto,
+  ReviewProposalDto,
   VoteOption,
 } from '../types.js';
+import { SystemRoles } from '../../../core/rbac/roles.js';
 
 class ProposalService {
   /**
@@ -53,9 +55,9 @@ class ProposalService {
     const ips = group.members.map((m) => m.user.globalImpactPoints);
     const userRank =
       ips.filter((ip) => ip > membership.user.globalImpactPoints).length + 1;
-    const percentile = userRank / ips.length;
+    const allowedRank = Math.ceil(requiredPercentile * ips.length);
 
-    if (percentile > requiredPercentile) {
+    if (userRank > allowedRank) {
       throw ApiError.forbidden(
         `You need to be in the top ${(requiredPercentile * 100).toFixed(0)}% of IP in this group`
       );
@@ -79,11 +81,15 @@ class ProposalService {
           ? ProposalType.EMERGENCY
           : ProposalType.COMMUNITY_INITIATIVE,
         status: ProposalStatus.DRAFT,
+        proposalScope:
+          (dto.proposalScope as ProposalScope) ?? ProposalScope.COMMUNITY,
+        groupFundingAmount: dto.groupFundingAmount,
+        locationFundingRequest: dto.locationFundingRequest,
       },
     });
 
     logger.info(
-      { userId, groupId: dto.groupId, scope, prCost, percentile },
+      { userId, groupId: dto.groupId, scope, prCost, userRank, allowedRank },
       'Proposal created'
     );
 
@@ -91,7 +97,111 @@ class ProposalService {
   }
 
   /**
-   * Start voting period
+   * Two-stage proposal review:
+   *
+   * Stage 1 (DRAFT → PENDING_REVIEW or APPROVED_FOR_VOTING):
+   *   - Group LEADER forwards the proposal.
+   *   - Voluntary GROUP-scoped proposals jump directly to APPROVED_FOR_VOTING.
+   *   - All other proposals go to PENDING_REVIEW for location admin review.
+   *
+   * Stage 2 (PENDING_REVIEW → APPROVED_FOR_VOTING or REJECTED):
+   *   - The appropriate location admin (ward/constituency/county/compliance_officer)
+   *     approves or rejects based on which location ID the group has set.
+   */
+  async reviewProposal(
+    userId: string,
+    proposalId: string,
+    dto: ReviewProposalDto,
+    callerSystemRoles: string[]
+  ) {
+    const proposal = await prisma.proposal.findUnique({
+      where: { id: proposalId },
+      include: { group: true },
+    });
+    if (!proposal) throw ApiError.notFound('Proposal');
+
+    const group = proposal.group;
+    const groupId = proposal.groupId;
+
+    // ── STAGE 1: LEADER forwards DRAFT ──────────────────────────────────────
+    if (proposal.status === ProposalStatus.DRAFT) {
+      const membership = groupId
+        ? await prisma.groupMember.findFirst({
+            where: { userId, groupId, active: true },
+            select: { role: true },
+          })
+        : null;
+      if (!membership || membership.role !== 'LEADER')
+        throw ApiError.forbidden(
+          'Only group leaders can forward proposals for review'
+        );
+
+      if (dto.decision === 'REJECT') {
+        return prisma.proposal.update({
+          where: { id: proposalId },
+          data: {
+            status: ProposalStatus.REJECTED,
+            reviewedById: userId,
+            reviewNote: dto.note ?? null,
+          },
+        });
+      }
+
+      // Voluntary GROUP-scoped proposals skip admin review entirely
+      const isVoluntary = !!group?.voluntaryType;
+      const isGroupScoped = proposal.proposalScope === ProposalScope.GROUP;
+      if (isVoluntary && isGroupScoped) {
+        return prisma.proposal.update({
+          where: { id: proposalId },
+          data: { status: ProposalStatus.APPROVED_FOR_VOTING },
+        });
+      }
+
+      // Voluntary COMMUNITY-scoped must have a location set
+      if (
+        isVoluntary &&
+        !group?.wardId &&
+        !group?.constituencyId &&
+        !group?.countyId
+      ) {
+        throw ApiError.badRequest(
+          'This voluntary group has no location affiliation. Associate the group with a ward, constituency, or county before creating community proposals.'
+        );
+      }
+
+      return prisma.proposal.update({
+        where: { id: proposalId },
+        data: { status: ProposalStatus.PENDING_REVIEW },
+      });
+    }
+
+    // ── STAGE 2: Location admin approves/rejects PENDING_REVIEW ─────────────
+    if (proposal.status === ProposalStatus.PENDING_REVIEW) {
+      if (!group) throw ApiError.badRequest('Proposal has no associated group');
+      if (!canLocationAdminApprove(group, callerSystemRoles))
+        throw ApiError.forbidden(
+          `Requires ${requiredRoleLabel(group)} to approve this proposal`
+        );
+
+      const newStatus =
+        dto.decision === 'APPROVE'
+          ? ProposalStatus.APPROVED_FOR_VOTING
+          : ProposalStatus.REJECTED;
+      return prisma.proposal.update({
+        where: { id: proposalId },
+        data: {
+          status: newStatus,
+          reviewedById: userId,
+          reviewNote: dto.note ?? null,
+        },
+      });
+    }
+
+    throw ApiError.badRequest('Proposal is not in a reviewable state');
+  }
+
+  /**
+   * Start voting period (group LEADER, requires APPROVED_FOR_VOTING status)
    */
   async startVoting(userId: string, proposalId: string) {
     const proposal = await prisma.proposal.findUnique({
@@ -100,10 +210,19 @@ class ProposalService {
     });
 
     if (!proposal) throw ApiError.notFound('Proposal');
-    if (proposal.creatorId !== userId)
-      throw ApiError.forbidden('Only creator can start voting');
-    if (proposal.status !== ProposalStatus.DRAFT)
-      throw ApiError.badRequest('Proposal not in draft');
+    if (proposal.status !== ProposalStatus.APPROVED_FOR_VOTING)
+      throw ApiError.badRequest(
+        'Proposal must be approved before voting can start'
+      );
+
+    const membership = proposal.groupId
+      ? await prisma.groupMember.findFirst({
+          where: { userId, groupId: proposal.groupId, active: true },
+          select: { role: true },
+        })
+      : null;
+    if (!membership || membership.role !== 'LEADER')
+      throw ApiError.forbidden('Only group leaders can start voting');
 
     const isEmergency = proposal.proposalType === ProposalType.EMERGENCY;
     const groupScope = proposal.group?.locationScope;
@@ -237,7 +356,17 @@ class ProposalService {
       where: { id: proposalId },
       include: {
         creator: { select: { id: true, name: true, avatarUrl: true } },
-        group: { select: { id: true, name: true, locationScope: true } },
+        group: {
+          select: {
+            id: true,
+            name: true,
+            locationScope: true,
+            wardId: true,
+            constituencyId: true,
+            countyId: true,
+            voluntaryType: true,
+          },
+        },
         votes: { select: { vote: true, voteWeight: true } },
       },
     });
@@ -278,9 +407,12 @@ class ProposalService {
           description: true,
           proposalType: true,
           status: true,
+          proposalScope: true,
           groupId: true,
           creatorId: true,
           budget: true,
+          groupFundingAmount: true,
+          locationFundingRequest: true,
           votingStartsAt: true,
           votingEndsAt: true,
           createdAt: true,
@@ -301,3 +433,38 @@ class ProposalService {
 }
 
 export const proposalService = new ProposalService();
+
+// ─── Location admin helpers ────────────────────────────────────────────────
+
+type GroupLocation = {
+  wardId: string | null;
+  constituencyId: string | null;
+  countyId: string | null;
+  locationScope: string;
+};
+
+function canLocationAdminApprove(
+  group: GroupLocation,
+  roles: string[]
+): boolean {
+  if (
+    roles.includes(SystemRoles.SUPER_ADMIN) ||
+    roles.includes('system:compliance_officer')
+  )
+    return true;
+  if (group.wardId) return roles.includes('location:ward_admin');
+  if (group.constituencyId)
+    return roles.includes('location:constituency_admin');
+  if (group.countyId) return roles.includes('location:county_admin');
+  if (group.locationScope === 'NATIONAL')
+    return roles.includes('system:compliance_officer');
+  return false;
+}
+
+function requiredRoleLabel(group: GroupLocation): string {
+  if (group.wardId) return 'ward administrator';
+  if (group.constituencyId) return 'constituency administrator';
+  if (group.countyId) return 'county administrator';
+  if (group.locationScope === 'NATIONAL') return 'compliance officer';
+  return 'platform administrator';
+}

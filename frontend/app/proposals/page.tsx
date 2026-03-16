@@ -7,10 +7,10 @@ import { FetchProposals } from "@/components/proposals/fetch-proposals"
 import { VotingProvider } from "@/contexts/voting-context"
 import { governanceApi } from "@/lib/api"
 import { useAuth } from "@/contexts/auth-context"
-import { Plus, Vote, TrendingUp } from "lucide-react"
+import { Plus, Vote, TrendingUp, AlertCircle } from "lucide-react"
 
 export default function ProposalsPage() {
-  const { user } = useAuth()
+  const { isAuthenticated, user } = useAuth()
   const canCreateProposal =
     user?.verificationLevel === "COMMUNITY_VERIFIED" ||
     user?.verificationLevel === "FULL_VERIFIED"
@@ -24,6 +24,12 @@ export default function ProposalsPage() {
     queryKey: ["proposals-voting"],
     queryFn: () => governanceApi.getProposals({ status: "VOTING", limit: 1 }),
     staleTime: 60_000,
+  })
+  const { data: needsAction } = useQuery({
+    queryKey: ["proposals-needs-action"],
+    queryFn: () => governanceApi.getNeedsAction(),
+    enabled: isAuthenticated,
+    staleTime: 30_000,
   })
 
   const handleCreateProposal = () => {
@@ -49,6 +55,17 @@ export default function ProposalsPage() {
       color: "bg-[#1E3D2F]",
       description: "Proposals submitted",
     },
+    ...(needsAction && needsAction.total > 0
+      ? [{
+          title: "Need Your Action",
+          value: needsAction.total,
+          change: "Awaiting you",
+          changeType: "negative" as const,
+          icon: AlertCircle,
+          color: "bg-amber",
+          description: "Proposals requiring action",
+        }]
+      : []),
   ]
 
   return (

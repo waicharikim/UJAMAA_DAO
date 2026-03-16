@@ -26,12 +26,13 @@ export const SystemRoles = {
 export const GroupRoles = {
   MEMBER: 'MEMBER',
   LEADER: 'LEADER',
+  ADMIN: 'ADMIN',
   TREASURER: 'TREASURER',
   AUDITOR: 'AUDITOR',
   FACILITATOR: 'FACILITATOR',
   MENTOR: 'MENTOR',
-  SECRETARY: 'SECRETARY', // In Prisma enum — included for completeness
-  MODERATOR: 'MODERATOR', // In Prisma enum — included for completeness
+  SECRETARY: 'SECRETARY',
+  MODERATOR: 'MODERATOR',
 } as const;
 
 export type SystemRole = keyof typeof SystemRoles;
@@ -44,12 +45,14 @@ export type AnyRole = SystemRole | GroupRole;
 export const RoleHierarchy: Partial<Record<GroupRole, GroupRole[]>> = {
   LEADER: [
     'LEADER',
+    'ADMIN',
     'FACILITATOR',
     'MODERATOR',
     'SECRETARY',
     'MENTOR',
     'MEMBER',
   ],
+  ADMIN: ['ADMIN', 'MEMBER'],
   TREASURER: ['TREASURER', 'MEMBER'],
   AUDITOR: ['AUDITOR', 'MEMBER'],
   FACILITATOR: ['FACILITATOR', 'MEMBER'],
@@ -102,6 +105,7 @@ export const RoleDisplayNames: Record<string, string> = {
   'project:verifier': 'Project Verifier',
   MEMBER: 'Member',
   LEADER: 'Leader',
+  ADMIN: 'Group Administrator',
   TREASURER: 'Treasurer',
   AUDITOR: 'Group Auditor',
   FACILITATOR: 'Facilitator',
@@ -113,6 +117,7 @@ export const RoleDisplayNames: Record<string, string> = {
 // Descriptions for onboarding and help text
 export const GroupRoleDescriptions: Record<GroupRole, string> = {
   LEADER: 'Group leader with full administrative and governance permissions',
+  ADMIN: 'Group administrator — reviews and approves proposals for voting',
   TREASURER: 'Manages group finances, dues, and budget allocations',
   AUDITOR: 'Reviews and audits group financial activities for accountability',
   FACILITATOR: 'Coordinates meetings, discussions, and group activities',
@@ -137,13 +142,14 @@ export type AssignmentMethodType =
 // Which method applies to each group role (system group leaders are always ELECTED)
 export const GroupRoleAssignment: Record<GroupRole, AssignmentMethodType> = {
   LEADER: AssignmentMethod.ELECTED, // Ward/Constituency/County leaders — democratic vote
-  TREASURER: AssignmentMethod.ELECTED, // Elected at system group level
-  AUDITOR: AssignmentMethod.ELECTED, // Elected at system group level
-  FACILITATOR: AssignmentMethod.APPOINTED, // Appointed by group LEADER
-  MENTOR: AssignmentMethod.APPOINTED, // Appointed by group LEADER
-  SECRETARY: AssignmentMethod.APPOINTED, // Appointed by group LEADER
-  MODERATOR: AssignmentMethod.APPOINTED, // Appointed by group LEADER
-  MEMBER: AssignmentMethod.DEFAULT, // Auto-assigned on group join / verification
+  ADMIN: AssignmentMethod.APPOINTED, // Appointed by group LEADER or SUPER_ADMIN
+  TREASURER: AssignmentMethod.ELECTED,
+  AUDITOR: AssignmentMethod.ELECTED,
+  FACILITATOR: AssignmentMethod.APPOINTED,
+  MENTOR: AssignmentMethod.APPOINTED,
+  SECRETARY: AssignmentMethod.APPOINTED,
+  MODERATOR: AssignmentMethod.APPOINTED,
+  MEMBER: AssignmentMethod.DEFAULT,
 };
 
 // Which system roles require SUPER_ADMIN appointment vs are purely platform-internal

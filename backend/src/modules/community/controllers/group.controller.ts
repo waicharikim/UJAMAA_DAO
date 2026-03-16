@@ -10,6 +10,7 @@ import { AuthRequest } from '../../../core/types/Ujamaadao.types.js';
 import { sendSuccess } from '../../../core/utils/response.js';
 import { groupService } from '../services/group.service.js';
 import { groupMembershipService } from '../services/groupMembership.service.js';
+import { prisma } from '../../../core/database/client.js';
 
 export class GroupController {
   static async createVoluntaryGroup(req: AuthRequest, res: Response) {
@@ -37,6 +38,16 @@ export class GroupController {
     const userId = req.user!.userId;
     const groups = await groupMembershipService.getUserGroups(userId);
     sendSuccess(res, groups, 'Groups retrieved');
+  }
+
+  static async getMyRole(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const { groupId } = req.params;
+    const membership = await prisma.groupMember.findFirst({
+      where: { userId, groupId, active: true },
+      select: { role: true },
+    });
+    sendSuccess(res, membership ?? { role: null }, 'Membership role retrieved');
   }
 
   static async getGroupDetail(req: AuthRequest, res: Response) {

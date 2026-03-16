@@ -18,7 +18,21 @@ router.use(authenticate);
 
 router.get('/', asyncHandler(ProposalController.listProposals));
 
+router.get('/needs-action', asyncHandler(ProposalController.getNeedsAction));
+
 router.get('/:proposalId', asyncHandler(ProposalController.getProposal));
+
+router.post(
+  '/:proposalId/review',
+  validateRequest({
+    schema: z.object({
+      decision: z.enum(['APPROVE', 'REJECT']),
+      note: z.string().max(500).optional(),
+    }),
+    target: 'body',
+  }),
+  asyncHandler(ProposalController.reviewProposal)
+);
 
 router.post(
   '/create',
@@ -29,6 +43,9 @@ router.post(
       description: z.string().min(50),
       fundingAmountKes: z.number().optional(),
       isEmergency: z.boolean().optional(),
+      proposalScope: z.enum(['GROUP', 'COMMUNITY']).optional(),
+      groupFundingAmount: z.number().optional(),
+      locationFundingRequest: z.number().optional(),
     }),
     target: 'body',
   }),

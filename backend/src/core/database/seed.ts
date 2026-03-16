@@ -840,7 +840,28 @@ async function seedTestAdmin() {
     });
   }
 
-  console.log(`   Created admin@ujamaa.test with super admin role`);
+  // Also give admin ward_admin role for dev testing of the proposal review chain
+  const wardAdminRole = await prisma.role.findUnique({
+    where: { name: 'location:ward_admin' },
+  });
+  if (wardAdminRole) {
+    await prisma.userRole.upsert({
+      where: {
+        userId_roleId: { userId: adminUser.id, roleId: wardAdminRole.id },
+      },
+      update: { active: true },
+      create: {
+        id: uuidv4(),
+        userId: adminUser.id,
+        roleId: wardAdminRole.id,
+        active: true,
+      },
+    });
+  }
+
+  console.log(
+    `   Created admin@ujamaa.test with super admin + ward admin roles`
+  );
 }
 
 // ============================================================================
@@ -855,7 +876,9 @@ async function seedEducationModules() {
 
   console.log('   Seeding education modules...');
 
-  const admin = await prisma.user.findUnique({ where: { email: 'admin@ujamaa.test' } });
+  const admin = await prisma.user.findUnique({
+    where: { email: 'admin@ujamaa.test' },
+  });
   if (!admin) {
     console.warn('   admin@ujamaa.test not found — skipping education modules');
     return;

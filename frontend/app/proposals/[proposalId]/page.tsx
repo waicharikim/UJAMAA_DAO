@@ -1,13 +1,13 @@
 "use client"
 
-import { use } from "react"
+import { use, useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/auth-context"
-import { governanceApi, projectApi } from "@/lib/api"
+import { governanceApi, communityApi, projectApi } from "@/lib/api"
 import {
   ArrowLeft,
   Loader2,
@@ -18,19 +18,25 @@ import {
   Users,
   TrendingUp,
   Briefcase,
+  ShieldCheck,
+  AlertTriangle,
+  Info,
 } from "lucide-react"
 
 const STATUS_META: Record<string, { label: string; className: string }> = {
-  DRAFT:    { label: "Draft",    className: "bg-warm-gray/20 text-warm-gray" },
-  VOTING:   { label: "Voting",   className: "bg-amber/20 text-amber" },
-  APPROVED: { label: "Approved", className: "bg-tea-green/20 text-tea-green" },
-  REJECTED: { label: "Rejected", className: "bg-red-100 text-red-700" },
+  DRAFT:               { label: "Draft",                className: "bg-warm-gray/20 text-warm-gray" },
+  PENDING_REVIEW:      { label: "Pending Admin Review", className: "bg-amber/20 text-amber-700" },
+  APPROVED_FOR_VOTING: { label: "Ready for Voting",     className: "bg-tea-green/20 text-tea-green" },
+  VOTING:              { label: "Voting",               className: "bg-amber/20 text-amber" },
+  APPROVED:            { label: "Approved",             className: "bg-tea-green/20 text-tea-green" },
+  REJECTED:            { label: "Rejected",             className: "bg-red-100 text-red-700" },
 }
 
 const TYPE_LABEL: Record<string, string> = {
-  STANDARD:  "Standard",
-  EMERGENCY: "Emergency",
-  BUDGET:    "Budget",
+  COMMUNITY_INITIATIVE: "Community Initiative",
+  MAJOR_PROJECT:        "Major Project",
+  STRATEGIC_DECISION:   "Strategic Decision",
+  EMERGENCY:            "Emergency",
 }
 
 function formatDate(iso: string | null) {
@@ -50,7 +56,6 @@ function relativeTime(iso: string | null) {
   return diff > 0 ? `${mins}m remaining` : `ended ${mins}m ago`
 }
 
-// Vote bar — visual breakdown of yes/no weights
 function VoteBar({ yes, no, total }: { yes: number; no: number; total: number }) {
   if (total === 0) return <div className="h-2 rounded-full bg-cream w-full" />
   const yesPct = Math.round((yes / total) * 100)
@@ -65,11 +70,23 @@ function VoteBar({ yes, no, total }: { yes: number; no: number; total: number })
   )
 }
 
+/** Returns a label describing which admin is needed to approve the proposal */
+function pendingAdminLabel(group: { wardId?: string | null; constituencyId?: string | null; countyId?: string | null; locationScope?: string } | null): string {
+  if (!group) return "platform administrator"
+  if (group.wardId)         return "ward administrator"
+  if (group.constituencyId) return "constituency administrator"
+  if (group.countyId)       return "county administrator"
+  if (group.locationScope === "NATIONAL") return "compliance officer"
+  return "platform administrator"
+}
+
 export default function ProposalDetailPage({ params }: { params: Promise<{ proposalId: string }> }) {
   const { proposalId } = use(params)
   const { isAuthenticated, user } = useAuth()
   const { toast } = useToast()
   const queryClient = useQueryClient()
+  const [rejectNote, setRejectNote] = useState("")
+  const [showRejectForm, setShowRejectForm] = useState(false)
 
   const { data: proposal, isLoading, isError } = useQuery({
     queryKey: ["proposal", proposalId],
@@ -78,57 +95,107 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
     staleTime: 15_000,
   })
 
+  const { data: myMembership } = useQuery({
+    queryKey: ["group-my-role", proposal?.groupId],
+    queryFn: () => communityApi.getMyRoleInGroup(proposal!.groupId!),
+    enabled: !!proposal?.groupId && isAuthenticated,
+    staleTime: 60_000,
+  })
+
+  // Group role
+  const myGroupRole = myMembership?.role
+  const isLeader = myGroupRole === "LEADER"
+
+  // System / location roles
+  const userRoles = (user?.roles as unknown as string[]) ?? []
+  const isSuperAdmin        = userRoles.includes("system:super_admin")
+  const isComplianceOfficer = userRoles.includes("system:compliance_officer")
+  const isWardAdmin         = userRoles.includes("location:ward_admin")
+  const isConstituencyAdmin = userRoles.includes("location:constituency_admin")
+  const isCountyAdmin       = userRoles.includes("location:county_admin")
+
+  // Can this user approve at stage 2 (location admin gate)?
+  const group = proposal?.group
+  const canLocationApprove =
+    isSuperAdmin || isComplianceOfficer ||
+    (!!group?.wardId         && isWardAdmin) ||
+    (!!group?.constituencyId && isConstituencyAdmin) ||
+    (!!group?.countyId       && isCountyAdmin) ||
+    (group?.locationScope === "NATIONAL" && isComplianceOfficer)
+
+  // Voluntary group checks
+  const isVoluntaryGroup = !!group?.voluntaryType
+  const isGroupScoped    = proposal?.proposalScope === "GROUP"
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["proposal", proposalId] })
+    queryClient.invalidateQueries({ queryKey: ["proposals"] })
+    queryClient.invalidateQueries({ queryKey: ["proposals-needs-action"] })
+  }
+
   const { mutate: castVote, isPending: voting } = useMutation({
     mutationFn: (option: "YES" | "NO" | "ABSTAIN") =>
       governanceApi.castVote({ proposalId, option }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["proposal", proposalId] })
-      queryClient.invalidateQueries({ queryKey: ["proposals"] })
-      toast({ title: "Vote recorded" })
-    },
-    onError: (err: any) => {
-      toast({
-        title: "Vote failed",
-        description: err?.message ?? "Please try again.",
-        variant: "destructive",
-      })
-    },
+    onSuccess: () => { invalidate(); toast({ title: "Vote recorded" }) },
+    onError: (err: any) => toast({ title: "Vote failed", description: err?.message, variant: "destructive" }),
   })
 
   const { mutate: startVoting, isPending: startingVote } = useMutation({
     mutationFn: () => governanceApi.startVoting(proposalId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["proposal", proposalId] })
-      queryClient.invalidateQueries({ queryKey: ["proposals"] })
-      toast({ title: "Voting opened", description: "Members can now cast their votes." })
+    onSuccess: () => { invalidate(); toast({ title: "Voting opened", description: "Members can now cast their votes." }) },
+    onError: (err: any) => toast({ title: "Failed to start voting", description: err?.message, variant: "destructive" }),
+  })
+
+  // Stage 1: LEADER reviews from DRAFT (APPROVE = forward; REJECT = reject)
+  const { mutate: leaderReview, isPending: leaderReviewing } = useMutation({
+    mutationFn: ({ decision, note }: { decision: "APPROVE" | "REJECT"; note?: string }) =>
+      governanceApi.reviewProposal(proposalId, decision, note),
+    onSuccess: (_, vars) => {
+      invalidate()
+      setShowRejectForm(false)
+      if (vars.decision === "APPROVE") {
+        toast({
+          title: isVoluntaryGroup && isGroupScoped ? "Proposal approved for voting" : "Forwarded for admin review",
+          description: isVoluntaryGroup && isGroupScoped
+            ? "The proposal is ready — open voting when you are ready."
+            : `Sent to the ${pendingAdminLabel(group ?? null)} for final approval.`,
+        })
+      } else {
+        toast({ title: "Proposal rejected" })
+      }
     },
-    onError: (err: any) => {
-      toast({ title: "Failed to start voting", description: err?.message ?? "Please try again.", variant: "destructive" })
+    onError: (err: any) => toast({ title: "Review failed", description: err?.message, variant: "destructive" }),
+  })
+
+  // Stage 2: Location admin approves/rejects from PENDING_REVIEW
+  const { mutate: adminReview, isPending: adminReviewing } = useMutation({
+    mutationFn: ({ decision, note }: { decision: "APPROVE" | "REJECT"; note?: string }) =>
+      governanceApi.reviewProposal(proposalId, decision, note),
+    onSuccess: (_, vars) => {
+      invalidate()
+      setShowRejectForm(false)
+      toast({ title: vars.decision === "APPROVE" ? "Proposal approved for voting" : "Proposal rejected" })
     },
+    onError: (err: any) => toast({ title: "Review failed", description: err?.message, variant: "destructive" }),
   })
 
   const { mutate: tallyVotes, isPending: tallying } = useMutation({
     mutationFn: () => governanceApi.tallyVotes(proposalId),
     onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ["proposal", proposalId] })
-      queryClient.invalidateQueries({ queryKey: ["proposals"] })
+      invalidate()
       toast({ title: `Proposal ${data?.newStatus === "APPROVED" ? "approved" : "rejected"}` })
     },
-    onError: (err: any) => {
-      toast({ title: "Tally failed", description: err?.message ?? "Please try again.", variant: "destructive" })
-    },
+    onError: (err: any) => toast({ title: "Tally failed", description: err?.message, variant: "destructive" }),
   })
 
   const { mutate: launchProject, isPending: launching } = useMutation({
     mutationFn: () => projectApi.createFromProposal(proposalId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["projects"] })
-      toast({ title: "Project launched", description: "You can now track milestones on the Projects page." })
+      toast({ title: "Project launched" })
       window.location.href = "/projects"
     },
-    onError: (err: any) => {
-      toast({ title: "Failed to launch project", description: err?.message ?? "Please try again.", variant: "destructive" })
-    },
+    onError: (err: any) => toast({ title: "Failed to launch project", description: err?.message, variant: "destructive" }),
   })
 
   if (!isAuthenticated) {
@@ -151,19 +218,18 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
     return (
       <div className="container mx-auto px-4 py-16 text-center">
         <p className="text-sm text-red-600 mb-4">Proposal not found.</p>
-        <Link href="/proposals" className="text-sm text-amber hover:underline">
-          ← Back to proposals
-        </Link>
+        <Link href="/proposals" className="text-sm text-amber hover:underline">← Back to proposals</Link>
       </div>
     )
   }
 
   const statusMeta = STATUS_META[proposal.status] ?? { label: proposal.status, className: "bg-gray-100 text-gray-600" }
-  const summary = proposal.votesSummary
-  const yesWeight = summary?.yesWeight ?? 0
-  const noWeight  = summary?.noWeight  ?? 0
-  const total     = summary?.total ?? proposal._count?.votes ?? 0
-  const absWeight = Math.max(0, total - yesWeight - noWeight)
+  const summary    = proposal.votesSummary
+  const yesWeight  = summary?.yesWeight ?? 0
+  const noWeight   = summary?.noWeight  ?? 0
+  const total      = summary?.total ?? proposal._count?.votes ?? 0
+  const absWeight  = Math.max(0, total - yesWeight - noWeight)
+  const adminLabel = pendingAdminLabel(group ?? null)
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-2xl space-y-6">
@@ -176,7 +242,6 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
       {/* Header card */}
       <Card className="border-0 shadow-sm">
         <CardContent className="p-6 space-y-4">
-          {/* Badges */}
           <div className="flex flex-wrap gap-2">
             <Badge className={`text-xs font-semibold ${statusMeta.className}`}>{statusMeta.label}</Badge>
             {proposal.proposalType && (
@@ -185,21 +250,35 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
             {proposal.group && (
               <Badge variant="outline" className="text-xs">{proposal.group.name}</Badge>
             )}
+            {proposal.proposalScope === "GROUP" && (
+              <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">Internal</Badge>
+            )}
+            {proposal.proposalScope === "COMMUNITY" && (
+              <Badge variant="outline" className="text-xs bg-tea-green/10 text-tea-green border-tea-green/20">Public</Badge>
+            )}
           </div>
 
-          {/* Title */}
           <h1 className="text-xl font-bold text-[#0A1F14] leading-snug" style={{ fontFamily: "var(--font-cormorant, serif)" }}>
             {proposal.title}
           </h1>
 
-          {/* Description */}
           {proposal.description && (
             <p className="text-sm text-warm-gray leading-relaxed whitespace-pre-line">
               {proposal.description}
             </p>
           )}
 
-          {/* Meta */}
+          {/* Rejection note */}
+          {proposal.status === "REJECTED" && proposal.reviewNote && (
+            <div className="rounded-xl bg-red-50 border border-red-100 p-3 flex gap-2">
+              <AlertTriangle className="h-4 w-4 text-red-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs font-semibold text-red-700">Rejection reason</p>
+                <p className="text-xs text-red-600 mt-0.5">{proposal.reviewNote}</p>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3 pt-2 border-t border-cream text-xs text-warm-gray">
             {proposal.creator && (
               <div>
@@ -232,11 +311,207 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
                 <p>KES {Number(proposal.budget).toLocaleString()}</p>
               </div>
             )}
+            {proposal.groupFundingAmount && (
+              <div>
+                <p className="font-semibold text-[#0A1F14] mb-0.5">Group contribution</p>
+                <p>KES {Number(proposal.groupFundingAmount).toLocaleString()}</p>
+              </div>
+            )}
+            {proposal.locationFundingRequest && (
+              <div>
+                <p className="font-semibold text-[#0A1F14] mb-0.5">Location funding request</p>
+                <p>KES {Number(proposal.locationFundingRequest).toLocaleString()}</p>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Vote tally card */}
+      {/* ── REVIEW WORKFLOW ACTIONS ─────────────────────────────────── */}
+
+      {/* DRAFT: LEADER reviews */}
+      {proposal.status === "DRAFT" && isLeader && (
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-6 space-y-3">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-amber" />
+              <h2 className="text-sm font-bold text-[#0A1F14]">
+                {isVoluntaryGroup && isGroupScoped ? "Approve Internally" : "Forward for Review"}
+              </h2>
+            </div>
+            <p className="text-xs text-warm-gray">
+              {isVoluntaryGroup && isGroupScoped
+                ? "This is an internal group proposal. Approve it directly to open it for a member vote."
+                : `As group leader, review and forward this proposal to the ${adminLabel} for final approval.`}
+            </p>
+
+            {!showRejectForm ? (
+              <div className="flex gap-3">
+                <button
+                  onClick={() => leaderReview({ decision: "APPROVE" })}
+                  disabled={leaderReviewing}
+                  className="flex-1 flex items-center justify-center gap-1.5 rounded-full py-2.5 text-sm font-bold transition-all hover:scale-[1.01] disabled:opacity-50"
+                  style={{ background: "#D4911E", color: "#0A1F14" }}
+                >
+                  {leaderReviewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                  {isVoluntaryGroup && isGroupScoped ? "Approve Internally" : "Forward for Review"}
+                </button>
+                <button
+                  onClick={() => setShowRejectForm(true)}
+                  className="flex-1 flex items-center justify-center gap-1.5 rounded-full py-2.5 text-sm font-bold border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
+                >
+                  <XCircle className="h-4 w-4" />
+                  Reject
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <textarea
+                  value={rejectNote}
+                  onChange={(e) => setRejectNote(e.target.value)}
+                  placeholder="Explain why this proposal is being rejected…"
+                  rows={3}
+                  className="w-full rounded-lg border border-cream bg-white px-3 py-2 text-sm text-[#0A1F14] placeholder:text-warm-gray/60 focus:outline-none focus:ring-2 focus:ring-amber/40 resize-none"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => leaderReview({ decision: "REJECT", note: rejectNote })}
+                    disabled={leaderReviewing || !rejectNote.trim()}
+                    className="flex-1 flex items-center justify-center gap-1.5 rounded-full py-2 text-sm font-bold bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {leaderReviewing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                    Confirm Rejection
+                  </button>
+                  <button
+                    onClick={() => { setShowRejectForm(false); setRejectNote("") }}
+                    className="px-4 text-xs text-warm-gray hover:text-[#0A1F14]"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* DRAFT: non-LEADER sees info */}
+      {proposal.status === "DRAFT" && !isLeader && (
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-4 flex gap-3 items-start">
+            <Info className="h-4 w-4 text-warm-gray flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-warm-gray">This proposal is a draft. The group leader needs to review and forward it.</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* PENDING_REVIEW: location admin approves/rejects */}
+      {proposal.status === "PENDING_REVIEW" && (
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-6 space-y-3">
+            {canLocationApprove ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4 text-amber" />
+                  <h2 className="text-sm font-bold text-[#0A1F14]">Administrator Review</h2>
+                </div>
+                <p className="text-xs text-warm-gray">
+                  Approve this proposal to open it for a member vote, or reject it with an explanation.
+                </p>
+                {!showRejectForm ? (
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => adminReview({ decision: "APPROVE" })}
+                      disabled={adminReviewing}
+                      className="flex-1 flex items-center justify-center gap-1.5 rounded-full py-2 text-sm font-bold transition-all hover:scale-[1.01] disabled:opacity-50"
+                      style={{ background: "#1D4731", color: "#fff" }}
+                    >
+                      {adminReviewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => setShowRejectForm(true)}
+                      className="flex-1 flex items-center justify-center gap-1.5 rounded-full py-2 text-sm font-bold border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
+                    >
+                      <XCircle className="h-4 w-4" />
+                      Reject
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <textarea
+                      value={rejectNote}
+                      onChange={(e) => setRejectNote(e.target.value)}
+                      placeholder="Explain why this proposal is being rejected…"
+                      rows={3}
+                      className="w-full rounded-lg border border-cream bg-white px-3 py-2 text-sm text-[#0A1F14] placeholder:text-warm-gray/60 focus:outline-none focus:ring-2 focus:ring-amber/40 resize-none"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => adminReview({ decision: "REJECT", note: rejectNote })}
+                        disabled={adminReviewing || !rejectNote.trim()}
+                        className="flex-1 flex items-center justify-center gap-1.5 rounded-full py-2 text-sm font-bold bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {adminReviewing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                        Confirm Rejection
+                      </button>
+                      <button
+                        onClick={() => { setShowRejectForm(false); setRejectNote("") }}
+                        className="px-4 text-xs text-warm-gray hover:text-[#0A1F14]"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="flex gap-3 items-start">
+                <Info className="h-4 w-4 text-amber flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-warm-gray">
+                  Awaiting approval from the{" "}
+                  <span className="font-semibold text-[#0A1F14]">{adminLabel}</span>.
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* APPROVED_FOR_VOTING: LEADER opens voting */}
+      {proposal.status === "APPROVED_FOR_VOTING" && (
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-6 space-y-3">
+            {isLeader ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-tea-green" />
+                  <h2 className="text-sm font-bold text-[#0A1F14]">Open for Voting</h2>
+                </div>
+                <p className="text-xs text-warm-gray">
+                  This proposal has been approved. Open it so members can cast their votes.
+                </p>
+                <button
+                  onClick={() => startVoting()}
+                  disabled={startingVote}
+                  className="w-full flex items-center justify-center gap-2 rounded-full py-2.5 text-sm font-bold transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ background: "#D4911E", color: "#0A1F14" }}
+                >
+                  {startingVote ? <Loader2 className="h-4 w-4 animate-spin" /> : <TrendingUp className="h-4 w-4" />}
+                  {startingVote ? "Opening…" : "Start Voting"}
+                </button>
+              </>
+            ) : (
+              <div className="flex gap-3 items-start">
+                <CheckCircle className="h-4 w-4 text-tea-green flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-warm-gray">Approved — waiting for the group leader to open the vote.</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Vote tally */}
       <Card className="border-0 shadow-sm">
         <CardContent className="p-6 space-y-4">
           <div className="flex items-center gap-2">
@@ -247,9 +522,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
               {total} vote{total !== 1 ? "s" : ""}
             </span>
           </div>
-
           <VoteBar yes={yesWeight} no={noWeight} total={total} />
-
           <div className="grid grid-cols-3 gap-3 text-center">
             <div className="rounded-xl bg-tea-green/10 py-3">
               <p className="text-xl font-bold text-tea-green">{yesWeight}</p>
@@ -267,28 +540,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
         </CardContent>
       </Card>
 
-      {/* Start Voting — only for creator when proposal is DRAFT */}
-      {proposal.status === "DRAFT" && user?.id === proposal.creatorId && (
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-6 space-y-3">
-            <h2 className="text-sm font-bold text-[#0A1F14]">Open for Voting</h2>
-            <p className="text-xs text-warm-gray">
-              Once you start voting, members of the group can cast their votes. This action cannot be undone.
-            </p>
-            <button
-              onClick={() => startVoting()}
-              disabled={startingVote}
-              className="w-full flex items-center justify-center gap-2 rounded-full py-2.5 text-sm font-bold transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ background: "#D4911E", color: "#0A1F14" }}
-            >
-              {startingVote ? <Loader2 className="h-4 w-4 animate-spin" /> : <TrendingUp className="h-4 w-4" />}
-              {startingVote ? "Opening…" : "Start Voting"}
-            </button>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Tally Votes — for VOTING proposals (any authenticated user can trigger) */}
+      {/* Close & tally */}
       {proposal.status === "VOTING" && (
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4 flex items-center justify-between gap-4">
@@ -308,7 +560,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
         </Card>
       )}
 
-      {/* Launch Project — only for APPROVED proposals */}
+      {/* Launch project */}
       {proposal.status === "APPROVED" && (
         <Card className="border-0 shadow-sm">
           <CardContent className="p-6 space-y-3">
@@ -317,7 +569,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
               <h2 className="text-sm font-bold text-[#0A1F14]">Launch Project</h2>
             </div>
             <p className="text-xs text-warm-gray leading-relaxed">
-              This proposal has been approved. Launch a project to start tracking milestones and delivering on the commitment.
+              This proposal has been approved. Launch a project to start tracking milestones.
             </p>
             <button
               onClick={() => launchProject()}
@@ -332,13 +584,12 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
         </Card>
       )}
 
-      {/* Vote actions — only for VOTING proposals */}
+      {/* Cast vote */}
       {proposal.status === "VOTING" && (
         <Card className="border-0 shadow-sm">
           <CardContent className="p-6 space-y-3">
             <h2 className="text-sm font-bold text-[#0A1F14]">Cast your vote</h2>
             <p className="text-xs text-warm-gray">Your vote is weighted by your Participation Rights balance.</p>
-
             <div className="grid grid-cols-3 gap-3">
               <button
                 onClick={() => castVote("YES")}

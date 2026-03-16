@@ -3,7 +3,7 @@
 import { Suspense } from "react"
 import Link from "next/link"
 import { useQuery } from "@tanstack/react-query"
-import { Vote, Users, Briefcase, Award, Coins, TrendingUp, Target } from "lucide-react"
+import { Vote, Users, Briefcase, Award, Coins, TrendingUp, Target, AlertCircle } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -113,6 +113,14 @@ export function DashboardContent() {
     staleTime: 60_000,
   })
 
+  // Proposals needing the current user's action
+  const { data: needsAction } = useQuery({
+    queryKey: ["proposals-needs-action"],
+    queryFn: () => governanceApi.getNeedsAction(),
+    enabled: isAuthenticated,
+    staleTime: 30_000,
+  })
+
   // My communities count (reuse system-groups query key)
   const { data: myGroups = [] } = useQuery({
     queryKey: ["system-groups"],
@@ -124,7 +132,7 @@ export function DashboardContent() {
   // Recent activity from notifications
   const { data: notifications = [] } = useQuery({
     queryKey: ["notifications"],
-    queryFn: notificationsApi.getNotifications,
+    queryFn: () => notificationsApi.getNotifications(),
     enabled: isAuthenticated,
     staleTime: 30_000,
   })
@@ -217,6 +225,30 @@ export function DashboardContent() {
             </>
           )}
         </div>
+      )}
+
+      {/* Needs-action banner — only when there are pending governance items */}
+      {isAuthenticated && needsAction && needsAction.total > 0 && (
+        <Card className="border-0 shadow-sm" style={{ background: "linear-gradient(135deg, #FFF7E6 0%, #FEF3C7 100%)", borderLeft: "4px solid #D4911E" }}>
+          <CardContent className="p-4 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="h-5 w-5 text-amber flex-shrink-0" />
+              <div>
+                <p className="text-sm font-bold text-[#0A1F14]">
+                  {needsAction.total} proposal{needsAction.total !== 1 ? "s" : ""} need your attention
+                </p>
+                <p className="text-xs text-warm-gray">
+                  You have pending actions as a proposal creator, group leader, or administrator.
+                </p>
+              </div>
+            </div>
+            <Link href="/proposals">
+              <Button size="sm" className="flex-shrink-0 font-semibold text-xs" style={{ background: "#D4911E", color: "#0A1F14" }}>
+                Review Now
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
       )}
 
       {/* Quick action cards */}

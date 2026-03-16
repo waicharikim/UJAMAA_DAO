@@ -250,11 +250,15 @@ describe('POST /governance/create', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('POST /governance/start-voting', () => {
-  it('returns 200 and transitions proposal to VOTING', async () => {
+  it('returns 200 and transitions APPROVED_FOR_VOTING proposal to VOTING', async () => {
     const user = await createGovernanceUser('sv-ok@example.com');
     const token = makeGovernanceToken(user.id);
     const group = await seedGovernanceGroup(user.id);
-    const proposal = await seedProposal(user.id, group.id);
+    const proposal = await seedProposal(
+      user.id,
+      group.id,
+      ProposalStatus.APPROVED_FOR_VOTING
+    );
 
     const res = await request(app)
       .post(`${BASE}/start-voting`)
@@ -271,11 +275,11 @@ describe('POST /governance/start-voting', () => {
     expect(updated!.status).toBe(ProposalStatus.VOTING);
   });
 
-  it('returns 400 when proposal is not in DRAFT status', async () => {
+  it('returns 400 when proposal is not in APPROVED_FOR_VOTING status', async () => {
     const user = await createGovernanceUser('sv-not-draft@example.com');
     const token = makeGovernanceToken(user.id);
     const group = await seedGovernanceGroup(user.id);
-    const proposal = await seedProposal(user.id, group.id, ProposalStatus.VOTING);
+    const proposal = await seedProposal(user.id, group.id, ProposalStatus.DRAFT);
 
     const res = await request(app)
       .post(`${BASE}/start-voting`)
@@ -588,14 +592,18 @@ describe('GET /governance — groupId filter and pagination', () => {
   });
 });
 
-describe('POST /governance/start-voting — non-creator forbidden', () => {
-  it('returns 403 when a non-creator group member tries to start voting', async () => {
+describe('POST /governance/start-voting — non-leader forbidden', () => {
+  it('returns 403 when a non-LEADER member tries to start voting', async () => {
     const creator = await createGovernanceUser('sv-creator2@example.com');
     const member = await createGovernanceUser('sv-member2@example.com');
     const memberToken = makeGovernanceToken(member.id);
     const group = await seedGovernanceGroup(creator.id);
     await addGroupMember(member.id, group.id);
-    const proposal = await seedProposal(creator.id, group.id);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.APPROVED_FOR_VOTING
+    );
 
     const res = await request(app)
       .post(`${BASE}/start-voting`)
