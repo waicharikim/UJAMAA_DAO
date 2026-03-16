@@ -12,6 +12,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { economyApi, governanceApi, communityApi, notificationsApi } from "@/lib/api"
 import { BarazaGroupsCard } from "@/components/integration/baraza-groups-card"
 import { SystemGroupsCard } from "@/components/community/system-groups-card"
+import { EmergencyAlertsCard } from "@/components/emergency/emergency-alerts-card"
 
 // ─── Stat card skeleton ───────────────────────────────────
 function StatSkeleton() {
@@ -363,6 +364,7 @@ export function DashboardContent() {
             <Suspense fallback={<Skeleton className="h-48 w-full rounded-xl" />}>
               <BarazaGroupsCard />
             </Suspense>
+            <EmergencyAlertsCard />
           </div>
         </div>
       )}

@@ -12,6 +12,7 @@
 import { Router } from 'express';
 import { MarketplaceController } from '../controllers/marketplace.controller.js';
 import { authenticate } from '../../../core/middleware/auth.middleware.js';
+import { authorize } from '../../../core/middleware/authorize.js';
 import { validateRequest } from '../../../core/middleware/validateRequest.js';
 import { asyncHandler } from '../../../core/utils/response.js';
 import {
@@ -40,9 +41,11 @@ router.get(
   asyncHandler(MarketplaceController.getMyListings)
 );
 
+// Requires COMMUNITY_VERIFIED — listings must come from verified ward members
 router.post(
   '/create',
   authenticate,
+  authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
   validateRequest({ schema: createListingSchema, target: 'body' }),
   asyncHandler(MarketplaceController.createListing)
 );
@@ -50,6 +53,7 @@ router.post(
 router.patch(
   '/:listingId/deactivate',
   authenticate,
+  authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
   validateRequest({ schema: listingIdParamSchema, target: 'params' }),
   asyncHandler(MarketplaceController.deactivateListing)
 );

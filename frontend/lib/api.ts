@@ -1217,6 +1217,209 @@ export const adminApi = {
 }
 
 // ─────────────────────────────────────────────────────────
+// Marketplace API  — /api/v1/marketplace
+// ─────────────────────────────────────────────────────────
+
+export interface MarketplaceListingDto {
+  id: string
+  title: string
+  description: string
+  listingType: "OFFER" | "REQUEST"
+  price: number
+  quantity: number
+  status: "ACTIVE" | "INACTIVE"
+  createdAt: string
+  sellerUserId: string
+  sellerUser?: { id: string; name: string | null; phoneNumber: string | null; email?: string | null }
+}
+
+export interface MarketplacePaginatedDto {
+  listings: MarketplaceListingDto[]
+  pagination: { page: number; limit: number; total: number; totalPages: number }
+}
+
+export const marketplaceApi = {
+  searchListings: (params?: { type?: "OFFER" | "REQUEST"; wardId?: string; limit?: number; page?: number }) => {
+    const q = new URLSearchParams()
+    if (params?.type) q.set("type", params.type)
+    if (params?.wardId) q.set("wardId", params.wardId)
+    if (params?.limit) q.set("limit", String(params.limit))
+    if (params?.page) q.set("page", String(params.page))
+    const qs = q.toString()
+    return apiFetch<MarketplacePaginatedDto>(`/marketplace/search${qs ? `?${qs}` : ""}`)
+  },
+
+  getListing: (listingId: string) =>
+    apiFetch<MarketplaceListingDto>(`/marketplace/${listingId}`),
+
+  getMyListings: (params?: { limit?: number; page?: number }) => {
+    const q = new URLSearchParams()
+    if (params?.limit) q.set("limit", String(params.limit))
+    if (params?.page) q.set("page", String(params.page))
+    const qs = q.toString()
+    return apiFetch<MarketplacePaginatedDto>(`/marketplace/my-listings${qs ? `?${qs}` : ""}`)
+  },
+
+  createListing: (dto: { title: string; description: string; type: "OFFER" | "REQUEST"; priceGuideKes?: number; quantity?: number }) =>
+    apiFetch<MarketplaceListingDto>("/marketplace/create", {
+      method: "POST",
+      body: JSON.stringify(dto),
+    }),
+
+  deactivateListing: (listingId: string) =>
+    apiFetch<MarketplaceListingDto>(`/marketplace/${listingId}/deactivate`, {
+      method: "PATCH",
+      body: JSON.stringify({}),
+    }),
+}
+
+// ─────────────────────────────────────────────────────────
+// Emergency API  — /api/v1/emergency
+// ─────────────────────────────────────────────────────────
+
+export interface EmergencyAlertDto {
+  id: string
+  emergencyType: "FIRE" | "FLOOD" | "MEDICAL" | "SECURITY" | "ACCIDENT" | "OTHER"
+  severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
+  title: string
+  description: string
+  location: string
+  status: string
+  createdAt: string
+  reporterId: string
+  reporter?: { id: string; name: string | null }
+  _count?: { responses: number }
+}
+
+export const emergencyApi = {
+  listAlerts: (params?: { wardId?: string; type?: string; status?: string; limit?: number; page?: number }) => {
+    const q = new URLSearchParams()
+    if (params?.wardId) q.set("wardId", params.wardId)
+    if (params?.type) q.set("type", params.type)
+    if (params?.status) q.set("status", params.status)
+    if (params?.limit) q.set("limit", String(params.limit))
+    if (params?.page) q.set("page", String(params.page))
+    const qs = q.toString()
+    return apiFetch<{ alerts: EmergencyAlertDto[]; pagination: { page: number; limit: number; total: number; totalPages: number } }>(`/emergency${qs ? `?${qs}` : ""}`)
+  },
+
+  getAlert: (alertId: string) =>
+    apiFetch<EmergencyAlertDto>(`/emergency/${alertId}`),
+
+  reportEmergency: (dto: { type: EmergencyAlertDto["emergencyType"]; description: string; locationWardId: string; latitude?: number; longitude?: number; photoUrl?: string }) =>
+    apiFetch<EmergencyAlertDto>("/emergency/report", {
+      method: "POST",
+      body: JSON.stringify(dto),
+    }),
+
+  respondToEmergency: (alertId: string, message: string) =>
+    apiFetch<unknown>(`/emergency/${alertId}/respond`, {
+      method: "POST",
+      body: JSON.stringify({ message }),
+    }),
+}
+
+// ─────────────────────────────────────────────────────────
+// Onboarding API  — /api/v1/onboarding
+// ─────────────────────────────────────────────────────────
+
+export interface OnboardingProgressDto {
+  id: string
+  userId: string
+  emailVerified: boolean
+  profileCompleted: boolean
+  industriesSelected: boolean
+  goodsServicesSelected: boolean
+  joinedWardGroup: boolean
+  castFirstVote: boolean
+  phoneVerified: boolean
+  communityVerified: boolean
+  currentStep: string
+  totalIPEarned: number
+  totalPREarned: number
+}
+
+export interface OnboardingTutorialDto {
+  key: string
+  title: string
+  requiredFor: string | null
+  ipReward: number
+  prReward: number
+}
+
+export const onboardingApi = {
+  getProgress: () =>
+    apiFetch<{
+      progress: OnboardingProgressDto | null
+      tutorials: OnboardingTutorialDto[]
+      completions: { tutorialId: string; completed: boolean; ipEarned: number; prEarned: number }[]
+      milestones: { milestoneKey: string; achieved: boolean }[]
+    }>("/onboarding/progress"),
+
+  completeTutorial: (tutorialKey: string) =>
+    apiFetch<{ id: string; completed: boolean; prEarned: number; ipEarned: number }>(
+      `/onboarding/tutorial/${tutorialKey}/complete`,
+      { method: "POST" }
+    ),
+
+  markMilestone: (milestoneKey: string) =>
+    apiFetch<{ id: string; milestoneKey: string; achievedAt: string }>(
+      "/onboarding/milestone",
+      { method: "POST", body: JSON.stringify({ milestoneKey }) }
+    ),
+}
+
+// ─────────────────────────────────────────────────────────
+// Reputation API  — /api/v1/reputation
+// ─────────────────────────────────────────────────────────
+
+export interface WardReputationBreakdownDto {
+  wardId: string
+  ward: string
+  constituency: string
+  county: string
+  points: number
+  tier: "NONE" | "BRONZE" | "SILVER" | "GOLD" | "PLATINUM"
+}
+
+export interface ImpactPointLogDto {
+  id: string
+  amount: number
+  reason: string
+  scope: string
+  createdAt: string
+}
+
+export const reputationApi = {
+  getMyReputation: () =>
+    apiFetch<{
+      globalImpactPoints: number
+      breakdown: WardReputationBreakdownDto[]
+      totals: { locations: number; totalPoints: number }
+    }>("/reputation/me"),
+
+  getMyHistory: (params?: { limit?: number; page?: number }) => {
+    const q = new URLSearchParams()
+    if (params?.limit) q.set("limit", String(params.limit))
+    if (params?.page) q.set("page", String(params.page))
+    const qs = q.toString()
+    return apiFetch<{
+      logs: ImpactPointLogDto[]
+      pagination: { page: number; limit: number; total: number; totalPages: number }
+    }>(`/reputation/me/history${qs ? `?${qs}` : ""}`)
+  },
+
+  getUserReputation: (userId: string) =>
+    apiFetch<{
+      userId: string
+      name: string | null
+      globalImpactPoints: number
+      breakdown: WardReputationBreakdownDto[]
+      totals: { locations: number; totalPoints: number }
+    }>(`/reputation/${userId}`),
+}
+
+// ─────────────────────────────────────────────────────────
 // auditApi
 // ─────────────────────────────────────────────────────────
 

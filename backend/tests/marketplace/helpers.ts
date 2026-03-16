@@ -19,10 +19,10 @@ export async function createMarketplaceUser(email: string) {
     data: {
       email,
       name: 'Marketplace Test User',
-      verificationLevel: 'EMAIL_VERIFIED',
+      verificationLevel: 'COMMUNITY_VERIFIED',
       emailVerified: true,
-      phoneVerified: false,
-      communityVerified: false,
+      phoneVerified: true,
+      communityVerified: true,
       locationVerified: false,
     },
   });
@@ -67,14 +67,14 @@ export function makeMarketplaceToken(
   return signJwtToken(
     {
       sub: userId,
-      verificationLevel: 'EMAIL_VERIFIED',
+      verificationLevel: 'COMMUNITY_VERIFIED',
       roles: [],
       globalImpactPoints: 0,
       utilityTokens: 0,
       participationRights: 50,
       emailVerified: true,
-      phoneVerified: false,
-      communityVerified: false,
+      phoneVerified: true,
+      communityVerified: true,
       type: 'permanent',
       ...extra,
     },

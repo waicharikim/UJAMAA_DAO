@@ -1,10 +1,9 @@
-// @ts-nocheck — scaffold: UserLocationImpact model alignment in progress
 /**
  * @file src/modules/reputation/services/locationImpact.service.ts
  * @description
  * Location-Based Impact Points Service — Ward-Specific Reputation
  *
- * Version: 2.0 — December 2025
+ * Version: 3.0 — March 2026
  */
 
 import { prisma } from '../../../core/database/client.js';
@@ -12,7 +11,7 @@ import { Prisma } from '@prisma/client';
 import { ImpactPointReason, LOCATION_TIER_THRESHOLDS } from '../types.js';
 import { logger } from '../../../core/logger/logger.js';
 
-class LocationImpactService {
+export class LocationImpactService {
   async getWardImpactPoints(userId: string, wardId: string) {
     const impact = await prisma.userLocationImpact.findUnique({
       where: { userId_wardId: { userId, wardId } },

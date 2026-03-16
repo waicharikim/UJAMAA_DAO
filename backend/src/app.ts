@@ -64,6 +64,7 @@ import notificationRoutes from './modules/notifications/routes/notification.rout
 import emergencyRoutes from './modules/emergency/routes/emergency.routes.js';
 import auditRoutes from './modules/audit/routes/audit.routes.js';
 import onboardingRoutes from './modules/onboarding/routes/onboarding.routes.js';
+import reputationRoutes from './modules/reputation/routes/reputation.routes.js';
 import integrationRoutes from './modules/integration/routes/bot.routes.js';
 
 // Bull Board dashboard
@@ -278,6 +279,7 @@ app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/emergency', emergencyRoutes);
 app.use('/api/v1/audit', auditRoutes);
 app.use('/api/v1/onboarding', onboardingRoutes);
+app.use('/api/v1/reputation', reputationRoutes);
 app.use('/api/v1/integration', integrationRoutes);
 
 // ─────────────────────────────────────────────

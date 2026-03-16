@@ -1,8 +1,7 @@
 /**
  * @file src/modules/emergency/routes/emergency.routes.ts
- * @description
- * Emergency Routes
- * Version: 2.0 — December 2025
+ * @description Emergency Routes
+ * Version: 3.0 — March 2026
  */
 
 import { Router } from 'express';
@@ -10,48 +9,47 @@ import { EmergencyController } from '../controllers/emergency.controller.js';
 import { authenticate } from '../../../core/middleware/auth.middleware.js';
 import { authorize } from '../../../core/middleware/authorize.js';
 import { validateRequest } from '../../../core/middleware/validateRequest.js';
-import { z } from 'zod';
 import { asyncHandler } from '../../../core/utils/response.js';
 import { roleService } from '../../../core/services/role.service.js';
+import { SystemRoles } from '../../../core/rbac/roles.js';
 import { prisma } from '../../../core/database/client.js';
+import {
+  reportEmergencySchema,
+  respondToEmergencySchema,
+  alertIdParamSchema,
+  listAlertsSchema,
+} from '../validators/emergency.validators.js';
 
 const router = Router();
 
-router.use(authenticate);
+// GET /emergency — list alerts (public)
+router.get(
+  '/',
+  validateRequest({ schema: listAlertsSchema, target: 'query' }),
+  asyncHandler(EmergencyController.listAlerts)
+);
 
-// Report emergency — any authenticated user (low PR cost handled in service)
+// GET /emergency/:alertId — get single alert (public)
+router.get(
+  '/:alertId',
+  validateRequest({ schema: alertIdParamSchema, target: 'params' }),
+  asyncHandler(EmergencyController.getAlert)
+);
+
+// POST /emergency/report — any authenticated user
 router.post(
   '/report',
-  validateRequest({
-    schema: z.object({
-      type: z.enum([
-        'FIRE',
-        'FLOOD',
-        'MEDICAL',
-        'SECURITY',
-        'ACCIDENT',
-        'OTHER',
-      ]),
-      description: z.string().min(10),
-      locationWardId: z.string().uuid(),
-      latitude: z.number().optional(),
-      longitude: z.number().optional(),
-      photoUrl: z.string().url().optional(),
-    }),
-    target: 'body',
-  }),
+  authenticate,
+  validateRequest({ schema: reportEmergencySchema, target: 'body' }),
   asyncHandler(EmergencyController.reportEmergency)
 );
 
-// Respond to emergency — only ward_admin of the ward OR verifier
+// POST /emergency/:alertId/respond — ward admin or verifier only
 router.post(
   '/:alertId/respond',
-  validateRequest({
-    schema: z.object({
-      message: z.string().min(5),
-    }),
-    target: 'body',
-  }),
+  authenticate,
+  validateRequest({ schema: alertIdParamSchema, target: 'params' }),
+  validateRequest({ schema: respondToEmergencySchema, target: 'body' }),
   authorize({
     scopeCheck: async (req) => {
       const { alertId } = req.params;
@@ -62,16 +60,15 @@ router.post(
 
       if (!alert) return false;
 
+      const userId = (req as any).user!.userId;
+
       const isWardAdmin = await roleService.hasLocationRole(
-        (req as any).user!.userId,
+        userId,
         alert.location,
-        'WARD_ADMIN'
+        SystemRoles.WARD_ADMIN
       );
 
-      const isVerifier = await roleService.isVerifier(
-        (req as any).user!.userId,
-        alert.location
-      );
+      const isVerifier = await roleService.isVerifier(userId, alert.location);
 
       return isWardAdmin || isVerifier;
     },

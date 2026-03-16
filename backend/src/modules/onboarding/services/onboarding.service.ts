@@ -18,7 +18,7 @@ import { ParticipationRightsReason } from '../../economy/types.js';
 import { ApiError } from '../../../core/errors/ApiError.js';
 import { logger } from '../../../core/logger/logger.js';
 
-class OnboardingService {
+export class OnboardingService {
   /**
    * Get user's onboarding progress
    */

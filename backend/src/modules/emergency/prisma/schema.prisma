@@ -3,11 +3,12 @@
 // ============================================================================
 
 enum EmergencyType {
-  NATURAL_DISASTER
-  HEALTH_CRISIS
-  CONFLICT
-  INFRASTRUCTURE_FAILURE
-  ENVIRONMENTAL
+  FIRE
+  FLOOD
+  MEDICAL
+  SECURITY
+  ACCIDENT
+  OTHER
 }
 
 enum EmergencySeverity {

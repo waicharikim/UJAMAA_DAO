@@ -1,10 +1,9 @@
-// @ts-nocheck — scaffold: ImpactPointLog model alignment in progress
 /**
  * @file src/modules/reputation/services/impactPoint.service.ts
  * @description
  * Global Impact Points Service — Permanent Reputation (Voting Weight)
  *
- * Version: 2.0 — December 2025
+ * Version: 3.0 — March 2026
  */
 
 import { prisma } from '../../../core/database/client.js';
@@ -12,7 +11,7 @@ import { Prisma } from '@prisma/client';
 import { ImpactPointReason } from '../types.js';
 import { logger } from '../../../core/logger/logger.js';
 
-class GlobalImpactPointService {
+export class GlobalImpactPointService {
   async award(
     userId: string,
     amount: number,
@@ -52,6 +51,28 @@ class GlobalImpactPointService {
       select: { globalImpactPoints: true },
     });
     return user?.globalImpactPoints || 0;
+  }
+
+  async getHistory(userId: string, limit = 20, page = 1) {
+    const skip = (page - 1) * limit;
+    const [logs, total] = await Promise.all([
+      prisma.impactPointLog.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.impactPointLog.count({ where: { userId } }),
+    ]);
+    return {
+      logs,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 }
 

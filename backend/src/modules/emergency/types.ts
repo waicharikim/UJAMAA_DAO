@@ -24,8 +24,20 @@ export enum EmergencyStatus {
 export interface ReportEmergencyDto {
   type: EmergencyType;
   description: string;
-  locationWardId: string; // User's current or primary ward
+  locationWardId: string;
   latitude?: number;
   longitude?: number;
   photoUrl?: string;
+}
+
+export interface RespondToEmergencyDto {
+  message: string;
+}
+
+export interface ListAlertsDto {
+  wardId?: string;
+  status?: string;
+  type?: EmergencyType;
+  limit?: number;
+  page?: number;
 }
