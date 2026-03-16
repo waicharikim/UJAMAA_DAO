@@ -21,7 +21,8 @@
 
 process.env.NODE_ENV = 'test';
 process.env.BASE_URL = 'http://localhost:8000';
-process.env.DATABASE_URL = 'postgresql://ujamaa_user:ujamaa_pass@localhost:5433/ujamaa_test_db';
+// DATABASE_URL is set by vitest.config.ts env block (before module init).
+// testSetup.ts runs after Prisma client is constructed — do NOT override it here.
 process.env.FRONTEND_URL = 'http://localhost:3000';
 process.env.JWT_SECRET = '6e603cfa9affb7677020ad6a930bd3f076867ff38d100586dc5d985bed845ad0';
 process.env.LOG_LEVEL = 'error';

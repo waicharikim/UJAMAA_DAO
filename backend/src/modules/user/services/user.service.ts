@@ -235,6 +235,7 @@ class UserService {
         impact: { global: 0, primary: null, allLocations: [], totals: {} },
         economic: { utilityTokens: 0, participationRights: 0 },
         industries: profile.industries,
+        roles: [],
         metadata: { createdAt: profile.metadata.createdAt, lastLoginAt: null },
       };
     }
@@ -726,7 +727,10 @@ class UserService {
 
     if (!target) throw ApiError.notFound('Target user');
 
-    if (voucher.primaryWardId !== wardId || target.primaryWardId !== wardId) {
+    // FULL_VERIFIED users (admins) can vouch across wards for bootstrapping.
+    // COMMUNITY_VERIFIED users must share the same ward as the target.
+    const isFullVerified = voucher.verificationLevel === 'FULL_VERIFIED';
+    if (!isFullVerified && target.primaryWardId !== wardId) {
       throw ApiError.geographicError('Vouch must be in same ward');
     }
 

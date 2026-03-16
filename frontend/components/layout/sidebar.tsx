@@ -18,6 +18,7 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  BookOpen,
 } from "lucide-react"
 
 const primaryNav = [
@@ -25,6 +26,7 @@ const primaryNav = [
   { label: "Governance", href: "/proposals", icon: Vote },
   { label: "Projects", href: "/projects", icon: Briefcase },
   { label: "Community", href: "/groups", icon: Users },
+  { label: "Learn", href: "/education", icon: BookOpen },
 ]
 
 const secondaryNav = [

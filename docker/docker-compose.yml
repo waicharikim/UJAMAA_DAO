@@ -69,6 +69,7 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=4000
+      - RUNNING_IN_DOCKER=true
       - DATABASE_URL=postgresql://${POSTGRES_USER:-ujamaa_user}:${POSTGRES_PASSWORD:-ujamaa_pass}@postgres:5432/${POSTGRES_DB:-ujamaa_db}
       - REDIS_URL=redis://redis:6379
       - REDIS_HOST=redis

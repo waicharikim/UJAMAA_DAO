@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Award, Coins, Users, MapPin, History } from "lucide-react"
 import { reputationApi, type WardReputationBreakdownDto, type ImpactPointLogDto } from "@/lib/api"
+import { VerificationCard } from "@/components/profile/verification-card"
 
 function StatCard({
   label,
@@ -158,6 +159,9 @@ export default function ProfilePage() {
           />
         </div>
       )}
+
+      {/* Verification progress */}
+      <VerificationCard />
 
       {/* Ward reputation breakdown */}
       <Card className="border-0 shadow-card">

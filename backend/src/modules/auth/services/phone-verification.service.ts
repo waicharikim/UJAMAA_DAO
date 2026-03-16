@@ -40,7 +40,7 @@ class PhoneVerificationService {
   async sendVerificationCode(
     phoneNumber: string,
     userId?: string
-  ): Promise<{ success: boolean; expiresIn: number }> {
+  ): Promise<{ success: boolean; expiresIn: number; devCode?: string }> {
     // Validate phone number format
     const normalized = this.normalizePhoneNumber(phoneNumber);
     if (!normalized) {
@@ -62,6 +62,8 @@ class PhoneVerificationService {
       return {
         success: true,
         expiresIn: SMS_CONFIG.codeExpiry / 1000,
+        // Returned in dev so the code is visible without a real SMS
+        devCode: mockCode,
       };
     }
 
@@ -182,11 +184,21 @@ class PhoneVerificationService {
 
         // Update user if userId provided
         if (userId) {
+          const currentUser = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { verificationLevel: true },
+          });
+
+          const shouldPromote =
+            currentUser?.verificationLevel === 'EMAIL_VERIFIED';
+
           await prisma.user.update({
             where: { id: userId },
             data: {
               phoneNumber: normalized,
               phoneVerified: true,
+              // Promote EMAIL_VERIFIED → PHONE_VERIFIED
+              ...(shouldPromote && { verificationLevel: 'PHONE_VERIFIED' }),
             },
           });
 

@@ -207,7 +207,7 @@ export class EducationService {
 
     // Award PR for completing an educational module
     await participationRightsService
-      .award(userId, ParticipationRightsReason.EDUCATION_MODULE_COMPLETED, {
+      .award(userId, 5, ParticipationRightsReason.EDUCATION_MODULE_COMPLETED, {
         moduleId,
       })
       .catch(() => {});

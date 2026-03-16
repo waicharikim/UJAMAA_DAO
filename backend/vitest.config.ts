@@ -1,6 +1,13 @@
 import { defineConfig } from 'vitest/config';
 import { resolve } from 'path';
 
+// When running inside Docker, postgres_test is reachable via its service name on port 5432.
+// On the host, it's exposed on localhost:5433.
+const isDocker = process.env.RUNNING_IN_DOCKER === 'true';
+const testDbUrl = isDocker
+  ? 'postgresql://ujamaa_user:ujamaa_pass@postgres_test:5432/ujamaa_test_db'
+  : 'postgresql://ujamaa_user:ujamaa_pass@localhost:5433/ujamaa_test_db';
+
 export default defineConfig({
   resolve: {
     alias: {
@@ -20,7 +27,7 @@ export default defineConfig({
     // so they never reach env.ts validation. Keep all required vars here.
     env: {
       NODE_ENV: 'test',
-      DATABASE_URL: 'postgresql://ujamaa_user:ujamaa_pass@localhost:5433/ujamaa_test_db',
+      DATABASE_URL: testDbUrl,
       JWT_SECRET: '6e603cfa9affb7677020ad6a930bd3f076867ff38d100586dc5d985bed845ad0',
       BASE_URL: 'http://localhost:4000',
       FRONTEND_URL: 'http://localhost:3000',

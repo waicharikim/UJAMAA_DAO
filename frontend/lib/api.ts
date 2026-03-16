@@ -215,10 +215,10 @@ export const authApi = {
   /**
    * POST /auth/phone/send-code
    * Send SMS verification code to phone number.
-   * Requires: COMMUNITY_VERIFIED
+   * Requires: EMAIL_VERIFIED
    */
   sendPhoneCode: (phoneNumber: string) =>
-    apiFetch<void>("/auth/phone/send-code", {
+    apiFetch<{ expiresIn: number; devCode?: string }>("/auth/phone/send-code", {
       method: "POST",
       body: JSON.stringify({ phoneNumber }),
     }),
@@ -226,12 +226,12 @@ export const authApi = {
   /**
    * POST /auth/phone/verify-code
    * Verify the SMS code.
-   * Requires: COMMUNITY_VERIFIED
+   * Requires: EMAIL_VERIFIED
    */
-  verifyPhoneCode: (code: string) =>
-    apiFetch<void>("/auth/phone/verify-code", {
+  verifyPhoneCode: (phoneNumber: string, code: string) =>
+    apiFetch<{ verified: boolean }>("/auth/phone/verify-code", {
       method: "POST",
-      body: JSON.stringify({ code }),
+      body: JSON.stringify({ phoneNumber, code }),
     }),
 
   /**
@@ -496,7 +496,10 @@ export const userApi = {
    * Request community verification (3 vouches needed). Requires PHONE_VERIFIED.
    */
   requestCommunityVerification: () =>
-    apiFetch<void>("/users/verify-community/request", { method: "POST" }),
+    apiFetch<{ requestId: string; status: string; expiresAt: string; vouchesNeeded: number }>(
+      "/users/verify-community/request",
+      { method: "POST" }
+    ),
 
   /**
    * POST /users/verify-community/vouch
@@ -524,9 +527,11 @@ export const userApi = {
    */
   getVerificationStatus: () =>
     apiFetch<{
-      status: string
-      vouchCount: number
-      requiredVouches: number
+      status: "PENDING" | "VOUCHING" | "PAYMENT_PENDING" | "APPROVED" | "REJECTED" | "EXPIRED"
+      vouchesReceived: number
+      vouchesNeeded: number
+      expiresAt?: string | null
+      rejectionReason?: string | null
     }>("/users/verify-community/status"),
 }
 
@@ -954,6 +959,100 @@ export const projectApi = {
 
   verifyMilestone: (dto: { milestoneId: string; approved: boolean; feedback?: string }) =>
     apiFetch<unknown>("/projects/milestone/verify", {
+      method: "POST",
+      body: JSON.stringify(dto),
+    }),
+}
+
+// ─────────────────────────────────────────────────────────
+// Education API  — /api/v1/education
+// ─────────────────────────────────────────────────────────
+
+export interface EducationModuleDto {
+  id: string
+  title: string
+  description: string
+  content: string
+  mediaUrls: string[]
+  duration: number
+  difficulty: "BEGINNER" | "INTERMEDIATE" | "ADVANCED" | "EXPERT"
+  category: string
+  verified: boolean
+  completionIP: number
+  views: number
+  averageRating: number
+  createdAt: string
+  creator: { id: string; name: string | null }
+  _count?: { progress: number; reviews: number }
+}
+
+export interface EducationModuleDetailDto extends EducationModuleDto {
+  assessment: {
+    id: string
+    passingScore: number
+    maxAttempts: number
+    questions: unknown
+  } | null
+  userProgress: {
+    status: string
+    progress: number
+    score: number | null
+    startedAt: string
+    completedAt: string | null
+  } | null
+}
+
+export interface EducationProgressDto {
+  id: string
+  userId: string
+  moduleId: string
+  status: string
+  progress: number
+  score: number | null
+  startedAt: string
+  completedAt: string | null
+  ipAwarded?: number
+}
+
+export interface EducationReviewDto {
+  id: string
+  moduleId: string
+  userId: string
+  rating: number
+  comment: string | null
+  helpful: number
+  createdAt: string
+}
+
+export const educationApi = {
+  getModules: (params?: {
+    category?: string
+    difficulty?: string
+    limit?: number
+    offset?: number
+  }): Promise<{ modules: EducationModuleDto[]; total: number; limit: number; offset: number }> => {
+    const q = new URLSearchParams()
+    if (params?.category) q.set("category", params.category)
+    if (params?.difficulty) q.set("difficulty", params.difficulty)
+    if (params?.limit) q.set("limit", String(params.limit))
+    if (params?.offset) q.set("offset", String(params.offset))
+    return apiFetch(`/education${q.toString() ? `?${q}` : ""}`)
+  },
+
+  getModule: (moduleId: string): Promise<EducationModuleDetailDto> =>
+    apiFetch<EducationModuleDetailDto>(`/education/${moduleId}`),
+
+  startModule: (moduleId: string): Promise<EducationProgressDto> =>
+    apiFetch<EducationProgressDto>(`/education/${moduleId}/start`, { method: "POST" }),
+
+  completeModule: (moduleId: string, score?: number): Promise<EducationProgressDto> =>
+    apiFetch<EducationProgressDto>(`/education/${moduleId}/complete`, {
+      method: "POST",
+      body: JSON.stringify(score !== undefined ? { score } : {}),
+    }),
+
+  submitReview: (moduleId: string, dto: { rating: number; comment?: string }): Promise<EducationReviewDto> =>
+    apiFetch<EducationReviewDto>(`/education/${moduleId}/review`, {
       method: "POST",
       body: JSON.stringify(dto),
     }),

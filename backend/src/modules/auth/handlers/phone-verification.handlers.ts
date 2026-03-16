@@ -36,6 +36,7 @@ export async function sendVerificationCode(req: AuthRequest, res: Response) {
     {
       success: result.success,
       expiresIn: result.expiresIn,
+      ...(result.devCode !== undefined && { devCode: result.devCode }),
     },
     'Verification code sent successfully',
     200

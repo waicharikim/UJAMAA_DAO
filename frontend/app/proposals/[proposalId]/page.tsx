@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/auth-context"
-import { governanceApi } from "@/lib/api"
+import { governanceApi, projectApi } from "@/lib/api"
 import {
   ArrowLeft,
   Loader2,
@@ -17,6 +17,7 @@ import {
   Clock,
   Users,
   TrendingUp,
+  Briefcase,
 } from "lucide-react"
 
 const STATUS_META: Record<string, { label: string; className: string }> = {
@@ -115,6 +116,18 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
     },
     onError: (err: any) => {
       toast({ title: "Tally failed", description: err?.message ?? "Please try again.", variant: "destructive" })
+    },
+  })
+
+  const { mutate: launchProject, isPending: launching } = useMutation({
+    mutationFn: () => projectApi.createFromProposal(proposalId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["projects"] })
+      toast({ title: "Project launched", description: "You can now track milestones on the Projects page." })
+      window.location.href = "/projects"
+    },
+    onError: (err: any) => {
+      toast({ title: "Failed to launch project", description: err?.message ?? "Please try again.", variant: "destructive" })
     },
   })
 
@@ -290,6 +303,30 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
             >
               {tallying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <TrendingUp className="h-3.5 w-3.5" />}
               {tallying ? "Tallying…" : "Tally Votes"}
+            </button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Launch Project — only for APPROVED proposals */}
+      {proposal.status === "APPROVED" && (
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-6 space-y-3">
+            <div className="flex items-center gap-2">
+              <Briefcase className="h-4 w-4 text-tea-green" />
+              <h2 className="text-sm font-bold text-[#0A1F14]">Launch Project</h2>
+            </div>
+            <p className="text-xs text-warm-gray leading-relaxed">
+              This proposal has been approved. Launch a project to start tracking milestones and delivering on the commitment.
+            </p>
+            <button
+              onClick={() => launchProject()}
+              disabled={launching}
+              className="w-full flex items-center justify-center gap-2 rounded-full py-2.5 text-sm font-bold transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ background: "#1D4731", color: "#fff" }}
+            >
+              {launching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Briefcase className="h-4 w-4" />}
+              {launching ? "Launching…" : "Launch Project"}
             </button>
           </CardContent>
         </Card>

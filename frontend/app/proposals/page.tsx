@@ -5,12 +5,15 @@ import { PageHeader } from "@/components/layout/page-header"
 import { StatsGrid } from "@/components/layout/stats-grid"
 import { FetchProposals } from "@/components/proposals/fetch-proposals"
 import { VotingProvider } from "@/contexts/voting-context"
-import { useRole } from "@/contexts/role-context"
 import { governanceApi } from "@/lib/api"
+import { useAuth } from "@/contexts/auth-context"
 import { Plus, Vote, TrendingUp } from "lucide-react"
 
 export default function ProposalsPage() {
-  const { hasScope } = useRole()
+  const { user } = useAuth()
+  const canCreateProposal =
+    user?.verificationLevel === "COMMUNITY_VERIFIED" ||
+    user?.verificationLevel === "FULL_VERIFIED"
 
   const { data: allMeta } = useQuery({
     queryKey: ["proposals-total"],
@@ -55,7 +58,7 @@ export default function ProposalsPage() {
           title="Governance Proposals"
           description="Participate in community governance by voting on proposals and creating new initiatives."
           actions={
-            hasScope("proposals:create") && (
+            canCreateProposal && (
               <button
                 onClick={handleCreateProposal}
                 className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold transition-all hover:scale-[1.02] active:scale-[0.98]"

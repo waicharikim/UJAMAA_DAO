@@ -18,21 +18,21 @@ export class EducationController {
       limit,
       offset,
     });
-    return sendSuccess(res, result, 'Modules retrieved');
+    sendSuccess(res, result, 'Modules retrieved');
   }
 
   static async getModule(req: AuthRequest, res: Response) {
     const { moduleId } = req.params;
     const userId = req.user?.userId;
     const result = await educationService.getModule(moduleId, userId);
-    return sendSuccess(res, result, 'Module retrieved');
+    sendSuccess(res, result, 'Module retrieved');
   }
 
   static async startModule(req: AuthRequest, res: Response) {
     const { moduleId } = req.params;
     const userId = req.user!.userId;
     const result = await educationService.startModule(userId, moduleId);
-    return sendCreated(res, result, 'Module started');
+    sendCreated(res, result, 'Module started');
   }
 
   static async completeModule(req: AuthRequest, res: Response) {
@@ -43,7 +43,7 @@ export class EducationController {
       moduleId,
       req.body
     );
-    return sendSuccess(res, result, 'Module completed');
+    sendSuccess(res, result, 'Module completed');
   }
 
   static async submitReview(req: AuthRequest, res: Response) {
@@ -54,6 +54,6 @@ export class EducationController {
       moduleId,
       req.body
     );
-    return sendCreated(res, result, 'Review submitted');
+    sendCreated(res, result, 'Review submitted');
   }
 }

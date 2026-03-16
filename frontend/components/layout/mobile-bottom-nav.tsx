@@ -16,6 +16,7 @@ import {
   User,
   Shield,
   X,
+  BookOpen,
 } from "lucide-react"
 import {
   Drawer,
@@ -32,6 +33,7 @@ const primaryNav = [
 ]
 
 const drawerNav = [
+  { label: "Learn", href: "/education", icon: BookOpen },
   { label: "Marketplace", href: "/marketplace", icon: Store },
   { label: "Treasury", href: "/treasury", icon: Landmark },
   { label: "Profile", href: "/profile", icon: User },

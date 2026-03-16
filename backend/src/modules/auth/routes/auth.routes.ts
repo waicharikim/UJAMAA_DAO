@@ -354,7 +354,7 @@ router.patch(
 router.post(
   '/phone/send-code',
   authenticate,
-  authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
+  authorize({ verificationLevel: 'EMAIL_VERIFIED' }),
   buildRateLimiter({ windowMs: 60 * 1000, max: 3 }),
   validateRequest({ schema: sendPhoneCodeSchema, target: 'body' }),
   asyncHandler(sendVerificationCode)
@@ -363,7 +363,7 @@ router.post(
 router.post(
   '/phone/verify-code',
   authenticate,
-  authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
+  authorize({ verificationLevel: 'EMAIL_VERIFIED' }),
   buildRateLimiter({ windowMs: 5 * 60 * 1000, max: 10 }),
   validateRequest({ schema: verifyPhoneCodeSchema, target: 'body' }),
   asyncHandler(verifyCode)

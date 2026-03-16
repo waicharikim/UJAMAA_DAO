@@ -799,7 +799,14 @@ async function seedTestAdmin() {
 
   const adminUser = await prisma.user.upsert({
     where: { email: 'admin@ujamaa.test' },
-    update: {},
+    update: {
+      // Always keep the admin fully verified and in a ward (fixes re-seed after ward data added)
+      primaryWardId: firstWard.id,
+      verificationLevel: 'FULL_VERIFIED',
+      emailVerified: true,
+      phoneVerified: true,
+      communityVerified: true,
+    },
     create: {
       id: uuidv4(),
       email: 'admin@ujamaa.test',
@@ -809,6 +816,7 @@ async function seedTestAdmin() {
       verificationLevel: 'FULL_VERIFIED',
       emailVerified: true,
       phoneVerified: true,
+      communityVerified: true,
       participationRights: 1000,
       globalImpactPoints: 10000,
     },
@@ -836,6 +844,250 @@ async function seedTestAdmin() {
 }
 
 // ============================================================================
+// 8. EDUCATION MODULES (template modules about the system itself)
+// ============================================================================
+
+async function seedEducationModules() {
+  if (process.env.NODE_ENV === 'production') {
+    console.log('   Skipping education module seed in production');
+    return;
+  }
+
+  console.log('   Seeding education modules...');
+
+  const admin = await prisma.user.findUnique({ where: { email: 'admin@ujamaa.test' } });
+  if (!admin) {
+    console.warn('   admin@ujamaa.test not found — skipping education modules');
+    return;
+  }
+
+  const modules = [
+    {
+      title: 'What is UjamaaDAO?',
+      description:
+        'An introduction to UjamaaDAO — what it is, why it was built, and how it empowers Kenyan ward communities through collective governance and economic cooperation.',
+      content: `# What is UjamaaDAO?
+
+UjamaaDAO is a community-owned digital platform designed to strengthen local governance and economic cooperation at the ward level in Kenya.
+
+## The name
+
+"Ujamaa" is a Swahili word meaning *familyhood* or *cooperative economics*. It reflects the founding belief that communities grow strongest when members invest in one another.
+
+"DAO" stands for *Decentralised Autonomous Organisation* — a structure where decisions are made collectively by members, with rules encoded transparently on a blockchain rather than sitting with a single authority.
+
+## Why it was built
+
+Kenya's 1,450 wards are the smallest unit of government, yet most civic participation tools are designed for national or county use. UjamaaDAO fills this gap by giving each ward its own governed community: a space to propose projects, vote on spending, organise local markets, and track collective progress.
+
+## The four pillars
+
+1. **Identity & Verification** — Members verify their ward residency through community vouching (3 neighbours confirm you live there) or a one-time KES 100 payment. This makes the system Sybil-resistant and locally accountable.
+
+2. **Participation Rights (PR)** — A non-transferable score that measures your right to participate. You earn PR by paying dues, completing education, attending barazas, and contributing to projects. You spend PR to vote and create proposals.
+
+3. **Impact Points (IP)** — A reputation score for your contributions. IP decays slowly over time to reward sustained engagement over one-off actions.
+
+4. **Governance** — Any verified member can propose a project or community initiative. Proposals go through a transparent voting window; passing proposals become funded projects with trackable milestones.
+
+## What you can do on UjamaaDAO
+
+- **Learn** — Complete education modules (like this one) to earn IP and deepen your civic knowledge.
+- **Govern** — Create or vote on proposals for your ward.
+- **Contribute** — Join project teams, complete milestones, and earn rewards.
+- **Trade** — List skills and goods in the ward marketplace (discovery only — no platform payments).
+- **Connect** — Join your ward's Telegram/WhatsApp baraza and have your attendance recorded on-chain.
+
+## The blockchain layer
+
+PR and Utility Tokens (UT) are minted on Base (an Ethereum Layer 2). This means your participation record is publicly verifiable and can never be altered by any single actor — including the platform team.
+
+## Getting started
+
+1. Verify your email → complete your profile → verify your phone.
+2. Get community-verified by three ward neighbours.
+3. Start participating: vote, learn, propose, contribute.
+
+Every action you take here strengthens your ward. Welcome to UjamaaDAO.`,
+      duration: 15,
+      difficulty: 'BEGINNER' as const,
+      category: 'civic',
+      completionIP: 25,
+      verified: true,
+      expertApproved: true,
+    },
+    {
+      title: 'Understanding Participation Rights (PR)',
+      description:
+        'Learn how Participation Rights work, how to earn them, how they are spent, and why they are non-transferable.',
+      content: `# Understanding Participation Rights (PR)
+
+Participation Rights (PR) are your democratic currency on UjamaaDAO. Unlike money, they cannot be bought, sold, or given away — they must be *earned* through genuine community participation.
+
+## What PR measures
+
+PR is a measure of your *right to participate* at any given moment. A high PR balance signals that you have been actively engaged with your community recently. A low balance means you may need to re-engage before you can take certain actions.
+
+## Earning PR
+
+| Action | PR earned |
+|--------|-----------|
+| Email verification | +25 |
+| Phone verification | +25 |
+| Monthly dues (ordinary, KES 60) | +100 |
+| Monthly dues (supporter, KES 200) | +200 |
+| Monthly dues (sponsor, KES 1,000) | +500 |
+| Completing an education module | varies |
+| Attending a baraza | +10 |
+| Wallet connection | +100 |
+
+## Spending PR
+
+| Action | PR cost |
+|--------|---------|
+| Casting a vote | 5 |
+| Ward proposal | 50 |
+| Constituency proposal | 100 |
+| County proposal | 150 |
+| National proposal | 200 |
+| Creating a community group | 100 |
+
+## PR regeneration
+
+Your PR balance regenerates by **25 PR per month** automatically, as long as your account is active. This means even members who are temporarily inactive don't lose their ability to re-engage.
+
+## Maximum balance
+
+The maximum PR balance is **500**. There is no benefit to accumulating PR beyond this cap — the system is designed to reward consistent participation, not hoarding.
+
+## Why PR is non-transferable
+
+PR cannot be transferred between users. This design choice is intentional:
+
+- It prevents wealthy members from buying influence.
+- It ensures every vote represents genuine community engagement.
+- It makes the governance system resistant to capture by outside interests.
+
+PR is recorded on the Base blockchain, meaning your participation history is transparent and tamper-proof.
+
+## Low PR warning
+
+When your balance falls below **20 PR**, you will see a warning in your dashboard. This is your signal to re-engage: attend a baraza, pay dues, or complete an education module.`,
+      duration: 10,
+      difficulty: 'BEGINNER' as const,
+      category: 'governance',
+      completionIP: 20,
+      verified: true,
+      expertApproved: true,
+    },
+    {
+      title: 'How Governance Works',
+      description:
+        'A step-by-step guide to proposals, voting thresholds, quorums, and how ward decisions become funded projects.',
+      content: `# How Governance Works
+
+UjamaaDAO's governance system allows any community-verified member to propose ideas and have them decided by collective vote. Here is how the process works from start to finish.
+
+## Step 1 — Create a proposal
+
+Any verified member with sufficient PR can create a proposal. The cost depends on the scope:
+
+- **Ward** (affects your ward only) — 50 PR
+- **Constituency** — 100 PR
+- **County** — 150 PR
+- **National** — 200 PR
+
+A proposal includes a title, description, and optionally a requested funding amount in KES. Proposals can also include milestones — measurable checkpoints for how the project will be delivered.
+
+## Step 2 — The voting window opens
+
+After creation, a proposal enters a *voting window*. The length depends on the proposal type:
+
+| Type | Voting period |
+|------|--------------|
+| Community initiative | 7 days |
+| Major project | 14 days |
+| Strategic decision | 21 days |
+| Emergency | 3 days |
+
+During this window, eligible members can vote YES, NO, or ABSTAIN. Each vote costs **5 PR**.
+
+## Step 3 — Quorum and approval thresholds
+
+For a proposal to pass, two conditions must be met:
+
+1. **Quorum** — A minimum percentage of eligible voters must have voted.
+2. **Approval threshold** — A minimum percentage of votes must be YES.
+
+| Proposal type | Quorum required | Approval required |
+|--------------|-----------------|-------------------|
+| Community | 40% | 50% |
+| Major | 50% | 60% |
+| Strategic | 60% | 66% |
+| Emergency | 30% | 60% |
+
+## Step 4 — Execution
+
+If a proposal passes, it becomes an approved project. A project manager can then:
+
+1. Break the work into milestones.
+2. Assign team members.
+3. Submit milestone completions with proof (photos, receipts, links).
+4. Have milestones verified by designated verifiers.
+
+Verified milestones trigger IP and PR awards to the contributors.
+
+## Transparency
+
+All votes, proposal texts, and results are stored immutably. No administrator can delete a proposal or alter vote counts after the window closes.
+
+## Tips for a strong proposal
+
+- Be specific: what exactly will be built or changed?
+- Include a realistic budget with line items.
+- Break large work into 3–5 milestones.
+- Link your proposal to a baraza discussion so the community has context before voting.`,
+      duration: 12,
+      difficulty: 'BEGINNER' as const,
+      category: 'governance',
+      completionIP: 30,
+      verified: true,
+      expertApproved: true,
+    },
+  ];
+
+  for (const mod of modules) {
+    const existing = await prisma.educationalModule.findFirst({
+      where: { title: mod.title, creatorId: admin.id },
+      select: { id: true },
+    });
+
+    if (existing) {
+      await prisma.educationalModule.update({
+        where: { id: existing.id },
+        data: {
+          description: mod.description,
+          content: mod.content,
+          verified: mod.verified,
+          completionIP: mod.completionIP,
+        },
+      });
+    } else {
+      await prisma.educationalModule.create({
+        data: {
+          id: uuidv4(),
+          creatorId: admin.id,
+          ...mod,
+          mediaUrls: [],
+        },
+      });
+    }
+  }
+
+  console.log(`   Created/ensured ${modules.length} education modules`);
+}
+
+// ============================================================================
 // MAIN SEED EXECUTION
 // ============================================================================
 
@@ -848,6 +1100,7 @@ async function main() {
     await seedRoles();
     await seedOnboardingTutorials();
     await seedTestAdmin();
+    await seedEducationModules();
 
     console.log('\n✅ Core seeding completed successfully!');
   } catch (error) {
