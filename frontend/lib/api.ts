@@ -1611,6 +1611,64 @@ export const reputationApi = {
 // ─────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────
+// Treasury API  — /api/v1/treasury
+// ─────────────────────────────────────────────────────────
+
+export interface TreasuryDto {
+  id:           string
+  groupId:      string
+  groupName:    string
+  balance:      number   // KES fiat balance
+  tokenBalance: number   // UT token balance
+  createdAt:    string
+  updatedAt:    string
+}
+
+export interface WalletTransactionDto {
+  id:              string
+  treasuryId:      string
+  amount:          number
+  currency:        string
+  transactionType: "CREDIT" | "DEBIT"
+  description:     string | null
+  referenceType:   string   // "DUES" | "MANUAL" | "PROJECT" | "PROPOSAL"
+  createdAt:       string
+  proposalId:      string | null
+  projectId:       string | null
+  initiatedById:   string
+  metadata:        Record<string, unknown> | null
+}
+
+export const treasuryApi = {
+  /** GET /treasury/:groupId — balance + metadata (any authenticated member) */
+  getTreasury: (groupId: string) =>
+    apiFetch<TreasuryDto>(`/treasury/${groupId}`),
+
+  /** GET /treasury/:groupId/transactions — paginated ledger */
+  getTransactions: (groupId: string, params?: {
+    page?:            number
+    limit?:           number
+    transactionType?: "CREDIT" | "DEBIT"
+    referenceType?:   string
+    fromDate?:        string
+    toDate?:          string
+  }) => {
+    const q = new URLSearchParams()
+    if (params?.page)            q.set("page",            String(params.page))
+    if (params?.limit)           q.set("limit",           String(params.limit))
+    if (params?.transactionType) q.set("transactionType", params.transactionType)
+    if (params?.referenceType)   q.set("referenceType",   params.referenceType)
+    if (params?.fromDate)        q.set("fromDate",        params.fromDate)
+    if (params?.toDate)          q.set("toDate",          params.toDate)
+    const qs = q.toString()
+    return apiFetch<{
+      transactions: WalletTransactionDto[]
+      pagination: { page: number; limit: number; total: number; totalPages: number }
+    }>(`/treasury/${groupId}/transactions${qs ? `?${qs}` : ""}`)
+  },
+}
+
+// ─────────────────────────────────────────────────────────
 // Payments API  — /api/v1/payments
 // ─────────────────────────────────────────────────────────
 
