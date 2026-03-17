@@ -10,7 +10,11 @@
  */
 
 import { logger } from '../logger/logger.js';
-import { economyQueue, userCleanupQueue } from '../queue/index.js';
+import {
+  economyQueue,
+  userCleanupQueue,
+  notificationsQueue,
+} from '../queue/index.js';
 
 // ─────────────────────────────────────────────
 // Import all job names & processors
@@ -23,6 +27,8 @@ import { MONTHLY_PR_REGENERATION_JOB } from '../../modules/economy/jobs/pr-regen
 import { DAILY_COMMITMENT_PENALTIES_JOB } from '../../modules/economy/jobs/commitment-penalties.jobs.js';
 
 import { AUTH_CLEANUP_JOB_NAME } from '../../modules/auth/jobs/auth-cleanup.jobs.js';
+
+import { DUES_REMINDER_JOB } from '../../modules/notifications/jobs/dues-reminder.jobs.js';
 
 export async function registerAllJobs(): Promise<void> {
   logger.info(
@@ -94,6 +100,22 @@ export async function registerAllJobs(): Promise<void> {
       }
     );
     logger.info({ job: AUTH_CLEANUP_JOB_NAME }, 'Job registered');
+
+    // ─────────────────────────────────────────────
+    // DUES REMINDER JOB
+    // Every day at 08:00 — sends dues reminders on days 26–28 of each month
+    // ─────────────────────────────────────────────
+    await notificationsQueue.add(
+      DUES_REMINDER_JOB,
+      {},
+      {
+        repeat: { pattern: '0 8 * * *' },
+        jobId: DUES_REMINDER_JOB,
+        removeOnComplete: { age: 3600 * 24 * 7 },
+        removeOnFail: { age: 3600 * 24 * 30 },
+      }
+    );
+    logger.info({ job: DUES_REMINDER_JOB }, 'Job registered');
 
     logger.info(
       { operationType: 'JOB_REGISTER' },

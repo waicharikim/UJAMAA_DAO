@@ -6,6 +6,9 @@
  *   GET    /notifications
  *   GET    /notifications/unread-count
  *   POST   /notifications/mark-read
+ *   POST   /notifications/mark-all-read
+ *   GET    /notifications/preferences
+ *   PUT    /notifications/preferences
  *
  * DB truncated before each test by testSetup.ts.
  */
@@ -50,6 +53,7 @@ vi.mock('../../src/modules/community/services/groupMembership.service.js', () =>
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 import request from 'supertest';
 import app, { servicesReady } from '../../src/app.js';
+import { prisma } from '../../src/core/database/client.js';
 import {
   createNotificationUser,
   seedNotification,
@@ -202,5 +206,171 @@ describe('POST /notifications/mark-read', () => {
       .get(`${BASE}/unread-count`)
       .set('Authorization', `Bearer ${token}`);
     expect(countRes.body.data.count).toBe(0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /notifications/mark-all-read
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('POST /notifications/mark-all-read', () => {
+  it('returns 401 without auth token', async () => {
+    const res = await request(app).post(`${BASE}/mark-all-read`);
+    expect(res.status).toBe(401);
+  });
+
+  it('marks all unread notifications as read', async () => {
+    const user = await createNotificationUser('mar-ok@test.com');
+    const token = makeNotificationToken(user.id);
+    await seedNotification(user.id, 'N1', false);
+    await seedNotification(user.id, 'N2', false);
+
+    const res = await request(app)
+      .post(`${BASE}/mark-all-read`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+
+    const countRes = await request(app)
+      .get(`${BASE}/unread-count`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(countRes.body.data.count).toBe(0);
+  });
+
+  it('is a no-op when there are no unread notifications', async () => {
+    const user = await createNotificationUser('mar-noop@test.com');
+    const token = makeNotificationToken(user.id);
+    await seedNotification(user.id, 'Already read', true);
+
+    const res = await request(app)
+      .post(`${BASE}/mark-all-read`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /notifications/preferences
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('GET /notifications/preferences', () => {
+  it('returns 401 without auth token', async () => {
+    const res = await request(app).get(`${BASE}/preferences`);
+    expect(res.status).toBe(401);
+  });
+
+  it('returns empty array when no preferences set', async () => {
+    const user = await createNotificationUser('prefs-get-empty@test.com');
+    const token = makeNotificationToken(user.id);
+
+    const res = await request(app)
+      .get(`${BASE}/preferences`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual([]);
+  });
+
+  it('returns preferences for the authenticated user', async () => {
+    const user = await createNotificationUser('prefs-get-ok@test.com');
+    const token = makeNotificationToken(user.id);
+    await prisma.notificationPreference.create({
+      data: { userId: user.id, channel: 'IN_APP', category: 'GOVERNANCE', enabled: true },
+    });
+
+    const res = await request(app)
+      .get(`${BASE}/preferences`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.data[0]).toMatchObject({ channel: 'IN_APP', category: 'GOVERNANCE', enabled: true });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PUT /notifications/preferences
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('PUT /notifications/preferences', () => {
+  it('returns 401 without auth token', async () => {
+    const res = await request(app)
+      .put(`${BASE}/preferences`)
+      .send({ channel: 'IN_APP', category: 'GOVERNANCE', enabled: false });
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 400 when channel is missing', async () => {
+    const user = await createNotificationUser('prefs-put-bad1@test.com');
+    const token = makeNotificationToken(user.id);
+
+    const res = await request(app)
+      .put(`${BASE}/preferences`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ category: 'GOVERNANCE', enabled: false });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when category is missing', async () => {
+    const user = await createNotificationUser('prefs-put-bad2@test.com');
+    const token = makeNotificationToken(user.id);
+
+    const res = await request(app)
+      .put(`${BASE}/preferences`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ channel: 'IN_APP', enabled: false });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when enabled is missing', async () => {
+    const user = await createNotificationUser('prefs-put-bad3@test.com');
+    const token = makeNotificationToken(user.id);
+
+    const res = await request(app)
+      .put(`${BASE}/preferences`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ channel: 'IN_APP', category: 'GOVERNANCE' });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('creates a new preference and returns 200', async () => {
+    const user = await createNotificationUser('prefs-put-ok@test.com');
+    const token = makeNotificationToken(user.id);
+
+    const res = await request(app)
+      .put(`${BASE}/preferences`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ channel: 'IN_APP', category: 'GOVERNANCE', enabled: false });
+
+    expect(res.status).toBe(200);
+
+    const pref = await prisma.notificationPreference.findUnique({
+      where: { userId_channel_category: { userId: user.id, channel: 'IN_APP', category: 'GOVERNANCE' } },
+    });
+    expect(pref?.enabled).toBe(false);
+  });
+
+  it('updates an existing preference', async () => {
+    const user = await createNotificationUser('prefs-put-update@test.com');
+    const token = makeNotificationToken(user.id);
+    await prisma.notificationPreference.create({
+      data: { userId: user.id, channel: 'EMAIL', category: 'ECONOMIC', enabled: true },
+    });
+
+    const res = await request(app)
+      .put(`${BASE}/preferences`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ channel: 'EMAIL', category: 'ECONOMIC', enabled: false });
+
+    expect(res.status).toBe(200);
+
+    const pref = await prisma.notificationPreference.findUnique({
+      where: { userId_channel_category: { userId: user.id, channel: 'EMAIL', category: 'ECONOMIC' } },
+    });
+    expect(pref?.enabled).toBe(false);
   });
 });

@@ -33,4 +33,28 @@ export class NotificationController {
     const count = await notificationService.getUnreadCount(userId);
     sendSuccess(res, { count });
   }
+
+  static async markAllRead(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    await notificationService.markAllRead(userId);
+    sendSuccess(res, null, 'All notifications marked as read');
+  }
+
+  static async getPreferences(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const preferences = await notificationService.getPreferences(userId);
+    sendSuccess(res, preferences, 'Preferences retrieved');
+  }
+
+  static async updatePreference(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const { channel, category, enabled } = req.body;
+    await notificationService.updatePreference(
+      userId,
+      channel,
+      category,
+      enabled
+    );
+    sendSuccess(res, null, 'Preference updated');
+  }
 }

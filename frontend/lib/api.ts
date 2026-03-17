@@ -673,6 +673,18 @@ export const notificationsApi = {
       method: "POST",
       body: JSON.stringify({ notificationId }),
     }),
+
+  markAllRead: () =>
+    apiFetch<void>("/notifications/mark-all-read", { method: "POST" }),
+
+  getPreferences: () =>
+    apiFetch<Array<{ channel: string; category: string; enabled: boolean }>>("/notifications/preferences"),
+
+  updatePreference: (channel: string, category: string, enabled: boolean) =>
+    apiFetch<void>("/notifications/preferences", {
+      method: "PUT",
+      body: JSON.stringify({ channel, category, enabled }),
+    }),
 }
 
 // ─────────────────────────────────────────────────────────
@@ -1139,11 +1151,20 @@ class ApiClient {
   }
 
   async getNotificationPreferences(): Promise<any> {
-    return {}
+    try {
+      return await notificationsApi.getPreferences()
+    } catch {
+      return []
+    }
   }
 
-  async updateNotificationPreferences(_preferences: any): Promise<any> {
-    return {}
+  async updateNotificationPreferences(preferences: { channel: string; category: string; enabled: boolean }): Promise<any> {
+    await notificationsApi.updatePreference(
+      preferences.channel,
+      preferences.category,
+      preferences.enabled
+    )
+    return preferences
   }
 
   async getGroups(): Promise<any[]> {

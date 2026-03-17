@@ -34,4 +34,21 @@ router.post(
   asyncHandler(NotificationController.markAsRead)
 );
 
+router.post('/mark-all-read', asyncHandler(NotificationController.markAllRead));
+
+router.get('/preferences', asyncHandler(NotificationController.getPreferences));
+
+router.put(
+  '/preferences',
+  validateRequest({
+    schema: z.object({
+      channel: z.string().min(1),
+      category: z.string().min(1),
+      enabled: z.boolean(),
+    }),
+    target: 'body',
+  }),
+  asyncHandler(NotificationController.updatePreference)
+);
+
 export default router;

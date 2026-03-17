@@ -112,11 +112,50 @@ export class NotificationService {
   }
 
   /**
+   * Mark ALL unread notifications as read for a user
+   */
+  async markAllRead(userId: string): Promise<void> {
+    await prisma.notification.updateMany({
+      where: { userId, read: false },
+      data: { read: true },
+    });
+  }
+
+  /**
    * Count unread notifications for the bell badge
    */
   async getUnreadCount(userId: string): Promise<number> {
     return prisma.notification.count({
       where: { userId, read: false },
+    });
+  }
+
+  /**
+   * Get all notification preferences for a user.
+   * Missing rows = enabled (default). Only explicit overrides are stored.
+   */
+  async getPreferences(
+    userId: string
+  ): Promise<Array<{ channel: string; category: string; enabled: boolean }>> {
+    return prisma.notificationPreference.findMany({
+      where: { userId },
+      select: { channel: true, category: true, enabled: true },
+    });
+  }
+
+  /**
+   * Upsert a single channel+category preference for a user.
+   */
+  async updatePreference(
+    userId: string,
+    channel: string,
+    category: string,
+    enabled: boolean
+  ): Promise<void> {
+    await prisma.notificationPreference.upsert({
+      where: { userId_channel_category: { userId, channel, category } },
+      create: { userId, channel, category, enabled },
+      update: { enabled },
     });
   }
 

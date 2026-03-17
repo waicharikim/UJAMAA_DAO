@@ -47,6 +47,11 @@ import {
 } from './modules/integration/jobs/baraza-reward.jobs.js';
 import { BotJobName } from './modules/integration/types.js';
 
+import {
+  DUES_REMINDER_JOB,
+  processDuesReminder,
+} from './modules/notifications/jobs/dues-reminder.jobs.js';
+
 // ─────────────────────────────────────────────
 // Graceful shutdown & error handling
 // ─────────────────────────────────────────────
@@ -61,6 +66,7 @@ async function shutdownWorkers(signal: string): Promise<void> {
       economyWorker.close(),
       userCleanupWorker.close(),
       integrationWorker.close(),
+      notificationsWorker.close(),
     ]);
     logger.info({ operationType: 'WORKER' }, 'All workers drained and closed');
   } catch (err) {
@@ -175,6 +181,31 @@ const integrationWorker = createWorker('integration', async (job) => {
         stack: err instanceof Error ? err.stack : undefined,
       },
       'Integration job failed'
+    );
+    throw err;
+  }
+});
+
+const notificationsWorker = createWorker('notifications', async (job) => {
+  try {
+    if (job.name === DUES_REMINDER_JOB) {
+      await processDuesReminder();
+    } else {
+      logger.warn(
+        { jobName: job.name, queue: 'notifications' },
+        'Unknown notifications job received'
+      );
+    }
+  } catch (err) {
+    logger.error(
+      {
+        jobId: job.id,
+        jobName: job.name,
+        queue: 'notifications',
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      },
+      'Notifications job failed'
     );
     throw err;
   }

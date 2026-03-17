@@ -23,6 +23,8 @@ import {
   VoteOption,
 } from '../types.js';
 import { SystemRoles } from '../../../core/rbac/roles.js';
+import { notificationService } from '../../notifications/services/notification.service.js';
+import { NotificationType } from '../../notifications/types.js';
 
 class ProposalService {
   /**
@@ -241,6 +243,26 @@ class ProposalService {
 
     logger.info({ proposalId, days }, 'Voting started');
 
+    // Notify group members that voting is open (up to 50 most recent members)
+    if (proposal.groupId) {
+      const members = await prisma.groupMember.findMany({
+        where: { groupId: proposal.groupId, active: true },
+        select: { userId: true },
+        take: 50,
+      });
+      await Promise.allSettled(
+        members.map((m) =>
+          notificationService.send({
+            userId: m.userId,
+            type: NotificationType.PROPOSAL_VOTING_STARTED,
+            title: 'Voting open',
+            message: `Voting has started on "${proposal.title}". You have ${days} days to cast your vote.`,
+            data: { proposalId },
+          })
+        )
+      );
+    }
+
     return { startsAt, endsAt };
   }
 
@@ -347,6 +369,26 @@ class ProposalService {
       { proposalId, quorum, approved, newStatus },
       'Proposal tallied'
     );
+
+    // Notify the proposal creator of the outcome
+    if (proposal.creatorId) {
+      const isPassed = newStatus === ProposalStatus.APPROVED;
+      notificationService
+        .send({
+          userId: proposal.creatorId,
+          type: isPassed
+            ? NotificationType.PROPOSAL_PASSED
+            : NotificationType.PROPOSAL_VOTE_CAST,
+          title: isPassed ? 'Proposal approved' : 'Proposal rejected',
+          message: isPassed
+            ? `"${proposal.title}" has passed the vote and is now approved.`
+            : `"${proposal.title}" did not pass the vote. ${!quorum ? 'Quorum was not reached.' : 'The vote was not in favour.'}`,
+          data: { proposalId, newStatus },
+        })
+        .catch(() => {
+          /* non-critical */
+        });
+    }
 
     return { newStatus, quorum, approved };
   }

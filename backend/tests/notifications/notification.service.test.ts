@@ -2,7 +2,8 @@
  * @file tests/notifications/notification.service.test.ts
  * @description Unit tests for NotificationService.
  *
- * Tests: getUserNotifications, getUnreadCount, markAsRead, send
+ * Tests: getUserNotifications, getUnreadCount, markAsRead, send,
+ *        markAllRead, getPreferences, updatePreference
  */
 
 import { describe, it, expect, vi } from 'vitest';
@@ -163,5 +164,141 @@ describe('send()', () => {
 
     const count = await prisma.notification.count({ where: { userId: user.id } });
     expect(count).toBe(0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// markAllRead()
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('markAllRead()', () => {
+  it('marks all unread notifications as read', async () => {
+    const user = await createNotificationUser('mark-all@test.com');
+    await seedNotification(user.id, 'Notif 1', false);
+    await seedNotification(user.id, 'Notif 2', false);
+    await seedNotification(user.id, 'Notif 3', false);
+
+    await service.markAllRead(user.id);
+
+    const unread = await prisma.notification.count({
+      where: { userId: user.id, read: false },
+    });
+    expect(unread).toBe(0);
+  });
+
+  it('does not affect already-read notifications', async () => {
+    const user = await createNotificationUser('mark-all-noop@test.com');
+    await seedNotification(user.id, 'Already read', true);
+
+    await service.markAllRead(user.id);
+
+    const notif = await prisma.notification.findFirst({ where: { userId: user.id } });
+    expect(notif?.read).toBe(true);
+  });
+
+  it('does not affect notifications of other users', async () => {
+    const a = await createNotificationUser('mark-all-a@test.com');
+    const b = await createNotificationUser('mark-all-b@test.com');
+    await seedNotification(a.id, 'A unread', false);
+    await seedNotification(b.id, 'B unread', false);
+
+    await service.markAllRead(a.id);
+
+    const bUnread = await prisma.notification.count({
+      where: { userId: b.id, read: false },
+    });
+    expect(bUnread).toBe(1);
+  });
+
+  it('is a no-op for a user with no notifications', async () => {
+    const user = await createNotificationUser('mark-all-empty@test.com');
+    await expect(service.markAllRead(user.id)).resolves.not.toThrow();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// getPreferences()
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('getPreferences()', () => {
+  it('returns empty array when no preferences set', async () => {
+    const user = await createNotificationUser('prefs-empty@test.com');
+    const result = await service.getPreferences(user.id);
+    expect(result).toEqual([]);
+  });
+
+  it('returns preferences with channel, category, and enabled fields', async () => {
+    const user = await createNotificationUser('prefs-shape@test.com');
+    await prisma.notificationPreference.create({
+      data: { userId: user.id, channel: 'IN_APP', category: 'GOVERNANCE', enabled: true },
+    });
+    await prisma.notificationPreference.create({
+      data: { userId: user.id, channel: 'EMAIL', category: 'ECONOMIC', enabled: false },
+    });
+
+    const result = await service.getPreferences(user.id);
+    expect(result).toHaveLength(2);
+    expect(result).toEqual(
+      expect.arrayContaining([
+        { channel: 'IN_APP', category: 'GOVERNANCE', enabled: true },
+        { channel: 'EMAIL', category: 'ECONOMIC', enabled: false },
+      ])
+    );
+  });
+
+  it('only returns preferences for the requesting user', async () => {
+    const a = await createNotificationUser('prefs-a@test.com');
+    const b = await createNotificationUser('prefs-b@test.com');
+    await prisma.notificationPreference.create({
+      data: { userId: b.id, channel: 'IN_APP', category: 'GENERAL', enabled: false },
+    });
+
+    const result = await service.getPreferences(a.id);
+    expect(result).toEqual([]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// updatePreference()
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('updatePreference()', () => {
+  it('creates a new preference when none exists', async () => {
+    const user = await createNotificationUser('upref-create@test.com');
+
+    await service.updatePreference(user.id, 'IN_APP', 'GOVERNANCE', false);
+
+    const pref = await prisma.notificationPreference.findUnique({
+      where: { userId_channel_category: { userId: user.id, channel: 'IN_APP', category: 'GOVERNANCE' } },
+    });
+    expect(pref?.enabled).toBe(false);
+  });
+
+  it('updates an existing preference (enabled=true → false)', async () => {
+    const user = await createNotificationUser('upref-update@test.com');
+    await prisma.notificationPreference.create({
+      data: { userId: user.id, channel: 'EMAIL', category: 'ECONOMIC', enabled: true },
+    });
+
+    await service.updatePreference(user.id, 'EMAIL', 'ECONOMIC', false);
+
+    const pref = await prisma.notificationPreference.findUnique({
+      where: { userId_channel_category: { userId: user.id, channel: 'EMAIL', category: 'ECONOMIC' } },
+    });
+    expect(pref?.enabled).toBe(false);
+  });
+
+  it('re-enables a disabled preference', async () => {
+    const user = await createNotificationUser('upref-reenable@test.com');
+    await prisma.notificationPreference.create({
+      data: { userId: user.id, channel: 'IN_APP', category: 'GENERAL', enabled: false },
+    });
+
+    await service.updatePreference(user.id, 'IN_APP', 'GENERAL', true);
+
+    const pref = await prisma.notificationPreference.findUnique({
+      where: { userId_channel_category: { userId: user.id, channel: 'IN_APP', category: 'GENERAL' } },
+    });
+    expect(pref?.enabled).toBe(true);
   });
 });
