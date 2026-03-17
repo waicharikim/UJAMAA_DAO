@@ -10,7 +10,7 @@ UjamaaDAO is a neighborhood sovereignty platform for Kenyan wards — cooperativ
 
 | Layer | Status |
 |---|---|
-| Backend API | ✅ Running — 16 modules, 15 fully tested (679 tests green, 42 test files), CI green |
+| Backend API | ✅ Running — 16 modules, all tested (679 tests green, 42 test files), CI green |
 | Prisma schema | ✅ 83 models, migrations applied, E2E flow verified |
 | Docker/Infra | ✅ All services running (`make dev`) — API, worker, postgres, redis, frontend, MailHog |
 | Frontend | ✅ Active — 17 routes, Chai palette design system, magic-link auth, Privy wallet |
