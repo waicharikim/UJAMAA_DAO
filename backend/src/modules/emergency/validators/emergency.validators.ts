@@ -22,6 +22,11 @@ export const alertIdParamSchema = z.object({
   alertId: z.string().uuid('alertId must be a valid UUID'),
 });
 
+export const updateAlertStatusSchema = z.object({
+  status: z.enum(['IN_PROGRESS', 'RESOLVED', 'FALSE_ALARM']),
+  statusNote: z.string().max(500).optional(),
+});
+
 export const listAlertsSchema = z.object({
   wardId: z.string().uuid().optional(),
   status: z.string().optional(),

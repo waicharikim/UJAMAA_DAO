@@ -10,6 +10,8 @@ import { globalImpactPointService } from '../../reputation/service/impactPoint.s
 import { roleService } from '../../../core/services/role.service.js';
 import { ApiError } from '../../../core/errors/ApiError.js';
 import { logger } from '../../../core/logger/logger.js';
+import { auditService } from '../../audit/services/audit.service.js';
+import { AuditAction } from '../../audit/types.js';
 import { ParticipationRightsReason } from '../../economy/types.js';
 import { ImpactPointReason } from '../../reputation/types.js';
 import type {
@@ -85,6 +87,15 @@ export class ProjectService {
       { userId, proposalId: dto.proposalId, projectId: project.id },
       'Project created'
     );
+
+    await auditService.log(
+      userId,
+      AuditAction.PROJECT_CREATED,
+      'Project',
+      project.id,
+      { proposalId: dto.proposalId }
+    );
+
     return project;
   }
 
@@ -139,6 +150,13 @@ export class ProjectService {
       },
     });
 
+    await auditService.log(
+      userId,
+      AuditAction.MILESTONE_SUBMITTED,
+      'Milestone',
+      dto.milestoneId
+    );
+
     return { status: MilestoneStatus.AWAITING_VERIFICATION };
   }
 
@@ -176,6 +194,14 @@ export class ProjectService {
         feedback: dto.feedback ?? null,
       },
     });
+
+    await auditService.log(
+      verifierId,
+      AuditAction.MILESTONE_VERIFIED,
+      'Milestone',
+      dto.milestoneId,
+      { approved: dto.approved, projectId: milestone.projectId }
+    );
 
     if (dto.approved && milestone.submittedById) {
       await participationRightsService

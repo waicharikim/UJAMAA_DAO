@@ -31,7 +31,6 @@ enum GroupStatus {
 enum GroupRole {
   MEMBER       // Regular member
   LEADER       // Group leader/chairperson
-  ADMIN        // Group administrator — approves/rejects proposals under review
   TREASURER    // Financial manager
   SECRETARY    // Records keeper
   AUDITOR      // Financial oversight
@@ -292,7 +291,8 @@ model User {
   educationalReviews        EducationalReview[]
 
   // ---- Emergency module ----
-  emergencyAlerts           EmergencyAlert[]
+  emergencyAlerts           EmergencyAlert[]   @relation("EmergencyAlertReporter")
+  resolvedEmergencies       EmergencyAlert[]   @relation("EmergencyAlertResolver")
   emergencyResponses        EmergencyResponse[]
 
   // ---- Reputation module ----
@@ -1601,12 +1601,12 @@ model Proposal {
   
   // SCOPE & FUNDING
   proposalScope          ProposalScope  @default(COMMUNITY)
-  groupFundingAmount     Decimal?       @db.Decimal(20, 2)  // committed from group treasury
-  locationFundingRequest Decimal?       @db.Decimal(20, 2)  // requested from location treasury
+  groupFundingAmount     Decimal?       @db.Decimal(20, 2)
+  locationFundingRequest Decimal?       @db.Decimal(20, 2)
 
   // REVIEW
-  reviewedById      String?        @db.Uuid  // Location admin who approved or rejected
-  reviewNote        String?        @db.Text  // Rejection reason or approval note
+  reviewedById      String?        @db.Uuid
+  reviewNote        String?        @db.Text
 
   // VOTING
   votesFor          Int            @default(0)
@@ -2287,9 +2287,14 @@ model EmergencyAlert {
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
 
-  reporter  User               @relation(fields: [reporterId], references: [id], onDelete: Cascade)
-  group     Group?             @relation(fields: [assignedGroupId], references: [id], onDelete: SetNull)
-  responses EmergencyResponse[]
+  resolvedAt     DateTime?
+  resolvedById   String?           @db.Uuid
+  statusNote     String?           @db.VarChar(500)
+
+  reporter   User               @relation("EmergencyAlertReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  resolvedBy User?              @relation("EmergencyAlertResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  group      Group?             @relation(fields: [assignedGroupId], references: [id], onDelete: SetNull)
+  responses  EmergencyResponse[]
 
   @@index([reporterId])
   @@index([assignedGroupId])

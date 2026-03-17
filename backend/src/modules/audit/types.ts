@@ -30,14 +30,19 @@ export enum AuditAction {
   WORK_VERIFIED = 'WORK_VERIFIED',
   LISTING_CREATED = 'LISTING_CREATED',
   LISTING_DEACTIVATED = 'LISTING_DEACTIVATED',
+  ROLE_ASSIGNED = 'ROLE_ASSIGNED',
+  ROLE_REVOKED = 'ROLE_REVOKED',
 }
 
 export interface AuditSearchDto {
   userId?: string;
   action?: AuditAction;
+  entityType?: string;
   entityId?: string;
   fromDate?: string;
   toDate?: string;
   page?: number;
   limit?: number;
+  sortBy?: 'createdAt' | 'action';
+  sortOrder?: 'asc' | 'desc';
 }

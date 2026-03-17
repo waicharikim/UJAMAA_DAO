@@ -55,6 +55,7 @@ class AuditService {
 
     if (dto.userId) where.userId = dto.userId;
     if (dto.action) where.action = dto.action;
+    if (dto.entityType) where.entityType = dto.entityType;
     if (dto.entityId) where.entityId = dto.entityId;
     if (dto.fromDate || dto.toDate) {
       where.createdAt = {};
@@ -62,13 +63,16 @@ class AuditService {
       if (dto.toDate) where.createdAt.lte = new Date(dto.toDate);
     }
 
+    const sortBy = dto.sortBy || 'createdAt';
+    const sortOrder = dto.sortOrder || 'desc';
+
     const [logs, total] = await Promise.all([
       prisma.auditLog.findMany({
         where,
         include: {
           user: { select: { id: true, name: true, email: true } },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { [sortBy]: sortOrder },
         skip,
         take: limit,
       }),

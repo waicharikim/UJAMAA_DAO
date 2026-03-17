@@ -56,16 +56,19 @@ All routes are mounted at `/api/v1/` in `backend/src/app.ts`.
 | auth | `/api/v1/auth` | tested | 104 |
 | user | `/api/v1/users` | tested | 35 |
 | economy | `/api/v1/economy` | tested | 34 |
-| community | `/api/v1/community` | tested | 49 |
-| governance | `/api/v1/governance` | tested | 47 |
-| admin | `/api/v1/admin` | partial | 0 |
-| projects | `/api/v1/projects` | partial | 0 |
-| marketplace | `/api/v1/marketplace` | partial | 0 |
-| notifications | `/api/v1/notifications` | partial | 0 |
-| emergency | `/api/v1/emergency` | partial | 0 |
-| audit | `/api/v1/audit` | partial | 0 |
-| onboarding | `/api/v1/onboarding` | partial | 0 |
-| integration | `/api/v1/integration` | partial | 0 |
+| community | `/api/v1/community` | tested | 82 |
+| governance | `/api/v1/governance` | tested | 58 |
+| projects | `/api/v1/projects` | tested | 41 |
+| marketplace | `/api/v1/marketplace` | tested | 35 |
+| emergency | `/api/v1/emergency` | tested | 42 |
+| notifications | `/api/v1/notifications` | tested | 43 |
+| onboarding | `/api/v1/onboarding` | tested | 22 |
+| reputation | `/api/v1/reputation` | tested | 23 |
+| education | `/api/v1/education` | tested | 42 |
+| admin | `/api/v1/admin` | tested | 24 |
+| audit | `/api/v1/audit` | tested | 23 |
+| treasury | `/api/v1/treasury` | tested | 32 |
+| integration | `/api/v1/integration` | tested | 30 |
 
 Health endpoints: `GET /health` · `GET /ready` · `GET /api/v1/docs`
 
@@ -113,7 +116,7 @@ Four BullMQ queues, all visible on Bull Board at `/admin/queues`:
 
 | Queue | Jobs |
 |---|---|
-| `economy` | `monthly-pr-regeneration` (1st of month), `daily-commitment-penalties` (02:00) |
+| `economy` | `monthly-pr-regeneration` (1st of month), `daily-commitment-penalties` (02:00), `dues-reminder` (08:00 daily, fires days 26–28) |
 | `user-cleanup` | `user-cleanup` (every 4h), `auth-cleanup` (03:00) |
 | `integration` | `baraza-attendance-reward`, `baraza-send-invite` |
 | `dead-letter` | Failed jobs after max retries |
@@ -162,7 +165,7 @@ All new events must be typed in the event bus types file and documented here.
 Next.js 16.1.6, React 18, TypeScript, Tailwind CSS, shadcn/ui, TanStack Query, Privy.
 
 **Dev:** `next dev --turbopack` (port 3000)
-**API client:** `frontend/lib/api.ts` — `authApi`, `userApi`, `economyApi`, `communityApi`, `governanceApi`, `integrationApi`, `notificationsApi`
+**API client:** `frontend/lib/api.ts` — `authApi`, `userApi`, `economyApi`, `communityApi`, `governanceApi`, `projectApi`, `marketplaceApi`, `emergencyApi`, `onboardingApi`, `reputationApi`, `educationApi`, `integrationApi`, `notificationsApi`
 **Auth context:** `frontend/contexts/auth-context.tsx` — magic link flow, auto-hydrate from localStorage
 **Wallet context:** `frontend/contexts/wallet-context.tsx` — Privy integration
 

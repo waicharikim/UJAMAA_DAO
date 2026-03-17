@@ -136,9 +136,80 @@ export class EmergencyService {
       },
     });
 
+    // Notify the alert reporter
+    await notificationService
+      .send({
+        userId: alert.reporterId,
+        type: NotificationType.GENERAL_ANNOUNCEMENT,
+        title: 'Someone is responding to your emergency',
+        message: `A responder has acknowledged your ${alert.emergencyType} alert.`,
+        data: { alertId },
+        channels: [NotificationChannel.IN_APP],
+      })
+      .catch(() => {});
+
     logger.info({ userId, alertId }, 'Emergency response recorded');
 
     return response;
+  }
+
+  /**
+   * Update alert status — reporter OR ward admin
+   * Valid transitions: ACTIVE→IN_PROGRESS, ACTIVE→FALSE_ALARM, IN_PROGRESS→RESOLVED, IN_PROGRESS→FALSE_ALARM
+   * Terminal states (RESOLVED, FALSE_ALARM) are immutable.
+   */
+  async updateAlertStatus(
+    actorId: string,
+    alertId: string,
+    newStatus: 'IN_PROGRESS' | 'RESOLVED' | 'FALSE_ALARM',
+    statusNote?: string
+  ) {
+    const alert = await prisma.emergencyAlert.findUnique({
+      where: { id: alertId },
+    });
+
+    if (!alert) throw ApiError.notFound('Emergency Alert');
+
+    if (alert.status === 'RESOLVED' || alert.status === 'FALSE_ALARM') {
+      throw ApiError.badRequest('Alert is already closed');
+    }
+
+    const isTerminal = newStatus === 'RESOLVED' || newStatus === 'FALSE_ALARM';
+
+    const updated = await prisma.emergencyAlert.update({
+      where: { id: alertId },
+      data: {
+        status: newStatus,
+        statusNote: statusNote ?? null,
+        ...(isTerminal && {
+          resolvedAt: new Date(),
+          resolvedById: actorId,
+        }),
+      },
+    });
+
+    if (isTerminal) {
+      await notificationService
+        .send({
+          userId: alert.reporterId,
+          type: NotificationType.GENERAL_ANNOUNCEMENT,
+          title: `Your emergency report has been ${newStatus === 'RESOLVED' ? 'resolved' : 'marked as false alarm'}`,
+          message: statusNote ?? `Your ${alert.emergencyType} alert has been ${newStatus.toLowerCase().replace('_', ' ')}.`,
+          data: { alertId },
+          channels: [NotificationChannel.IN_APP],
+        })
+        .catch(() => {});
+    }
+
+    await auditService.log(
+      actorId,
+      AuditAction.EMERGENCY_REPORTED,
+      'emergency_alert',
+      alertId,
+      { from: alert.status, to: newStatus }
+    );
+
+    return updated;
   }
 
   /**

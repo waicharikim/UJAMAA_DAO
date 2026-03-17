@@ -865,6 +865,280 @@ async function seedTestAdmin() {
 }
 
 // ============================================================================
+// 8b. TEST USERS — Role coverage + governance test data (dev/test only)
+// ============================================================================
+
+async function seedTestUsers() {
+  if (process.env.NODE_ENV === 'production') {
+    console.log('   Skipping test users in production');
+    return;
+  }
+
+  console.log(
+    '   Seeding test users (role coverage + governance test data)...'
+  );
+
+  const firstWard = await prisma.ward.findFirst({
+    include: { constituency: { include: { county: true } } },
+  });
+  if (!firstWard) {
+    console.warn('   No ward found — skipping test users');
+    return;
+  }
+
+  const COMMON_FIELDS = {
+    emailVerified: true,
+    phoneVerified: true,
+    communityVerified: true,
+    verificationLevel: 'COMMUNITY_VERIFIED' as const,
+    participationRights: 500,
+    globalImpactPoints: 200,
+    primaryWardId: firstWard.id,
+  };
+
+  type TestUser = {
+    email: string;
+    name: string;
+    phoneNumber: string;
+    role?: string;
+    verificationLevel?: string;
+  };
+  const testUsers: TestUser[] = [
+    {
+      email: 'compliance@ujamaa.test',
+      name: 'Compliance Officer',
+      phoneNumber: '+254700000001',
+      role: 'system:compliance_officer',
+      verificationLevel: 'FULL_VERIFIED',
+    },
+    {
+      email: 'ward.admin@ujamaa.test',
+      name: 'Ward Administrator',
+      phoneNumber: '+254700000002',
+      role: 'location:ward_admin',
+      verificationLevel: 'FULL_VERIFIED',
+    },
+    {
+      email: 'constituency.admin@ujamaa.test',
+      name: 'Constituency Administrator',
+      phoneNumber: '+254700000003',
+      role: 'location:constituency_admin',
+      verificationLevel: 'FULL_VERIFIED',
+    },
+    {
+      email: 'county.admin@ujamaa.test',
+      name: 'County Administrator',
+      phoneNumber: '+254700000004',
+      role: 'location:county_admin',
+      verificationLevel: 'FULL_VERIFIED',
+    },
+    {
+      email: 'waichari@ujamaa.test',
+      name: 'James Waichari',
+      phoneNumber: '+254700000010',
+    },
+    {
+      email: 'akinyi@ujamaa.test',
+      name: 'Grace Akinyi',
+      phoneNumber: '+254700000011',
+    },
+    {
+      email: 'otieno@ujamaa.test',
+      name: 'Kevin Otieno',
+      phoneNumber: '+254700000012',
+    },
+  ];
+
+  const createdUsers: Record<string, string> = {};
+
+  for (const u of testUsers) {
+    const verificationLevel = (u.verificationLevel ??
+      COMMON_FIELDS.verificationLevel) as
+      | 'COMMUNITY_VERIFIED'
+      | 'FULL_VERIFIED';
+    const user = await prisma.user.upsert({
+      where: { email: u.email },
+      update: { primaryWardId: firstWard.id, verificationLevel },
+      create: {
+        id: uuidv4(),
+        email: u.email,
+        name: u.name,
+        phoneNumber: u.phoneNumber,
+        ...COMMON_FIELDS,
+        verificationLevel,
+      },
+    });
+    createdUsers[u.email] = user.id;
+
+    if (u.role) {
+      const roleRecord = await prisma.role.findUnique({
+        where: { name: u.role },
+      });
+      if (roleRecord) {
+        await prisma.userRole.upsert({
+          where: { userId_roleId: { userId: user.id, roleId: roleRecord.id } },
+          update: { active: true },
+          create: {
+            id: uuidv4(),
+            userId: user.id,
+            roleId: roleRecord.id,
+            active: true,
+          },
+        });
+      }
+    }
+  }
+
+  // Seed voluntary group: Kayole Borehole Committee
+  const boreholeGroup = await prisma.group
+    .upsert({
+      where: {
+        name_wardId: {
+          name: 'Kayole Borehole Committee',
+          wardId: firstWard.id,
+        },
+      } as any,
+      update: {},
+      create: {
+        id: uuidv4(),
+        name: 'Kayole Borehole Committee',
+        description:
+          'Community borehole construction and maintenance committee',
+        isSystemGroup: false,
+        locationScope: 'WARD',
+        voluntaryType: 'PROJECT',
+        wardId: firstWard.id,
+        memberCount: 0,
+      },
+    })
+    .catch(async () => {
+      // fallback if unique constraint differs
+      const existing = await prisma.group.findFirst({
+        where: { name: 'Kayole Borehole Committee', wardId: firstWard.id },
+      });
+      return (
+        existing ??
+        (await prisma.group.create({
+          data: {
+            id: uuidv4(),
+            name: 'Kayole Borehole Committee',
+            description:
+              'Community borehole construction and maintenance committee',
+            isSystemGroup: false,
+            locationScope: 'WARD',
+            voluntaryType: 'PROJECT',
+            wardId: firstWard.id,
+            memberCount: 0,
+          },
+        }))
+      );
+    });
+
+  // Add test users to borehole group
+  const groupMembers = [
+    { email: 'waichari@ujamaa.test', role: 'LEADER' },
+    { email: 'akinyi@ujamaa.test', role: 'MEMBER' },
+    { email: 'otieno@ujamaa.test', role: 'MEMBER' },
+  ];
+
+  let memberCount = 0;
+  for (const m of groupMembers) {
+    const userId = createdUsers[m.email];
+    if (!userId) continue;
+    await prisma.groupMember.upsert({
+      where: { userId_groupId: { userId, groupId: boreholeGroup.id } },
+      update: {},
+      create: {
+        userId,
+        groupId: boreholeGroup.id,
+        role: m.role as any,
+        autoEnrolled: false,
+        canLeave: true,
+        joinedAt: new Date(),
+        active: true,
+      },
+    });
+    memberCount++;
+  }
+
+  await prisma.group.update({
+    where: { id: boreholeGroup.id },
+    data: { memberCount },
+  });
+
+  // Seed test proposals
+  const waichariId = createdUsers['waichari@ujamaa.test'];
+  if (waichariId) {
+    // DRAFT proposal
+    const existing1 = await prisma.proposal.findFirst({
+      where: { title: 'New Community Borehole', creatorId: waichariId },
+    });
+    if (!existing1) {
+      await prisma.proposal.create({
+        data: {
+          id: uuidv4(),
+          groupId: boreholeGroup.id,
+          creatorId: waichariId,
+          title: 'New Community Borehole',
+          description:
+            'Proposal to drill a new borehole in Kayole Ward to address water scarcity affecting 5,000 residents.',
+          status: 'DRAFT',
+          proposalType: 'COMMUNITY_INITIATIVE',
+          proposalScope: 'COMMUNITY',
+          budget: 350000,
+        },
+      });
+    }
+
+    // PENDING_REVIEW proposal
+    const existing2 = await prisma.proposal.findFirst({
+      where: { title: 'Road Maintenance Request', creatorId: waichariId },
+    });
+    if (!existing2) {
+      await prisma.proposal.create({
+        data: {
+          id: uuidv4(),
+          groupId: boreholeGroup.id,
+          creatorId: waichariId,
+          title: 'Road Maintenance Request',
+          description:
+            'Request for maintenance of the main access road connecting Kayole to Embakasi Road.',
+          status: 'PENDING_REVIEW',
+          proposalType: 'COMMUNITY_INITIATIVE',
+          proposalScope: 'COMMUNITY',
+          budget: 150000,
+        },
+      });
+    }
+
+    // APPROVED_FOR_VOTING proposal
+    const existing3 = await prisma.proposal.findFirst({
+      where: { title: 'Youth Skills Programme', creatorId: waichariId },
+    });
+    if (!existing3) {
+      await prisma.proposal.create({
+        data: {
+          id: uuidv4(),
+          groupId: boreholeGroup.id,
+          creatorId: waichariId,
+          title: 'Youth Skills Programme',
+          description:
+            'Six-month vocational skills programme for unemployed youth aged 18–35 in Kayole Ward.',
+          status: 'APPROVED_FOR_VOTING',
+          proposalType: 'COMMUNITY_INITIATIVE',
+          proposalScope: 'COMMUNITY',
+          budget: 200000,
+        },
+      });
+    }
+  }
+
+  console.log(
+    `   Created ${testUsers.length} test users, 1 voluntary group, 3 test proposals`
+  );
+}
+
+// ============================================================================
 // 8. EDUCATION MODULES (template modules about the system itself)
 // ============================================================================
 
@@ -1123,6 +1397,7 @@ async function main() {
     await seedRoles();
     await seedOnboardingTutorials();
     await seedTestAdmin();
+    await seedTestUsers();
     await seedEducationModules();
 
     console.log('\n✅ Core seeding completed successfully!');

@@ -22,6 +22,11 @@ import { groupMembershipService } from '../../community/services/groupMembership
 import { ApiError } from '../../../core/errors/ApiError.js';
 import { logger } from '../../../core/logger/logger.js';
 import { userService } from '../../user/services/user.service.js';
+import { auditService } from '../../audit/services/audit.service.js';
+import { AuditAction } from '../../audit/types.js';
+import { isValidSystemRole } from '../../../core/rbac/roles.js';
+import { notificationService } from '../../notifications/services/notification.service.js';
+import { NotificationType } from '../../notifications/types.js';
 
 class AdminService {
   // ============================================================================
@@ -86,6 +91,16 @@ class AdminService {
         },
         `Residence change request ${newStatus.toLowerCase()}`
       );
+
+      if (approved) {
+        await auditService.log(
+          adminId,
+          AuditAction.RESIDENCE_CHANGE_APPROVED,
+          'ResidenceChangeRequest',
+          requestId,
+          { userId: request.userId }
+        );
+      }
 
       return { status: newStatus };
     });
@@ -574,6 +589,253 @@ class AdminService {
     return prisma.systemConfiguration.findMany({
       orderBy: [{ category: 'asc' }, { key: 'asc' }],
     });
+  }
+
+  // ============================================================================
+  // ROLE ASSIGNMENT (SUPER_ADMIN only)
+  // ============================================================================
+
+  async assignRole(
+    adminId: string,
+    userId: string,
+    role: string,
+    scope?: string
+  ): Promise<void> {
+    if (!isValidSystemRole(role)) {
+      throw ApiError.badRequest(`Unknown role: ${role}`);
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw ApiError.notFound('User');
+
+    const roleRecord = await prisma.role.upsert({
+      where: { name: role },
+      create: { name: role, description: role },
+      update: {},
+    });
+
+    await prisma.userRole.upsert({
+      where: { userId_roleId: { userId, roleId: roleRecord.id } },
+      create: {
+        userId,
+        roleId: roleRecord.id,
+        active: true,
+        grantedBy: adminId,
+      },
+      update: { active: true },
+    });
+
+    await auditService.log(adminId, AuditAction.ROLE_ASSIGNED, 'User', userId, {
+      role,
+      scope,
+    });
+
+    await notificationService
+      .send({
+        userId,
+        type: NotificationType.GENERAL_ANNOUNCEMENT,
+        title: 'Role assigned',
+        message: `You have been assigned the role: ${role}`,
+        data: { role, scope },
+      })
+      .catch(() => {
+        /* non-critical */
+      });
+
+    logger.info(
+      { operationType: 'ADMIN_ROLE_ASSIGN', adminId, userId, role, scope },
+      'Role assigned'
+    );
+  }
+
+  async revokeRole(
+    adminId: string,
+    userId: string,
+    role: string
+  ): Promise<void> {
+    const roleRecord = await prisma.role.findUnique({ where: { name: role } });
+    if (!roleRecord) throw ApiError.notFound('Role');
+
+    const userRole = await prisma.userRole.findUnique({
+      where: { userId_roleId: { userId, roleId: roleRecord.id } },
+    });
+    if (!userRole || !userRole.active) {
+      throw ApiError.badRequest('User does not have this role');
+    }
+
+    await prisma.userRole.update({
+      where: { userId_roleId: { userId, roleId: roleRecord.id } },
+      data: { active: false },
+    });
+
+    await auditService.log(adminId, AuditAction.ROLE_REVOKED, 'User', userId, {
+      role,
+    });
+
+    await notificationService
+      .send({
+        userId,
+        type: NotificationType.GENERAL_ANNOUNCEMENT,
+        title: 'Role removed',
+        message: `The role "${role}" has been removed from your account`,
+        data: { role },
+      })
+      .catch(() => {
+        /* non-critical */
+      });
+
+    logger.info(
+      { operationType: 'ADMIN_ROLE_REVOKE', adminId, userId, role },
+      'Role revoked'
+    );
+  }
+
+  async getUserRoles(userId: string) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw ApiError.notFound('User');
+
+    const userRoles = await prisma.userRole.findMany({
+      where: { userId, active: true },
+      include: { role: { select: { name: true, description: true } } },
+    });
+
+    return userRoles.map((ur) => ({
+      role: ur.role.name,
+      description: ur.role.description,
+      grantedBy: ur.grantedBy,
+    }));
+  }
+
+  // ============================================================================
+  // REPORT GENERATION
+  // ============================================================================
+
+  async generateReport(
+    type: 'users' | 'governance' | 'economy',
+    params: { fromDate?: Date; toDate?: Date }
+  ) {
+    const { fromDate, toDate } = params;
+    const dateFilter =
+      fromDate || toDate
+        ? {
+            createdAt: {
+              ...(fromDate ? { gte: fromDate } : {}),
+              ...(toDate ? { lte: toDate } : {}),
+            },
+          }
+        : {};
+
+    if (type === 'users') {
+      const [byVerification, registrationsRaw, suspendedCount] =
+        await Promise.all([
+          prisma.user.groupBy({
+            by: ['verificationLevel'],
+            _count: { id: true },
+            where: dateFilter,
+          }),
+          prisma.user.findMany({
+            where: dateFilter,
+            select: { createdAt: true },
+          }),
+          prisma.user.count({ where: { status: 'SUSPENDED', ...dateFilter } }),
+        ]);
+
+      // Group registrations by ISO week
+      const weekMap: Record<string, number> = {};
+      for (const u of registrationsRaw) {
+        const d = u.createdAt;
+        const yearWeek = `${d.getFullYear()}-W${String(Math.ceil((d.getDate() + new Date(d.getFullYear(), 0, 1).getDay()) / 7)).padStart(2, '0')}`;
+        weekMap[yearWeek] = (weekMap[yearWeek] || 0) + 1;
+      }
+
+      const columns = ['verificationLevel', 'count'];
+      const rows = byVerification.map((r) => ({
+        verificationLevel: r.verificationLevel,
+        count: r._count.id,
+      }));
+
+      return {
+        title: 'User Activity Report',
+        generatedAt: new Date().toISOString(),
+        columns,
+        rows,
+        summary: {
+          registrationsPerWeek: weekMap,
+          suspendedCount,
+          totalRegistrations: registrationsRaw.length,
+        },
+      };
+    }
+
+    if (type === 'governance') {
+      const [byStatus, totalVotes] = await Promise.all([
+        prisma.proposal.groupBy({
+          by: ['status'],
+          _count: { id: true },
+          where: dateFilter,
+        }),
+        prisma.groupMemberVote.count({ where: dateFilter }),
+      ]);
+
+      const statusMap: Record<string, number> = {};
+      for (const r of byStatus) statusMap[r.status] = r._count.id;
+
+      const approved = statusMap['APPROVED'] || 0;
+      const rejected = statusMap['REJECTED'] || 0;
+      const total = approved + rejected;
+      const passRate =
+        total > 0 ? ((approved / total) * 100).toFixed(1) + '%' : 'N/A';
+
+      const columns = ['status', 'count'];
+      const rows = byStatus.map((r) => ({
+        status: r.status,
+        count: r._count.id,
+      }));
+
+      return {
+        title: 'Governance Report',
+        generatedAt: new Date().toISOString(),
+        columns,
+        rows,
+        summary: {
+          totalVotesCast: totalVotes,
+          passRate,
+          approvedProposals: approved,
+          rejectedProposals: rejected,
+        },
+      };
+    }
+
+    // economy
+    const [prAwarded, prSpent, duesPaid, activeCommitments] = await Promise.all(
+      [
+        prisma.participationRightsLog.aggregate({
+          _sum: { amount: true },
+          where: { amount: { gt: 0 }, ...dateFilter },
+        }),
+        prisma.participationRightsLog.aggregate({
+          _sum: { amount: true },
+          where: { amount: { lt: 0 }, ...dateFilter },
+        }),
+        prisma.duesPayment.count({ where: dateFilter }),
+        prisma.commitment.count({ where: { type: 'DUES', status: 'ACTIVE' } }),
+      ]
+    );
+
+    const columns = ['metric', 'value'];
+    const rows = [
+      { metric: 'PR Awarded (total)', value: prAwarded._sum.amount ?? 0 },
+      { metric: 'PR Spent (total)', value: Math.abs(prSpent._sum.amount ?? 0) },
+      { metric: 'Dues Payments', value: duesPaid },
+      { metric: 'Active Commitments', value: activeCommitments },
+    ];
+
+    return {
+      title: 'Economy Report',
+      generatedAt: new Date().toISOString(),
+      columns,
+      rows,
+    };
   }
 }
 

@@ -32,6 +32,9 @@ import {
   banUserSchema,
   resolveSecurityEventAdminSchema,
   userIdParamSchema, // for security events view
+  addAdminRoleSchema,
+  reportQuerySchema,
+  reportTypeParamSchema,
 } from '../validators/admin.validators.js';
 
 // Handlers (expanded)
@@ -44,10 +47,14 @@ import {
   suspendUser,
   resolveSecurityEvent,
   updateSystemConfig,
-  getUserSecurityEventsAdmin, // NEW
+  getUserSecurityEventsAdmin,
   getStats,
   listUsers,
   getSystemConfig,
+  assignRole,
+  revokeRole,
+  listUserRoles,
+  generateReport,
 } from '../handlers/admin.handlers.js';
 
 const router = Router();
@@ -185,6 +192,50 @@ router.post(
     target: 'body',
   }),
   asyncHandler(updateSystemConfig)
+);
+
+// ============================================================================
+// ROLE ASSIGNMENT (SUPER_ADMIN only)
+// ============================================================================
+
+router.post(
+  '/users/:userId/roles',
+  authorize({ allowedRoles: [SystemRoles.SUPER_ADMIN] }),
+  buildRateLimiter({ windowMs: 15 * 60 * 1000, max: 20 }),
+  validateRequest({ schema: userIdParamSchema, target: 'params' }),
+  validateRequest({ schema: addAdminRoleSchema, target: 'body' }),
+  asyncHandler(assignRole)
+);
+
+router.delete(
+  '/users/:userId/roles/:role',
+  authorize({ allowedRoles: [SystemRoles.SUPER_ADMIN] }),
+  buildRateLimiter({ windowMs: 15 * 60 * 1000, max: 20 }),
+  asyncHandler(revokeRole)
+);
+
+router.get(
+  '/users/:userId/roles',
+  authorize({
+    allowedRoles: [SystemRoles.SUPER_ADMIN, SystemRoles.COMPLIANCE_OFFICER],
+  }),
+  validateRequest({ schema: userIdParamSchema, target: 'params' }),
+  asyncHandler(listUserRoles)
+);
+
+// ============================================================================
+// REPORT GENERATION
+// ============================================================================
+
+router.get(
+  '/reports/:type',
+  authorize({
+    allowedRoles: [SystemRoles.SUPER_ADMIN, SystemRoles.COMPLIANCE_OFFICER],
+  }),
+  buildRateLimiter({ windowMs: 15 * 60 * 1000, max: 10 }),
+  validateRequest({ schema: reportTypeParamSchema, target: 'params' }),
+  validateRequest({ schema: reportQuerySchema, target: 'query' }),
+  asyncHandler(generateReport)
 );
 
 export default router;

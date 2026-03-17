@@ -6,16 +6,16 @@ UjamaaDAO is a neighborhood sovereignty platform for Kenyan wards — cooperativ
 
 ---
 
-## Project Status (Feb 2026)
+## Project Status (March 2026)
 
 | Layer | Status |
 |---|---|
-| Backend API | ✅ Running — 12 modules, 3 fully tested (173 tests green), CI green |
-| Prisma schema | ✅ 80 models, migrations applied, E2E flow verified |
+| Backend API | ✅ Running — 16 modules, 15 fully tested (679 tests green, 42 test files), CI green |
+| Prisma schema | ✅ 83 models, migrations applied, E2E flow verified |
 | Docker/Infra | ✅ All services running (`make dev`) — API, worker, postgres, redis, frontend, MailHog |
-| Frontend | ✅ Active — 15 routes, Chai palette design system, magic-link auth, Privy wallet |
+| Frontend | ✅ Active — 17 routes, Chai palette design system, magic-link auth, Privy wallet |
 | M-Pesa | 🔶 Stubbed — service exists, always returns success (real Daraja API integration pending) |
-| Smart Contracts | 🔶 Scaffold only — `contracts/` directory, Foundry config, no Solidity yet |
+| Smart Contracts | 🔶 Written and tested — `PrToken.sol` (soulbound) + `UtToken.sol`, 13 Foundry tests green; Base Sepolia deploy pending (minter wallet not funded) |
 
 ---
 
@@ -30,8 +30,8 @@ UJAMAA_DAO/
 │   │   ├── workers.ts      # BullMQ worker entry (4 background jobs)
 │   │   ├── core/           # Shared infrastructure (logger, queue, rbac, errors…)
 │   │   └── modules/        # Feature modules (auth, user, economy, community, …)
-│   ├── prisma/             # Merged schema (80 models) + migrations
-│   ├── tests/              # Vitest suites — 173 tests (104 auth, 35 user, 34 economy)
+│   ├── prisma/             # Merged schema (83 models) + migrations
+│   ├── tests/              # Vitest suites — 679 tests (42 test files, all modules)
 │   ├── Makefile            # All dev commands
 │   └── .env.example
 │
@@ -42,9 +42,10 @@ UJAMAA_DAO/
 │   ├── lib/            # Typed API client (authApi, userApi, economyApi)
 │   └── stubs/          # Webpack stubs for unused Privy transitive deps
 │
-├── contracts/          # Solidity (Foundry) — scaffold, no code yet
+├── contracts/          # Solidity (Foundry) — Base L2
 │   ├── foundry.toml
-│   └── src/            # PrToken.sol + UtToken.sol (to be written)
+│   ├── src/            # PrToken.sol (soulbound ERC-20) + UtToken.sol
+│   └── test/           # 13 Foundry tests green
 │
 ├── docker/             # Docker Compose configs
 │   ├── docker-compose.yml          # Development stack
@@ -59,7 +60,7 @@ UJAMAA_DAO/
 │   ├── DECISIONS.md    # All ADRs (ADR-001 through ADR-022)
 │   └── AGENTS.md       # Claude agent hats and workflow
 │
-└── docs/               # API and module documentation
+└── docs/               # API and module documentation (auth, user, economy, community, governance, …)
 ```
 
 ---
@@ -101,12 +102,12 @@ Visit **`http://localhost:8025`** — MailHog catches all outgoing emails in dev
 |---|---|
 | Runtime | Node.js 22, TypeScript strict |
 | Framework | Express |
-| Database | PostgreSQL 15 + Prisma ORM (80 models) |
+| Database | PostgreSQL 15 + Prisma ORM (83 models) |
 | Queue | BullMQ + Redis |
 | Logger | Pino (structured, `operationType` context) |
-| Testing | Vitest + Supertest — 173 tests, CI green |
+| Testing | Vitest + Supertest — 679 tests, 42 test files, CI green |
 | Auth | Email magic links (JWT + hex token), Africa's Talking SMS |
-| Frontend | Next.js 15 (App Router), TanStack Query v5, Tailwind v3, shadcn/ui |
+| Frontend | Next.js 16 (App Router + Turbopack), TanStack Query v5, Tailwind v3, shadcn/ui |
 | Wallet | Privy (`@privy-io/react-auth` v3.14.1) — embedded wallets on Base L2 |
 | Contracts | Foundry (forge/cast/anvil) — Base Sepolia → Base Mainnet |
 | Infra | Docker Compose + Traefik reverse proxy |
@@ -140,7 +141,7 @@ UjamaaDAO uses **email magic links** — no passwords, no seed phrases.
 |---|---|
 | [`ai_workflows/SESSION_STATE.md`](ai_workflows/SESSION_STATE.md) | Live project snapshot — read first each session |
 | [`ai_workflows/CLAUDE.md`](ai_workflows/CLAUDE.md) | Full project context, module status, conventions |
-| [`ai_workflows/DECISIONS.md`](ai_workflows/DECISIONS.md) | All architectural decisions (ADR-001 – ADR-022) |
+| [`ai_workflows/DECISIONS.md`](ai_workflows/DECISIONS.md) | All architectural decisions (ADR-001 – ADR-031) |
 | [`ai_workflows/PROGRESS_LOG.md`](ai_workflows/PROGRESS_LOG.md) | Session-by-session build history |
 | [`backend/README.md`](backend/README.md) | Backend setup, commands, architecture |
 | [`frontend/README.md`](frontend/README.md) | Frontend setup, design system, page inventory |

@@ -33,9 +33,14 @@ model EmergencyAlert {
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
 
-  reporter  User               @relation(fields: [reporterId], references: [id], onDelete: Cascade)
-  group     Group?             @relation(fields: [assignedGroupId], references: [id], onDelete: SetNull)
-  responses EmergencyResponse[]
+  resolvedAt     DateTime?
+  resolvedById   String?           @db.Uuid
+  statusNote     String?           @db.VarChar(500)
+
+  reporter   User               @relation("EmergencyAlertReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  resolvedBy User?              @relation("EmergencyAlertResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  group      Group?             @relation(fields: [assignedGroupId], references: [id], onDelete: SetNull)
+  responses  EmergencyResponse[]
 
   @@index([reporterId])
   @@index([assignedGroupId])

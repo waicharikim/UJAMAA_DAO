@@ -19,6 +19,8 @@ import { ApiError } from '../../../core/errors/ApiError.js';
 import { logger } from '../../../core/logger/logger.js';
 import { VOLUNTARY_GROUP_PR_COST } from '../types.js';
 import { CreateVoluntaryGroupDto } from '@modules/community/types.js';
+import { auditService } from '../../audit/services/audit.service.js';
+import { AuditAction } from '../../audit/types.js';
 
 class GroupService {
   /**
@@ -81,6 +83,14 @@ class GroupService {
       'Voluntary group created'
     );
 
+    await auditService.log(
+      userId,
+      AuditAction.GROUP_CREATED,
+      'Group',
+      group.id,
+      { type: dto.voluntaryType, name: dto.name }
+    );
+
     return group;
   }
 
@@ -131,6 +141,8 @@ class GroupService {
 
     logger.info({ userId, groupId }, 'Joined voluntary group');
 
+    await auditService.log(userId, AuditAction.GROUP_JOINED, 'Group', groupId);
+
     return membership;
   }
 
@@ -156,6 +168,8 @@ class GroupService {
     });
 
     logger.info({ userId, groupId }, 'Left voluntary group');
+
+    await auditService.log(userId, AuditAction.GROUP_LEFT, 'Group', groupId);
 
     return { success: true };
   }

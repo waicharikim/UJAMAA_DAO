@@ -13,8 +13,19 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { formatDate } from "@/lib/utils"
 import { useToast } from "@/components/ui/use-toast"
-import { Search, Shield, Ban, UserCheck, Mail, MapPin, Calendar, Award, Coins, Users } from "lucide-react"
+import { Search, Shield, Ban, UserCheck, Mail, MapPin, Calendar, Award, Coins, Users, X, Plus } from "lucide-react"
 import { adminApi, type AdminUserDto } from "@/lib/api"
+
+const AVAILABLE_ROLES = [
+  "system:super_admin",
+  "system:compliance_officer",
+  "system:blockchain_admin",
+  "system:contract_deployer",
+  "system:multisig_signer",
+  "location:ward_admin",
+  "location:constituency_admin",
+  "location:county_admin",
+]
 
 export function UserManagement() {
   const { toast } = useToast()
@@ -24,6 +35,9 @@ export function UserManagement() {
   const [statusFilter, setStatusFilter] = useState("all")
   const [verificationFilter, setVerificationFilter] = useState("all")
   const debounceTimer = useRef<NodeJS.Timeout | null>(null)
+  const [showRolesDialog, setShowRolesDialog] = useState(false)
+  const [rolesUser, setRolesUser] = useState<AdminUserDto | null>(null)
+  const [selectedRoleToAdd, setSelectedRoleToAdd] = useState("")
 
   useEffect(() => {
     if (debounceTimer.current) clearTimeout(debounceTimer.current)
@@ -59,6 +73,35 @@ export function UserManagement() {
   const [showUserDialog, setShowUserDialog] = useState(false)
   const [actionType, setActionType] = useState<"suspend" | null>(null)
   const [reason, setReason] = useState("")
+
+  const { data: userRolesData, isLoading: rolesLoading } = useQuery({
+    queryKey: ["admin", "user-roles", rolesUser?.id],
+    queryFn: () => adminApi.getUserRoles(rolesUser!.id),
+    enabled: !!rolesUser && showRolesDialog,
+  })
+
+  const assignRoleMutation = useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: string }) =>
+      adminApi.assignRole(userId, role),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "user-roles", rolesUser?.id] })
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] })
+      setSelectedRoleToAdd("")
+      toast({ title: "Role assigned", description: "Role has been assigned successfully." })
+    },
+    onError: () => toast({ title: "Failed", description: "Could not assign role.", variant: "destructive" }),
+  })
+
+  const revokeRoleMutation = useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: string }) =>
+      adminApi.revokeRole(userId, role),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "user-roles", rolesUser?.id] })
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] })
+      toast({ title: "Role removed", description: "Role has been removed." })
+    },
+    onError: () => toast({ title: "Failed", description: "Could not remove role.", variant: "destructive" }),
+  })
 
   const mapStatus = (s: string): "active" | "suspended" | "pending" =>
     s === "ACTIVE" ? "active" : s === "SUSPENDED" ? "suspended" : "pending"
@@ -173,6 +216,13 @@ export function UserManagement() {
                     <div className="flex items-center gap-2">
                       <Button
                         size="sm"
+                        variant="outline"
+                        onClick={() => { setRolesUser(user); setSelectedRoleToAdd(""); setShowRolesDialog(true) }}
+                      >
+                        <Shield className="h-4 w-4 mr-1" />Roles
+                      </Button>
+                      <Button
+                        size="sm"
                         variant={status === "suspended" ? "default" : "destructive"}
                         onClick={() => { setSelectedUser(user); setActionType("suspend"); setReason(""); setShowUserDialog(true) }}
                       >
@@ -219,6 +269,69 @@ export function UserManagement() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showRolesDialog} onOpenChange={setShowRolesDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Shield className="h-4 w-4" />
+              Manage Roles — {rolesUser?.name ?? rolesUser?.email}
+            </DialogTitle>
+            <DialogDescription>Add or remove system roles for this user.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label className="text-sm font-medium">Current Roles</Label>
+              {rolesLoading ? (
+                <div className="h-6 w-24 animate-pulse bg-slate-200 rounded mt-2" />
+              ) : (
+                <div className="flex flex-wrap gap-2 mt-2 min-h-[2rem]">
+                  {(userRolesData ?? []).length === 0 && (
+                    <span className="text-sm text-slate-500">No roles assigned</span>
+                  )}
+                  {(userRolesData ?? []).map((r) => (
+                    <Badge key={r.role} variant="secondary" className="flex items-center gap-1 pr-1">
+                      {r.role.replace("system:", "").replace("location:", "").replace(/_/g, " ")}
+                      <button
+                        className="ml-1 hover:text-red-600"
+                        disabled={revokeRoleMutation.isPending}
+                        onClick={() => rolesUser && revokeRoleMutation.mutate({ userId: rolesUser.id, role: r.role })}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div>
+              <Label className="text-sm font-medium">Add Role</Label>
+              <div className="flex gap-2 mt-2">
+                <Select value={selectedRoleToAdd} onValueChange={setSelectedRoleToAdd}>
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="Select role…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {AVAILABLE_ROLES.map((r) => (
+                      <SelectItem key={r} value={r}>{r.replace("system:", "").replace("location:", "").replace(/_/g, " ")}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  size="sm"
+                  disabled={!selectedRoleToAdd || assignRoleMutation.isPending}
+                  onClick={() => rolesUser && assignRoleMutation.mutate({ userId: rolesUser.id, role: selectedRoleToAdd })}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            <div className="flex justify-end pt-2">
+              <Button variant="outline" onClick={() => setShowRolesDialog(false)}>Done</Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

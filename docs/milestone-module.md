@@ -1,5 +1,5 @@
-> **Module status:** `partial` — project routes not yet mounted in `app.ts`, no tests written.
-> Expected base URL: `/api/v1/projects`
+> **Module status:** `tested` — project/milestone routes at `/api/v1/projects` (41 tests).
+> Milestone submission (`POST /projects/:id/milestones/:mId/submit`) and verification (`POST /projects/:id/milestones/:mId/verify`) live.
 
 # Milestone Module
 

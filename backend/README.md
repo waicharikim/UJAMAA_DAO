@@ -29,7 +29,7 @@ This backend provides all core APIs, business logic, authentication, and integra
 - **Economy**: Participation Rights (PR) soulbound tokens + Utility Tokens (UT), dues commitments, impact points for reputation and governance.
 - **Authentication**: Email magic links (JWT + hex token), phone OTP via Africa's Talking, JWT session management.
 - **Logging & Error Handling**: Structured logging with Pino (`operationType` context), consistent ApiError-based error handling.
-- **Testing**: 173 tests green — 104 auth, 35 user, 34 economy (Vitest + Supertest). CI runs on every push.
+- **Testing**: 679 tests green across 42 test files — all 16 modules tested (Vitest + Supertest). CI runs on every push.
 - **Dockerized**: Multi-service docker-compose setup with PostgreSQL, Redis, Traefik, MailHog, and frontend.
 
 ---
@@ -50,16 +50,27 @@ ujamaadao-backend/
 │   │   ├── middleware/     # Express middlewares
 │   │   ├── queue/          # Queue setup
 │   │   └── services/       # Shared services
-│   ├── modules/            # Feature modules
-│   │   ├── auth/           # Authentication
-│   │   ├── user/           # User management
-│   │   ├── admin/          # Admin features
-│   │   ├── economy/        # Token & PR economy
-│   │   └── community/      # Groups & governance
+│   ├── modules/            # Feature modules (16 modules)
+│   │   ├── auth/           # Authentication (magic link, OTP, sessions)
+│   │   ├── user/           # User profile, verification, residence
+│   │   ├── economy/        # PR/UT tokens, dues, commitments
+│   │   ├── community/      # Groups, members, vouching
+│   │   ├── governance/     # Proposals, voting (2-stage review chain)
+│   │   ├── projects/       # Projects, milestones, verification
+│   │   ├── marketplace/    # Discovery listings (Rule 1: no payments)
+│   │   ├── emergency/      # Alert lifecycle + responder coordination
+│   │   ├── notifications/  # In-app + email + SMS notifications
+│   │   ├── onboarding/     # Tutorial, milestones, progress
+│   │   ├── reputation/     # Impact points, location impact
+│   │   ├── education/      # Learning modules with PR rewards
+│   │   ├── admin/          # Role assignment, reports, config
+│   │   ├── audit/          # Audit log (searchable, sortable)
+│   │   ├── treasury/       # Group treasury ledger, dues allocation
+│   │   └── integration/    # Baraza (Telegram/Discord/WhatsApp) attendance
 │   └── worker-events.ts    # Event listeners
 │
-├── prisma/                 # Prisma schema and migrations
-├── tests/                  # Vitest test suites
+├── prisma/                 # Merged schema (83 models) + migrations
+├── tests/                  # Vitest test suites (679 tests, 42 files)
 ├── docs/                   # API & architecture docs
 │
 ├── Dockerfile              # Container build
@@ -119,20 +130,17 @@ See [INFRASTRUCTURE.md](./INFRASTRUCTURE.md) for detailed setup instructions.
 ### 3. Testing
 
 ```bash
-# Run all tests (173 tests — auth, user, economy)
-npx vitest run
+# Run all tests (679 tests — all 16 modules) — MUST run inside the container
+docker exec -e RUNNING_IN_DOCKER=true ujamaa_web npx vitest run
 
-# Run specific suite
-npx vitest run tests/auth/
-npx vitest run tests/user/
-npx vitest run tests/economy/
-
-# Watch mode
-npx vitest
+# Run specific module
+docker exec -e RUNNING_IN_DOCKER=true ujamaa_web npx vitest run tests/auth/
+docker exec -e RUNNING_IN_DOCKER=true ujamaa_web npx vitest run tests/community/
 ```
 
-> Tests require the test database (`ujamaa_postgres_test` on port 5433) to be running.
-> `make dev` starts it automatically.
+> **Always run tests inside the Docker container** with `RUNNING_IN_DOCKER=true`.
+> This ensures the test DB (`postgres_test:5432`) is reachable.
+> Running `npx vitest run` directly on the host will fail — the test DB is only accessible via `localhost:5433` from outside Docker, which the container Prisma client cannot reach.
 
 ### 4. Code Quality
 
@@ -197,11 +205,14 @@ See `.env.example` for complete list with descriptions.
 
 Detailed API documentation per module:
 
-- `/docs/user-api.md` - User management endpoints
-- `/docs/auth-api.md` - Authentication flow
-- `/docs/economy-api.md` - Token & participation rights
-- `/docs/group-api.md` - Groups & governance
-- `/docs/admin-api.md` - Admin operations
+- `docs/auth-api.md` — Authentication flow (magic link, OTP, sessions)
+- `docs/user-api.md` — User profile, verification, residence
+- `docs/economy-api.md` — PR/UT tokens, dues, commitments
+- `docs/group-api.md` — Groups (discovery, management, membership)
+- `docs/proposal-api.md` — Governance proposals and voting
+- `docs/admin-api.md` — Admin operations (roles, reports, config)
+- `docs/architecture.md` — Full system architecture and module status
+- `docs/economy-design.md` — Token economics, earning rules, regen, decay
 
 **API Base URL**: `http://localhost:4000/api/v1`
 
@@ -299,9 +310,9 @@ See [UPGRADE-GUIDE.md](./UPGRADE-GUIDE.md) for observability options.
 - **Runtime**: Node.js 22
 - **Language**: TypeScript (strict)
 - **Framework**: Express
-- **Database**: PostgreSQL 15 + Prisma ORM (80 models)
-- **Cache/Queue**: Redis + BullMQ (4 background jobs)
-- **Testing**: Vitest + Supertest — 173 tests, CI green
+- **Database**: PostgreSQL 15 + Prisma ORM (83 models)
+- **Cache/Queue**: Redis + BullMQ (5 scheduled jobs across 4 queues)
+- **Testing**: Vitest + Supertest — 679 tests (42 files), CI green
 - **Logging**: Pino (structured, `operationType` context)
 - **Validation**: Zod
 - **Authentication**: Email magic links + Africa's Talking SMS OTP + JWT sessions

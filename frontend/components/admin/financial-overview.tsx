@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   DollarSign,
   TrendingUp,
@@ -12,15 +13,46 @@ import {
   Wallet,
   PieChart,
   BarChart3,
+  Download,
+  Loader2,
 } from "lucide-react"
-import { type AdminStatsDto } from "@/lib/api"
+import { type AdminStatsDto, adminApi } from "@/lib/api"
+import { useToast } from "@/components/ui/use-toast"
 
 interface Props {
   stats?: AdminStatsDto
 }
 
 export function FinancialOverview({ stats }: Props) {
+  const { toast } = useToast()
   const [activeTab, setActiveTab] = useState("overview")
+  const [reportType, setReportType] = useState<"users" | "governance" | "economy">("economy")
+  const [generatingReport, setGeneratingReport] = useState(false)
+
+  async function handleGenerateReport() {
+    setGeneratingReport(true)
+    try {
+      const report = await adminApi.generateReport(reportType, { format: "json" })
+      const csv = [
+        report.data.columns.join(","),
+        ...report.data.rows.map((row: Record<string, unknown>) =>
+          report.data.columns.map((col: string) => JSON.stringify(row[col] ?? "")).join(",")
+        ),
+      ].join("\n")
+      const blob = new Blob([csv], { type: "text/csv" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `report-${reportType}-${new Date().toISOString().split("T")[0]}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast({ title: "Report downloaded", description: `${reportType} report exported as CSV.` })
+    } catch {
+      toast({ title: "Report failed", description: "Could not generate report.", variant: "destructive" })
+    } finally {
+      setGeneratingReport(false)
+    }
+  }
 
   const financialData = {
     totalPR: stats?.economy.totalParticipationRights ?? 0,
@@ -191,16 +223,34 @@ export function FinancialOverview({ stats }: Props) {
             <TabsContent value="reports" className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>Financial Reports</CardTitle>
+                  <CardTitle>Generate Report</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-center py-12 text-slate-500">
-                    <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <h3 className="text-lg font-semibold mb-2">Financial Reports</h3>
-                    <p>Detailed financial analytics and reports will be available here.</p>
-                    <Button className="mt-4" variant="outline">
-                      Generate Report
-                    </Button>
+                  <div className="flex flex-col items-center gap-6 py-8">
+                    <BarChart3 className="h-12 w-12 opacity-40 text-slate-500" />
+                    <p className="text-sm text-slate-500 text-center">Select a report type and download as CSV.</p>
+                    <div className="flex gap-3 items-center">
+                      <Select value={reportType} onValueChange={(v) => setReportType(v as typeof reportType)}>
+                        <SelectTrigger className="w-48">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="users">User Activity</SelectItem>
+                          <SelectItem value="governance">Governance</SelectItem>
+                          <SelectItem value="economy">Economy</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        variant="outline"
+                        disabled={generatingReport}
+                        onClick={handleGenerateReport}
+                      >
+                        {generatingReport
+                          ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Generating…</>
+                          : <><Download className="h-4 w-4 mr-2" />Download CSV</>
+                        }
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

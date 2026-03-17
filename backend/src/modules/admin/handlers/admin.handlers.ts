@@ -240,3 +240,67 @@ export async function getSystemConfig(req: AuthRequest, res: Response) {
   const configs = await adminService.getConfig();
   sendSuccess(res, configs, 'Config retrieved');
 }
+
+// ============================================================================
+// ROLE ASSIGNMENT
+// ============================================================================
+
+export async function assignRole(req: AuthRequest, res: Response) {
+  const adminId = req.user!.userId;
+  const { userId } = req.params;
+  const { role, scope } = req.body;
+  await adminService.assignRole(adminId, userId, role, scope);
+  sendSuccess(res, null, 'Role assigned successfully', 200);
+}
+
+export async function revokeRole(req: AuthRequest, res: Response) {
+  const adminId = req.user!.userId;
+  const { userId, role } = req.params;
+  await adminService.revokeRole(adminId, userId, decodeURIComponent(role));
+  sendSuccess(res, null, 'Role revoked successfully', 200);
+}
+
+export async function listUserRoles(req: AuthRequest, res: Response) {
+  const { userId } = req.params;
+  const roles = await adminService.getUserRoles(userId);
+  sendSuccess(res, roles, 'User roles retrieved');
+}
+
+// ============================================================================
+// REPORT GENERATION
+// ============================================================================
+
+export async function generateReport(req: AuthRequest, res: Response) {
+  const { type } = req.params as { type: 'users' | 'governance' | 'economy' };
+  const { fromDate, toDate, format } = req.query as {
+    fromDate?: string;
+    toDate?: string;
+    format?: string;
+  };
+
+  const report = await adminService.generateReport(type, {
+    fromDate: fromDate ? new Date(fromDate) : undefined,
+    toDate: toDate ? new Date(toDate) : undefined,
+  });
+
+  if (format === 'csv') {
+    const { columns, rows } = report;
+    const csv = [
+      columns.join(','),
+      ...rows.map((row: Record<string, unknown>) =>
+        columns.map((col: string) => JSON.stringify(row[col] ?? '')).join(',')
+      ),
+    ].join('\n');
+
+    const date = new Date().toISOString().split('T')[0];
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="report-${type}-${date}.csv"`
+    );
+    res.status(200).send(csv);
+    return;
+  }
+
+  sendSuccess(res, report, `${type} report generated`);
+}

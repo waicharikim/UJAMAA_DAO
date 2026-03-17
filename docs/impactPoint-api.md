@@ -1,7 +1,7 @@
 # Impact Points & Token Management API
 
-> **Module status:** `partial` — economy routes mounted at `/api/v1/economy` in `app.ts`.
-> Impact points and token balance endpoints are part of the economy module.
+> **Module status:** `tested` — economy routes at `/api/v1/economy` (34 tests); reputation routes at `/api/v1/reputation` (23 tests).
+> Impact points and token balance endpoints are part of the economy and reputation modules.
 
 Base URL: `/api/v1/economy`
 

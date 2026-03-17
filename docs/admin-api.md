@@ -1,7 +1,7 @@
 # Admin API Documentation
 
-> **Module status:** `partial` — admin routes mounted at `/api/v1/admin` in `app.ts`.
-> Tests not yet written.
+> **Module status:** `tested` — admin routes at `/api/v1/admin` (24 tests).
+> Role assignment, report generation (users/governance/economy, JSON + CSV), audit log wired.
 
 ## Overview
 

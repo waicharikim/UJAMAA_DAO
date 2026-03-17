@@ -28,6 +28,7 @@ vi.mock('../../src/modules/audit/services/audit.service.js', () => ({
 }));
 
 import { describe, it, expect, vi } from 'vitest';
+import { prisma } from '../../src/core/database/client.js';
 import { EmergencyType, EmergencySeverity } from '@prisma/client';
 import { EmergencyService } from '../../src/modules/emergency/services/emergency.service.js';
 import {
@@ -212,6 +213,83 @@ describe('EmergencyService.getAlert', () => {
   it('throws 404 for unknown alert', async () => {
     await expect(
       service.getAlert('00000000-0000-0000-0000-000000000000')
+    ).rejects.toMatchObject({ statusCode: 404 });
+  });
+});
+
+// ─────────────────────────────────────────────
+// updateAlertStatus
+// ─────────────────────────────────────────────
+
+describe('EmergencyService.updateAlertStatus', () => {
+  it('transitions ACTIVE → IN_PROGRESS', async () => {
+    const reporter = await createEmergencyUser('status1@test.com');
+    const ward = await seedWard();
+    const alert = await seedEmergencyAlert(reporter.id, ward.id, { status: 'ACTIVE' });
+
+    const updated = await service.updateAlertStatus(reporter.id, alert.id, 'IN_PROGRESS');
+
+    expect(updated.status).toBe('IN_PROGRESS');
+    expect(updated.resolvedAt).toBeNull();
+    expect(updated.resolvedById).toBeNull();
+  });
+
+  it('transitions ACTIVE → FALSE_ALARM and sets resolvedAt', async () => {
+    const reporter = await createEmergencyUser('status2@test.com');
+    const ward = await seedWard();
+    const alert = await seedEmergencyAlert(reporter.id, ward.id, { status: 'ACTIVE' });
+
+    const updated = await service.updateAlertStatus(
+      reporter.id,
+      alert.id,
+      'FALSE_ALARM',
+      'Turned out to be a controlled burn'
+    );
+
+    expect(updated.status).toBe('FALSE_ALARM');
+    expect(updated.resolvedAt).not.toBeNull();
+    expect(updated.resolvedById).toBe(reporter.id);
+    expect(updated.statusNote).toBe('Turned out to be a controlled burn');
+  });
+
+  it('transitions IN_PROGRESS → RESOLVED and sets resolvedAt', async () => {
+    const reporter = await createEmergencyUser('status3@test.com');
+    const responder = await createEmergencyUser('responder3@test.com');
+    const ward = await seedWard();
+    const alert = await seedEmergencyAlert(reporter.id, ward.id, { status: 'IN_PROGRESS' });
+
+    const updated = await service.updateAlertStatus(responder.id, alert.id, 'RESOLVED');
+
+    expect(updated.status).toBe('RESOLVED');
+    expect(updated.resolvedAt).not.toBeNull();
+    expect(updated.resolvedById).toBe(responder.id);
+  });
+
+  it('throws 400 when alert is already RESOLVED', async () => {
+    const reporter = await createEmergencyUser('status4@test.com');
+    const ward = await seedWard();
+    const alert = await seedEmergencyAlert(reporter.id, ward.id, { status: 'RESOLVED' });
+
+    await expect(
+      service.updateAlertStatus(reporter.id, alert.id, 'IN_PROGRESS')
+    ).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it('throws 400 when alert is already FALSE_ALARM', async () => {
+    const reporter = await createEmergencyUser('status5@test.com');
+    const ward = await seedWard();
+    const alert = await seedEmergencyAlert(reporter.id, ward.id, { status: 'FALSE_ALARM' });
+
+    await expect(
+      service.updateAlertStatus(reporter.id, alert.id, 'RESOLVED')
+    ).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it('throws 404 for unknown alertId', async () => {
+    const reporter = await createEmergencyUser('status6@test.com');
+
+    await expect(
+      service.updateAlertStatus(reporter.id, '00000000-0000-0000-0000-000000000000', 'RESOLVED')
     ).rejects.toMatchObject({ statusCode: 404 });
   });
 });

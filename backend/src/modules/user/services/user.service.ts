@@ -21,6 +21,8 @@ import { Prisma } from '@prisma/client';
 import { ApiError } from '../../../core/errors/ApiError.js';
 import { logger } from '../../../core/logger/logger.js';
 import { eventBus } from '../../../core/utils/eventBus.js';
+import { auditService } from '../../audit/services/audit.service.js';
+import { AuditAction } from '../../audit/types.js';
 import { VerificationLevel } from '../../../core/types/Ujamaadao.types.js';
 import {
   UpdateProfileDto,
@@ -292,6 +294,14 @@ class UserService {
       'User profile updated'
     );
 
+    await auditService.log(
+      userId,
+      AuditAction.PROFILE_UPDATED,
+      'User',
+      userId,
+      { fields: Object.keys(dto) }
+    );
+
     eventBus.publish('user.profile.updated', {
       userId,
       updates: Object.keys(dto),
@@ -523,6 +533,14 @@ class UserService {
         requestId: request.id,
       },
       'Residence change requested'
+    );
+
+    await auditService.log(
+      userId,
+      AuditAction.RESIDENCE_CHANGE_REQUESTED,
+      'ResidenceChangeRequest',
+      request.id,
+      { newWardId: dto.newPrimaryWardId }
     );
 
     eventBus.publish('user.residence_change.requested', {

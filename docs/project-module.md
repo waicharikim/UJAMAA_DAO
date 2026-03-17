@@ -1,7 +1,7 @@
 # UjamaaDAO Project Module Documentation
 
-> **Module status:** `partial` — project routes not yet mounted in `app.ts`, no tests written.
-> Expected base URL: `/api/v1/projects`
+> **Module status:** `tested` — project routes at `/api/v1/projects` (41 tests).
+> Milestone submission + verification live. `GET /projects` (paginated) + `GET /projects/:projectId` (full detail with milestones).
 
 ## Overview
 

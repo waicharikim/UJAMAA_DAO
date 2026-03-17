@@ -1375,6 +1375,32 @@ export const adminApi = {
     const qs = q.toString()
     return apiFetch<{ requests: any[]; pagination: { total: number } }>(`/admin/residence/pending${qs ? `?${qs}` : ""}`)
   },
+
+  assignRole: (userId: string, role: string, scope?: string) =>
+    apiFetch<null>(`/admin/users/${userId}/roles`, {
+      method: "POST",
+      body: JSON.stringify({ role, scope }),
+    }),
+
+  revokeRole: (userId: string, role: string) =>
+    apiFetch<null>(`/admin/users/${userId}/roles/${encodeURIComponent(role)}`, {
+      method: "DELETE",
+    }),
+
+  getUserRoles: (userId: string) =>
+    apiFetch<{ role: string; description: string | null; grantedBy: string | null }[]>(`/admin/users/${userId}/roles`),
+
+  generateReport: (
+    type: "users" | "governance" | "economy",
+    params?: { fromDate?: string; toDate?: string; format?: "json" | "csv" }
+  ) => {
+    const q = new URLSearchParams()
+    if (params?.fromDate) q.set("fromDate", params.fromDate)
+    if (params?.toDate) q.set("toDate", params.toDate)
+    if (params?.format) q.set("format", params.format)
+    const qs = q.toString()
+    return apiFetch<any>(`/admin/reports/${type}${qs ? `?${qs}` : ""}`)
+  },
 }
 
 // ─────────────────────────────────────────────────────────

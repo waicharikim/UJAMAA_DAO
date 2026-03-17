@@ -1,7 +1,7 @@
 # UjamaaDAO Voting Module Documentation
 
-> **Module status:** `partial` — governance routes not yet mounted in `app.ts`, no tests written.
-> Expected base URL: `/api/v1/governance`
+> **Module status:** `tested` — governance (voting) routes at `/api/v1/governance` (58 tests).
+> Individual PR-weighted votes live. `castVote`, `tallyVotes`, `startVoting` all tested.
 
 ## Overview
 

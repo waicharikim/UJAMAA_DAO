@@ -25,6 +25,8 @@ import {
 import { SystemRoles } from '../../../core/rbac/roles.js';
 import { notificationService } from '../../notifications/services/notification.service.js';
 import { NotificationType } from '../../notifications/types.js';
+import { auditService } from '../../audit/services/audit.service.js';
+import { AuditAction } from '../../audit/types.js';
 
 class ProposalService {
   /**
@@ -95,6 +97,14 @@ class ProposalService {
       'Proposal created'
     );
 
+    await auditService.log(
+      userId,
+      AuditAction.PROPOSAL_CREATED,
+      'Proposal',
+      proposal.id,
+      { groupId: dto.groupId, title: dto.title, scope }
+    );
+
     return proposal;
   }
 
@@ -139,7 +149,7 @@ class ProposalService {
         );
 
       if (dto.decision === 'REJECT') {
-        return prisma.proposal.update({
+        const updated = await prisma.proposal.update({
           where: { id: proposalId },
           data: {
             status: ProposalStatus.REJECTED,
@@ -147,16 +157,32 @@ class ProposalService {
             reviewNote: dto.note ?? null,
           },
         });
+        await auditService.log(
+          userId,
+          AuditAction.PROPOSAL_STATUS_CHANGED,
+          'Proposal',
+          proposalId,
+          { newStatus: ProposalStatus.REJECTED, stage: 1 }
+        );
+        return updated;
       }
 
       // Voluntary GROUP-scoped proposals skip admin review entirely
       const isVoluntary = !!group?.voluntaryType;
       const isGroupScoped = proposal.proposalScope === ProposalScope.GROUP;
       if (isVoluntary && isGroupScoped) {
-        return prisma.proposal.update({
+        const updated = await prisma.proposal.update({
           where: { id: proposalId },
           data: { status: ProposalStatus.APPROVED_FOR_VOTING },
         });
+        await auditService.log(
+          userId,
+          AuditAction.PROPOSAL_STATUS_CHANGED,
+          'Proposal',
+          proposalId,
+          { newStatus: ProposalStatus.APPROVED_FOR_VOTING, stage: 1 }
+        );
+        return updated;
       }
 
       // Voluntary COMMUNITY-scoped must have a location set
@@ -171,10 +197,18 @@ class ProposalService {
         );
       }
 
-      return prisma.proposal.update({
+      const forwarded = await prisma.proposal.update({
         where: { id: proposalId },
         data: { status: ProposalStatus.PENDING_REVIEW },
       });
+      await auditService.log(
+        userId,
+        AuditAction.PROPOSAL_STATUS_CHANGED,
+        'Proposal',
+        proposalId,
+        { newStatus: ProposalStatus.PENDING_REVIEW, stage: 1 }
+      );
+      return forwarded;
     }
 
     // ── STAGE 2: Location admin approves/rejects PENDING_REVIEW ─────────────
@@ -189,7 +223,7 @@ class ProposalService {
         dto.decision === 'APPROVE'
           ? ProposalStatus.APPROVED_FOR_VOTING
           : ProposalStatus.REJECTED;
-      return prisma.proposal.update({
+      const updated = await prisma.proposal.update({
         where: { id: proposalId },
         data: {
           status: newStatus,
@@ -197,6 +231,14 @@ class ProposalService {
           reviewNote: dto.note ?? null,
         },
       });
+      await auditService.log(
+        userId,
+        AuditAction.PROPOSAL_STATUS_CHANGED,
+        'Proposal',
+        proposalId,
+        { newStatus, stage: 2 }
+      );
+      return updated;
     }
 
     throw ApiError.badRequest('Proposal is not in a reviewable state');
@@ -328,6 +370,14 @@ class ProposalService {
       'Vote cast'
     );
 
+    await auditService.log(
+      userId,
+      AuditAction.PROPOSAL_VOTE_CAST,
+      'Proposal',
+      dto.proposalId,
+      { option: dto.option, weight }
+    );
+
     return { weight };
   }
 
@@ -369,6 +419,20 @@ class ProposalService {
       { proposalId, quorum, approved, newStatus },
       'Proposal tallied'
     );
+
+    if (proposal.creatorId) {
+      await auditService
+        .log(
+          proposal.creatorId,
+          AuditAction.PROPOSAL_STATUS_CHANGED,
+          'Proposal',
+          proposalId,
+          { newStatus, quorum, approved, tallySource: 'auto' }
+        )
+        .catch(() => {
+          /* non-critical */
+        });
+    }
 
     // Notify the proposal creator of the outcome
     if (proposal.creatorId) {

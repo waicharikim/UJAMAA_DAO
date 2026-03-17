@@ -18,6 +18,7 @@ import {
   respondToEmergencySchema,
   alertIdParamSchema,
   listAlertsSchema,
+  updateAlertStatusSchema,
 } from '../validators/emergency.validators.js';
 
 const router = Router();
@@ -74,6 +75,15 @@ router.post(
     },
   }),
   asyncHandler(EmergencyController.respondToEmergency)
+);
+
+// PATCH /emergency/:alertId/status — reporter or ward admin
+router.patch(
+  '/:alertId/status',
+  authenticate,
+  validateRequest({ schema: alertIdParamSchema, target: 'params' }),
+  validateRequest({ schema: updateAlertStatusSchema, target: 'body' }),
+  asyncHandler(EmergencyController.updateAlertStatus)
 );
 
 export default router;

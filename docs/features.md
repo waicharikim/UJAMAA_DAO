@@ -1,7 +1,7 @@
 # UjamaaDAO – Feature Inventory
 
 **Status:** March 2026 – Current Implementation + Planned / Designed Features
-**Version:** 1.1 (updated from Feb 2026 draft)
+**Version:** 1.2 (updated March 2026 — session 39)
 
 > Use this as the single source of truth for what exists, what is designed, and what is still to come.
 > Update the summary table at the end of every session that changes module status.
@@ -94,9 +94,10 @@
 
 - Ward switch / residence change request workflow
 - Vouching system (same ward, verified users only)
+- Group discovery / explore endpoint with `isMember` + `myRole` per user
+- Group admin tools: updateSettings, changeMemberRole, removeMember (LEADER-only)
+- Baraza messaging integration (Telegram/WhatsApp/Discord attendance tracking + PR rewards)
 - Community leaderboard (top contributors per ward) (planned)
-- Ward admin / moderator roles (planned)
-- Group discovery / explore endpoint (planned)
 
 ---
 
@@ -203,22 +204,30 @@
 
 ## 10. Emergency Response & Mutual Aid
 
-### Major Features (partial backend)
+### Major Features
 
-- Verified incident reporting (floods, fires, medical emergencies, food shortages)
-- Rapid mobilization of volunteers, supplies, transport
-- Trusted information sharing (verification badges, Impact Points)
-- Aid distribution coordination
-- Post-event debrief & learning
+- Verified incident reporting (FIRE, FLOOD, MEDICAL, SECURITY, ACCIDENT, OTHER)
+- Alert lifecycle management: ACTIVE → IN_PROGRESS → RESOLVED / FALSE_ALARM
+- Responder registration (ward admin or verifier)
+- Reporter notifications: on response and on resolution
+- Audit trail for every status transition
+- Rapid mobilization of volunteers, supplies, transport (via group membership)
+- Aid distribution coordination (planned)
 
 > All scoped to the ward or nearby wards.
 
 ---
 
-## 11. Treasury (planned)
+## 11. Treasury
 
-- Ward / group treasury funded by dues and M-Pesa contributions
-- Platform-wide treasury for grants and operations
+### Major Features
+
+- Group treasury ledger (balance + `WalletTransaction` audit trail per group)
+- Dues allocation: 100% of dues payment auto-credited to user's primary ward system group treasury
+- Manual deposit / withdraw (SUPER_ADMIN, with balance guard on withdrawals)
+- Transaction history with filters (type, referenceType, date range, pagination)
+- M-Pesa STK Push integration (planned — Daraja sandbox)
+- Platform-wide treasury for grants and operations (planned)
 - UT as transparent on-chain layer; KES via M-Pesa for real-world spend
 - Withdrawal path: fiat-backed UT only (not earned UT) — see ADR-026
 
@@ -240,16 +249,19 @@
 
 | Area | Backend Status | Frontend Status | Notes / Next Work |
 |---|---|---|---|
-| Identity & Verification | tested (104 tests) | functional | Polish admin override |
+| Identity & Verification | tested (104 tests) | functional | SMS credentials (AT sandbox → real) |
 | Profile & Personal Data | tested (35 tests) | functional | Avatar upload pending |
-| Participation Rights (PR) | tested (34 tests) | functional | Add tiers & usage scenarios |
-| Community / Wards / Groups | tested (49 tests) | functional | memberCount bug fix pending |
-| Governance / Voting | tested (47 tests) | functional | Proposal comments pending |
-| Marketplace | partial | stub page | High priority after community |
-| Education / Onboarding | partial | stub | Medium priority |
-| Notifications | partial | partial (bell UI) | No scheduled jobs yet |
-| Emergency | partial | none | Medium priority |
-| Admin Tools | partial | none | Expand after core features |
-| Treasury | scaffold | stub page | Blocked on M-Pesa |
-| Emergency | partial | none | Medium priority |
+| Participation Rights (PR) | tested (34 tests) | functional | On-chain mint wired; Base Sepolia deploy pending |
+| Community / Wards / Groups | tested (82 tests) | functional | Baraza / chat integration live |
+| Governance / Voting | tested (58 tests) | functional | 2-stage location review chain live |
+| Projects & Milestones | tested (41 tests) | functional | Milestone submission + verification live |
+| Marketplace | tested (35 tests) | functional | Discovery-only per Rule 1 |
+| Education / Onboarding | tested (42+22 tests) | functional | Module completion, tutorial, vouch flow |
+| Notifications | tested (43 tests) | functional | Dues-reminder job + governance hooks live |
+| Emergency | tested (42 tests) | functional | Alert lifecycle (ACTIVE→IN_PROGRESS→RESOLVED) live |
+| Admin Tools | tested (24 tests) | functional | Role assignment, report generation, audit wired |
+| Audit | tested (23 tests) | functional | 13+ audit events active; audit routes tested |
+| Treasury | tested (32 tests) | stub page | Dues allocation (Phase 1) live; M-Pesa flows pending |
+| Integration (Baraza) | tested (30 tests) | functional | Telegram/Discord/WhatsApp attendance + invite jobs |
+| Reputation / Impact Points | tested (23 tests) | functional | Ward-level impact tracking live |
 | Platform / Cross-cutting | complete | complete | Add i18n when needed |

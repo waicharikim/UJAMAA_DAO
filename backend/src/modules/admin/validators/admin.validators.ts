@@ -10,6 +10,7 @@
 
 import { z } from 'zod';
 import { uuidSchema } from '../../auth/validators/auth.validators.js'; // Reuse common UUID
+import { SystemRoles } from '../../../core/rbac/roles.js';
 
 // ============================================================================
 // REUSABLE ADMIN SCHEMAS
@@ -138,31 +139,37 @@ export const resolveSecurityEventAdminSchema = z.object({
 // ============================================================================
 
 /**
- * POST /admin/admins
- * Grant admin role to a user
+ * POST /admin/users/:userId/roles
+ * Grant a system role to a user
  */
+const systemRoleValues = Object.values(SystemRoles) as [string, ...string[]];
+
 export const addAdminRoleSchema = z.object({
-  userId: uuidSchema,
-  role: z.enum(['ADMIN', 'COMPLIANCE_OFFICER']),
-  scope: z.string().optional(), // e.g. ward/constituency ID
+  role: z.enum(systemRoleValues),
+  scope: z.string().optional(),
 });
 
-/**
- * DELETE /admin/admins/:userId
- * Remove admin role from a user
- */
-export const removeAdminRoleSchema = z.object({
+export const revokeRoleParamSchema = z.object({
+  userId: uuidSchema,
+  role: z.string().min(1),
+});
+
+export const listUserRolesQuerySchema = z.object({
   userId: uuidSchema,
 });
 
 // ============================================================================
-// LIST ADMINS (SUPER_ADMIN only)
+// REPORT GENERATION
 // ============================================================================
 
-export const listAdminsQuerySchema = z.object({
-  page: z.coerce.number().min(1).default(1),
-  pageSize: z.coerce.number().min(10).max(100).default(20),
-  role: z.enum(['ADMIN', 'COMPLIANCE_OFFICER']).optional(),
+export const reportQuerySchema = z.object({
+  fromDate: z.string().optional(),
+  toDate: z.string().optional(),
+  format: z.enum(['json', 'csv']).default('json'),
+});
+
+export const reportTypeParamSchema = z.object({
+  type: z.enum(['users', 'governance', 'economy']),
 });
 
 export default {
@@ -174,6 +181,8 @@ export default {
   banUserSchema,
   resolveSecurityEventAdminSchema,
   addAdminRoleSchema,
-  removeAdminRoleSchema,
-  listAdminsQuerySchema,
+  revokeRoleParamSchema,
+  listUserRolesQuerySchema,
+  reportQuerySchema,
+  reportTypeParamSchema,
 };

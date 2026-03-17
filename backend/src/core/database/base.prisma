@@ -248,6 +248,7 @@ model User {
 
   // ---- Governance module ----
   proposals                 Proposal[]             @relation("UserProposals")
+  reviewedProposals         Proposal[]             @relation("ProposalReviewer")
   votes                     GroupMemberVote[]      @relation("UserVotes")
 
   // ---- Projects module ----
@@ -290,7 +291,8 @@ model User {
   educationalReviews        EducationalReview[]
 
   // ---- Emergency module ----
-  emergencyAlerts           EmergencyAlert[]
+  emergencyAlerts           EmergencyAlert[]   @relation("EmergencyAlertReporter")
+  resolvedEmergencies       EmergencyAlert[]   @relation("EmergencyAlertResolver")
   emergencyResponses        EmergencyResponse[]
 
   // ---- Reputation module ----

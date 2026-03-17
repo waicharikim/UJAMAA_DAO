@@ -10,6 +10,8 @@ import { prisma } from '../../../core/database/client.js';
 import { Prisma } from '@prisma/client';
 import { ImpactPointReason } from '../types.js';
 import { logger } from '../../../core/logger/logger.js';
+import { auditService } from '../../audit/services/audit.service.js';
+import { AuditAction } from '../../audit/types.js';
 
 export class GlobalImpactPointService {
   async award(
@@ -40,6 +42,16 @@ export class GlobalImpactPointService {
         { userId, amount, reason },
         '[IP] Global Impact Points awarded'
       );
+
+      await auditService
+        .log(userId, AuditAction.IP_AWARDED, 'User', userId, {
+          amount,
+          reason,
+          ...metadata,
+        })
+        .catch(() => {
+          /* non-critical */
+        });
 
       return log;
     });

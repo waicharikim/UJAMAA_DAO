@@ -43,4 +43,20 @@ export class EmergencyController {
     const alert = await emergencyService.getAlert(alertId);
     sendSuccess(res, alert, 'Emergency alert details');
   }
+
+  static async updateAlertStatus(req: AuthRequest, res: Response) {
+    const actorId = req.user!.userId;
+    const { alertId } = req.params;
+    const { status, statusNote } = req.body as {
+      status: 'IN_PROGRESS' | 'RESOLVED' | 'FALSE_ALARM';
+      statusNote?: string;
+    };
+    const alert = await emergencyService.updateAlertStatus(
+      actorId,
+      alertId,
+      status,
+      statusNote
+    );
+    sendSuccess(res, alert, 'Alert status updated');
+  }
 }

@@ -199,7 +199,7 @@ export async function registerBarazaGroup(
     const user = (req as any).user;
     const dto = req.body as RegisterBarazaGroupDto;
     const barazaGroup = await barazaBotService.registerBarazaGroup(
-      user.id,
+      user.userId,
       dto
     );
     sendSuccess(res, barazaGroup, 'Baraza group registered', 201);
@@ -215,7 +215,7 @@ export async function getBarazaGroups(
 ): Promise<void> {
   try {
     const user = (req as any).user;
-    const groups = await barazaBotService.getBarazaGroupsForUser(user.id);
+    const groups = await barazaBotService.getBarazaGroupsForUser(user.userId);
     sendSuccess(res, groups);
   } catch (err) {
     next(err);

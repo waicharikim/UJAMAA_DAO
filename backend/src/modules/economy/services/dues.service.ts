@@ -15,6 +15,7 @@
 import { prisma } from '../../../core/database/client.js';
 import { Prisma } from '@prisma/client';
 import { participationRightsService } from './participationRights.service.js';
+import { treasuryService } from '../../treasury/services/treasury.service.js';
 import {
   DuesTier,
   DUES_CONFIG,
@@ -105,6 +106,13 @@ class DuesService {
       payment.id,
       { tier, amountKes, period, prReward: tierConfig.prReward, mpesaReceipt }
     );
+
+    // Allocate dues to ward group treasury (non-critical — catch any error so payment is unaffected)
+    await treasuryService
+      .allocateDues(payment.id, userId)
+      .catch((err) =>
+        logger.warn({ err, paymentId: payment.id }, '[DUES] Treasury allocation failed — payment still recorded')
+      );
 
     return payment;
   }

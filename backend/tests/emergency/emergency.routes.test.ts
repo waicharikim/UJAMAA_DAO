@@ -304,3 +304,92 @@ describe('POST /emergency/:alertId/respond', () => {
     expect(res.status).toBe(400);
   });
 });
+
+// ─────────────────────────────────────────────
+// PATCH /emergency/:alertId/status
+// ─────────────────────────────────────────────
+
+describe('PATCH /emergency/:alertId/status', () => {
+  it('401 without token', async () => {
+    const user = await createEmergencyUser('patch401@test.com');
+    const ward = await seedWard();
+    const alert = await seedEmergencyAlert(user.id, ward.id);
+
+    const res = await request(app)
+      .patch(`/api/v1/emergency/${alert.id}/status`)
+      .send({ status: 'IN_PROGRESS' });
+
+    expect(res.status).toBe(401);
+  });
+
+  it('400 for invalid status value', async () => {
+    const user = await createEmergencyUser('patchbadstatus@test.com');
+    const token = makeEmergencyToken(user.id);
+    const ward = await seedWard();
+    const alert = await seedEmergencyAlert(user.id, ward.id);
+
+    const res = await request(app)
+      .patch(`/api/v1/emergency/${alert.id}/status`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ status: 'CANCELLED' });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('400 for already closed alert', async () => {
+    const user = await createEmergencyUser('patchclosed@test.com');
+    const token = makeEmergencyToken(user.id);
+    const ward = await seedWard();
+    const alert = await seedEmergencyAlert(user.id, ward.id, { status: 'RESOLVED' });
+
+    const res = await request(app)
+      .patch(`/api/v1/emergency/${alert.id}/status`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ status: 'IN_PROGRESS' });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('200 transitions to IN_PROGRESS', async () => {
+    const user = await createEmergencyUser('patchprogress@test.com');
+    const token = makeEmergencyToken(user.id);
+    const ward = await seedWard();
+    const alert = await seedEmergencyAlert(user.id, ward.id, { status: 'ACTIVE' });
+
+    const res = await request(app)
+      .patch(`/api/v1/emergency/${alert.id}/status`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ status: 'IN_PROGRESS' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('IN_PROGRESS');
+  });
+
+  it('200 transitions to RESOLVED and sets resolvedAt', async () => {
+    const user = await createEmergencyUser('patchresolved@test.com');
+    const token = makeEmergencyToken(user.id);
+    const ward = await seedWard();
+    const alert = await seedEmergencyAlert(user.id, ward.id, { status: 'IN_PROGRESS' });
+
+    const res = await request(app)
+      .patch(`/api/v1/emergency/${alert.id}/status`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ status: 'RESOLVED', statusNote: 'All clear' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('RESOLVED');
+    expect(res.body.data.resolvedAt).not.toBeNull();
+  });
+
+  it('404 for unknown alertId', async () => {
+    const user = await createEmergencyUser('patch404@test.com');
+    const token = makeEmergencyToken(user.id);
+
+    const res = await request(app)
+      .patch('/api/v1/emergency/00000000-0000-0000-0000-000000000000/status')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ status: 'RESOLVED' });
+
+    expect(res.status).toBe(404);
+  });
+});
