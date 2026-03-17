@@ -299,6 +299,9 @@ model User {
   impactPointLogs           ImpactPointLog[]       @relation("UserImpactPointLogs")
   locationImpacts           UserLocationImpact[]   @relation("UserLocationImpacts")
 
+  // ---- Payments module ----
+  paymentRecords            PaymentRecord[]
+
   // ---- System ----
   updatedConfigs            SystemConfiguration[]  @relation("ConfigUpdater")
 

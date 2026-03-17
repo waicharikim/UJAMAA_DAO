@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Award, Coins, Users, MapPin, History } from "lucide-react"
 import { reputationApi, type WardReputationBreakdownDto, type ImpactPointLogDto } from "@/lib/api"
 import { VerificationCard } from "@/components/profile/verification-card"
+import { DuesPaymentCard } from "@/components/payments/dues-payment-card"
 
 function StatCard({
   label,
@@ -162,6 +163,12 @@ export default function ProfilePage() {
 
       {/* Verification progress */}
       <VerificationCard />
+
+      {/* Monthly dues */}
+      {user?.verificationLevel === "COMMUNITY_VERIFIED" || user?.verificationLevel === "FULL_VERIFIED"
+        ? <DuesPaymentCard />
+        : null
+      }
 
       {/* Ward reputation breakdown */}
       <Card className="border-0 shadow-card">

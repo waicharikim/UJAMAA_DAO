@@ -1,0 +1,26 @@
+// ============================================================================
+// PAYMENTS MODULE — Flutterwave (M-Pesa STK Push + Card)
+// ============================================================================
+
+model PaymentRecord {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @db.Uuid
+  txRef        String    @unique  // Our generated reference
+  flwRef       String?            // Flutterwave's reference (set on webhook)
+  amount       Decimal   @db.Decimal(10, 2)
+  currency     String    @default("KES")
+  method       String    // "MPESA" | "CARD"
+  purpose      String    // "DUES" | "VERIFICATION" | "TREASURY_DEPOSIT"
+  purposeMeta  Json?     // { tier, period, groupId } etc
+  status       String    @default("PENDING") // PENDING | COMPLETED | FAILED
+  createdAt    DateTime  @default(now())
+  completedAt  DateTime?
+
+  user         User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([txRef])
+  @@index([flwRef])
+  @@index([status])
+  @@map("payment_records")
+}

@@ -7,6 +7,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { CheckCircle, Circle, Loader2, Phone, Users, ShieldCheck } from "lucide-react"
+import { PaymentModal } from "@/components/payments/payment-modal"
 
 // ─── Verification level ordering ──────────────────────────
 const LEVELS = ["EMAIL_VERIFIED", "PHONE_VERIFIED", "COMMUNITY_VERIFIED", "FULL_VERIFIED"] as const
@@ -158,8 +159,7 @@ function CommunityStep() {
   const { user, refreshUser } = useAuth()
   const { toast } = useToast()
   const queryClient = useQueryClient()
-  const [txId, setTxId] = useState("")
-  const [showPayment, setShowPayment] = useState(false)
+  const [payModalOpen, setPayModalOpen] = useState(false)
   const [copied, setCopied] = useState(false)
 
   const profileUrl = typeof window !== "undefined"
@@ -191,16 +191,12 @@ function CommunityStep() {
     },
   })
 
-  const paymentMutation = useMutation({
-    mutationFn: () => userApi.payForVerification(txId),
-    onSuccess: async () => {
-      await refreshUser()
-      toast({ title: "Payment verified", description: "You are now community verified!" })
-    },
-    onError: (err: any) => {
-      toast({ title: "Payment failed", description: err?.message ?? "Check your transaction ID and try again.", variant: "destructive" })
-    },
-  })
+  async function handleVerificationPaymentSuccess() {
+    setPayModalOpen(false)
+    await refreshUser()
+    queryClient.invalidateQueries({ queryKey: ["community-verification-status"] })
+    toast({ title: "Payment verified", description: "You are now community verified!" })
+  }
 
   const vouchesReceived = status?.vouchesReceived ?? 0
   const vouchesNeeded  = status?.vouchesNeeded  ?? 3
@@ -208,6 +204,7 @@ function CommunityStep() {
   const hasNoRequest   = !status || status.status === "EXPIRED" || status.status === "REJECTED"
 
   return (
+    <>
     <div className="space-y-4">
       <p className="text-sm text-[#0E0B08]/60 leading-relaxed">
         Get vouched for by 3 community-verified neighbours in your ward, or pay a one-time KES 100 verification fee.
@@ -283,42 +280,24 @@ function CommunityStep() {
       {/* Payment fallback */}
       <div>
         <button
-          onClick={() => setShowPayment((v) => !v)}
+          onClick={() => setPayModalOpen(true)}
           className="text-xs font-semibold underline underline-offset-2"
           style={{ color: "#C9922A" }}
         >
-          {showPayment ? "Hide payment option" : "Or pay KES 100 via M-Pesa instead"}
+          Or pay KES 100 via M-Pesa / Card instead
         </button>
-
-        {showPayment && (
-          <div
-            className="mt-3 rounded-xl p-4 space-y-3"
-            style={{ background: "rgba(201,146,42,0.06)", border: "1px solid rgba(201,146,42,0.15)" }}
-          >
-            <p className="text-xs text-[#0E0B08]/60 leading-relaxed">
-              Send <strong>KES 100</strong> to <strong>Paybill 400200, Account: UJAMAA</strong>, then enter your M-Pesa confirmation code below.
-            </p>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="e.g. RGH7X2MNOP"
-                value={txId}
-                onChange={(e) => setTxId(e.target.value.toUpperCase())}
-                className="flex-1 h-10 rounded-lg border border-black/10 bg-white px-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#C9922A]/30"
-              />
-              <button
-                onClick={() => paymentMutation.mutate()}
-                disabled={paymentMutation.isPending || txId.length < 10}
-                className="flex-shrink-0 h-10 rounded-lg px-4 text-sm font-semibold transition-all hover:opacity-90 disabled:opacity-40"
-                style={{ background: "#C9922A", color: "#fff" }}
-              >
-                {paymentMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Submit"}
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
+
+    <PaymentModal
+      open={payModalOpen}
+      onClose={() => setPayModalOpen(false)}
+      purpose="VERIFICATION"
+      amount={100}
+      label="Community verification fee"
+      onSuccess={handleVerificationPaymentSuccess}
+    />
+    </>
   )
 }
 

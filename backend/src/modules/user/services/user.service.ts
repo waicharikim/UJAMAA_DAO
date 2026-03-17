@@ -820,10 +820,28 @@ class UserService {
     return { success: true };
   }
 
+  /**
+   * Called by PaymentService after a verified payment webhook completes.
+   * Finalizes community verification without needing a transactionId check.
+   */
+  async finalizeVerificationPayment(userId: string, txRef: string) {
+    const request = await prisma.verificationRequest.findUnique({
+      where: { userId_type: { userId, type: 'COMMUNITY' } },
+    });
+
+    if (!request || request.status !== 'PAYMENT_PENDING') {
+      logger.warn({ userId, txRef }, '[PAYMENTS] finalizeVerification: no active payment request');
+      return;
+    }
+
+    await this.completeCommunityVerification(userId);
+    logger.info({ userId, txRef }, 'Verification payment finalized');
+  }
+
   private async verifyMPesaPayment(
     transactionId: string
   ): Promise<{ amount: number } | null> {
-    // TODO: Real M-Pesa Daraja API integration
+    // TODO: Replace with PaymentService.initiatePayment() in new flows
     return { amount: PAYMENT_AMOUNT_KES };
   }
 

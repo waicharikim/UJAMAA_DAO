@@ -90,6 +90,14 @@ services:
       - AT_API_KEY=${AT_API_KEY:-}
       - AT_USERNAME=${AT_USERNAME:-sandbox}
       - AT_SENDER_ID=${AT_SENDER_ID:-}
+      # ── Buni by KCB (M-Pesa STK Push) ───────────────────────────────────
+      - BUNI_CLIENT_ID=${BUNI_CLIENT_ID:-}
+      - BUNI_CLIENT_SECRET=${BUNI_CLIENT_SECRET:-}
+      - BUNI_BASE_URL=${BUNI_BASE_URL:-https://uat.buni.kcbgroup.com}
+      # ── Flutterwave (Card payments only) ────────────────────────────────
+      - FLW_PUBLIC_KEY=${FLW_PUBLIC_KEY:-FLWPUBK_TEST-placeholder}
+      - FLW_SECRET_KEY=${FLW_SECRET_KEY:-FLWSECK_TEST-placeholder}
+      - FLW_WEBHOOK_SECRET=${FLW_WEBHOOK_SECRET:-}
       # VERSION B: Uncomment for metrics
       # - STATSD_HOST=web-metrics
       # - STATSD_PORT=8125

@@ -1610,6 +1610,44 @@ export const reputationApi = {
 // auditApi
 // ─────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────
+// Payments API  — /api/v1/payments
+// ─────────────────────────────────────────────────────────
+
+export type PaymentMethod  = "MPESA" | "CARD"
+export type PaymentPurpose = "DUES" | "VERIFICATION" | "TREASURY_DEPOSIT"
+export type PaymentStatus  = "PENDING" | "COMPLETED" | "FAILED"
+
+export interface PaymentRecord {
+  id:          string
+  txRef:       string
+  method:      PaymentMethod
+  purpose:     PaymentPurpose
+  purposeMeta: Record<string, unknown> | null
+  amount:      string
+  currency:    string
+  status:      PaymentStatus
+  createdAt:   string
+  completedAt: string | null
+}
+
+export const paymentApi = {
+  /** POST /payments/initiate — creates a PaymentRecord and triggers STK push or returns card link */
+  initiate: (data: {
+    method:      PaymentMethod
+    purpose:     PaymentPurpose
+    purposeMeta?: Record<string, unknown>
+  }) =>
+    apiFetch<{ txRef: string; paymentLink?: string }>("/payments/initiate", {
+      method: "POST",
+      body:   JSON.stringify(data),
+    }),
+
+  /** GET /payments/status/:txRef — poll until COMPLETED or FAILED */
+  getStatus: (txRef: string) =>
+    apiFetch<PaymentRecord>(`/payments/status/${txRef}`),
+}
+
 export const auditApi = {
   search: (params?: { page?: number; limit?: number; userId?: string; action?: string; fromDate?: string; toDate?: string }) => {
     const q = new URLSearchParams()
