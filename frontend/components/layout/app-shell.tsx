@@ -12,7 +12,7 @@ interface AppShellProps {
 }
 
 // Routes that render full-width without the app chrome
-const PUBLIC_ROUTES = ["/", "/about", "/auth/register", "/auth/callback"]
+const PUBLIC_ROUTES = ["/", "/about", "/auth/register", "/auth/callback", "/dev/login"]
 
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname()

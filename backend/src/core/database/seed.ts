@@ -912,6 +912,20 @@ async function seedTestUsers() {
       verificationLevel: 'FULL_VERIFIED',
     },
     {
+      email: 'auditor@ujamaa.test',
+      name: 'System Auditor',
+      phoneNumber: '+254700000005',
+      role: 'system:auditor',
+      verificationLevel: 'FULL_VERIFIED',
+    },
+    {
+      email: 'coordinator@ujamaa.test',
+      name: 'County Coordinator',
+      phoneNumber: '+254700000006',
+      role: 'system:county_coordinator',
+      verificationLevel: 'FULL_VERIFIED',
+    },
+    {
       email: 'ward.admin@ujamaa.test',
       name: 'Ward Administrator',
       phoneNumber: '+254700000002',
@@ -948,6 +962,64 @@ async function seedTestUsers() {
       phoneNumber: '+254700000012',
     },
   ];
+
+  // PHONE_VERIFIED user — for testing verification flow UX
+  await prisma.user.upsert({
+    where: { email: 'phone-only@ujamaa.test' },
+    update: { primaryWardId: firstWard.id, verificationLevel: 'PHONE_VERIFIED' },
+    create: {
+      id: uuidv4(),
+      email: 'phone-only@ujamaa.test',
+      name: 'Amina Phone-Only',
+      phoneNumber: '+254700000020',
+      primaryWardId: firstWard.id,
+      verificationLevel: 'PHONE_VERIFIED',
+      emailVerified: true,
+      phoneVerified: true,
+      communityVerified: false,
+      participationRights: 0,
+      globalImpactPoints: 0,
+    },
+  });
+
+  // EMAIL_VERIFIED user — for testing onboarding / nudge UX
+  await prisma.user.upsert({
+    where: { email: 'email-only@ujamaa.test' },
+    update: { primaryWardId: firstWard.id, verificationLevel: 'EMAIL_VERIFIED' },
+    create: {
+      id: uuidv4(),
+      email: 'email-only@ujamaa.test',
+      name: 'Brian Email-Only',
+      phoneNumber: '+254700000021',
+      primaryWardId: firstWard.id,
+      verificationLevel: 'EMAIL_VERIFIED',
+      emailVerified: true,
+      phoneVerified: false,
+      communityVerified: false,
+      participationRights: 50,
+      globalImpactPoints: 0,
+    },
+  });
+
+  // FULL_VERIFIED member without special roles — wallet connected
+  await prisma.user.upsert({
+    where: { email: 'full-member@ujamaa.test' },
+    update: { primaryWardId: firstWard.id, verificationLevel: 'FULL_VERIFIED' },
+    create: {
+      id: uuidv4(),
+      email: 'full-member@ujamaa.test',
+      name: 'Wanjiru Full-Member',
+      phoneNumber: '+254700000022',
+      primaryWardId: firstWard.id,
+      verificationLevel: 'FULL_VERIFIED',
+      emailVerified: true,
+      phoneVerified: true,
+      communityVerified: true,
+      walletAddress: '0xfullmember000000000000000000000000000001',
+      participationRights: 200,
+      globalImpactPoints: 500,
+    },
+  });
 
   const createdUsers: Record<string, string> = {};
 
@@ -1006,7 +1078,7 @@ async function seedTestUsers() {
           'Community borehole construction and maintenance committee',
         isSystemGroup: false,
         locationScope: 'WARD',
-        voluntaryType: 'PROJECT',
+        voluntaryType: 'INFRASTRUCTURE_COMMITTEE',
         wardId: firstWard.id,
         memberCount: 0,
       },
@@ -1026,7 +1098,7 @@ async function seedTestUsers() {
               'Community borehole construction and maintenance committee',
             isSystemGroup: false,
             locationScope: 'WARD',
-            voluntaryType: 'PROJECT',
+            voluntaryType: 'INFRASTRUCTURE_COMMITTEE',
             wardId: firstWard.id,
             memberCount: 0,
           },

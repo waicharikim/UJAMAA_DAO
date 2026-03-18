@@ -12,6 +12,8 @@
 import { Router } from 'express';
 import { asyncHandler } from '../../../core/utils/response.js';
 import { validateRequest } from '../../../core/middleware/validateRequest.js';
+import { prisma } from '../../../core/database/client.js';
+import { signJwtToken, JwtPayload } from '../../../core/utils/jwt.service.js';
 import { authenticate } from '../../../core/middleware/auth.middleware.js';
 import { authorize } from '../../../core/middleware/authorize.js';
 import { toMiddleware, requireAdmin } from '../../../core/rbac/authorize.js';
@@ -367,6 +369,70 @@ router.post(
   buildRateLimiter({ windowMs: 5 * 60 * 1000, max: 10 }),
   validateRequest({ schema: verifyPhoneCodeSchema, target: 'body' }),
   asyncHandler(verifyCode)
+);
+
+// ============================================================================
+// DEV-ONLY: Instant account switcher — returns a JWT without email flow
+// Guarded by NODE_ENV check; returns 404 in production.
+// ============================================================================
+
+router.post(
+  '/dev/login',
+  asyncHandler(async (req, res) => {
+    if (process.env.NODE_ENV === 'production') {
+      res.status(404).json({ success: false, error: { message: 'Not found' } });
+      return;
+    }
+
+    const { email } = req.body ?? {};
+    if (!email) {
+      res.status(400).json({ success: false, error: { message: 'email required' } });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: String(email) },
+      include: {
+        userRoles: { where: { active: true }, include: { role: true } },
+      },
+    });
+
+    if (!user) {
+      res.status(404).json({ success: false, error: { message: 'User not found' } });
+      return;
+    }
+
+    const roleNames = user.userRoles.map((ur: any) => ur.role.name);
+
+    const payload: JwtPayload = {
+      sub: user.id,
+      verificationLevel: user.verificationLevel as any,
+      roles: roleNames,
+      globalImpactPoints: user.globalImpactPoints ?? 0,
+      utilityTokens: (user as any).utilityTokens ?? 0,
+      participationRights: user.participationRights ?? 0,
+      emailVerified: user.emailVerified,
+      phoneVerified: user.phoneVerified,
+      communityVerified: user.communityVerified,
+      type: 'permanent',
+    };
+
+    const accessToken = signJwtToken(payload, '7d', 0);
+
+    res.json({
+      success: true,
+      data: {
+        accessToken,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          verificationLevel: user.verificationLevel,
+          roles: roleNames,
+        },
+      },
+    });
+  })
 );
 
 export default router;
