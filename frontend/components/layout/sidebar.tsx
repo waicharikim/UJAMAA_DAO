@@ -19,20 +19,22 @@ import {
   ChevronLeft,
   ChevronRight,
   BookOpen,
+  AlertTriangle,
 } from "lucide-react"
 
 const primaryNav = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Governance", href: "/proposals", icon: Vote },
-  { label: "Projects", href: "/projects", icon: Briefcase },
-  { label: "Community", href: "/groups", icon: Users },
-  { label: "Learn", href: "/education", icon: BookOpen },
+  { label: "Dashboard",  href: "/dashboard",  icon: LayoutDashboard },
+  { label: "Governance", href: "/proposals",  icon: Vote },
+  { label: "Projects",   href: "/projects",   icon: Briefcase },
+  { label: "Community",  href: "/groups",     icon: Users },
+  { label: "Learn",      href: "/education",  icon: BookOpen },
+  { label: "Emergency",  href: "/emergency",  icon: AlertTriangle },
 ]
 
 const secondaryNav = [
   { label: "Marketplace", href: "/marketplace", icon: Store },
-  { label: "Treasury", href: "/treasury", icon: Landmark },
-  { label: "Profile", href: "/profile", icon: User },
+  { label: "Treasury",    href: "/treasury",    icon: Landmark },
+  { label: "Profile",     href: "/profile",     icon: User },
 ]
 
 // Adinkra Gye Nyame motif in amber-on-tea-green

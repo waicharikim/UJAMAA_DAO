@@ -1504,6 +1504,12 @@ export const emergencyApi = {
       method: "POST",
       body: JSON.stringify({ message }),
     }),
+
+  updateAlertStatus: (alertId: string, status: "IN_PROGRESS" | "RESOLVED" | "FALSE_ALARM", statusNote?: string) =>
+    apiFetch<EmergencyAlertDto>(`/emergency/${alertId}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status, statusNote }),
+    }),
 }
 
 // ─────────────────────────────────────────────────────────
