@@ -1,13 +1,15 @@
 import { Suspense, use } from "react"
 import { GroupDetail } from "@/components/groups/group-detail"
 import { GroupMembers } from "@/components/groups/group-members"
+import { GroupWall } from "@/components/groups/group-wall"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 
 export default function GroupPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   return (
     <ProtectedRoute>
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8 space-y-8">
+        {/* Top row: group info + members */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2">
             <Suspense fallback={<GroupDetailSkeleton />}>
@@ -20,6 +22,9 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
             </Suspense>
           </div>
         </div>
+
+        {/* Community wall: proposals + projects */}
+        <GroupWall groupId={id} />
       </div>
     </ProtectedRoute>
   )
