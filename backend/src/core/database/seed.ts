@@ -1634,7 +1634,7 @@ All votes, proposal texts, and results are stored immutably. No administrator ca
         },
       });
     } else {
-      await prisma.educationalModule.create({
+      const created = await prisma.educationalModule.create({
         data: {
           id: uuidv4(),
           creatorId: admin.id,
@@ -1642,6 +1642,13 @@ All votes, proposal texts, and results are stored immutably. No administrator ca
           mediaUrls: [],
         },
       });
+      await auditService.log(
+        admin.id,
+        AuditAction.MODULE_PUBLISHED,
+        'EducationModule',
+        created.id,
+        { title: mod.title },
+      );
     }
   }
 

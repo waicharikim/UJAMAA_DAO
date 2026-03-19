@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query"
-import { Vote, Users, Briefcase, AlertTriangle, Rss, RefreshCw, ArrowRight } from "lucide-react"
+import { Vote, Users, Briefcase, AlertTriangle, Rss, RefreshCw, ArrowRight, BookOpen, ShoppingBag } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { feedApi, type FeedItemDto } from "@/lib/api"
@@ -24,10 +24,12 @@ function relativeTime(iso: string): string {
 // ─── Category config ──────────────────────────────────────────────────────────
 
 const CATEGORY = {
-  governance: { Icon: Vote,          color: "#C9922A", bg: "rgba(201,146,42,0.12)" },
-  community:  { Icon: Users,         color: "#1D4731", bg: "rgba(29,71,49,0.10)"   },
-  project:    { Icon: Briefcase,     color: "#2A6B7C", bg: "rgba(42,107,124,0.10)" },
-  emergency:  { Icon: AlertTriangle, color: "#B03A1E", bg: "rgba(176,58,30,0.10)"  },
+  governance:  { Icon: Vote,          color: "#C9922A", bg: "rgba(201,146,42,0.12)", label: "Governance"  },
+  community:   { Icon: Users,         color: "#1D4731", bg: "rgba(29,71,49,0.10)",   label: "Community"   },
+  project:     { Icon: Briefcase,     color: "#2A6B7C", bg: "rgba(42,107,124,0.10)", label: "Project"     },
+  emergency:   { Icon: AlertTriangle, color: "#B03A1E", bg: "rgba(176,58,30,0.10)",  label: "Emergency"   },
+  marketplace: { Icon: ShoppingBag,   color: "#6B4F9E", bg: "rgba(107,79,158,0.10)", label: "Marketplace" },
+  education:   { Icon: BookOpen,      color: "#2A7A4B", bg: "rgba(42,122,75,0.10)",  label: "Learning"    },
 } as const
 
 // ─── Deep-link helper ─────────────────────────────────────────────────────────
@@ -35,67 +37,96 @@ const CATEGORY = {
 function entityHref(item: FeedItemDto): string | null {
   if (!item.entityId) return null
   switch (item.category) {
-    case "governance": return `/proposals/${item.entityId}`
-    case "project":    return `/projects`
-    case "emergency":  return `/emergency`
-    default:           return null
+    case "governance":  return `/proposals/${item.entityId}`
+    case "community":   return `/groups/${item.entityId}`
+    case "project":     return `/projects/${item.entityId}`
+    case "marketplace": return `/marketplace`
+    case "education":   return `/education`
+    default:            return null
   }
 }
 
-// ─── Skeleton rows ────────────────────────────────────────────────────────────
+// ─── Skeleton cards ───────────────────────────────────────────────────────────
 
 function FeedSkeleton() {
   return (
     <div className="space-y-3">
-      {Array.from({ length: 5 }).map((_, i) => (
+      {Array.from({ length: 4 }).map((_, i) => (
         <div
           key={i}
-          className="flex items-center gap-3 p-3 rounded-xl"
-          style={{ background: "rgba(201,146,42,0.05)" }}
+          className="bg-white rounded-2xl shadow-card border-l-[3px] p-4"
+          style={{ borderLeftColor: "rgba(201,146,42,0.3)" }}
         >
-          <Skeleton className="w-9 h-9 rounded-xl flex-shrink-0" />
-          <div className="flex-1 space-y-2">
-            <Skeleton className="h-4 w-3/4" />
-            <Skeleton className="h-3 w-1/3" />
+          <div className="flex items-start justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2.5">
+              <Skeleton className="w-11 h-11 rounded-xl flex-shrink-0" />
+              <Skeleton className="h-3 w-20" />
+            </div>
+            <Skeleton className="h-3 w-12 flex-shrink-0" />
           </div>
-          <Skeleton className="h-3 w-12 flex-shrink-0" />
+          <Skeleton className="h-4 w-full mb-1.5" />
+          <Skeleton className="h-4 w-2/3" />
         </div>
       ))}
     </div>
   )
 }
 
-// ─── Single feed item ─────────────────────────────────────────────────────────
+// ─── Single feed card ─────────────────────────────────────────────────────────
 
-function FeedRow({ item }: { item: FeedItemDto }) {
+function FeedCard({ item, compact }: { item: FeedItemDto; compact: boolean }) {
   const cfg = CATEGORY[item.category] ?? CATEGORY.community
-  const { Icon, color, bg } = cfg
+  const { Icon, color, bg, label } = cfg
   const href = entityHref(item)
 
-  const inner = (
+  const card = (
     <div
-      className="flex items-center gap-3 p-3 rounded-xl transition-colors hover:opacity-90"
-      style={{ background: "rgba(201,146,42,0.05)" }}
+      className="bg-white rounded-2xl shadow-card border-l-[3px] transition-shadow hover:shadow-md"
+      style={{ borderLeftColor: color }}
     >
-      <div
-        className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-        style={{ background: bg }}
-      >
-        <Icon className="h-4 w-4" style={{ color }} />
+      <div className={compact ? "p-3" : "p-4"}>
+        {/* Top row: icon + category label + timestamp */}
+        <div className="flex items-start justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2.5">
+            <div
+              className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{ background: bg }}
+            >
+              <Icon className="h-5 w-5" style={{ color }} />
+            </div>
+            <span
+              className="text-[10px] font-bold uppercase tracking-widest"
+              style={{ color }}
+            >
+              {label}
+            </span>
+          </div>
+          <span className="text-[11px] text-[#0E0B08]/40 flex-shrink-0 pt-0.5 whitespace-nowrap">
+            {relativeTime(item.timestamp)}
+          </span>
+        </div>
+
+        {/* Description — 2 lines allowed */}
+        <p className="text-sm font-medium text-[#0E0B08] leading-snug line-clamp-2">
+          {item.description}
+        </p>
+
+        {/* View link — full mode only, when deep-linkable */}
+        {!compact && href && (
+          <div className="mt-3 flex justify-end">
+            <span className="text-xs font-semibold" style={{ color }}>
+              View →
+            </span>
+          </div>
+        )}
       </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-[#0E0B08] truncate">{item.description}</p>
-      </div>
-      <span className="text-[10px] text-[#0E0B08]/40 flex-shrink-0 whitespace-nowrap">
-        {relativeTime(item.timestamp)}
-      </span>
     </div>
   )
 
   if (href) {
-    return <Link href={href} className="block">{inner}</Link>
+    return <Link href={href} className="block">{card}</Link>
   }
-  return inner
+  return card
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -172,11 +203,11 @@ export function ActivityFeed({ compact = false }: ActivityFeedProps) {
       {/* Loading state */}
       {isLoading && <FeedSkeleton />}
 
-      {/* Items */}
+      {/* Cards */}
       {!isLoading && displayed.length > 0 && (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {displayed.map((item) => (
-            <FeedRow key={item.id} item={item} />
+            <FeedCard key={item.id} item={item} compact={compact} />
           ))}
         </div>
       )}

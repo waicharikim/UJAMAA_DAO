@@ -1730,7 +1730,7 @@ export const auditApi = {
 
 export interface FeedItemDto {
   id: string
-  category: "governance" | "community" | "project" | "emergency"
+  category: "governance" | "community" | "project" | "emergency" | "marketplace" | "education"
   description: string
   timestamp: string
   entityId?: string

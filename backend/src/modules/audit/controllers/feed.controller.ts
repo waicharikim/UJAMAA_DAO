@@ -24,9 +24,11 @@ const FEED_ACTIONS = [
   AuditAction.MILESTONE_SUBMITTED,
   AuditAction.MILESTONE_VERIFIED,
   AuditAction.EMERGENCY_REPORTED,
+  AuditAction.LISTING_CREATED,
+  AuditAction.MODULE_PUBLISHED,
 ] as const;
 
-type FeedCategory = 'governance' | 'community' | 'project' | 'emergency';
+type FeedCategory = 'governance' | 'community' | 'project' | 'emergency' | 'marketplace' | 'education';
 
 interface FeedItem {
   id: string;
@@ -64,6 +66,8 @@ function getCategory(action: string): FeedCategory {
   if (action.startsWith('PROPOSAL')) return 'governance';
   if (action.startsWith('GROUP')) return 'community';
   if (action === AuditAction.EMERGENCY_REPORTED) return 'emergency';
+  if (action.startsWith('LISTING')) return 'marketplace';
+  if (action === AuditAction.MODULE_PUBLISHED) return 'education';
   return 'project';
 }
 
@@ -94,6 +98,10 @@ function buildDescription(
     case AuditAction.EMERGENCY_REPORTED:
       // Never reveal reporter identity
       return 'An emergency was reported in this ward';
+    case AuditAction.LISTING_CREATED:
+      return `${actor} added a new listing to the marketplace`;
+    case AuditAction.MODULE_PUBLISHED:
+      return `New learning material available: "${String(meta.title ?? 'Untitled')}"`;
     default:
       return (action as string).replace(/_/g, ' ').toLowerCase();
   }
@@ -122,6 +130,10 @@ function buildSafeMeta(
       return { approved: raw.approved, projectId: raw.projectId };
     case AuditAction.EMERGENCY_REPORTED:
       return { type: raw.type }; // wardId intentionally excluded
+    case AuditAction.LISTING_CREATED:
+      return { type: raw.type, title: raw.title };
+    case AuditAction.MODULE_PUBLISHED:
+      return { title: raw.title };
     default:
       return {};
   }
