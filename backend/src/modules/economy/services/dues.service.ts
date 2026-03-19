@@ -111,7 +111,10 @@ class DuesService {
     await treasuryService
       .allocateDues(payment.id, userId)
       .catch((err) =>
-        logger.warn({ err, paymentId: payment.id }, '[DUES] Treasury allocation failed — payment still recorded')
+        logger.warn(
+          { err, paymentId: payment.id },
+          '[DUES] Treasury allocation failed — payment still recorded'
+        )
       );
 
     return payment;

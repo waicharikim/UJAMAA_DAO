@@ -29,13 +29,14 @@ import { DuesTier, DUES_CONFIG } from '../../economy/types.js';
 
 // ─── Provider env vars ────────────────────────────────────────────────────────
 
-const BUNI_CLIENT_ID      = process.env.BUNI_CLIENT_ID      || '';
-const BUNI_CLIENT_SECRET  = process.env.BUNI_CLIENT_SECRET  || '';
-const BUNI_BASE_URL       = process.env.BUNI_BASE_URL       || 'https://uat.buni.kcbgroup.com';
+const BUNI_CLIENT_ID = process.env.BUNI_CLIENT_ID || '';
+const BUNI_CLIENT_SECRET = process.env.BUNI_CLIENT_SECRET || '';
+const BUNI_BASE_URL =
+  process.env.BUNI_BASE_URL || 'https://uat.buni.kcbgroup.com';
 
-const FLW_PUBLIC_KEY      = process.env.FLW_PUBLIC_KEY      || '';
-const FLW_SECRET_KEY      = process.env.FLW_SECRET_KEY      || '';
-const FLW_WEBHOOK_SECRET  = process.env.FLW_WEBHOOK_SECRET  || '';
+const FLW_PUBLIC_KEY = process.env.FLW_PUBLIC_KEY || '';
+const FLW_SECRET_KEY = process.env.FLW_SECRET_KEY || '';
+const FLW_WEBHOOK_SECRET = process.env.FLW_WEBHOOK_SECRET || '';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:4000';
 
@@ -48,21 +49,25 @@ async function getBuniToken(): Promise<string> {
     return _buniTokenCache.token;
   }
 
-  const credentials = Buffer.from(`${BUNI_CLIENT_ID}:${BUNI_CLIENT_SECRET}`).toString('base64');
+  const credentials = Buffer.from(
+    `${BUNI_CLIENT_ID}:${BUNI_CLIENT_SECRET}`
+  ).toString('base64');
   const res = await fetch(`${BUNI_BASE_URL}/token`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
-      'Authorization': `Basic ${credentials}`,
+      Authorization: `Basic ${credentials}`,
     },
     body: 'grant_type=client_credentials',
   });
 
   if (!res.ok) {
-    throw new Error(`[BUNI] Token request failed: ${res.status} ${res.statusText}`);
+    throw new Error(
+      `[BUNI] Token request failed: ${res.status} ${res.statusText}`
+    );
   }
 
-  const data = await res.json() as BuniTokenResponse;
+  const data = (await res.json()) as BuniTokenResponse;
   _buniTokenCache = {
     token: data.access_token,
     expiresAt: Date.now() + data.expires_in * 1_000,
@@ -81,7 +86,10 @@ const FIXED_AMOUNTS: Partial<Record<PaymentPurpose, number>> = {
   VERIFICATION: 100,
 };
 
-function resolveAmount(purpose: PaymentPurpose, meta: Record<string, unknown>): number {
+function resolveAmount(
+  purpose: PaymentPurpose,
+  meta: Record<string, unknown>
+): number {
   if (purpose === 'DUES') {
     const { tier } = meta as unknown as DuesPurposeMeta;
     const config = DUES_CONFIG.TIERS[tier as DuesTier];
@@ -142,7 +150,10 @@ class PaymentService {
         method === 'CARD'
           ? `https://checkout.flutterwave.com/v3/hosted/pay/test-${txRef}`
           : undefined;
-      logger.debug({ txRef, method, purpose }, '[PAYMENTS] Test mode — stubbed');
+      logger.debug(
+        { txRef, method, purpose },
+        '[PAYMENTS] Test mode — stubbed'
+      );
       return { txRef, paymentLink };
     }
 
@@ -157,12 +168,19 @@ class PaymentService {
   private async _initiateMpesaBuni(
     txRef: string,
     amount: number,
-    user: { email: string | null; phoneNumber: string | null; name: string | null },
+    user: {
+      email: string | null;
+      phoneNumber: string | null;
+      name: string | null;
+    },
     meta: Record<string, unknown>
   ): Promise<{ txRef: string }> {
     const rawPhone = user.phoneNumber;
     if (!rawPhone) {
-      await prisma.paymentRecord.update({ where: { txRef }, data: { status: 'FAILED' } });
+      await prisma.paymentRecord.update({
+        where: { txRef },
+        data: { status: 'FAILED' },
+      });
       throw ApiError.badRequest('Phone number required for M-Pesa payment');
     }
 
@@ -188,28 +206,37 @@ class PaymentService {
     const res = await fetch(`${BUNI_BASE_URL}/mm/api/request/1.0.0/stkpush`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
-        'routeCode': '207',
-        'operation': 'STKPush',
-        'messageId': txRef,
+        routeCode: '207',
+        operation: 'STKPush',
+        messageId: txRef,
       },
       body: JSON.stringify(body),
     });
 
-    const data = await res.json() as BuniStkPushResponse;
+    const data = (await res.json()) as BuniStkPushResponse;
     const statusCode = String(data?.header?.statusCode);
 
     if (statusCode !== '0') {
-      await prisma.paymentRecord.update({ where: { txRef }, data: { status: 'FAILED' } });
-      logger.error({ txRef, statusCode, desc: data?.header?.statusDescription }, '[BUNI] STK push rejected');
+      await prisma.paymentRecord.update({
+        where: { txRef },
+        data: { status: 'FAILED' },
+      });
+      logger.error(
+        { txRef, statusCode, desc: data?.header?.statusDescription },
+        '[BUNI] STK push rejected'
+      );
       throw ApiError.transactionFailed('M-Pesa STK push failed');
     }
 
     // Store CheckoutRequestID in flwRef for webhook correlation
     const checkoutRequestId = data.response?.CheckoutRequestID;
     if (checkoutRequestId) {
-      await prisma.paymentRecord.update({ where: { txRef }, data: { flwRef: checkoutRequestId } });
+      await prisma.paymentRecord.update({
+        where: { txRef },
+        data: { flwRef: checkoutRequestId },
+      });
     }
 
     logger.info({ txRef, checkoutRequestId }, '[BUNI] STK push sent');
@@ -221,7 +248,11 @@ class PaymentService {
   private async _initiateCardFlw(
     txRef: string,
     amount: number,
-    user: { email: string | null; phoneNumber: string | null; name: string | null },
+    user: {
+      email: string | null;
+      phoneNumber: string | null;
+      name: string | null;
+    },
     meta: Record<string, unknown>
   ): Promise<{ txRef: string; paymentLink: string }> {
     const flw = await getFlw();
@@ -248,7 +279,10 @@ class PaymentService {
     const link = response?.data?.link;
 
     if (!link) {
-      await prisma.paymentRecord.update({ where: { txRef }, data: { status: 'FAILED' } });
+      await prisma.paymentRecord.update({
+        where: { txRef },
+        data: { status: 'FAILED' },
+      });
       throw ApiError.transactionFailed('Failed to generate card payment link');
     }
 
@@ -274,12 +308,18 @@ class PaymentService {
     });
 
     if (!record) {
-      logger.warn({ CheckoutRequestID }, '[BUNI] Webhook for unknown CheckoutRequestID — ignoring');
+      logger.warn(
+        { CheckoutRequestID },
+        '[BUNI] Webhook for unknown CheckoutRequestID — ignoring'
+      );
       return { statusCode: '0', statusMessage: 'Acknowledged' };
     }
 
     if (record.status !== 'PENDING') {
-      logger.info({ txRef: record.txRef }, '[BUNI] Already processed — idempotent skip');
+      logger.info(
+        { txRef: record.txRef },
+        '[BUNI] Already processed — idempotent skip'
+      );
       return { statusCode: '0', statusMessage: 'Already processed' };
     }
 
@@ -288,15 +328,21 @@ class PaymentService {
         where: { id: record.id },
         data: { status: 'FAILED' },
       });
-      logger.warn({ txRef: record.txRef, ResultCode }, '[BUNI] STK callback failed — record FAILED');
+      logger.warn(
+        { txRef: record.txRef, ResultCode },
+        '[BUNI] STK callback failed — record FAILED'
+      );
       return { statusCode: '0', statusMessage: 'Acknowledged' };
     }
 
     // Extract amount + receipt from CallbackMetadata
     const items = CallbackMetadata?.Item ?? [];
-    const amountVal  = items.find(i => i.Name === 'Amount')?.Value;
-    const receiptVal = items.find(i => i.Name === 'MpesaReceiptNumber')?.Value;
-    const amount = typeof amountVal === 'number' ? amountVal : Number(record.amount);
+    const amountVal = items.find((i) => i.Name === 'Amount')?.Value;
+    const receiptVal = items.find(
+      (i) => i.Name === 'MpesaReceiptNumber'
+    )?.Value;
+    const amount =
+      typeof amountVal === 'number' ? amountVal : Number(record.amount);
     const mpesaReceipt = receiptVal ? String(receiptVal) : undefined;
 
     await prisma.paymentRecord.update({
@@ -304,7 +350,10 @@ class PaymentService {
       data: { status: 'COMPLETED', completedAt: new Date() },
     });
 
-    logger.info({ txRef: record.txRef, amount, mpesaReceipt }, '[BUNI] Payment COMPLETED');
+    logger.info(
+      { txRef: record.txRef, amount, mpesaReceipt },
+      '[BUNI] Payment COMPLETED'
+    );
 
     await this._routeCompletedPayment(
       record.userId,
@@ -315,7 +364,10 @@ class PaymentService {
       mpesaReceipt
     );
 
-    return { statusCode: '0', statusMessage: 'Notification received successfully' };
+    return {
+      statusCode: '0',
+      statusMessage: 'Notification received successfully',
+    };
   }
 
   // ─── Flutterwave webhook (card) ────────────────────────────────────────────
@@ -324,7 +376,10 @@ class PaymentService {
    * Handle Flutterwave webhook — card payments only.
    * Verifies x-flutterwave-signature header.
    */
-  async handleWebhook(payload: FlwWebhookPayload, signature: string): Promise<void> {
+  async handleWebhook(
+    payload: FlwWebhookPayload,
+    signature: string
+  ): Promise<void> {
     if (FLW_WEBHOOK_SECRET && process.env.NODE_ENV !== 'test') {
       const hash = crypto
         .createHmac('sha256', FLW_WEBHOOK_SECRET)
@@ -336,7 +391,10 @@ class PaymentService {
     }
 
     if (payload.event !== 'charge.completed') {
-      logger.debug({ event: payload.event }, '[FLW] Ignoring non-charge webhook');
+      logger.debug(
+        { event: payload.event },
+        '[FLW] Ignoring non-charge webhook'
+      );
       return;
     }
 
@@ -349,13 +407,22 @@ class PaymentService {
     }
 
     if (record.status !== 'PENDING') {
-      logger.info({ txRef, status: record.status }, '[FLW] Already processed — idempotent skip');
+      logger.info(
+        { txRef, status: record.status },
+        '[FLW] Already processed — idempotent skip'
+      );
       return;
     }
 
     if (status !== 'successful') {
-      await prisma.paymentRecord.update({ where: { txRef }, data: { status: 'FAILED', flwRef } });
-      logger.warn({ txRef, flwStatus: status }, '[FLW] Charge failed — record FAILED');
+      await prisma.paymentRecord.update({
+        where: { txRef },
+        data: { status: 'FAILED', flwRef },
+      });
+      logger.warn(
+        { txRef, flwStatus: status },
+        '[FLW] Charge failed — record FAILED'
+      );
       return;
     }
 
@@ -386,21 +453,36 @@ class PaymentService {
     switch (purpose) {
       case 'DUES': {
         const { tier, period } = (meta || {}) as unknown as DuesPurposeMeta;
-        await duesService.recordPayment(userId, tier as DuesTier, amount, period, mpesaReceipt ?? txRef);
+        await duesService.recordPayment(
+          userId,
+          tier as DuesTier,
+          amount,
+          period,
+          mpesaReceipt ?? txRef
+        );
         break;
       }
       case 'VERIFICATION': {
-        const { userService } = await import('../../user/services/user.service.js');
+        const { userService } = await import(
+          '../../user/services/user.service.js'
+        );
         await userService.finalizeVerificationPayment(userId, txRef);
         break;
       }
       case 'TREASURY_DEPOSIT': {
         const { groupId } = (meta || {}) as unknown as TreasuryPurposeMeta;
-        await treasuryService.deposit(groupId, { amount, description: `Payment ${txRef}` }, userId);
+        await treasuryService.deposit(
+          groupId,
+          { amount, description: `Payment ${txRef}` },
+          userId
+        );
         break;
       }
       default:
-        logger.warn({ purpose, txRef }, '[PAYMENTS] Unknown purpose — downstream not called');
+        logger.warn(
+          { purpose, txRef },
+          '[PAYMENTS] Unknown purpose — downstream not called'
+        );
     }
   }
 

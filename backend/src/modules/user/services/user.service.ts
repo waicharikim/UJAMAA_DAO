@@ -830,7 +830,10 @@ class UserService {
     });
 
     if (!request || request.status !== 'PAYMENT_PENDING') {
-      logger.warn({ userId, txRef }, '[PAYMENTS] finalizeVerification: no active payment request');
+      logger.warn(
+        { userId, txRef },
+        '[PAYMENTS] finalizeVerification: no active payment request'
+      );
       return;
     }
 

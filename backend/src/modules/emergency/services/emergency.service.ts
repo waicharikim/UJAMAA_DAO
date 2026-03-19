@@ -194,7 +194,9 @@ export class EmergencyService {
           userId: alert.reporterId,
           type: NotificationType.GENERAL_ANNOUNCEMENT,
           title: `Your emergency report has been ${newStatus === 'RESOLVED' ? 'resolved' : 'marked as false alarm'}`,
-          message: statusNote ?? `Your ${alert.emergencyType} alert has been ${newStatus.toLowerCase().replace('_', ' ')}.`,
+          message:
+            statusNote ??
+            `Your ${alert.emergencyType} alert has been ${newStatus.toLowerCase().replace('_', ' ')}.`,
           data: { alertId },
           channels: [NotificationChannel.IN_APP],
         })

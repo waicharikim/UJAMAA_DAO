@@ -386,7 +386,9 @@ router.post(
 
     const { email } = req.body ?? {};
     if (!email) {
-      res.status(400).json({ success: false, error: { message: 'email required' } });
+      res
+        .status(400)
+        .json({ success: false, error: { message: 'email required' } });
       return;
     }
 
@@ -398,7 +400,9 @@ router.post(
     });
 
     if (!user) {
-      res.status(404).json({ success: false, error: { message: 'User not found' } });
+      res
+        .status(404)
+        .json({ success: false, error: { message: 'User not found' } });
       return;
     }
 

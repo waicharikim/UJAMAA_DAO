@@ -15,11 +15,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../../../core/database/client.js';
 import { ApiError } from '../../../core/errors/ApiError.js';
 import { logger } from '../../../core/logger/logger.js';
-import {
-  DepositDto,
-  WithdrawDto,
-  TransactionQueryDto,
-} from '../types.js';
+import { DepositDto, WithdrawDto, TransactionQueryDto } from '../types.js';
 
 class TreasuryService {
   // ────────────────────────────────────────────────────────────
@@ -76,29 +72,31 @@ class TreasuryService {
   async deposit(groupId: string, dto: DepositDto, initiatedById: string) {
     const treasury = await this.getOrCreateTreasury(groupId);
 
-    const tx = await prisma.$transaction(async (t: Prisma.TransactionClient) => {
-      const transaction = await t.walletTransaction.create({
-        data: {
-          treasuryId: treasury.id,
-          amount: dto.amount,
-          currency: 'KES',
-          transactionType: 'CREDIT',
-          description: dto.description ?? null,
-          referenceType: dto.referenceType ?? 'MANUAL',
-          proposalId: dto.proposalId ?? null,
-          projectId: dto.projectId ?? null,
-          initiatedById,
-          metadata: undefined,
-        },
-      });
+    const tx = await prisma.$transaction(
+      async (t: Prisma.TransactionClient) => {
+        const transaction = await t.walletTransaction.create({
+          data: {
+            treasuryId: treasury.id,
+            amount: dto.amount,
+            currency: 'KES',
+            transactionType: 'CREDIT',
+            description: dto.description ?? null,
+            referenceType: dto.referenceType ?? 'MANUAL',
+            proposalId: dto.proposalId ?? null,
+            projectId: dto.projectId ?? null,
+            initiatedById,
+            metadata: undefined,
+          },
+        });
 
-      await t.groupTreasury.update({
-        where: { id: treasury.id },
-        data: { balance: { increment: dto.amount } },
-      });
+        await t.groupTreasury.update({
+          where: { id: treasury.id },
+          data: { balance: { increment: dto.amount } },
+        });
 
-      return transaction;
-    });
+        return transaction;
+      }
+    );
 
     logger.info(
       { groupId, amount: dto.amount, transactionId: tx.id },
@@ -122,29 +120,31 @@ class TreasuryService {
       throw ApiError.badRequest('Insufficient treasury balance');
     }
 
-    const tx = await prisma.$transaction(async (t: Prisma.TransactionClient) => {
-      const transaction = await t.walletTransaction.create({
-        data: {
-          treasuryId: treasury.id,
-          amount: dto.amount,
-          currency: 'KES',
-          transactionType: 'DEBIT',
-          description: dto.description ?? null,
-          referenceType: dto.referenceType ?? 'MANUAL',
-          proposalId: dto.proposalId ?? null,
-          projectId: dto.projectId ?? null,
-          initiatedById,
-          metadata: undefined,
-        },
-      });
+    const tx = await prisma.$transaction(
+      async (t: Prisma.TransactionClient) => {
+        const transaction = await t.walletTransaction.create({
+          data: {
+            treasuryId: treasury.id,
+            amount: dto.amount,
+            currency: 'KES',
+            transactionType: 'DEBIT',
+            description: dto.description ?? null,
+            referenceType: dto.referenceType ?? 'MANUAL',
+            proposalId: dto.proposalId ?? null,
+            projectId: dto.projectId ?? null,
+            initiatedById,
+            metadata: undefined,
+          },
+        });
 
-      await t.groupTreasury.update({
-        where: { id: treasury.id },
-        data: { balance: { decrement: dto.amount } },
-      });
+        await t.groupTreasury.update({
+          where: { id: treasury.id },
+          data: { balance: { decrement: dto.amount } },
+        });
 
-      return transaction;
-    });
+        return transaction;
+      }
+    );
 
     logger.info(
       { groupId, amount: dto.amount, transactionId: tx.id },
@@ -282,7 +282,11 @@ class TreasuryService {
           description: `Dues payment — ${payment.tier} tier (${payment.period})`,
           referenceType: 'DUES',
           initiatedById: userId,
-          metadata: { duesPaymentId, tier: payment.tier, period: payment.period },
+          metadata: {
+            duesPaymentId,
+            tier: payment.tier,
+            period: payment.period,
+          },
         },
       });
 

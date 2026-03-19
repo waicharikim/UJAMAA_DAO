@@ -90,7 +90,7 @@ export interface BuniTokenResponse {
 
 /** Shape returned by Flutterwave charge.mpesa() */
 export interface FlwMpesaChargeResponse {
-  status: string;     // "success" | "error"
+  status: string; // "success" | "error"
   message: string;
   data?: {
     id: number;
@@ -125,7 +125,7 @@ export interface FlwMpesaChargeResponse {
 
 /** Shape returned by Flutterwave payment.create() for hosted checkout */
 export interface FlwPaymentLinkResponse {
-  status: string;   // "success" | "error"
+  status: string; // "success" | "error"
   message: string;
   data?: {
     link: string;
@@ -134,7 +134,7 @@ export interface FlwPaymentLinkResponse {
 
 /** Shape of the Flutterwave webhook payload */
 export interface FlwWebhookPayload {
-  event: string;    // "charge.completed"
+  event: string; // "charge.completed"
   data: {
     id: number;
     tx_ref: string;
@@ -142,7 +142,7 @@ export interface FlwWebhookPayload {
     amount: number;
     currency: string;
     charged_amount: number;
-    status: string;  // "successful" | "failed"
+    status: string; // "successful" | "failed"
     payment_type: string;
     meta?: Record<string, string | number | boolean | null>;
     customer: {

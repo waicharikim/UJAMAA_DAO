@@ -28,7 +28,13 @@ const FEED_ACTIONS = [
   AuditAction.MODULE_PUBLISHED,
 ] as const;
 
-type FeedCategory = 'governance' | 'community' | 'project' | 'emergency' | 'marketplace' | 'education';
+type FeedCategory =
+  | 'governance'
+  | 'community'
+  | 'project'
+  | 'emergency'
+  | 'marketplace'
+  | 'education';
 
 interface FeedItem {
   id: string;
@@ -41,9 +47,7 @@ interface FeedItem {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function firstLastInitial(
-  user: { name: string | null } | null,
-): string {
+function firstLastInitial(user: { name: string | null } | null): string {
   if (!user?.name) return 'A member';
   const parts = user.name.trim().split(/\s+/);
   if (parts.length === 1) return parts[0];
@@ -74,7 +78,7 @@ function getCategory(action: string): FeedCategory {
 function buildDescription(
   action: AuditAction,
   user: { name: string | null } | null,
-  meta: Record<string, unknown>,
+  meta: Record<string, unknown>
 ): string {
   const actor = firstLastInitial(user);
   switch (action) {
@@ -109,7 +113,7 @@ function buildDescription(
 
 function buildSafeMeta(
   action: AuditAction,
-  raw: Record<string, unknown>,
+  raw: Record<string, unknown>
 ): Record<string, unknown> {
   switch (action) {
     case AuditAction.PROPOSAL_CREATED:
