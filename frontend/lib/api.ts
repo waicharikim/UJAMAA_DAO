@@ -1725,3 +1725,24 @@ export const auditApi = {
     return apiFetch<{ logs: AuditLogDto[]; pagination: { page: number; limit: number; total: number; totalPages: number } }>(`/audit/search${qs ? `?${qs}` : ""}`)
   },
 }
+
+// ─── Feed ─────────────────────────────────────────────────────────────────────
+
+export interface FeedItemDto {
+  id: string
+  category: "governance" | "community" | "project" | "emergency"
+  description: string
+  timestamp: string
+  entityId?: string
+  meta: Record<string, unknown>
+}
+
+export interface FeedPageDto {
+  items: FeedItemDto[]
+  nextCursor: string | null
+}
+
+export const feedApi = {
+  getFeed: (cursor?: string): Promise<FeedPageDto> =>
+    apiFetch<FeedPageDto>(`/feed${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`),
+}

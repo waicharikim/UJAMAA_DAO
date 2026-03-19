@@ -24,6 +24,9 @@ import { v4 as uuidv4 } from 'uuid';
 import countiesData from '../data/counties.js';
 import { industries as industriesList } from '../data/industries.js';
 import { goodsServices as goodsList } from '../data/goodsServices.js';
+import { groupMembershipService } from '../../modules/community/services/groupMembership.service.js';
+import { auditService } from '../../modules/audit/services/audit.service.js';
+import { AuditAction } from '../../modules/audit/types.js';
 
 // ============================================================================
 // SAFETY CHECK
@@ -797,11 +800,16 @@ async function seedTestAdmin() {
     return;
   }
 
+  const adminSecondaryWard = await prisma.ward.findFirst({
+    where: { constituencyId: firstWard.constituencyId, id: { not: firstWard.id } },
+  });
+
   const adminUser = await prisma.user.upsert({
     where: { email: 'admin@ujamaa.test' },
     update: {
       // Always keep the admin fully verified and in a ward (fixes re-seed after ward data added)
       primaryWardId: firstWard.id,
+      secondaryWardId: adminSecondaryWard?.id ?? firstWard.id,
       verificationLevel: 'FULL_VERIFIED',
       emailVerified: true,
       phoneVerified: true,
@@ -813,6 +821,7 @@ async function seedTestAdmin() {
       name: 'System Administrator',
       phoneNumber: '+254700000000',
       primaryWardId: firstWard.id,
+      secondaryWardId: adminSecondaryWard?.id ?? firstWard.id,
       verificationLevel: 'FULL_VERIFIED',
       emailVerified: true,
       phoneVerified: true,
@@ -886,6 +895,40 @@ async function seedTestUsers() {
     return;
   }
 
+  // Second ward in the SAME constituency (cross-ward vouch testing)
+  const secondWard = await prisma.ward.findFirst({
+    where: {
+      constituencyId: firstWard.constituencyId,
+      id: { not: firstWard.id },
+    },
+    include: { constituency: { include: { county: true } } },
+  });
+
+  // Ward in a DIFFERENT constituency but SAME county
+  const diffConstituencyWard = await prisma.ward.findFirst({
+    where: {
+      constituency: {
+        countyId: firstWard.constituency.countyId,
+        id: { not: firstWard.constituencyId },
+      },
+    },
+    include: { constituency: { include: { county: true } } },
+  });
+
+  // Ward in a DIFFERENT county
+  const diffCountyWard = await prisma.ward.findFirst({
+    where: {
+      constituency: {
+        countyId: { not: firstWard.constituency.countyId },
+      },
+    },
+    include: { constituency: { include: { county: true } } },
+  });
+
+  // Main ward users: reside in firstWard, originate from secondWard (cross-ward within same constituency)
+  // Geographic spread users: reside in their respective ward, originate from firstWard
+  const mainSecondaryWardId = secondWard?.id ?? firstWard.id;
+
   const COMMON_FIELDS = {
     emailVerified: true,
     phoneVerified: true,
@@ -894,6 +937,7 @@ async function seedTestUsers() {
     participationRights: 500,
     globalImpactPoints: 200,
     primaryWardId: firstWard.id,
+    secondaryWardId: mainSecondaryWardId,
   };
 
   type TestUser = {
@@ -923,6 +967,13 @@ async function seedTestUsers() {
       name: 'County Coordinator',
       phoneNumber: '+254700000006',
       role: 'system:county_coordinator',
+      verificationLevel: 'FULL_VERIFIED',
+    },
+    {
+      email: 'support@ujamaa.test',
+      name: 'Support Staff',
+      phoneNumber: '+254700000007',
+      role: 'system:support',
       verificationLevel: 'FULL_VERIFIED',
     },
     {
@@ -966,13 +1017,14 @@ async function seedTestUsers() {
   // PHONE_VERIFIED user — for testing verification flow UX
   await prisma.user.upsert({
     where: { email: 'phone-only@ujamaa.test' },
-    update: { primaryWardId: firstWard.id, verificationLevel: 'PHONE_VERIFIED' },
+    update: { primaryWardId: firstWard.id, secondaryWardId: mainSecondaryWardId, verificationLevel: 'PHONE_VERIFIED' },
     create: {
       id: uuidv4(),
       email: 'phone-only@ujamaa.test',
       name: 'Amina Phone-Only',
       phoneNumber: '+254700000020',
       primaryWardId: firstWard.id,
+      secondaryWardId: mainSecondaryWardId,
       verificationLevel: 'PHONE_VERIFIED',
       emailVerified: true,
       phoneVerified: true,
@@ -985,13 +1037,14 @@ async function seedTestUsers() {
   // EMAIL_VERIFIED user — for testing onboarding / nudge UX
   await prisma.user.upsert({
     where: { email: 'email-only@ujamaa.test' },
-    update: { primaryWardId: firstWard.id, verificationLevel: 'EMAIL_VERIFIED' },
+    update: { primaryWardId: firstWard.id, secondaryWardId: mainSecondaryWardId, verificationLevel: 'EMAIL_VERIFIED' },
     create: {
       id: uuidv4(),
       email: 'email-only@ujamaa.test',
       name: 'Brian Email-Only',
       phoneNumber: '+254700000021',
       primaryWardId: firstWard.id,
+      secondaryWardId: mainSecondaryWardId,
       verificationLevel: 'EMAIL_VERIFIED',
       emailVerified: true,
       phoneVerified: false,
@@ -1004,13 +1057,14 @@ async function seedTestUsers() {
   // FULL_VERIFIED member without special roles — wallet connected
   await prisma.user.upsert({
     where: { email: 'full-member@ujamaa.test' },
-    update: { primaryWardId: firstWard.id, verificationLevel: 'FULL_VERIFIED' },
+    update: { primaryWardId: firstWard.id, secondaryWardId: mainSecondaryWardId, verificationLevel: 'FULL_VERIFIED' },
     create: {
       id: uuidv4(),
       email: 'full-member@ujamaa.test',
       name: 'Wanjiru Full-Member',
       phoneNumber: '+254700000022',
       primaryWardId: firstWard.id,
+      secondaryWardId: mainSecondaryWardId,
       verificationLevel: 'FULL_VERIFIED',
       emailVerified: true,
       phoneVerified: true,
@@ -1021,6 +1075,83 @@ async function seedTestUsers() {
     },
   });
 
+  // ── Geographic spread users ──────────────────────────────────────────────
+
+  // Second ward, same constituency — for cross-ward vouch restriction testing
+  if (secondWard) {
+    await prisma.user.upsert({
+      where: { email: 'ward2.member@ujamaa.test' },
+      update: { primaryWardId: secondWard.id, secondaryWardId: firstWard.id },
+      create: {
+        id: uuidv4(),
+        email: 'ward2.member@ujamaa.test',
+        name: `${secondWard.name} Member`,
+        phoneNumber: '+254700000030',
+        primaryWardId: secondWard.id,
+        secondaryWardId: firstWard.id,
+        verificationLevel: 'COMMUNITY_VERIFIED',
+        emailVerified: true,
+        phoneVerified: true,
+        communityVerified: true,
+        participationRights: 300,
+        globalImpactPoints: 100,
+      },
+    });
+    console.log(
+      `   → ward2.member placed in ward: ${secondWard.name} (${secondWard.constituency.name})`
+    );
+  }
+
+  // Different constituency, same county
+  if (diffConstituencyWard) {
+    await prisma.user.upsert({
+      where: { email: 'const.member@ujamaa.test' },
+      update: { primaryWardId: diffConstituencyWard.id, secondaryWardId: firstWard.id },
+      create: {
+        id: uuidv4(),
+        email: 'const.member@ujamaa.test',
+        name: `${diffConstituencyWard.constituency.name} Member`,
+        phoneNumber: '+254700000031',
+        primaryWardId: diffConstituencyWard.id,
+        secondaryWardId: firstWard.id,
+        verificationLevel: 'COMMUNITY_VERIFIED',
+        emailVerified: true,
+        phoneVerified: true,
+        communityVerified: true,
+        participationRights: 300,
+        globalImpactPoints: 100,
+      },
+    });
+    console.log(
+      `   → const.member placed in constituency: ${diffConstituencyWard.constituency.name} (${diffConstituencyWard.constituency.county.name})`
+    );
+  }
+
+  // Different county entirely
+  if (diffCountyWard) {
+    await prisma.user.upsert({
+      where: { email: 'county.member@ujamaa.test' },
+      update: { primaryWardId: diffCountyWard.id, secondaryWardId: firstWard.id },
+      create: {
+        id: uuidv4(),
+        email: 'county.member@ujamaa.test',
+        name: `${diffCountyWard.constituency.county.name} Member`,
+        phoneNumber: '+254700000032',
+        primaryWardId: diffCountyWard.id,
+        secondaryWardId: firstWard.id,
+        verificationLevel: 'COMMUNITY_VERIFIED',
+        emailVerified: true,
+        phoneVerified: true,
+        communityVerified: true,
+        participationRights: 300,
+        globalImpactPoints: 100,
+      },
+    });
+    console.log(
+      `   → county.member placed in county: ${diffCountyWard.constituency.county.name}`
+    );
+  }
+
   const createdUsers: Record<string, string> = {};
 
   for (const u of testUsers) {
@@ -1030,7 +1161,7 @@ async function seedTestUsers() {
       | 'FULL_VERIFIED';
     const user = await prisma.user.upsert({
       where: { email: u.email },
-      update: { primaryWardId: firstWard.id, verificationLevel },
+      update: { primaryWardId: firstWard.id, secondaryWardId: mainSecondaryWardId, verificationLevel },
       create: {
         id: uuidv4(),
         email: u.email,
@@ -1084,26 +1215,25 @@ async function seedTestUsers() {
       },
     })
     .catch(async () => {
-      // fallback if unique constraint differs
+      // fallback: group may exist in a different ward from a prior seed run
       const existing = await prisma.group.findFirst({
-        where: { name: 'Kayole Borehole Committee', wardId: firstWard.id },
+        where: { name: 'Kayole Borehole Committee' },
       });
-      return (
-        existing ??
-        (await prisma.group.create({
-          data: {
-            id: uuidv4(),
-            name: 'Kayole Borehole Committee',
-            description:
-              'Community borehole construction and maintenance committee',
-            isSystemGroup: false,
-            locationScope: 'WARD',
-            voluntaryType: 'INFRASTRUCTURE_COMMITTEE',
-            wardId: firstWard.id,
-            memberCount: 0,
-          },
-        }))
-      );
+      if (existing) return existing;
+      // Only create if truly absent (name is globally unique on Group)
+      return prisma.group.create({
+        data: {
+          id: uuidv4(),
+          name: 'Kayole Borehole Committee',
+          description:
+            'Community borehole construction and maintenance committee',
+          isSystemGroup: false,
+          locationScope: 'WARD',
+          voluntaryType: 'INFRASTRUCTURE_COMMITTEE',
+          wardId: firstWard.id,
+          memberCount: 0,
+        },
+      });
     });
 
   // Add test users to borehole group
@@ -1146,7 +1276,7 @@ async function seedTestUsers() {
       where: { title: 'New Community Borehole', creatorId: waichariId },
     });
     if (!existing1) {
-      await prisma.proposal.create({
+      const p1 = await prisma.proposal.create({
         data: {
           id: uuidv4(),
           groupId: boreholeGroup.id,
@@ -1160,6 +1290,9 @@ async function seedTestUsers() {
           budget: 350000,
         },
       });
+      await auditService.log(waichariId, AuditAction.PROPOSAL_CREATED, 'Proposal', p1.id, {
+        groupId: boreholeGroup.id, title: p1.title, scope: 'COMMUNITY',
+      });
     }
 
     // PENDING_REVIEW proposal
@@ -1167,7 +1300,7 @@ async function seedTestUsers() {
       where: { title: 'Road Maintenance Request', creatorId: waichariId },
     });
     if (!existing2) {
-      await prisma.proposal.create({
+      const p2 = await prisma.proposal.create({
         data: {
           id: uuidv4(),
           groupId: boreholeGroup.id,
@@ -1181,6 +1314,12 @@ async function seedTestUsers() {
           budget: 150000,
         },
       });
+      await auditService.log(waichariId, AuditAction.PROPOSAL_CREATED, 'Proposal', p2.id, {
+        groupId: boreholeGroup.id, title: p2.title, scope: 'COMMUNITY',
+      });
+      await auditService.log(waichariId, AuditAction.PROPOSAL_STATUS_CHANGED, 'Proposal', p2.id, {
+        newStatus: 'PENDING_REVIEW', stage: 1,
+      });
     }
 
     // APPROVED_FOR_VOTING proposal
@@ -1188,7 +1327,7 @@ async function seedTestUsers() {
       where: { title: 'Youth Skills Programme', creatorId: waichariId },
     });
     if (!existing3) {
-      await prisma.proposal.create({
+      const p3 = await prisma.proposal.create({
         data: {
           id: uuidv4(),
           groupId: boreholeGroup.id,
@@ -1202,12 +1341,65 @@ async function seedTestUsers() {
           budget: 200000,
         },
       });
+      await auditService.log(waichariId, AuditAction.PROPOSAL_CREATED, 'Proposal', p3.id, {
+        groupId: boreholeGroup.id, title: p3.title, scope: 'COMMUNITY',
+      });
+      await auditService.log(waichariId, AuditAction.PROPOSAL_STATUS_CHANGED, 'Proposal', p3.id, {
+        newStatus: 'APPROVED_FOR_VOTING', stage: 1,
+      });
+    }
+  }
+
+  // ── Auto-enroll all test users into their system groups ───────────────────
+  console.log('   Enrolling test users into system groups...');
+
+  // Collect every (userId, primaryWardId, secondaryWardId) across all test users
+  const allUsersForEnrollment: { userId: string; primary: string; secondary: string }[] = [];
+
+  // Users from the main loop — reside in firstWard, origin in mainSecondaryWardId
+  for (const [, userId] of Object.entries(createdUsers)) {
+    allUsersForEnrollment.push({ userId, primary: firstWard.id, secondary: mainSecondaryWardId });
+  }
+
+  // Separately upserted users with their actual primary/secondary ward assignments
+  const extraEmails: { email: string; primary: string; secondary: string }[] = [
+    { email: 'phone-only@ujamaa.test', primary: firstWard.id, secondary: mainSecondaryWardId },
+    { email: 'email-only@ujamaa.test', primary: firstWard.id, secondary: mainSecondaryWardId },
+    { email: 'full-member@ujamaa.test', primary: firstWard.id, secondary: mainSecondaryWardId },
+    ...(secondWard ? [{ email: 'ward2.member@ujamaa.test', primary: secondWard.id, secondary: firstWard.id }] : []),
+    ...(diffConstituencyWard ? [{ email: 'const.member@ujamaa.test', primary: diffConstituencyWard.id, secondary: firstWard.id }] : []),
+    ...(diffCountyWard ? [{ email: 'county.member@ujamaa.test', primary: diffCountyWard.id, secondary: firstWard.id }] : []),
+  ];
+  for (const { email, primary, secondary } of extraEmails) {
+    const u = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+    if (u) allUsersForEnrollment.push({ userId: u.id, primary, secondary });
+  }
+
+  // Admin user
+  const adminUser = await prisma.user.findUnique({
+    where: { email: 'admin@ujamaa.test' },
+    select: { id: true },
+  });
+  if (adminUser) {
+    allUsersForEnrollment.push({ userId: adminUser.id, primary: firstWard.id, secondary: mainSecondaryWardId });
+  }
+
+  let enrolled = 0;
+  for (const { userId, primary, secondary } of allUsersForEnrollment) {
+    try {
+      await groupMembershipService.enrollInSystemGroups(userId, primary, secondary);
+      enrolled++;
+      // Log a feed-visible GROUP_JOINED event for this enrollment
+      await auditService.log(userId, AuditAction.GROUP_JOINED, 'Group', primary, {});
+    } catch {
+      // already enrolled — safe to ignore
     }
   }
 
   console.log(
     `   Created ${testUsers.length} test users, 1 voluntary group, 3 test proposals`
   );
+  console.log(`   Enrolled ${enrolled} users into system groups`);
 }
 
 // ============================================================================

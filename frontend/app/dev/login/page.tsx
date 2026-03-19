@@ -19,6 +19,13 @@ const TEST_ACCOUNTS = [
     levelColor: "#1D4731",
   },
   {
+    email: "support@ujamaa.test",
+    name: "Support Staff",
+    role: "Support",
+    level: "FULL_VERIFIED",
+    levelColor: "#1D4731",
+  },
+  {
     email: "compliance@ujamaa.test",
     name: "Compliance Officer",
     role: "Compliance Officer",
@@ -80,6 +87,27 @@ const TEST_ACCOUNTS = [
     role: "—",
     level: "EMAIL_VERIFIED",
     levelColor: "#B03A1E",
+  },
+  {
+    email: "ward2.member@ujamaa.test",
+    name: "Ward 2 Member",
+    role: "Different Ward",
+    level: "COMMUNITY_VERIFIED",
+    levelColor: "#2A5240",
+  },
+  {
+    email: "const.member@ujamaa.test",
+    name: "Constituency Member",
+    role: "Different Constituency",
+    level: "COMMUNITY_VERIFIED",
+    levelColor: "#2A5240",
+  },
+  {
+    email: "county.member@ujamaa.test",
+    name: "County Member",
+    role: "Different County",
+    level: "COMMUNITY_VERIFIED",
+    levelColor: "#2A5240",
   },
 ]
 
@@ -145,7 +173,7 @@ export default function DevLoginPage() {
             Account Switcher
           </h1>
           <p className="text-sm" style={{ color: "rgba(14,11,8,0.5)" }}>
-            Click any account to instantly log in. All 11 test users are pre-seeded.
+            Click any account to instantly log in. All 14 test users are pre-seeded across 3 geographic scopes.
           </p>
         </div>
 

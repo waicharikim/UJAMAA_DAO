@@ -3,14 +3,15 @@
 import { Suspense } from "react"
 import Link from "next/link"
 import { useQuery } from "@tanstack/react-query"
-import { Vote, Users, Briefcase, Award, Coins, TrendingUp, Target, AlertCircle, ShieldCheck, MapPin, BarChart3, ArrowRight } from "lucide-react"
+import { Vote, Users, Briefcase, Award, Coins, TrendingUp, AlertCircle, ShieldCheck, MapPin, BarChart3, ArrowRight } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/contexts/auth-context"
 import { useRole } from "@/contexts/role-context"
-import { economyApi, governanceApi, communityApi, notificationsApi, adminApi } from "@/lib/api"
+import { economyApi, governanceApi, communityApi, adminApi } from "@/lib/api"
+import { ActivityFeed } from "@/components/feed/activity-feed"
 import { BarazaGroupsCard } from "@/components/integration/baraza-groups-card"
 import { SystemGroupsCard } from "@/components/community/system-groups-card"
 import { EmergencyAlertsCard } from "@/components/emergency/emergency-alerts-card"
@@ -354,17 +355,8 @@ export function DashboardContent() {
     staleTime: 60_000,
   })
 
-  // Recent activity from notifications
-  const { data: notifications = [] } = useQuery({
-    queryKey: ["notifications"],
-    queryFn: () => notificationsApi.getNotifications(),
-    enabled: isAuthenticated,
-    staleTime: 30_000,
-  })
-
   const prBalance = prData?.balance ?? user?.tokenBalance ?? 0
   const impactPoints = user?.impactPoints?.global ?? 0
-  const recentActivity = notifications.slice(0, 5)
 
   return (
     <div className="px-4 md:px-8 py-6 space-y-8 max-w-6xl mx-auto">
@@ -584,44 +576,7 @@ export function DashboardContent() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  {recentActivity.length === 0 ? (
-                    <p className="text-sm py-4 text-center" style={{ color: "rgba(14,11,8,0.35)" }}>
-                      No recent activity yet.
-                    </p>
-                  ) : (
-                    recentActivity.map((n: any) => {
-                      const isProposal = n.type?.startsWith("PROPOSAL")
-                      const isGroup    = n.type?.startsWith("GROUP") || n.type?.startsWith("COMMUNITY")
-                      const iconColor  = isProposal ? "#C9922A" : isGroup ? "#B03A1E" : "#1E3D2F"
-                      const iconBg     = isProposal ? "rgba(201,146,42,0.12)" : isGroup ? "rgba(176,58,30,0.1)" : "rgba(30,61,47,0.1)"
-                      const Icon       = isProposal ? Vote : isGroup ? Users : Target
-                      return (
-                        <div
-                          key={n.id}
-                          className="flex items-center gap-3 p-3 rounded-xl"
-                          style={{ background: "rgba(201,146,42,0.05)" }}
-                        >
-                          <div
-                            className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                            style={{ background: iconBg }}
-                          >
-                            <Icon className="h-4 w-4" style={{ color: iconColor }} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-[#0E0B08] truncate">{n.title || n.message}</p>
-                            {n.message && n.title && (
-                              <p className="text-xs text-[#0E0B08]/50 truncate">{n.message}</p>
-                            )}
-                          </div>
-                          <span className="text-[10px] text-[#0E0B08]/40 flex-shrink-0">
-                            {new Date(n.createdAt).toLocaleDateString()}
-                          </span>
-                        </div>
-                      )
-                    })
-                  )}
-                </div>
+                <ActivityFeed compact />
               </CardContent>
             </Card>
           </div>

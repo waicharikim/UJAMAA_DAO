@@ -17,6 +17,7 @@ import {
   Shield,
   X,
   BookOpen,
+  Rss,
 } from "lucide-react"
 import {
   Drawer,
@@ -33,6 +34,7 @@ const primaryNav = [
 ]
 
 const drawerNav = [
+  { label: "Feed", href: "/feed", icon: Rss },
   { label: "Learn", href: "/education", icon: BookOpen },
   { label: "Marketplace", href: "/marketplace", icon: Store },
   { label: "Treasury", href: "/treasury", icon: Landmark },

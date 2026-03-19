@@ -9,6 +9,7 @@ import { UserManagement } from "./user-management"
 import { SystemSettings } from "./system-settings"
 import { AuditLogs } from "./audit-logs"
 import { FinancialOverview } from "./financial-overview"
+import { GovernanceReview } from "./governance-review"
 import { Settings, FileText, DollarSign, Shield, AlertTriangle, CheckCircle, Clock, Coins } from "lucide-react"
 import { adminApi, auditApi, type AdminStatsDto } from "@/lib/api"
 import { formatRelativeTime } from "@/lib/utils"
@@ -91,8 +92,9 @@ export function AdminDashboard({ stats }: Props) {
   return (
     <div className="space-y-6">
       <Tabs defaultValue="overview">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="governance">Governance</TabsTrigger>
           <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="financial">Financial</TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
@@ -217,6 +219,7 @@ export function AdminDashboard({ stats }: Props) {
           </Card>
         </TabsContent>
 
+        <TabsContent value="governance"><GovernanceReview /></TabsContent>
         <TabsContent value="users"><UserManagement /></TabsContent>
         <TabsContent value="financial"><FinancialOverview stats={stats} /></TabsContent>
         <TabsContent value="settings"><SystemSettings /></TabsContent>

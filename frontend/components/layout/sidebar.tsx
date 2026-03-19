@@ -20,10 +20,12 @@ import {
   ChevronRight,
   BookOpen,
   AlertTriangle,
+  Rss,
 } from "lucide-react"
 
 const primaryNav = [
   { label: "Dashboard",  href: "/dashboard",  icon: LayoutDashboard },
+  { label: "Feed",       href: "/feed",       icon: Rss },
   { label: "Governance", href: "/proposals",  icon: Vote },
   { label: "Projects",   href: "/projects",   icon: Briefcase },
   { label: "Community",  href: "/groups",     icon: Users },

@@ -11,13 +11,16 @@ import { formatDate, formatRelativeTime } from "@/lib/utils"
 import { FileText, Search, Download, User, Shield, DollarSign, Vote, Settings } from "lucide-react"
 import { auditApi, type AuditLogDto } from "@/lib/api"
 
+const PAGE_SIZE = 50
+
 export function AuditLogs() {
   const [search, setSearch] = useState("")
   const [category, setCategory] = useState("all")
   const [dateRange, setDateRange] = useState("all")
+  const [page, setPage] = useState(1)
 
   const buildParams = () => {
-    const params: Parameters<typeof auditApi.search>[0] = { limit: 50 }
+    const params: Parameters<typeof auditApi.search>[0] = { limit: PAGE_SIZE, page }
     if (dateRange === "today") params.fromDate = new Date(new Date().setHours(0,0,0,0)).toISOString()
     else if (dateRange === "week") params.fromDate = new Date(Date.now() - 7*24*60*60*1000).toISOString()
     else if (dateRange === "month") params.fromDate = new Date(Date.now() - 30*24*60*60*1000).toISOString()
@@ -25,7 +28,7 @@ export function AuditLogs() {
   }
 
   const { data, isLoading } = useQuery({
-    queryKey: ["admin", "audit-logs", category, dateRange],
+    queryKey: ["admin", "audit-logs", category, dateRange, page],
     queryFn: () => auditApi.search(buildParams()),
     staleTime: 30_000,
   })
@@ -105,7 +108,7 @@ export function AuditLogs() {
               <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
               <Input placeholder="Search logs…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
             </div>
-            <Select value={category} onValueChange={setCategory}>
+            <Select value={category} onValueChange={(v) => { setCategory(v); setPage(1) }}>
               <SelectTrigger><SelectValue placeholder="Category" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Categories</SelectItem>
@@ -116,7 +119,7 @@ export function AuditLogs() {
                 <SelectItem value="security">Security</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={dateRange} onValueChange={setDateRange}>
+            <Select value={dateRange} onValueChange={(v) => { setDateRange(v); setPage(1) }}>
               <SelectTrigger><SelectValue placeholder="Date Range" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Time</SelectItem>
@@ -168,6 +171,33 @@ export function AuditLogs() {
                   <p>No audit logs found.</p>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Pagination */}
+          {!isLoading && data && data.pagination.totalPages > 1 && (
+            <div className="flex items-center justify-between mt-6 pt-4 border-t text-sm text-slate-600">
+              <span>
+                Page {data.pagination.page} of {data.pagination.totalPages} · {data.pagination.total.toLocaleString()} total entries
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page === 1}
+                  onClick={() => setPage((p) => p - 1)}
+                >
+                  ← Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= data.pagination.totalPages}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Next →
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>

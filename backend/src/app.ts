@@ -63,6 +63,7 @@ import marketplaceRoutes from './modules/marketplace/routes/marketplace.routes.j
 import notificationRoutes from './modules/notifications/routes/notification.routes.js';
 import emergencyRoutes from './modules/emergency/routes/emergency.routes.js';
 import auditRoutes from './modules/audit/routes/audit.routes.js';
+import feedRoutes from './modules/audit/routes/feed.routes.js';
 import onboardingRoutes from './modules/onboarding/routes/onboarding.routes.js';
 import reputationRoutes from './modules/reputation/routes/reputation.routes.js';
 import educationRoutes from './modules/education/routes/education.routes.js';
@@ -281,6 +282,7 @@ app.use('/api/v1/marketplace', marketplaceRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/emergency', emergencyRoutes);
 app.use('/api/v1/audit', auditRoutes);
+app.use('/api/v1/feed', feedRoutes);
 app.use('/api/v1/onboarding', onboardingRoutes);
 app.use('/api/v1/reputation', reputationRoutes);
 app.use('/api/v1/education', educationRoutes);

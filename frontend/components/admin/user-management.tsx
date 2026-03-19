@@ -30,10 +30,12 @@ const AVAILABLE_ROLES = [
 export function UserManagement() {
   const { toast } = useToast()
   const queryClient = useQueryClient()
+  const PAGE_SIZE = 50
   const [searchInput, setSearchInput] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [verificationFilter, setVerificationFilter] = useState("all")
+  const [page, setPage] = useState(1)
   const debounceTimer = useRef<NodeJS.Timeout | null>(null)
   const [showRolesDialog, setShowRolesDialog] = useState(false)
   const [rolesUser, setRolesUser] = useState<AdminUserDto | null>(null)
@@ -41,17 +43,21 @@ export function UserManagement() {
 
   useEffect(() => {
     if (debounceTimer.current) clearTimeout(debounceTimer.current)
-    debounceTimer.current = setTimeout(() => setDebouncedSearch(searchInput), 500)
+    debounceTimer.current = setTimeout(() => { setDebouncedSearch(searchInput); setPage(1) }, 500)
     return () => { if (debounceTimer.current) clearTimeout(debounceTimer.current) }
   }, [searchInput])
 
+  // Reset to page 1 whenever filters change
+  useEffect(() => { setPage(1) }, [statusFilter, verificationFilter])
+
   const { data, isLoading } = useQuery({
-    queryKey: ["admin", "users", debouncedSearch, statusFilter, verificationFilter],
+    queryKey: ["admin", "users", debouncedSearch, statusFilter, verificationFilter, page],
     queryFn: () => adminApi.getUsers({
       search: debouncedSearch || undefined,
       status: statusFilter !== "all" ? statusFilter : undefined,
       verificationLevel: verificationFilter !== "all" ? verificationFilter : undefined,
-      limit: 50,
+      limit: PAGE_SIZE,
+      offset: (page - 1) * PAGE_SIZE,
     }),
     staleTime: 30_000,
   })
@@ -233,6 +239,33 @@ export function UserManagement() {
                 )
               })}
               {users.length === 0 && <p className="text-center py-8 text-slate-500">No users found.</p>}
+            </div>
+          )}
+
+          {/* Pagination */}
+          {!isLoading && (data?.total ?? 0) > PAGE_SIZE && (
+            <div className="flex items-center justify-between mt-6 pt-4 border-t text-sm text-slate-600">
+              <span>
+                {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, data!.total)} of {data!.total.toLocaleString()} users
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page === 1}
+                  onClick={() => setPage((p) => p - 1)}
+                >
+                  ← Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page * PAGE_SIZE >= data!.total}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Next →
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>
