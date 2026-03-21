@@ -80,6 +80,7 @@ import {
   userCleanupQueue,
   deadLetterQueue,
   integrationQueue,
+  notificationsQueue,
 } from '@core/queue/index.js';
 
 const app = express();
@@ -336,6 +337,7 @@ createBullBoard({
     new BullMQAdapter(userCleanupQueue),
     new BullMQAdapter(deadLetterQueue),
     new BullMQAdapter(integrationQueue),
+    new BullMQAdapter(notificationsQueue),
   ],
   serverAdapter,
 });

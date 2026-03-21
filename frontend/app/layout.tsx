@@ -28,6 +28,17 @@ const cormorant = Cormorant_Garamond({
 export const metadata: Metadata = {
   title: "UjamaaDAO — Ward Sovereignty Platform",
   description: "Cooperative governance, community projects, and economic sovereignty for Kenyan wards.",
+  manifest: "/manifest.json",
+  themeColor: "#1D4731",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "UjamaaDAO",
+  },
+  icons: {
+    icon: "/icons/icon.svg",
+    apple: "/icons/icon.svg",
+  },
 }
 
 export default function RootLayout({

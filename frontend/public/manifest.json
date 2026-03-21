@@ -1,0 +1,25 @@
+{
+  "name": "UjamaaDAO",
+  "short_name": "UjamaaDAO",
+  "description": "Cooperative governance, community projects, and economic sovereignty for Kenyan wards.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1D4731",
+  "theme_color": "#1D4731",
+  "categories": ["finance", "productivity", "social"],
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
