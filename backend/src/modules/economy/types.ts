@@ -41,6 +41,9 @@ export enum ParticipationRightsReason {
   PROPOSAL_EXECUTED = 'PROPOSAL_EXECUTED',
   GROUP_CREATED = 'GROUP_CREATED',
 
+  // Decay
+  INACTIVITY_DECAY = 'INACTIVITY_DECAY',
+
   // Administrative & Location
   RESIDENCE_CHANGE = 'RESIDENCE_CHANGE',
   RESIDENCE_CHANGE_APPROVED = 'RESIDENCE_CHANGE_APPROVED',
@@ -74,6 +77,9 @@ export const PR_CONFIG = {
   MAX_BALANCE: 500,
   MONTHLY_REGEN_BASE: 25,
   ACTIVE_USER_DAYS_THRESHOLD: 30,
+  INACTIVITY_DECAY_THRESHOLD_DAYS: 60,  // days before decay kicks in
+  INACTIVITY_DECAY_RATE: 0.05,          // 5% per month
+  INACTIVITY_DECAY_FLOOR: 100,          // minimum PR after decay
   LOW_WARNING_THRESHOLD: 20,
 
   // Onboarding rewards (staged)

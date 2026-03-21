@@ -26,6 +26,8 @@ const FEED_ACTIONS = [
   AuditAction.EMERGENCY_REPORTED,
   AuditAction.LISTING_CREATED,
   AuditAction.MODULE_PUBLISHED,
+  AuditAction.WORK_LOGGED,
+  AuditAction.WORK_VERIFIED,
 ] as const;
 
 type FeedCategory =
@@ -106,6 +108,12 @@ function buildDescription(
       return `${actor} added a new listing to the marketplace`;
     case AuditAction.MODULE_PUBLISHED:
       return `New learning material available: "${String(meta.title ?? 'Untitled')}"`;
+    case AuditAction.WORK_LOGGED:
+      return `${actor} logged ${String(meta.hours ?? '?')} hours of ${String(meta.workType ?? 'work').replace(/_/g, ' ').toLowerCase()} on a project`;
+    case AuditAction.WORK_VERIFIED:
+      return meta.approved
+        ? `${actor}'s work hours were approved (+${String(meta.ipAwarded ?? 0)} IP)`
+        : `A work log submission was reviewed`;
     default:
       return (action as string).replace(/_/g, ' ').toLowerCase();
   }
@@ -138,6 +146,10 @@ function buildSafeMeta(
       return { type: raw.type, title: raw.title };
     case AuditAction.MODULE_PUBLISHED:
       return { title: raw.title };
+    case AuditAction.WORK_LOGGED:
+      return { hours: raw.hours, workType: raw.workType, projectId: raw.projectId };
+    case AuditAction.WORK_VERIFIED:
+      return { approved: raw.approved, ipAwarded: raw.ipAwarded, projectId: raw.projectId };
     default:
       return {};
   }

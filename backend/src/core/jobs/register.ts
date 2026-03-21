@@ -23,6 +23,7 @@ import {
 import { USER_CLEANUP_JOB_NAME } from '../../modules/user/jobs/user-cleanup.jobs.js';
 
 import { MONTHLY_PR_REGENERATION_JOB } from '../../modules/economy/jobs/pr-regeneration.jobs.js';
+import { MONTHLY_PR_INACTIVITY_DECAY_JOB } from '../../modules/economy/jobs/pr-decay.jobs.js';
 
 import { DAILY_COMMITMENT_PENALTIES_JOB } from '../../modules/economy/jobs/commitment-penalties.jobs.js';
 
@@ -68,6 +69,23 @@ export async function registerAllJobs(): Promise<void> {
       }
     );
     logger.info({ job: MONTHLY_PR_REGENERATION_JOB }, 'Job registered');
+
+    // ─────────────────────────────────────────────
+    // MONTHLY PR INACTIVITY DECAY
+    // 00:10 on the 2nd of every month (runs after regen on the 1st)
+    // ADR-026: 5%/month for users inactive ≥60 days, floor = 100 PR
+    // ─────────────────────────────────────────────
+    await economyQueue.add(
+      MONTHLY_PR_INACTIVITY_DECAY_JOB,
+      {},
+      {
+        repeat: { pattern: '10 0 2 * *' },
+        jobId: MONTHLY_PR_INACTIVITY_DECAY_JOB,
+        removeOnComplete: { age: 3600 * 24 * 7 },
+        removeOnFail: { age: 3600 * 24 * 30 },
+      }
+    );
+    logger.info({ job: MONTHLY_PR_INACTIVITY_DECAY_JOB }, 'Job registered');
 
     // ─────────────────────────────────────────────
     // DAILY COMMITMENT PENALTIES

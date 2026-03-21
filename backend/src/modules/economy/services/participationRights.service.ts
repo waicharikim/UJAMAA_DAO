@@ -26,8 +26,14 @@ import { auditService } from '../../audit/services/audit.service.js';
 import { AuditAction } from '../../audit/types.js';
 import { getPrContract } from '../../../core/blockchain/client.js';
 
-const { MAX_BALANCE, MONTHLY_REGEN_BASE, ACTIVE_USER_DAYS_THRESHOLD } =
-  PR_CONFIG;
+const {
+  MAX_BALANCE,
+  MONTHLY_REGEN_BASE,
+  ACTIVE_USER_DAYS_THRESHOLD,
+  INACTIVITY_DECAY_THRESHOLD_DAYS,
+  INACTIVITY_DECAY_RATE,
+  INACTIVITY_DECAY_FLOOR,
+} = PR_CONFIG;
 
 export class ParticipationRightsService {
   private prisma: PrismaClient;
@@ -346,6 +352,76 @@ export class ParticipationRightsService {
 
     // Add checks for other types (attendance, project deliverables)
     return false; // Placeholder - customize later
+  }
+
+  /**
+   * Monthly inactivity decay — ADR-026
+   *
+   * For users inactive for ≥60 days: deduct 5% of current balance, capped by a 100 PR floor.
+   * Runs after monthlyRegeneration so active users aren't double-counted.
+   */
+  async applyInactivityDecay(): Promise<void> {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - INACTIVITY_DECAY_THRESHOLD_DAYS);
+
+    // Users whose last login is before the 60-day cutoff AND have more than the floor balance
+    const inactiveUsers = await this.prisma.user.findMany({
+      where: {
+        OR: [
+          { lastLoginAt: { lt: cutoff } },
+          { lastLoginAt: null },
+        ],
+        participationRights: { gt: INACTIVITY_DECAY_FLOOR },
+      },
+      select: { id: true, participationRights: true },
+    });
+
+    let decayedCount = 0;
+
+    for (const user of inactiveUsers) {
+      const current = user.participationRights ?? 0;
+      const decayAmount = Math.max(
+        1,
+        Math.floor(current * INACTIVITY_DECAY_RATE)
+      );
+      const newBalance = Math.max(
+        INACTIVITY_DECAY_FLOOR,
+        current - decayAmount
+      );
+      const actualDeduction = current - newBalance;
+
+      if (actualDeduction <= 0) continue;
+
+      await this.prisma.$transaction(async (tx) => {
+        await tx.user.update({
+          where: { id: user.id },
+          data: { participationRights: newBalance },
+        });
+        await tx.participationRightsLog.create({
+          data: {
+            userId: user.id,
+            amount: -actualDeduction,
+            reason: ParticipationRightsReason.INACTIVITY_DECAY,
+            balance: newBalance,
+          },
+        });
+      });
+
+      await auditService.log(
+        user.id,
+        AuditAction.PR_INACTIVITY_DECAY,
+        'User',
+        user.id,
+        { deducted: actualDeduction, newBalance, daysInactive: INACTIVITY_DECAY_THRESHOLD_DAYS }
+      );
+
+      decayedCount++;
+    }
+
+    logger.info(
+      { decayedCount, checked: inactiveUsers.length },
+      '[PR] Inactivity decay applied'
+    );
   }
 }
 

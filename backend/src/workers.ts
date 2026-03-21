@@ -32,6 +32,11 @@ import {
 } from './modules/economy/jobs/pr-regeneration.jobs.js';
 
 import {
+  MONTHLY_PR_INACTIVITY_DECAY_JOB,
+  processInactivityDecay,
+} from './modules/economy/jobs/pr-decay.jobs.js';
+
+import {
   DAILY_COMMITMENT_PENALTIES_JOB,
   processCommitmentPenalties,
 } from './modules/economy/jobs/commitment-penalties.jobs.js';
@@ -109,6 +114,8 @@ const economyWorker = createWorker('economy', async (job) => {
   try {
     if (name === MONTHLY_PR_REGENERATION_JOB) {
       await processMonthlyPRRegeneration();
+    } else if (name === MONTHLY_PR_INACTIVITY_DECAY_JOB) {
+      await processInactivityDecay();
     } else if (name === DAILY_COMMITMENT_PENALTIES_JOB) {
       await processCommitmentPenalties();
     } else {
@@ -295,11 +302,12 @@ const failedJobHandler = async (job: any, err: Error) => {
   }
 };
 
-// NOTE: "failed" events are emitted by Worker, not Queue.
-// Error handling is done inside each worker's catch block above.
-// The failedJobHandler is kept for manual invocation / future Worker-level attachment.
-// economyQueue.on("failed", failedJobHandler);  // Queue doesn't emit "failed"
-// userCleanupQueue.on("failed", failedJobHandler);
+// Wire failedJobHandler to every worker's 'failed' event.
+// Workers emit 'failed' after all retries are exhausted.
+economyWorker.on('failed', failedJobHandler);
+userCleanupWorker.on('failed', failedJobHandler);
+integrationWorker.on('failed', failedJobHandler);
+notificationsWorker.on('failed', failedJobHandler);
 
 /**
  * Send alert when a job fails permanently
