@@ -803,8 +803,8 @@ class UserService {
       where: { userId_type: { userId, type: 'COMMUNITY' } },
     });
 
-    if (!request || request.status !== 'PAYMENT_PENDING') {
-      throw ApiError.conflict('No active payment request');
+    if (!request || !['VOUCHING', 'PAYMENT_PENDING'].includes(request.status)) {
+      throw ApiError.conflict('No active verification request');
     }
 
     const payment = await this.verifyMPesaPayment(transactionId);
@@ -829,10 +829,10 @@ class UserService {
       where: { userId_type: { userId, type: 'COMMUNITY' } },
     });
 
-    if (!request || request.status !== 'PAYMENT_PENDING') {
+    if (!request || !['VOUCHING', 'PAYMENT_PENDING'].includes(request.status)) {
       logger.warn(
         { userId, txRef },
-        '[PAYMENTS] finalizeVerification: no active payment request'
+        '[PAYMENTS] finalizeVerification: no active verification request'
       );
       return;
     }
