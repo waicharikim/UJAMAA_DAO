@@ -52,7 +52,7 @@ export default function RegisterPage() {
             </div>
             <h1 className="text-2xl font-serif font-bold text-chai">Join UjamaaDAO</h1>
             <p className="text-sm text-warm-gray mt-1">
-              Create your account in 4 quick steps
+              Create your account in 5 quick steps
             </p>
           </div>
 

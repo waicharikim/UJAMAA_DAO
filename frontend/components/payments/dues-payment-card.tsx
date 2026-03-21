@@ -80,7 +80,16 @@ export function DuesPaymentCard() {
               <Skeleton className="h-10 rounded-xl" />
             </div>
           ) : isError ? (
-            <p className="text-xs text-warm-gray py-2">Unable to load dues history. Please refresh.</p>
+            <div className="py-2 space-y-2">
+              <p className="text-xs text-warm-gray">Unable to load dues history.</p>
+              <button
+                onClick={() => queryClient.refetchQueries({ queryKey: ["dues-history"] })}
+                className="text-xs font-semibold underline underline-offset-2"
+                style={{ color: "#C9922A" }}
+              >
+                Try again
+              </button>
+            </div>
           ) : (
             <>
               {/* Current month status */}
