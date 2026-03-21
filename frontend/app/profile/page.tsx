@@ -113,6 +113,7 @@ export default function ProfilePage() {
     queryFn: reputationApi.getMyReputation,
     staleTime: 60_000,
     enabled: !!user,
+    retry: false,
   })
 
   const { data: history, isLoading: histLoading } = useQuery({
@@ -120,6 +121,7 @@ export default function ProfilePage() {
     queryFn: () => reputationApi.getMyHistory({ limit: 10 }),
     staleTime: 60_000,
     enabled: !!user,
+    retry: false,
   })
 
   return (

@@ -40,11 +40,12 @@ export function DuesPaymentCard() {
   const [selectedTier, setSelectedTier] = useState<Tier>("ORDINARY")
   const [modalOpen, setModalOpen] = useState(false)
 
-  const { data: history, isLoading } = useQuery({
+  const { data: history, isLoading, isError } = useQuery({
     queryKey: ["dues-history"],
     queryFn:  economyApi.getDuesHistory,
     staleTime: 60_000,
     enabled:  !!user,
+    retry: false,
   })
 
   // Check if current month is already paid
@@ -78,6 +79,8 @@ export function DuesPaymentCard() {
               <Skeleton className="h-10 rounded-xl" />
               <Skeleton className="h-10 rounded-xl" />
             </div>
+          ) : isError ? (
+            <p className="text-xs text-warm-gray py-2">Unable to load dues history. Please refresh.</p>
           ) : (
             <>
               {/* Current month status */}

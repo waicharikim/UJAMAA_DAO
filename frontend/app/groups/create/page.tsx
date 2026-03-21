@@ -36,7 +36,7 @@ const VOLUNTARY_TYPES = [
 export default function CreateGroupPage() {
   const router = useRouter()
   const { toast } = useToast()
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, user } = useAuth()
 
   const [form, setForm] = useState({
     name: "",
@@ -70,6 +70,20 @@ export default function CreateGroupPage() {
     return (
       <div className="container mx-auto px-4 py-16 text-center text-sm text-warm-gray">
         Sign in to create a group.
+      </div>
+    )
+  }
+
+  const canCreate = user?.verificationLevel === "COMMUNITY_VERIFIED" || user?.verificationLevel === "FULL_VERIFIED"
+  if (!canCreate) {
+    return (
+      <div className="container mx-auto px-4 py-16 max-w-md text-center space-y-4">
+        <p className="text-warm-gray text-sm">
+          You need <strong>Community Verification</strong> to create a voluntary group.
+        </p>
+        <Link href="/profile" className="text-amber text-sm underline underline-offset-2">
+          Complete verification →
+        </Link>
       </div>
     )
   }
