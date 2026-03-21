@@ -4,7 +4,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { use } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { projectApi, type ProjectDetailDto, type ProjectMilestoneDto } from "@/lib/api"
+import { projectApi, type ProjectDetailDto, type ProjectMilestoneDto, type WorkLogResponseDto } from "@/lib/api"
 import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -22,6 +22,7 @@ import {
   ChevronUp,
   Loader2,
   ExternalLink,
+  ClipboardList,
 } from "lucide-react"
 import { formatDate } from "@/lib/utils"
 
@@ -81,6 +82,18 @@ function ProjectSkeleton() {
 
 // ── Milestone card ────────────────────────────────────────
 
+const WORK_TYPE_LABELS: Record<string, string> = {
+  MANUAL_LABOR: "Manual Labour",
+  SKILLED_WORK:  "Skilled Work",
+  SUPERVISION:   "Supervision",
+}
+
+const LOG_STATUS_COLORS: Record<string, { color: string; bg: string }> = {
+  PENDING:  { color: "#C9922A", bg: "rgba(201,146,42,0.10)" },
+  APPROVED: { color: "#1D4731", bg: "rgba(29,71,49,0.10)"   },
+  REJECTED: { color: "#B03A1E", bg: "rgba(176,58,30,0.10)"  },
+}
+
 function MilestoneCard({
   milestone,
   isMember,
@@ -93,6 +106,7 @@ function MilestoneCard({
   const queryClient = useQueryClient()
   const { toast } = useToast()
   const [expanded, setExpanded] = useState(false)
+  const [logPanelOpen, setLogPanelOpen] = useState(false)
 
   // Submit form state
   const [proofUrl, setProofUrl] = useState("")
@@ -100,6 +114,11 @@ function MilestoneCard({
 
   // Verify form state
   const [feedback, setFeedback] = useState("")
+
+  // Work log form state
+  const [wlWorkType, setWlWorkType] = useState<"MANUAL_LABOR" | "SKILLED_WORK" | "SUPERVISION">("MANUAL_LABOR")
+  const [wlDesc, setWlDesc] = useState("")
+  const [wlHours, setWlHours] = useState<number>(1)
 
   const cfg = MILESTONE_STATUS[milestone.status] ?? MILESTONE_STATUS.PENDING
 
@@ -123,9 +142,28 @@ function MilestoneCard({
     onError: (e: any) => toast({ title: "Failed", description: e?.message, variant: "destructive" }),
   })
 
-  const canStart  = isMember && milestone.status === "PENDING"
-  const canSubmit = isMember && milestone.status === "IN_PROGRESS"
-  const canVerify = isMember && milestone.status === "AWAITING_VERIFICATION"
+  const logWorkMutation = useMutation({
+    mutationFn: () => projectApi.logWork({ milestoneId: milestone.id, workType: wlWorkType, description: wlDesc, hours: wlHours }),
+    onSuccess: () => {
+      toast({ title: "Hours logged" })
+      setWlDesc("")
+      setWlHours(1)
+      queryClient.invalidateQueries({ queryKey: ["work-logs", milestone.id] })
+    },
+    onError: (e: any) => toast({ title: "Failed", description: e?.message, variant: "destructive" }),
+  })
+
+  const { data: workLogsData } = useQuery<{ workLogs: WorkLogResponseDto[]; total: number }>({
+    queryKey: ["work-logs", milestone.id],
+    queryFn: () => projectApi.getWorkLogs(milestone.id),
+    enabled: milestone.status === "IN_PROGRESS" && expanded,
+    staleTime: 30_000,
+  })
+
+  const canStart   = isMember && milestone.status === "PENDING"
+  const canSubmit  = isMember && milestone.status === "IN_PROGRESS"
+  const canVerify  = isMember && milestone.status === "AWAITING_VERIFICATION"
+  const canLogWork = isMember && milestone.status === "IN_PROGRESS"
 
   return (
     <div
@@ -151,7 +189,7 @@ function MilestoneCard({
 
           <div className="flex items-center gap-2 flex-shrink-0">
             <StatusBadge status={milestone.status} config={MILESTONE_STATUS} />
-            {(canStart || canSubmit || canVerify) && (
+            {(canStart || canSubmit || canVerify || canLogWork) && (
               <button
                 onClick={() => setExpanded(!expanded)}
                 className="p-1 rounded-lg hover:bg-black/5 transition-colors"
@@ -252,6 +290,102 @@ function MilestoneCard({
                   Approve
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* Log hours */}
+          {canLogWork && (
+            <div className="space-y-2">
+              <button
+                onClick={() => setLogPanelOpen((v) => !v)}
+                className="flex items-center gap-1.5 text-xs font-semibold text-[#2A6B7C] hover:opacity-80 transition-opacity"
+              >
+                <ClipboardList className="h-3.5 w-3.5" />
+                Log hours
+                {logPanelOpen ? <ChevronUp className="h-3 w-3 opacity-60" /> : <ChevronDown className="h-3 w-3 opacity-60" />}
+              </button>
+
+              {logPanelOpen && (
+                <div className="space-y-2.5 pt-1">
+                  <div className="flex gap-2">
+                    <select
+                      value={wlWorkType}
+                      onChange={(e) => setWlWorkType(e.target.value as typeof wlWorkType)}
+                      className="h-9 rounded-lg border border-black/10 bg-white px-2 text-xs focus:outline-none focus:ring-2 focus:ring-amber/40"
+                    >
+                      <option value="MANUAL_LABOR">Manual Labour</option>
+                      <option value="SKILLED_WORK">Skilled Work</option>
+                      <option value="SUPERVISION">Supervision</option>
+                    </select>
+                    <input
+                      type="number"
+                      min={0.5}
+                      max={24}
+                      step={0.5}
+                      value={wlHours}
+                      onChange={(e) => setWlHours(Number(e.target.value))}
+                      className="w-20 h-9 rounded-lg border border-black/10 bg-white px-3 text-xs focus:outline-none focus:ring-2 focus:ring-amber/40"
+                      placeholder="hrs"
+                    />
+                  </div>
+                  <textarea
+                    placeholder="What did you do? (min 10 chars)"
+                    value={wlDesc}
+                    onChange={(e) => setWlDesc(e.target.value)}
+                    rows={2}
+                    className="w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-amber/40 resize-none"
+                  />
+                  <button
+                    onClick={() => logWorkMutation.mutate()}
+                    disabled={logWorkMutation.isPending || wlDesc.trim().length < 10 || wlHours <= 0}
+                    className="flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all hover:opacity-90 disabled:opacity-50"
+                    style={{ background: "#2A6B7C", color: "#fff" }}
+                  >
+                    {logWorkMutation.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+                    Submit Hours
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Work logs list */}
+          {workLogsData && workLogsData.workLogs.length > 0 && (
+            <div className="space-y-1.5 pt-1">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-[#0E0B08]/40">
+                Logged work ({workLogsData.total})
+              </p>
+              {workLogsData.workLogs.map((log) => {
+                const sc = LOG_STATUS_COLORS[log.status] ?? LOG_STATUS_COLORS.PENDING
+                return (
+                  <div
+                    key={log.id}
+                    className="flex items-start justify-between gap-2 rounded-lg p-2.5"
+                    style={{ background: "rgba(0,0,0,0.025)" }}
+                  >
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-[#0E0B08]">
+                        {WORK_TYPE_LABELS[log.workType]} · {log.hours}h
+                      </p>
+                      <p className="text-[10px] text-[#0E0B08]/50 line-clamp-1 mt-0.5">{log.description}</p>
+                      <p className="text-[10px] text-[#0E0B08]/35 mt-0.5">{log.worker.name ?? "Member"}</p>
+                    </div>
+                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                      <span
+                        className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full"
+                        style={{ color: sc.color, background: sc.bg }}
+                      >
+                        {log.status.toLowerCase()}
+                      </span>
+                      {log.totalIPEarned > 0 && (
+                        <span className="text-[10px] font-bold" style={{ color: "#C9922A" }}>
+                          +{log.totalIPEarned} IP
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>

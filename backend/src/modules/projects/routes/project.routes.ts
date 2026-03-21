@@ -14,6 +14,7 @@ import { validateRequest } from '../../../core/middleware/validateRequest.js';
 import { z } from 'zod';
 import { asyncHandler } from '../../../core/utils/response.js';
 import { roleService } from '../../../core/services/role.service.js';
+import { ApiError } from '../../../core/errors/index.js';
 
 const router = Router();
 
@@ -117,6 +118,61 @@ router.post(
     },
   }),
   asyncHandler(ProjectController.verifyMilestone)
+);
+
+// ── Work Logging ─────────────────────────────────────────────────────────────
+
+router.post(
+  '/work-log',
+  authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
+  validateRequest({
+    schema: z.object({
+      milestoneId: z.string().uuid(),
+      workType: z.enum(['MANUAL_LABOR', 'SKILLED_WORK', 'SUPERVISION']),
+      description: z.string().min(10).max(1000),
+      hours: z.number().positive().max(24),
+      photoUrls: z.array(z.string().url()).max(5).optional(),
+      witnessIds: z.array(z.string().uuid()).max(3).optional(),
+    }),
+    target: 'body',
+  }),
+  asyncHandler(ProjectController.logWork)
+);
+
+router.post(
+  '/work-log/verify',
+  validateRequest({
+    schema: z.object({
+      workLogId: z.string().uuid(),
+      approved: z.boolean(),
+      feedback: z.string().max(500).optional(),
+    }),
+    target: 'body',
+  }),
+  authorize({
+    scopeCheck: async (req) => {
+      const { workLogId } = req.body;
+      const workLog = await prisma.physicalWorkLog.findUnique({
+        where: { id: workLogId },
+        select: { projectId: true },
+      });
+      if (!workLog) throw new ApiError('Work log not found', 404);
+      if (!workLog.projectId) return false;
+      const isLeader = await roleService.isProjectLeader(req.user!.userId, workLog.projectId);
+      const isVerifier = await roleService.isVerifier(req.user!.userId);
+      return isLeader || isVerifier;
+    },
+  }),
+  asyncHandler(ProjectController.verifyWork)
+);
+
+router.get(
+  '/milestone/:milestoneId/work-logs',
+  validateRequest({
+    schema: z.object({ milestoneId: z.string().uuid() }),
+    target: 'params',
+  }),
+  asyncHandler(ProjectController.listWorkLogs)
 );
 
 export default router;

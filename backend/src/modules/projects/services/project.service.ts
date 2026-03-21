@@ -24,6 +24,10 @@ import type {
   ProjectDto,
   MilestoneResponseDto,
   ProjectMemberResponseDto,
+  LogWorkDto,
+  VerifyWorkDto,
+  WorkLogResponseDto,
+  WorkLogListDto,
 } from '../types.js';
 import { ProjectStatus, MilestoneStatus } from '../types.js';
 
@@ -369,6 +373,159 @@ export class ProjectService {
             status: project.proposal.status,
           }
         : null,
+    };
+  }
+
+  // ── WORK LOGGING ────────────────────────────────────────────────────────────
+
+  async logWork(userId: string, dto: LogWorkDto): Promise<WorkLogResponseDto> {
+    const milestone = await prisma.milestone.findUnique({
+      where: { id: dto.milestoneId },
+      select: { id: true, projectId: true, status: true },
+    });
+    if (!milestone) throw ApiError.notFound('Milestone');
+    if (milestone.status !== 'IN_PROGRESS') {
+      throw ApiError.badRequest('Can only log work on an in-progress milestone');
+    }
+
+    // Must be a project member
+    const member = await prisma.projectMember.findFirst({
+      where: { projectId: milestone.projectId, userId },
+    });
+    if (!member) throw ApiError.forbidden('You must be a project member to log work');
+
+    const IP_PER_HOUR = 10;
+    const baseIP = Math.round(dto.hours * IP_PER_HOUR);
+
+    const workLog = await prisma.physicalWorkLog.create({
+      data: {
+        userId,
+        milestoneId: dto.milestoneId,
+        projectId: milestone.projectId,
+        workType: dto.workType,
+        description: dto.description,
+        hours: dto.hours,
+        photoUrls: dto.photoUrls ?? [],
+        witnessIds: dto.witnessIds ?? [],
+        baseIP,
+        totalIPEarned: 0, // awarded on verification
+      },
+      include: { user: { select: { id: true, name: true, avatarUrl: true } } },
+    });
+
+    await auditService.log(
+      userId,
+      AuditAction.WORK_LOGGED,
+      'PhysicalWorkLog',
+      workLog.id,
+      { milestoneId: dto.milestoneId, hours: dto.hours, workType: dto.workType }
+    );
+
+    logger.info({ userId, workLogId: workLog.id, milestoneId: dto.milestoneId }, 'Work logged');
+
+    return this.mapWorkLog(workLog);
+  }
+
+  async verifyWork(verifierId: string, dto: VerifyWorkDto): Promise<WorkLogResponseDto> {
+    const workLog = await prisma.physicalWorkLog.findUnique({
+      where: { id: dto.workLogId },
+      include: { user: { select: { id: true, name: true, avatarUrl: true } } },
+    });
+    if (!workLog) throw ApiError.notFound('Work log');
+    if (workLog.verifiedAt) throw ApiError.conflict('Work log already verified');
+
+    // Must be project leader or a system verifier
+    const isLeader = await roleService.isProjectLeader(verifierId, workLog.projectId!);
+    const isVerifier = await roleService.isVerifier(verifierId);
+    if (!isLeader && !isVerifier) {
+      throw ApiError.forbidden('Only project leaders or verifiers can verify work');
+    }
+
+    const now = new Date();
+
+    if (dto.approved) {
+      const totalIPEarned = workLog.baseIP;
+
+      const updated = await prisma.physicalWorkLog.update({
+        where: { id: dto.workLogId },
+        data: { verifiedAt: now, totalIPEarned },
+        include: { user: { select: { id: true, name: true, avatarUrl: true } } },
+      });
+
+      // Award IP to the worker
+      await globalImpactPointService.award(
+        workLog.userId,
+        totalIPEarned,
+        ImpactPointReason.PHYSICAL_WORK_VERIFIED
+      );
+
+      await auditService.log(
+        verifierId,
+        AuditAction.WORK_VERIFIED,
+        'PhysicalWorkLog',
+        dto.workLogId,
+        { approved: true, totalIPEarned, workerId: workLog.userId }
+      );
+
+      logger.info({ verifierId, workLogId: dto.workLogId, approved: true }, 'Work verified');
+      return this.mapWorkLog(updated);
+    } else {
+      // Rejection — record via WorkVerification, don't award IP
+      await prisma.workVerification.create({
+        data: {
+          workLogId: dto.workLogId,
+          verifierId,
+          method: 'SUPERVISOR',
+          status: 'REJECTED',
+          notes: dto.feedback,
+          verifiedAt: now,
+        },
+      });
+
+      await auditService.log(
+        verifierId,
+        AuditAction.WORK_VERIFIED,
+        'PhysicalWorkLog',
+        dto.workLogId,
+        { approved: false, feedback: dto.feedback, workerId: workLog.userId }
+      );
+
+      logger.info({ verifierId, workLogId: dto.workLogId, approved: false }, 'Work rejected');
+      return this.mapWorkLog({ ...workLog, verifiedAt: null });
+    }
+  }
+
+  async listWorkLogs(milestoneId: string): Promise<WorkLogListDto> {
+    const workLogs = await prisma.physicalWorkLog.findMany({
+      where: { milestoneId },
+      include: { user: { select: { id: true, name: true, avatarUrl: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return {
+      workLogs: workLogs.map((w) => this.mapWorkLog(w)),
+      total: workLogs.length,
+    };
+  }
+
+  private mapWorkLog(w: any): WorkLogResponseDto {
+    const isVerified = !!w.verifiedAt;
+    const isRejected = !isVerified && (w.verifications?.some((v: any) => v.status === 'REJECTED') ?? false);
+
+    return {
+      id: w.id,
+      milestoneId: w.milestoneId,
+      projectId: w.projectId,
+      userId: w.userId,
+      worker: w.user,
+      workType: w.workType,
+      description: w.description,
+      hours: Number(w.hours),
+      photoUrls: w.photoUrls ?? [],
+      status: isVerified ? 'APPROVED' : isRejected ? 'REJECTED' : 'PENDING',
+      totalIPEarned: w.totalIPEarned ?? 0,
+      verifiedAt: w.verifiedAt ? w.verifiedAt.toISOString() : null,
+      createdAt: w.createdAt.toISOString(),
     };
   }
 }

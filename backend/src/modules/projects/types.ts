@@ -98,3 +98,44 @@ export interface ListProjectsDto {
   limit: number;
   offset: number;
 }
+
+// ── Work Logging DTOs ─────────────────────────────────────────────────────────
+
+export type WorkType = 'MANUAL_LABOR' | 'SKILLED_WORK' | 'SUPERVISION';
+export type WorkLogStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+export interface LogWorkDto {
+  milestoneId: string;
+  workType: WorkType;
+  description: string;
+  hours: number;
+  photoUrls?: string[];
+  witnessIds?: string[];
+}
+
+export interface VerifyWorkDto {
+  workLogId: string;
+  approved: boolean;
+  feedback?: string;
+}
+
+export interface WorkLogResponseDto {
+  id: string;
+  milestoneId: string;
+  projectId: string;
+  userId: string;
+  worker: { id: string; name: string | null; avatarUrl: string | null };
+  workType: WorkType;
+  description: string;
+  hours: number;
+  photoUrls: string[];
+  status: WorkLogStatus;
+  totalIPEarned: number;
+  verifiedAt: string | null;
+  createdAt: string;
+}
+
+export interface WorkLogListDto {
+  workLogs: WorkLogResponseDto[];
+  total: number;
+}

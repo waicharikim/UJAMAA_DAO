@@ -257,6 +257,7 @@ export const authorize = (options: UjamaadaoAuthorizeOptions) => {
               ? await Promise.resolve(scopeCheck(req))
               : scopeCheck;
         } catch (err) {
+          if (err instanceof ApiError) throw err;
           logger.error(
             { error: err instanceof Error ? err.message : String(err) },
             'Scope check threw'

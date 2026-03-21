@@ -57,4 +57,22 @@ export class ProjectController {
     const result = await projectService.verifyMilestone(verifierId, dto);
     sendSuccess(res, result, 'Milestone verified');
   }
+
+  static async logWork(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const result = await projectService.logWork(userId, req.body);
+    sendSuccess(res, result, 'Work logged successfully', 201);
+  }
+
+  static async verifyWork(req: AuthRequest, res: Response) {
+    const verifierId = req.user!.userId;
+    const result = await projectService.verifyWork(verifierId, req.body);
+    sendSuccess(res, result, 'Work verified');
+  }
+
+  static async listWorkLogs(req: AuthRequest, res: Response) {
+    const { milestoneId } = req.params;
+    const result = await projectService.listWorkLogs(milestoneId);
+    sendSuccess(res, result, 'Work logs retrieved');
+  }
 }

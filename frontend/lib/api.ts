@@ -972,6 +972,22 @@ export interface ProjectDetailDto extends ProjectListItemDto {
   proposal: { id: string; title: string; status: string } | null
 }
 
+export interface WorkLogResponseDto {
+  id: string
+  milestoneId: string
+  projectId: string
+  userId: string
+  worker: { id: string; name: string | null; avatarUrl: string | null }
+  workType: "MANUAL_LABOR" | "SKILLED_WORK" | "SUPERVISION"
+  description: string
+  hours: number
+  photoUrls: string[]
+  status: "PENDING" | "APPROVED" | "REJECTED"
+  totalIPEarned: number
+  verifiedAt: string | null
+  createdAt: string
+}
+
 export const projectApi = {
   getProjects: (params?: {
     ownerGroupId?: string
@@ -1015,6 +1031,28 @@ export const projectApi = {
       method: "POST",
       body: JSON.stringify(dto),
     }),
+
+  logWork: (dto: {
+    milestoneId: string
+    workType: "MANUAL_LABOR" | "SKILLED_WORK" | "SUPERVISION"
+    description: string
+    hours: number
+    photoUrls?: string[]
+    witnessIds?: string[]
+  }): Promise<WorkLogResponseDto> =>
+    apiFetch<WorkLogResponseDto>("/projects/work-log", {
+      method: "POST",
+      body: JSON.stringify(dto),
+    }),
+
+  verifyWork: (dto: { workLogId: string; approved: boolean; feedback?: string }): Promise<WorkLogResponseDto> =>
+    apiFetch<WorkLogResponseDto>("/projects/work-log/verify", {
+      method: "POST",
+      body: JSON.stringify(dto),
+    }),
+
+  getWorkLogs: (milestoneId: string): Promise<{ workLogs: WorkLogResponseDto[]; total: number }> =>
+    apiFetch(`/projects/milestone/${milestoneId}/work-logs`),
 }
 
 // ─────────────────────────────────────────────────────────
