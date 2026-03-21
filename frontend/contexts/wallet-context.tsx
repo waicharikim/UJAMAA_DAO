@@ -130,8 +130,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         loginMethods: ["email", "wallet", "google"],
         // Auto-create an embedded wallet for users who log in without one
         embeddedWallets: {
-          createOnLogin: "users-without-wallets",
-          requireUserPasswordOnCreate: false,
+          ethereum: { createOnLogin: "users-without-wallets" },
         },
       }}
     >

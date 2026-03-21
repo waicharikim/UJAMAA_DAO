@@ -1,466 +1,448 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useParams } from "next/navigation"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { MilestoneTracker } from "@/components/projects/milestone-tracker"
+import { useState } from "react"
+import Link from "next/link"
+import { use } from "react"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { projectApi, type ProjectDetailDto, type ProjectMilestoneDto } from "@/lib/api"
 import { useAuth } from "@/contexts/auth-context"
-import { Calendar, Users, DollarSign, MapPin, TrendingUp, Clock, Target, ArrowLeft } from "lucide-react"
-import type { Project, ProjectMilestone } from "@/lib/types/projects"
+import { useToast } from "@/hooks/use-toast"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
+import {
+  ArrowLeft,
+  Briefcase,
+  Users,
+  CheckCircle2,
+  Clock,
+  XCircle,
+  Circle,
+  PlayCircle,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  ExternalLink,
+} from "lucide-react"
+import { formatDate } from "@/lib/utils"
 
-// ── Chai palette helpers ──────────────────────────────────────────────────────
+// ── Status config ─────────────────────────────────────────
 
-const STATUS_STYLES: Record<string, { label: string; bg: string; color: string }> = {
-  PLANNING:  { label: "Planning",   bg: "rgba(212,145,30,0.12)",  color: "#C9922A" },
-  ACTIVE:    { label: "Active",     bg: "rgba(30,61,47,0.12)",    color: "#1E3D2F" },
-  COMPLETED: { label: "Completed",  bg: "rgba(42,82,64,0.12)",    color: "#2A5240" },
-  ON_HOLD:   { label: "On Hold",    bg: "rgba(176,58,30,0.1)",    color: "#B03A1E" },
-  CANCELLED: { label: "Cancelled",  bg: "rgba(176,58,30,0.12)",   color: "#B03A1E" },
+const PROJECT_STATUS: Record<string, { label: string; color: string; bg: string }> = {
+  PLANNING:  { label: "Planning",   color: "#C9922A", bg: "rgba(201,146,42,0.10)" },
+  ACTIVE:    { label: "Active",     color: "#1D4731", bg: "rgba(29,71,49,0.10)"   },
+  ON_HOLD:   { label: "On Hold",    color: "#7A6E60", bg: "rgba(122,110,96,0.10)" },
+  CANCELLED: { label: "Cancelled",  color: "#B03A1E", bg: "rgba(176,58,30,0.10)" },
+  COMPLETED: { label: "Completed",  color: "#2A7A4B", bg: "rgba(42,122,75,0.10)" },
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const s = STATUS_STYLES[status] ?? { label: status, bg: "rgba(26,18,11,0.08)", color: "rgba(26,18,11,0.5)" }
+const MILESTONE_STATUS: Record<
+  string,
+  { label: string; color: string; bg: string; Icon: React.ElementType }
+> = {
+  PENDING:                { label: "Pending",             color: "#7A6E60", bg: "rgba(122,110,96,0.10)", Icon: Circle        },
+  IN_PROGRESS:            { label: "In Progress",         color: "#C9922A", bg: "rgba(201,146,42,0.10)", Icon: PlayCircle    },
+  AWAITING_VERIFICATION:  { label: "Awaiting Review",     color: "#2A6B7C", bg: "rgba(42,107,124,0.10)", Icon: Clock         },
+  VERIFIED:               { label: "Verified",            color: "#1D4731", bg: "rgba(29,71,49,0.10)",   Icon: CheckCircle2  },
+  REJECTED:               { label: "Rejected",            color: "#B03A1E", bg: "rgba(176,58,30,0.10)",  Icon: XCircle       },
+}
+
+// ── Helpers ───────────────────────────────────────────────
+
+function StatusBadge({ status, config }: { status: string; config: Record<string, { label: string; color: string; bg: string; Icon?: React.ElementType }> }) {
+  const cfg = config[status] ?? { label: status, color: "#7A6E60", bg: "rgba(122,110,96,0.10)", Icon: Circle }
+  const Icon = "Icon" in cfg ? cfg.Icon! : undefined
   return (
     <span
-      className="text-xs font-semibold px-2.5 py-1 rounded-full"
-      style={{ background: s.bg, color: s.color }}
+      className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
+      style={{ color: cfg.color, background: cfg.bg }}
     >
-      {s.label}
+      {Icon && <Icon className="h-2.5 w-2.5" />}
+      {cfg.label}
     </span>
   )
 }
 
-function InfoCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+// ── Skeleton ──────────────────────────────────────────────
+
+function ProjectSkeleton() {
   return (
-    <div
-      className={`rounded-2xl p-6 ${className}`}
-      style={{
-        background: "linear-gradient(135deg, #FAF7F2 0%, #F6F0E6 100%)",
-        border: "1px solid rgba(212,145,30,0.14)",
-      }}
-    >
-      {children}
+    <div className="space-y-6">
+      <div className="space-y-2">
+        <Skeleton className="h-8 w-2/3" />
+        <Skeleton className="h-4 w-40" />
+      </div>
+      <Skeleton className="h-28 rounded-2xl" />
+      <div className="space-y-3">
+        {[1, 2, 3].map((i) => <Skeleton key={i} className="h-24 rounded-2xl" />)}
+      </div>
     </div>
   )
 }
 
-// ── Page ─────────────────────────────────────────────────────────────────────
+// ── Milestone card ────────────────────────────────────────
 
-export default function ProjectDetailPage() {
-  const params = useParams()
-  const { user } = useAuth()
-  const [project, setProject] = useState<Project | null>(null)
-  const [milestones, setMilestones] = useState<ProjectMilestone[]>([])
-  const [loading, setLoading] = useState(true)
+function MilestoneCard({
+  milestone,
+  isMember,
+  projectId,
+}: {
+  milestone: ProjectMilestoneDto
+  isMember: boolean
+  projectId: string
+}) {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+  const [expanded, setExpanded] = useState(false)
 
-  useEffect(() => {
-    loadProject()
-  }, [params.id])
+  // Submit form state
+  const [proofUrl, setProofUrl] = useState("")
+  const [submitDesc, setSubmitDesc] = useState("")
 
-  const loadProject = async () => {
-    try {
-      setLoading(true)
-      const mockProject: Project = {
-        id: params.id as string,
-        proposalId: "prop-1",
-        title: "Community Solar Energy Initiative",
-        description:
-          "Install solar panels in community centers across Westlands constituency to reduce energy costs and promote renewable energy adoption. This project aims to create sustainable energy solutions while building community capacity for green technology maintenance and operation.",
-        locationScope: "CONSTITUENCY",
-        constituency: "Westlands",
-        status: "ACTIVE",
-        budget: { total: 50000, allocated: 30000, disbursed: 15000, remaining: 35000 },
-        timeline: {
-          startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-          endDate: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
-          estimatedDuration: 90,
-        },
-        participants: [
-          {
-            id: "p1",
-            userId: user?.id || "user1",
-            user: { id: user?.id || "user1", name: user?.username || "John Doe", email: user?.email || "john@example.com", avatarUrl: user?.avatar, impactPoints: 150 },
-            role: "MANAGER",
-            permissions: ["view_project", "edit_project", "create_milestone"],
-            contribution: { description: "Project management and coordination", hoursCommitted: 40, skillsOffered: ["Project Management", "Solar Energy"], availability: "PART_TIME" },
-            performance: { milestonesCompleted: 2, impactPointsEarned: 75, tokensEarned: 150, rating: 4.5, feedback: ["Great leadership", "Excellent communication"] },
-            joinedAt: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000).toISOString(),
-            status: "ACTIVE",
-          },
-          {
-            id: "p2",
-            userId: "user2",
-            user: { id: "user2", name: "Sarah Wilson", email: "sarah@example.com", impactPoints: 120 },
-            role: "VERIFIER",
-            permissions: ["view_project", "verify_milestones"],
-            contribution: { description: "Technical verification and quality assurance", hoursCommitted: 20, skillsOffered: ["Solar Installation", "Quality Control"], availability: "PART_TIME" },
-            performance: { milestonesCompleted: 1, impactPointsEarned: 45, tokensEarned: 90, rating: 4.8, feedback: ["Thorough verification process"] },
-            joinedAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString(),
-            status: "ACTIVE",
-          },
-        ],
-        milestones: [],
-        createdBy: { id: "group1", name: "Green Energy Collective", type: "GROUP" },
-        managedBy: { id: user?.id || "user1", name: user?.username || "John Doe", role: "PROJECT_MANAGER" },
-        groupId: "group1",
-        groupName: "Green Energy Collective",
-        progress: { overall: 65, milestonesCompleted: 2, totalMilestones: 4, daysElapsed: 30, daysRemaining: 60 },
-        impactMetrics: { participantsCount: 8, beneficiariesCount: 500, impactPointsGenerated: 320, tokensDistributed: 640 },
-        createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-        updatedAt: new Date().toISOString(),
-      }
+  // Verify form state
+  const [feedback, setFeedback] = useState("")
 
-      const mockMilestones: ProjectMilestone[] = [
-        {
-          id: "m1", projectId: params.id as string,
-          title: "Site Assessment and Planning",
-          description: "Conduct comprehensive site assessment for solar panel installation locations",
-          requirements: ["Survey all potential installation sites", "Assess structural integrity of buildings", "Calculate energy requirements", "Obtain necessary permits"],
-          deliverables: ["Site assessment report", "Installation plan document", "Permit applications", "Energy calculation spreadsheet"],
-          dueDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-          status: "COMPLETED", priority: "HIGH",
-          funding: { allocated: 5000, disbursed: 5000, pending: 0 },
-          assignedTo: [user?.id || "user1"],
-          verifiedBy: { id: "user2", name: "Sarah Wilson", verifiedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), comments: "Excellent work on site assessment. All requirements met." },
-          submissions: [{ id: "s1", milestoneId: "m1", submittedBy: { id: user?.id || "user1", name: user?.username || "John Doe" }, evidence: { description: "Completed comprehensive site assessment.", files: [], links: ["https://docs.google.com/spreadsheets/site-assessment"], metrics: { sitesAssessed: 5, permitsObtained: 3 } }, submittedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(), status: "APPROVED", reviewComments: "Thorough assessment.", reviewedBy: { id: "user2", name: "Sarah Wilson", reviewedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString() } }],
-          dependencies: [], progress: 100,
-          impactPoints: { individual: 50, group: 25 }, tokenRewards: { individual: 100, group: 50 },
-          createdAt: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), completedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-        },
-        {
-          id: "m2", projectId: params.id as string,
-          title: "Equipment Procurement",
-          description: "Source and purchase solar panels, inverters, and installation equipment",
-          requirements: ["Research certified solar equipment suppliers", "Obtain quotes from multiple vendors", "Ensure equipment meets local standards", "Negotiate bulk purchase discounts"],
-          deliverables: ["Vendor comparison report", "Purchase orders", "Equipment delivery schedule", "Quality certificates"],
-          dueDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
-          status: "IN_PROGRESS", priority: "CRITICAL",
-          funding: { allocated: 25000, disbursed: 0, pending: 25000 },
-          assignedTo: [user?.id || "user1", "user3"],
-          submissions: [], dependencies: ["m1"], progress: 40,
-          impactPoints: { individual: 75, group: 40 }, tokenRewards: { individual: 150, group: 75 },
-          createdAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString(), updatedAt: new Date().toISOString(),
-        },
-        {
-          id: "m3", projectId: params.id as string,
-          title: "Installation and Setup",
-          description: "Install solar panels and configure energy systems",
-          requirements: ["Install solar panels on approved sites", "Set up inverters and electrical connections", "Configure monitoring systems", "Conduct safety testing"],
-          deliverables: ["Installation completion report", "System configuration documentation", "Safety test results", "User operation manual"],
-          dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-          status: "PENDING", priority: "HIGH",
-          funding: { allocated: 15000, disbursed: 0, pending: 15000 },
-          assignedTo: ["user2", "user4"],
-          submissions: [], dependencies: ["m2"], progress: 0,
-          impactPoints: { individual: 100, group: 50 }, tokenRewards: { individual: 200, group: 100 },
-          createdAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(), updatedAt: new Date().toISOString(),
-        },
-        {
-          id: "m4", projectId: params.id as string,
-          title: "Community Training and Handover",
-          description: "Train community members on system operation and maintenance",
-          requirements: ["Develop training materials", "Conduct training sessions", "Establish maintenance schedule", "Create support documentation"],
-          deliverables: ["Training curriculum", "Training completion certificates", "Maintenance schedule", "Support contact list"],
-          dueDate: new Date(Date.now() + 50 * 24 * 60 * 60 * 1000).toISOString(),
-          status: "PENDING", priority: "MEDIUM",
-          funding: { allocated: 5000, disbursed: 0, pending: 5000 },
-          assignedTo: [user?.id || "user1", "user5"],
-          submissions: [], dependencies: ["m3"], progress: 0,
-          impactPoints: { individual: 60, group: 30 }, tokenRewards: { individual: 120, group: 60 },
-          createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(), updatedAt: new Date().toISOString(),
-        },
-      ]
+  const cfg = MILESTONE_STATUS[milestone.status] ?? MILESTONE_STATUS.PENDING
 
-      setProject(mockProject)
-      setMilestones(mockMilestones)
-    } catch (error) {
-      console.error("Failed to load project:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["project", projectId] })
 
-  const handleSubmitMilestone = async (milestoneId: string, submission: unknown) => {
-    console.log("Submitting milestone:", milestoneId, submission)
-    await loadProject()
-  }
+  const startMutation = useMutation({
+    mutationFn: () => projectApi.startMilestone(milestone.id),
+    onSuccess: () => { toast({ title: "Milestone started" }); invalidate() },
+    onError: (e: any) => toast({ title: "Failed", description: e?.message, variant: "destructive" }),
+  })
 
-  const handleVerifyMilestone = async (milestoneId: string, approved: boolean, comments: string) => {
-    console.log("Verifying milestone:", milestoneId, approved, comments)
-    await loadProject()
-  }
+  const submitMutation = useMutation({
+    mutationFn: () => projectApi.submitMilestone({ milestoneId: milestone.id, proofUrl, description: submitDesc }),
+    onSuccess: () => { toast({ title: "Milestone submitted for review" }); setExpanded(false); invalidate() },
+    onError: (e: any) => toast({ title: "Failed", description: e?.message, variant: "destructive" }),
+  })
 
-  const handleCreateMilestone = () => {
-    window.location.href = `/projects/${params.id}/milestones/create`
-  }
+  const verifyMutation = useMutation({
+    mutationFn: (approved: boolean) => projectApi.verifyMilestone({ milestoneId: milestone.id, approved, feedback: feedback || undefined }),
+    onSuccess: (_, approved) => { toast({ title: approved ? "Milestone verified ✓" : "Milestone rejected" }); setExpanded(false); invalidate() },
+    onError: (e: any) => toast({ title: "Failed", description: e?.message, variant: "destructive" }),
+  })
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="h-10 w-10 animate-spin rounded-full border-2 border-[#C9922A] border-t-transparent" />
-      </div>
-    )
-  }
-
-  if (!project) {
-    return (
-      <div className="container mx-auto px-4 py-8 text-center">
-        <p className="text-[#1A120B]/50 text-lg mb-4">Project not found</p>
-        <button
-          onClick={() => window.history.back()}
-          className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-all"
-          style={{ background: "rgba(212,145,30,0.12)", color: "#C9922A" }}
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Go Back
-        </button>
-      </div>
-    )
-  }
-
-  const userParticipant = project.participants.find((p) => p.userId === user?.id)
+  const canStart  = isMember && milestone.status === "PENDING"
+  const canSubmit = isMember && milestone.status === "IN_PROGRESS"
+  const canVerify = isMember && milestone.status === "AWAITING_VERIFICATION"
 
   return (
-    <div className="container mx-auto px-4 py-8 space-y-6">
-
-      {/* ── Header ─────────────────────────────────────────── */}
-      <div className="flex items-start gap-4">
-        <button
-          onClick={() => window.history.back()}
-          className="mt-1 flex h-9 w-9 items-center justify-center rounded-xl transition-colors hover:bg-[rgba(201,146,42,0.1)]"
-          style={{ border: "1px solid rgba(212,145,30,0.2)" }}
-        >
-          <ArrowLeft className="h-4 w-4" style={{ color: "#C9922A" }} />
-        </button>
-        <div className="flex-1">
-          <h1 className="font-display font-bold text-3xl text-[#1A120B]">{project.title}</h1>
-          <div className="flex flex-wrap items-center gap-2 mt-2">
-            <StatusBadge status={project.status} />
-            <span
-              className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full"
-              style={{ background: "rgba(26,18,11,0.06)", color: "rgba(26,18,11,0.5)" }}
+    <div
+      className="bg-white rounded-2xl border transition-shadow hover:shadow-sm"
+      style={{ borderColor: "rgba(0,0,0,0.07)" }}
+    >
+      <div className="p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3 flex-1 min-w-0">
+            <div
+              className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5"
+              style={{ background: cfg.bg }}
             >
-              <MapPin className="h-3 w-3" />
-              {project.locationScope}
-            </span>
-            {userParticipant && (
-              <span
-                className="text-xs font-medium px-2.5 py-1 rounded-full"
-                style={{ background: "rgba(30,61,47,0.1)", color: "#1E3D2F" }}
+              <cfg.Icon className="h-4 w-4" style={{ color: cfg.color }} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-[#0E0B08] leading-snug">{milestone.title}</p>
+              {milestone.description && (
+                <p className="text-xs text-[#0E0B08]/50 mt-0.5 line-clamp-1">{milestone.description}</p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <StatusBadge status={milestone.status} config={MILESTONE_STATUS} />
+            {(canStart || canSubmit || canVerify) && (
+              <button
+                onClick={() => setExpanded(!expanded)}
+                className="p-1 rounded-lg hover:bg-black/5 transition-colors"
               >
-                {userParticipant.role}
-              </span>
+                {expanded
+                  ? <ChevronUp className="h-3.5 w-3.5 text-[#0E0B08]/40" />
+                  : <ChevronDown className="h-3.5 w-3.5 text-[#0E0B08]/40" />
+                }
+              </button>
             )}
           </div>
         </div>
+
+        {milestone.dueDate && (
+          <p className="text-[10px] text-[#0E0B08]/40 mt-2 ml-11">
+            Due {formatDate(milestone.dueDate)}
+          </p>
+        )}
       </div>
 
-      {/* ── Project overview grid ───────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <InfoCard>
-            <h2 className="font-display font-bold text-lg text-[#1A120B] mb-3">Project Overview</h2>
-            <p className="text-sm leading-relaxed mb-6" style={{ color: "rgba(26,18,11,0.6)" }}>
+      {/* Action panel */}
+      {expanded && (
+        <div
+          className="border-t px-4 py-4 space-y-3"
+          style={{ borderColor: "rgba(0,0,0,0.06)", background: "rgba(0,0,0,0.015)" }}
+        >
+          {/* Start */}
+          {canStart && (
+            <button
+              onClick={() => startMutation.mutate()}
+              disabled={startMutation.isPending}
+              className="flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all hover:opacity-90 disabled:opacity-50"
+              style={{ background: "#C9922A", color: "#fff" }}
+            >
+              {startMutation.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+              Start Milestone
+            </button>
+          )}
+
+          {/* Submit */}
+          {canSubmit && (
+            <div className="space-y-2.5">
+              <p className="text-xs font-semibold text-[#0E0B08]">Submit for review</p>
+              <input
+                type="url"
+                placeholder="Proof URL (photo, doc, drive link…)"
+                value={proofUrl}
+                onChange={(e) => setProofUrl(e.target.value)}
+                className="w-full h-9 rounded-lg border border-black/10 bg-white px-3 text-xs focus:outline-none focus:ring-2 focus:ring-amber/40"
+              />
+              <textarea
+                placeholder="Describe what was completed…"
+                value={submitDesc}
+                onChange={(e) => setSubmitDesc(e.target.value)}
+                rows={2}
+                className="w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-amber/40 resize-none"
+              />
+              <button
+                onClick={() => submitMutation.mutate()}
+                disabled={submitMutation.isPending || !submitDesc.trim()}
+                className="flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all hover:opacity-90 disabled:opacity-50"
+                style={{ background: "#1D4731", color: "#fff" }}
+              >
+                {submitMutation.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+                Submit for Review
+              </button>
+            </div>
+          )}
+
+          {/* Verify */}
+          {canVerify && (
+            <div className="space-y-2.5">
+              <p className="text-xs font-semibold text-[#0E0B08]">Review submission</p>
+              <textarea
+                placeholder="Optional feedback…"
+                value={feedback}
+                onChange={(e) => setFeedback(e.target.value)}
+                rows={2}
+                className="w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-amber/40 resize-none"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => verifyMutation.mutate(false)}
+                  disabled={verifyMutation.isPending}
+                  className="flex-1 rounded-xl px-3 py-2 text-xs font-bold transition-all hover:opacity-90 disabled:opacity-50"
+                  style={{ background: "rgba(176,58,30,0.10)", color: "#B03A1E" }}
+                >
+                  {verifyMutation.isPending && <Loader2 className="h-3 w-3 animate-spin inline mr-1" />}
+                  Reject
+                </button>
+                <button
+                  onClick={() => verifyMutation.mutate(true)}
+                  disabled={verifyMutation.isPending}
+                  className="flex-1 rounded-xl px-3 py-2 text-xs font-bold transition-all hover:opacity-90 disabled:opacity-50"
+                  style={{ background: "#1D4731", color: "#fff" }}
+                >
+                  {verifyMutation.isPending && <Loader2 className="h-3 w-3 animate-spin inline mr-1" />}
+                  Approve
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Main page ─────────────────────────────────────────────
+
+export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params)
+  const { user } = useAuth()
+
+  const { data: project, isLoading, error } = useQuery<ProjectDetailDto>({
+    queryKey: ["project", id],
+    queryFn:  () => projectApi.getProject(id),
+    staleTime: 30_000,
+  })
+
+  if (isLoading) {
+    return (
+      <div className="px-4 md:px-8 py-6 max-w-3xl mx-auto">
+        <ProjectSkeleton />
+      </div>
+    )
+  }
+
+  if (error || !project) {
+    return (
+      <div className="px-4 md:px-8 py-6 max-w-3xl mx-auto text-center py-20">
+        <p className="text-sm font-medium" style={{ color: "#B03A1E" }}>Project not found.</p>
+        <Link href="/projects" className="text-xs text-[#0E0B08]/50 mt-2 inline-block hover:underline">
+          ← Back to projects
+        </Link>
+      </div>
+    )
+  }
+
+  const projectCfg = PROJECT_STATUS[project.status] ?? PROJECT_STATUS.PLANNING
+  const isMember   = project.members.some((m) => m.userId === user?.id)
+  const progress   = project.milestonesCount > 0
+    ? Math.round((project.completedMilestonesCount / project.milestonesCount) * 100)
+    : 0
+
+  return (
+    <div className="px-4 md:px-8 py-6 max-w-3xl mx-auto space-y-6">
+
+      {/* Back link */}
+      <Link
+        href="/projects"
+        className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0E0B08]/50 hover:text-[#0E0B08] transition-colors"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" />
+        All Projects
+      </Link>
+
+      {/* Header card */}
+      <Card className="border-0 shadow-card">
+        <CardContent className="p-6">
+          <div className="flex items-start gap-4">
+            <div
+              className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{ background: projectCfg.bg }}
+            >
+              <Briefcase className="h-5 w-5" style={{ color: projectCfg.color }} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h1 className="font-display font-bold text-2xl text-[#0E0B08] leading-tight">
+                {project.title}
+              </h1>
+              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                <StatusBadge status={project.status} config={PROJECT_STATUS} />
+                {project.ownerGroup && (
+                  <Link
+                    href={`/groups/${project.ownerGroup.id}`}
+                    className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#1D4731] hover:underline"
+                  >
+                    {project.ownerGroup.name}
+                    <ExternalLink className="h-2.5 w-2.5" />
+                  </Link>
+                )}
+                {project.proposal && (
+                  <Link
+                    href={`/proposals/${project.proposal.id}`}
+                    className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#2A6B7C] hover:underline"
+                  >
+                    View proposal
+                    <ExternalLink className="h-2.5 w-2.5" />
+                  </Link>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {project.description && (
+            <p className="text-sm text-[#0E0B08]/60 leading-relaxed mt-4">
               {project.description}
             </p>
+          )}
 
-            <div className="space-y-4">
-              <div>
-                <div className="flex justify-between text-sm mb-2">
-                  <span className="font-medium text-[#1A120B]/60">Overall Progress</span>
-                  <span className="font-bold text-[#C9922A]">{project.progress.overall}%</span>
-                </div>
-                <div className="h-2 rounded-full overflow-hidden" style={{ background: "rgba(201,146,42,0.12)" }}>
-                  <div
-                    className="h-full rounded-full transition-all"
-                    style={{ width: `${project.progress.overall}%`, background: "linear-gradient(to right, #C9922A, #E8B84B)" }}
-                  />
-                </div>
+          {/* Progress */}
+          {project.milestonesCount > 0 && (
+            <div className="mt-5">
+              <div className="flex items-center justify-between text-xs mb-1.5">
+                <span className="font-semibold text-[#0E0B08]/50">Progress</span>
+                <span className="font-bold text-[#0E0B08]">
+                  {project.completedMilestonesCount}/{project.milestonesCount} milestones · {progress}%
+                </span>
               </div>
+              <div className="h-2 rounded-full overflow-hidden" style={{ background: "rgba(0,0,0,0.06)" }}>
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{ width: `${progress}%`, background: "#1D4731" }}
+                />
+              </div>
+            </div>
+          )}
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex items-center gap-2">
-                  <Target className="h-4 w-4 flex-shrink-0" style={{ color: "#C9922A" }} />
-                  <span className="text-sm text-[#1A120B]/60">
-                    {project.progress.milestonesCompleted}/{project.progress.totalMilestones} milestones
+          <p className="text-[10px] text-[#0E0B08]/35 mt-3">
+            Created {formatDate(project.createdAt)}
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Milestones */}
+      {project.milestones.length > 0 && (
+        <div>
+          <h2 className="text-xs font-bold uppercase tracking-widest text-[#0E0B08]/40 mb-3">Milestones</h2>
+          <div className="space-y-3">
+            {project.milestones
+              .sort((a, b) => a.orderIndex - b.orderIndex)
+              .map((m) => (
+                <MilestoneCard
+                  key={m.id}
+                  milestone={m}
+                  isMember={isMember}
+                  projectId={id}
+                />
+              ))}
+          </div>
+        </div>
+      )}
+
+      {project.milestones.length === 0 && (
+        <Card className="border-0 shadow-card">
+          <CardContent className="py-10 text-center">
+            <p className="text-sm text-[#0E0B08]/40">No milestones defined yet.</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Members */}
+      {project.members.length > 0 && (
+        <Card className="border-0 shadow-card">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <Users className="h-4 w-4" style={{ color: "#C9922A" }} />
+              Team
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2.5">
+              {project.members.map((m) => (
+                <div
+                  key={m.userId}
+                  className="flex items-center justify-between gap-3 py-2 border-b last:border-0"
+                  style={{ borderColor: "rgba(0,0,0,0.05)" }}
+                >
+                  <div className="flex items-center gap-2.5">
+                    {m.user.avatarUrl ? (
+                      <img src={m.user.avatarUrl} alt="" className="w-8 h-8 rounded-xl object-cover" />
+                    ) : (
+                      <div
+                        className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-bold"
+                        style={{ background: "#1D4731" }}
+                      >
+                        {(m.user.name ?? "?")[0].toUpperCase()}
+                      </div>
+                    )}
+                    <p className="text-sm font-semibold text-[#0E0B08]">{m.user.name ?? "Member"}</p>
+                  </div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#7A6E60" }}>
+                    {m.role.toLowerCase()}
                   </span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 flex-shrink-0" style={{ color: "#1E3D2F" }} />
-                  <span className="text-sm text-[#1A120B]/60">{project.progress.daysRemaining} days remaining</span>
-                </div>
-              </div>
-            </div>
-          </InfoCard>
-        </div>
-
-        <div className="space-y-4">
-          {/* Budget */}
-          <InfoCard>
-            <h3 className="font-display font-bold text-base text-[#1A120B] mb-4 flex items-center gap-2">
-              <DollarSign className="h-4 w-4" style={{ color: "#C9922A" }} />
-              Budget
-            </h3>
-            <dl className="space-y-2.5">
-              {[
-                { label: "Total Budget",  value: `KES ${project.budget.total.toLocaleString()}`,     color: "#1A120B" },
-                { label: "Allocated",     value: `KES ${project.budget.allocated.toLocaleString()}`, color: "#1A120B" },
-                { label: "Disbursed",     value: `KES ${project.budget.disbursed.toLocaleString()}`, color: "#1E3D2F" },
-                { label: "Remaining",     value: `KES ${project.budget.remaining.toLocaleString()}`, color: "#C9922A" },
-              ].map(({ label, value, color }) => (
-                <div key={label} className="flex justify-between text-sm">
-                  <dt style={{ color: "rgba(26,18,11,0.5)" }}>{label}</dt>
-                  <dd className="font-semibold" style={{ color }}>{value}</dd>
-                </div>
-              ))}
-            </dl>
-          </InfoCard>
-
-          {/* Impact */}
-          <InfoCard>
-            <h3 className="font-display font-bold text-base text-[#1A120B] mb-4 flex items-center gap-2">
-              <TrendingUp className="h-4 w-4" style={{ color: "#1E3D2F" }} />
-              Impact Metrics
-            </h3>
-            <dl className="space-y-2.5">
-              {[
-                { label: "Participants",    value: project.impactMetrics.participantsCount },
-                { label: "Beneficiaries",   value: project.impactMetrics.beneficiariesCount },
-                { label: "Impact Points",   value: project.impactMetrics.impactPointsGenerated },
-                { label: "PR Distributed",  value: project.impactMetrics.tokensDistributed },
-              ].map(({ label, value }) => (
-                <div key={label} className="flex justify-between text-sm">
-                  <dt style={{ color: "rgba(26,18,11,0.5)" }}>{label}</dt>
-                  <dd className="font-semibold text-[#1A120B]">{value.toLocaleString()}</dd>
-                </div>
-              ))}
-            </dl>
-          </InfoCard>
-        </div>
-      </div>
-
-      {/* ── Tabs ───────────────────────────────────────────── */}
-      <Tabs defaultValue="milestones">
-        <TabsList
-          className="grid w-full grid-cols-4 rounded-xl p-1"
-          style={{ background: "rgba(212,145,30,0.08)", border: "1px solid rgba(212,145,30,0.14)" }}
-        >
-          {["milestones", "participants", "budget", "reports"].map((tab) => (
-            <TabsTrigger
-              key={tab}
-              value={tab}
-              className="rounded-lg text-sm capitalize data-[state=active]:font-semibold"
-              style={{ color: "rgba(26,18,11,0.55)" }}
-            >
-              {tab === "budget" ? "Budget & Funding" : tab.charAt(0).toUpperCase() + tab.slice(1)}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-
-        <TabsContent value="milestones" className="mt-6">
-          <MilestoneTracker
-            project={project}
-            milestones={milestones}
-            onSubmitMilestone={handleSubmitMilestone}
-            onVerifyMilestone={handleVerifyMilestone}
-            onCreateMilestone={handleCreateMilestone}
-          />
-        </TabsContent>
-
-        <TabsContent value="participants" className="mt-6">
-          <InfoCard>
-            <h3 className="font-display font-bold text-lg text-[#1A120B] mb-5 flex items-center gap-2">
-              <Users className="h-5 w-5" style={{ color: "#C9922A" }} />
-              Project Participants
-            </h3>
-            <div className="space-y-3">
-              {project.participants.map((participant) => (
-                <div
-                  key={participant.id}
-                  className="flex items-center justify-between p-4 rounded-xl"
-                  style={{ background: "rgba(201,146,42,0.05)", border: "1px solid rgba(201,146,42,0.1)" }}
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white"
-                      style={{ background: "linear-gradient(135deg, #2A5240, #1E3D2F)" }}
-                    >
-                      {participant.user.name.charAt(0)}
-                    </div>
-                    <div>
-                      <p className="font-semibold text-sm text-[#1A120B]">{participant.user.name}</p>
-                      <p className="text-xs" style={{ color: "rgba(26,18,11,0.5)" }}>{participant.contribution.description}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <span
-                      className="text-xs font-semibold px-2.5 py-1 rounded-full"
-                      style={{ background: "rgba(30,61,47,0.1)", color: "#1E3D2F" }}
-                    >
-                      {participant.role}
-                    </span>
-                    <p className="text-xs mt-1" style={{ color: "rgba(26,18,11,0.45)" }}>
-                      {participant.performance.impactPointsEarned} impact pts
-                    </p>
-                  </div>
-                </div>
               ))}
             </div>
-          </InfoCard>
-        </TabsContent>
-
-        <TabsContent value="budget" className="mt-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <InfoCard>
-              <h3 className="font-display font-bold text-base text-[#1A120B] mb-4">Budget Breakdown</h3>
-              <div className="space-y-3">
-                {milestones.map((milestone) => (
-                  <div
-                    key={milestone.id}
-                    className="flex justify-between items-center p-3 rounded-xl"
-                    style={{ background: "rgba(201,146,42,0.05)", border: "1px solid rgba(201,146,42,0.1)" }}
-                  >
-                    <div>
-                      <p className="font-medium text-sm text-[#1A120B]">{milestone.title}</p>
-                      <p className="text-xs" style={{ color: "rgba(26,18,11,0.45)" }}>
-                        {milestone.status} · {milestone.priority}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-bold text-sm text-[#1A120B]">KES {milestone.funding.allocated.toLocaleString()}</p>
-                      <p className="text-xs" style={{ color: "rgba(26,18,11,0.45)" }}>
-                        KES {milestone.funding.disbursed.toLocaleString()} disbursed
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </InfoCard>
-
-            <InfoCard>
-              <h3 className="font-display font-bold text-base text-[#1A120B] mb-4">Funding Timeline</h3>
-              <div className="flex flex-col items-center justify-center py-8 gap-3">
-                <Calendar className="h-10 w-10" style={{ color: "rgba(201,146,42,0.3)" }} />
-                <p className="text-sm text-center" style={{ color: "rgba(26,18,11,0.4)" }}>
-                  Funding timeline visualization will be displayed here
-                </p>
-              </div>
-            </InfoCard>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="reports" className="mt-6">
-          <InfoCard>
-            <div className="flex flex-col items-center justify-center py-12 gap-3">
-              <TrendingUp className="h-10 w-10" style={{ color: "rgba(201,146,42,0.3)" }} />
-              <h3 className="font-display font-bold text-lg text-[#1A120B]">Reports Coming Soon</h3>
-              <p className="text-sm text-center max-w-sm" style={{ color: "rgba(26,18,11,0.45)" }}>
-                Detailed project analytics and reports will be available here.
-              </p>
-            </div>
-          </InfoCard>
-        </TabsContent>
-      </Tabs>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

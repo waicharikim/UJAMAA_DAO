@@ -11,7 +11,7 @@ interface NotificationContextType {
   unreadCount: number
   preferences: NotificationPreferences | null
   markAsRead: (id: string) => void
-  updatePreferences: (preferences: Partial<NotificationPreferences>) => void
+  updatePreferences: (preferences: { channel: string; category: string; enabled: boolean }) => void
   isLoading: boolean
 }
 
@@ -44,7 +44,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   })
 
   const updatePreferencesMutation = useMutation({
-    mutationFn: (prefs: Partial<NotificationPreferences>) => apiClient.updateNotificationPreferences(prefs),
+    mutationFn: (prefs: { channel: string; category: string; enabled: boolean }) => apiClient.updateNotificationPreferences(prefs),
     onSuccess: (updatedPrefs) => {
       queryClient.setQueryData(["notification-preferences"], updatedPrefs)
     },
@@ -56,7 +56,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     markAsReadMutation.mutate(id)
   }
 
-  const updatePreferences = (prefs: Partial<NotificationPreferences>) => {
+  const updatePreferences = (prefs: { channel: string; category: string; enabled: boolean }) => {
     updatePreferencesMutation.mutate(prefs)
   }
 
