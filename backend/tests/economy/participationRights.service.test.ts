@@ -242,3 +242,123 @@ describe('hasSufficient()', () => {
     expect(await participationRightsService.hasSufficient(user.id, 50)).toBe(false);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// applyInactivityDecay()
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('applyInactivityDecay()', () => {
+  const FLOOR = PR_CONFIG.INACTIVITY_DECAY_FLOOR;       // 100
+  const THRESHOLD = PR_CONFIG.INACTIVITY_DECAY_THRESHOLD_DAYS; // 60
+  const RATE = PR_CONFIG.INACTIVITY_DECAY_RATE;          // 0.05
+
+  /** Create a user who last logged in `daysAgo` days ago */
+  async function createInactiveUser(email: string, balance: number, daysAgo: number) {
+    const user = await createEconomyTestUser(email);
+    const lastLogin = new Date();
+    lastLogin.setDate(lastLogin.getDate() - daysAgo);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { participationRights: balance, lastLoginAt: lastLogin },
+    });
+    return user;
+  }
+
+  /** Create a user who last logged in today (active) */
+  async function createActiveUser(email: string, balance: number) {
+    const user = await createEconomyTestUser(email);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { participationRights: balance, lastLoginAt: new Date() },
+    });
+    return user;
+  }
+
+  it('deducts 5% from an inactive user above the floor', async () => {
+    const user = await createInactiveUser('decay-basic@example.com', 200, THRESHOLD + 1);
+
+    await participationRightsService.applyInactivityDecay();
+
+    const updated = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    const expected = Math.max(FLOOR, 200 - Math.floor(200 * RATE)); // 200 - 10 = 190
+    expect(updated.participationRights).toBe(expected);
+  });
+
+  it('does not decay an active user (logged in recently)', async () => {
+    const user = await createActiveUser('decay-active@example.com', 300);
+
+    await participationRightsService.applyInactivityDecay();
+
+    const updated = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(updated.participationRights).toBe(300);
+  });
+
+  it('does not decay a user at exactly the floor balance', async () => {
+    const user = await createInactiveUser('decay-floor-exact@example.com', FLOOR, THRESHOLD + 1);
+
+    await participationRightsService.applyInactivityDecay();
+
+    const updated = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(updated.participationRights).toBe(FLOOR);
+  });
+
+  it('never drops a user below the floor', async () => {
+    // Balance just above floor — 5% would take them below 100
+    const balance = FLOOR + 1; // 101
+    const user = await createInactiveUser('decay-near-floor@example.com', balance, THRESHOLD + 5);
+
+    await participationRightsService.applyInactivityDecay();
+
+    const updated = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(updated.participationRights).toBeGreaterThanOrEqual(FLOOR);
+  });
+
+  it('creates a ParticipationRightsLog entry with a negative amount', async () => {
+    const user = await createInactiveUser('decay-log@example.com', 200, THRESHOLD + 1);
+
+    await participationRightsService.applyInactivityDecay();
+
+    const log = await prisma.participationRightsLog.findFirst({
+      where: { userId: user.id, amount: { lt: 0 } },
+    });
+    expect(log).not.toBeNull();
+    expect(log!.amount).toBe(-Math.floor(200 * RATE)); // -10
+    expect(log!.balance).toBe(190);
+  });
+
+  it('skips users with no lastLoginAt if balance is at the floor', async () => {
+    const user = await createEconomyTestUser('decay-null-login@example.com');
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { participationRights: FLOOR, lastLoginAt: null },
+    });
+
+    await participationRightsService.applyInactivityDecay();
+
+    const updated = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(updated.participationRights).toBe(FLOOR);
+  });
+
+  it('decays a user with null lastLoginAt who is above the floor', async () => {
+    const user = await createEconomyTestUser('decay-null-above@example.com');
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { participationRights: 400, lastLoginAt: null },
+    });
+
+    await participationRightsService.applyInactivityDecay();
+
+    const updated = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(updated.participationRights).toBe(400 - Math.floor(400 * RATE)); // 380
+  });
+
+  it('does not decay a user who last logged in 59 days ago (just under threshold)', async () => {
+    // 59 days ago is strictly before the 60-day cutoff — should not be decayed
+    const user = await createInactiveUser('decay-boundary@example.com', 200, THRESHOLD - 1);
+
+    await participationRightsService.applyInactivityDecay();
+
+    const updated = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(updated.participationRights).toBe(200);
+  });
+});
