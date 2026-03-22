@@ -19,6 +19,7 @@ import { prisma } from '../../../core/database/client.js';
 import { participationRightsService } from '../services/participationRights.service.js';
 import { duesService } from '../services/dues.service.js';
 import { commitmentService } from '../services/commitment.service.js';
+import { utWithdrawalService } from '../services/utWithdrawal.service.js';
 import { sendSuccess } from '../../../core/utils/response.js';
 import { DuesTier } from '../types.js';
 
@@ -102,4 +103,26 @@ export async function optInDuesCommitment(req: AuthRequest, res: Response) {
     'Dues commitment created successfully (voluntary monthly)',
     201
   );
+}
+
+/**
+ * POST /economy/ut/withdraw
+ * Cash out fiatBackedUtBalance → M-Pesa
+ * Requires: COMMUNITY_VERIFIED
+ */
+export async function withdrawUt(req: AuthRequest, res: Response) {
+  const userId = req.user!.userId;
+  const result = await utWithdrawalService.withdraw(userId, req.body);
+  sendSuccess(res, result, 'Withdrawal initiated — payout pending', 202);
+}
+
+/**
+ * GET /economy/ut/withdrawals
+ * Get user's UT withdrawal history + current balances
+ * Requires: COMMUNITY_VERIFIED
+ */
+export async function getUtWithdrawals(req: AuthRequest, res: Response) {
+  const userId = req.user!.userId;
+  const result = await utWithdrawalService.getWithdrawals(userId);
+  sendSuccess(res, result, 'UT withdrawal history retrieved', 200);
 }

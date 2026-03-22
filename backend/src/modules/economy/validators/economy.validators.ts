@@ -75,6 +75,27 @@ export const duesOptInSchema = z.object({
 });
 
 // ============================================================================
+// UT WITHDRAWAL (POST /economy/ut/withdraw)
+// ============================================================================
+
+/**
+ * Withdraw UT Schema
+ * Validates body for POST /economy/ut/withdraw
+ */
+export const withdrawUtSchema = z.object({
+  amountKes: z
+    .number({ required_error: 'amountKes is required' })
+    .int('amountKes must be an integer')
+    .positive('amountKes must be positive'),
+  mpesaPhone: z
+    .string()
+    .regex(
+      /^\+?[1-9]\d{6,14}$/,
+      'Invalid phone number (E.164 format required)'
+    ),
+});
+
+// ============================================================================
 // COMMITMENT STATUS RESPONSE (for profile/dashboard)
 // ============================================================================
 

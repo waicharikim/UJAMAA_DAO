@@ -188,7 +188,8 @@ model User {
 
   // Economy
   participationRights  Int       @default(0)
-  utilityTokens        Int       @default(0)
+  fiatBackedUtBalance  Int       @default(0) // M-Pesa deposits — 1 UT = 1 KES, cashable back
+  earnedUtBalance      Int       @default(0) // Platform activity rewards — no cash-out path
   globalImpactPoints   Int       @default(0)
 
   // Account status
@@ -265,6 +266,7 @@ model User {
   physicalWorkLogs          PhysicalWorkLog[]
   workVerifications         WorkVerification[]     @relation("WorkVerifier")
   commitments               Commitment[]
+  utWithdrawals             UtWithdrawal[]
 
   // ---- Treasury module ----
   createdEscrows            Escrow[]

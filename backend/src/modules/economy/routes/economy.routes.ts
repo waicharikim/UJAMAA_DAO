@@ -20,7 +20,10 @@ import { authorize } from '../../../core/middleware/authorize.js';
 import { buildRateLimiter } from '../../../core/middleware/rateLimiter.js';
 
 // Validators
-import { duesOptInSchema } from '../validators/economy.validators.js';
+import {
+  duesOptInSchema,
+  withdrawUtSchema,
+} from '../validators/economy.validators.js';
 
 // Handlers
 import {
@@ -28,6 +31,8 @@ import {
   getDuesHistory,
   getCommitments,
   optInDuesCommitment,
+  withdrawUt,
+  getUtWithdrawals,
 } from '../handlers/economy.handlers.js';
 
 const router = Router();
@@ -92,6 +97,40 @@ router.post(
   buildRateLimiter({ windowMs: 30 * 24 * 60 * 60 * 1000, max: 1 }), // 1 per month
   validateRequest({ schema: duesOptInSchema, target: 'body' }),
   asyncHandler(optInDuesCommitment)
+);
+
+// ============================================================================
+// UT WITHDRAWALS (fiatBackedUtBalance → M-Pesa)
+// ============================================================================
+
+/**
+ * POST /economy/ut/withdraw
+ * Cash out fiatBackedUtBalance to M-Pesa. Minimum 10 KES, max 10,000 KES per request.
+ * Requires: COMMUNITY_VERIFIED
+ * Rate limited: 3 per hour globally, 1 per 10 minutes per user
+ */
+router.post(
+  '/ut/withdraw',
+  authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
+  buildRateLimiter({ windowMs: 60 * 60 * 1000, max: 3 }),
+  buildRateLimiter({
+    windowMs: 10 * 60 * 1000,
+    max: 1,
+    keyGenerator: (req: any) => req.user?.userId || req.ip,
+  }),
+  validateRequest({ schema: withdrawUtSchema, target: 'body' }),
+  asyncHandler(withdrawUt)
+);
+
+/**
+ * GET /economy/ut/withdrawals
+ * Get user's UT withdrawal history + fiatBackedUtBalance / earnedUtBalance
+ * Requires: COMMUNITY_VERIFIED
+ */
+router.get(
+  '/ut/withdrawals',
+  authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
+  asyncHandler(getUtWithdrawals)
 );
 
 // ============================================================================

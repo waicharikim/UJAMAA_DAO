@@ -188,7 +188,8 @@ model User {
 
   // Economy
   participationRights  Int       @default(0)
-  utilityTokens        Int       @default(0)
+  fiatBackedUtBalance  Int       @default(0) // M-Pesa deposits — 1 UT = 1 KES, cashable back
+  earnedUtBalance      Int       @default(0) // Platform activity rewards — no cash-out path
   globalImpactPoints   Int       @default(0)
 
   // Account status
@@ -265,6 +266,7 @@ model User {
   physicalWorkLogs          PhysicalWorkLog[]
   workVerifications         WorkVerification[]     @relation("WorkVerifier")
   commitments               Commitment[]
+  utWithdrawals             UtWithdrawal[]
 
   // ---- Treasury module ----
   createdEscrows            Escrow[]
@@ -1100,6 +1102,29 @@ model WorkVerification {
   @@unique([workLogId, verifierId])
   @@index([verifierId])
   @@index([status])
+}
+
+// ============================================================================
+// UT WITHDRAWALS (fiatBackedUtBalance → M-Pesa B2C payouts)
+// Rule: Only fiatBackedUtBalance is cashable. earnedUtBalance has no cash-out path.
+// ============================================================================
+
+model UtWithdrawal {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @db.Uuid
+  amountKes   Int                     // 1 UT = 1 KES
+  mpesaPhone  String                  // E.164 format
+  status      String   @default("PENDING") // PENDING | COMPLETED | FAILED
+  completedAt DateTime?
+  failureNote String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([status])
+  @@map("ut_withdrawals")
 }
 
 // ============================================================================
@@ -2546,4 +2571,3 @@ model PaymentRecord {
   @@index([status])
   @@map("payment_records")
 }
-
