@@ -58,6 +58,7 @@ model County {
 
   // Community module back-relation
   groups         Group[]        @relation("CountyGroups")
+  elections      Election[]     @relation("CountyElections")
 
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
@@ -267,6 +268,11 @@ model User {
   workVerifications         WorkVerification[]     @relation("WorkVerifier")
   commitments               Commitment[]
   utWithdrawals             UtWithdrawal[]
+
+  // ---- Elections module ----
+  electionCandidacies       ElectionCandidate[]    @relation("ElectionCandidates")
+  electionVotes             ElectionVote[]         @relation("ElectionVoters")
+  wonElections              Election[]             @relation("ElectionWinners")
 
   // ---- Treasury module ----
   createdEscrows            Escrow[]

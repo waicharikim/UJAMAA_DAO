@@ -120,7 +120,7 @@ model Group {
   treasury            GroupTreasury[]
   treasuryPolicies    TreasuryPolicy[]
   ownedProjects       Project[]               @relation("GroupProjects") // UPDATED relation name
-  // elections Election[] // TODO: define Election model when governance elections are implemented
+  elections             Election[]          @relation("GroupElections")
   nationalContributions NationalContribution[]
   barazaGroups          BarazaGroup[]
 

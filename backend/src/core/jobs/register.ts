@@ -14,6 +14,7 @@ import {
   economyQueue,
   userCleanupQueue,
   notificationsQueue,
+  governanceQueue,
 } from '../queue/index.js';
 
 // ─────────────────────────────────────────────
@@ -30,6 +31,13 @@ import { DAILY_COMMITMENT_PENALTIES_JOB } from '../../modules/economy/jobs/commi
 import { AUTH_CLEANUP_JOB_NAME } from '../../modules/auth/jobs/auth-cleanup.jobs.js';
 
 import { DUES_REMINDER_JOB } from '../../modules/notifications/jobs/dues-reminder.jobs.js';
+
+import {
+  SCHEDULE_ELECTIONS_JOB,
+  OPEN_NOMINATIONS_JOB,
+  OPEN_VOTING_JOB,
+  TALLY_RESULTS_JOB,
+} from '../../modules/elections/jobs/election.jobs.js';
 
 export async function registerAllJobs(): Promise<void> {
   logger.info(
@@ -134,6 +142,70 @@ export async function registerAllJobs(): Promise<void> {
       }
     );
     logger.info({ job: DUES_REMINDER_JOB }, 'Job registered');
+
+    // ─────────────────────────────────────────────
+    // ELECTION SCHEDULING
+    // 01:00 on 1st of every month — scan all groups/counties for eligible elections
+    // ─────────────────────────────────────────────
+    await governanceQueue.add(
+      SCHEDULE_ELECTIONS_JOB,
+      {},
+      {
+        repeat: { pattern: '0 1 1 * *' },
+        jobId: SCHEDULE_ELECTIONS_JOB,
+        removeOnComplete: { age: 3600 * 24 * 7 },
+        removeOnFail: { age: 3600 * 24 * 30 },
+      }
+    );
+    logger.info({ job: SCHEDULE_ELECTIONS_JOB }, 'Job registered');
+
+    // ─────────────────────────────────────────────
+    // OPEN NOMINATIONS
+    // Daily 00:15 — PENDING → NOMINATIONS_OPEN
+    // ─────────────────────────────────────────────
+    await governanceQueue.add(
+      OPEN_NOMINATIONS_JOB,
+      {},
+      {
+        repeat: { pattern: '15 0 * * *' },
+        jobId: OPEN_NOMINATIONS_JOB,
+        removeOnComplete: { age: 3600 * 24 * 7 },
+        removeOnFail: { age: 3600 * 24 * 30 },
+      }
+    );
+    logger.info({ job: OPEN_NOMINATIONS_JOB }, 'Job registered');
+
+    // ─────────────────────────────────────────────
+    // OPEN VOTING
+    // Daily 00:20 — NOMINATIONS_OPEN → VOTING_OPEN
+    // ─────────────────────────────────────────────
+    await governanceQueue.add(
+      OPEN_VOTING_JOB,
+      {},
+      {
+        repeat: { pattern: '20 0 * * *' },
+        jobId: OPEN_VOTING_JOB,
+        removeOnComplete: { age: 3600 * 24 * 7 },
+        removeOnFail: { age: 3600 * 24 * 30 },
+      }
+    );
+    logger.info({ job: OPEN_VOTING_JOB }, 'Job registered');
+
+    // ─────────────────────────────────────────────
+    // TALLY ELECTION RESULTS
+    // Daily 00:25 — VOTING_OPEN → CLOSED + apply role
+    // ─────────────────────────────────────────────
+    await governanceQueue.add(
+      TALLY_RESULTS_JOB,
+      {},
+      {
+        repeat: { pattern: '25 0 * * *' },
+        jobId: TALLY_RESULTS_JOB,
+        removeOnComplete: { age: 3600 * 24 * 7 },
+        removeOnFail: { age: 3600 * 24 * 30 },
+      }
+    );
+    logger.info({ job: TALLY_RESULTS_JOB }, 'Job registered');
 
     logger.info(
       { operationType: 'JOB_REGISTER' },

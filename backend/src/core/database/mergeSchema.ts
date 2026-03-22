@@ -42,6 +42,7 @@ const MODULE_ORDER = [
   'economy', // depends on user (dues, work logs)
   'community', // depends on user, economy (GroupTreasury via DuesAllocation)
   'governance', // depends on community (Group), treasury (Escrow, WalletTransaction)
+  'elections', // depends on community (Group), base (County, User)
   'projects', // depends on governance (Proposal), economy (PhysicalWorkLog)
   'treasury', // depends on governance (Proposal), projects (Project), community (Group)
   'marketplace', // depends on community (Group)

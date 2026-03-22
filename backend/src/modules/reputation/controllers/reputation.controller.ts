@@ -45,6 +45,101 @@ export class ReputationController {
   }
 
   /**
+   * GET /reputation/leaderboard — top users by PR, IP, or combined score
+   * Query params: metric (pr|ip|combined), scope (global|county|ward), scopeId, page, limit
+   */
+  static async getLeaderboard(req: AuthRequest, res: Response) {
+    const metric = (req.query.metric as string) || 'combined';
+    const scope = (req.query.scope as string) || 'global';
+    const scopeId = req.query.scopeId as string | undefined;
+    const page = Math.max(1, parseInt(String(req.query.page || 1), 10));
+    const limit = Math.min(
+      100,
+      Math.max(1, parseInt(String(req.query.limit || 50), 10))
+    );
+    const skip = (page - 1) * limit;
+
+    // Build location filter
+    const locationFilter: any = {};
+    if (scope === 'ward' && scopeId) {
+      locationFilter.primaryWardId = scopeId;
+    } else if (scope === 'county' && scopeId) {
+      locationFilter.primaryWard = { countyId: scopeId };
+    }
+
+    // Determine orderBy
+    let orderBy: any;
+    if (metric === 'pr') {
+      orderBy = { participationRights: 'desc' };
+    } else if (metric === 'ip') {
+      orderBy = { globalImpactPoints: 'desc' };
+    } else {
+      // combined: sort by IP primarily (more stable metric)
+      orderBy = [
+        { globalImpactPoints: 'desc' },
+        { participationRights: 'desc' },
+      ];
+    }
+
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        where: {
+          ...locationFilter,
+          status: 'ACTIVE',
+          communityVerified: true,
+        },
+        orderBy,
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          name: true,
+          avatarUrl: true,
+          participationRights: true,
+          globalImpactPoints: true,
+          primaryWard: {
+            select: {
+              id: true,
+              name: true,
+              county: { select: { id: true, name: true } },
+            },
+          },
+        },
+      }),
+      prisma.user.count({
+        where: {
+          ...locationFilter,
+          status: 'ACTIVE',
+          communityVerified: true,
+        },
+      }),
+    ]);
+
+    const entries = users.map((u, index) => ({
+      rank: skip + index + 1,
+      userId: u.id,
+      name: u.name ?? 'Anonymous',
+      avatarUrl: u.avatarUrl,
+      participationRights: u.participationRights,
+      globalImpactPoints: u.globalImpactPoints,
+      combinedScore:
+        u.globalImpactPoints + Math.floor(u.participationRights / 10),
+      ward: u.primaryWard
+        ? { id: u.primaryWard.id, name: u.primaryWard.name }
+        : null,
+      county: u.primaryWard?.county
+        ? { id: u.primaryWard.county.id, name: u.primaryWard.county.name }
+        : null,
+    }));
+
+    sendSuccess(
+      res,
+      { entries, total, page, limit, metric, scope },
+      'Leaderboard retrieved'
+    );
+  }
+
+  /**
    * GET /reputation/:userId — public view of any user's reputation
    */
   static async getUserReputation(req: AuthRequest, res: Response) {

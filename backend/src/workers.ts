@@ -57,6 +57,17 @@ import {
   processDuesReminder,
 } from './modules/notifications/jobs/dues-reminder.jobs.js';
 
+import {
+  SCHEDULE_ELECTIONS_JOB,
+  OPEN_NOMINATIONS_JOB,
+  OPEN_VOTING_JOB,
+  TALLY_RESULTS_JOB,
+  processScheduleElections,
+  processOpenNominations,
+  processOpenVoting,
+  processTallyResults,
+} from './modules/elections/jobs/election.jobs.js';
+
 // ─────────────────────────────────────────────
 // Graceful shutdown & error handling
 // ─────────────────────────────────────────────
@@ -72,6 +83,7 @@ async function shutdownWorkers(signal: string): Promise<void> {
       userCleanupWorker.close(),
       integrationWorker.close(),
       notificationsWorker.close(),
+      governanceWorker.close(),
     ]);
     logger.info({ operationType: 'WORKER' }, 'All workers drained and closed');
   } catch (err) {
@@ -193,6 +205,37 @@ const integrationWorker = createWorker('integration', async (job) => {
   }
 });
 
+const governanceWorker = createWorker('governance', async (job) => {
+  try {
+    if (job.name === SCHEDULE_ELECTIONS_JOB) {
+      await processScheduleElections();
+    } else if (job.name === OPEN_NOMINATIONS_JOB) {
+      await processOpenNominations();
+    } else if (job.name === OPEN_VOTING_JOB) {
+      await processOpenVoting();
+    } else if (job.name === TALLY_RESULTS_JOB) {
+      await processTallyResults();
+    } else {
+      logger.warn(
+        { jobName: job.name, queue: 'governance' },
+        'Unknown governance job received'
+      );
+    }
+  } catch (err) {
+    logger.error(
+      {
+        jobId: job.id,
+        jobName: job.name,
+        queue: 'governance',
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      },
+      'Governance job failed'
+    );
+    throw err;
+  }
+});
+
 const notificationsWorker = createWorker('notifications', async (job) => {
   try {
     if (job.name === DUES_REMINDER_JOB) {
@@ -308,6 +351,7 @@ economyWorker.on('failed', failedJobHandler);
 userCleanupWorker.on('failed', failedJobHandler);
 integrationWorker.on('failed', failedJobHandler);
 notificationsWorker.on('failed', failedJobHandler);
+governanceWorker.on('failed', failedJobHandler);
 
 /**
  * Send alert when a job fails permanently

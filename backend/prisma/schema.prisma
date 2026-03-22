@@ -58,6 +58,7 @@ model County {
 
   // Community module back-relation
   groups         Group[]        @relation("CountyGroups")
+  elections      Election[]     @relation("CountyElections")
 
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
@@ -267,6 +268,11 @@ model User {
   workVerifications         WorkVerification[]     @relation("WorkVerifier")
   commitments               Commitment[]
   utWithdrawals             UtWithdrawal[]
+
+  // ---- Elections module ----
+  electionCandidacies       ElectionCandidate[]    @relation("ElectionCandidates")
+  electionVotes             ElectionVote[]         @relation("ElectionVoters")
+  wonElections              Election[]             @relation("ElectionWinners")
 
   // ---- Treasury module ----
   createdEscrows            Escrow[]
@@ -1283,7 +1289,7 @@ model Group {
   treasury            GroupTreasury[]
   treasuryPolicies    TreasuryPolicy[]
   ownedProjects       Project[]               @relation("GroupProjects") // UPDATED relation name
-  // elections Election[] // TODO: define Election model when governance elections are implemented
+  elections             Election[]          @relation("GroupElections")
   nationalContributions NationalContribution[]
   barazaGroups          BarazaGroup[]
 
@@ -1727,6 +1733,109 @@ model GroupMemberVote {
  @@unique([groupId, memberId, proposalId])
  @@index([proposalId])
  @@index([memberId])
+}
+
+
+
+// ============================================================================
+// MODULE: ELECTIONS
+// ============================================================================
+// ============================================================================
+// ELECTIONS MODULE
+// Democratic elections for ELECTED roles (GroupRoleAssignment + SystemRoleAssignment).
+// Gated: first election only after membership threshold is reached.
+// ============================================================================
+
+model Election {
+  id       String @id @default(uuid()) @db.Uuid
+
+  // What role is being elected
+  roleKey  String // e.g. "LEADER", "TREASURER", "AUDITOR", "COUNTY_COORDINATOR"
+
+  // Scope: GROUP (group-level) or SYSTEM (platform-level)
+  scope    String // 'GROUP' | 'SYSTEM'
+
+  // Scope references (mutually exclusive)
+  groupId  String? @db.Uuid
+  countyId String? @db.Uuid
+
+  status   String @default("PENDING")
+  // PENDING | NOMINATIONS_OPEN | VOTING_OPEN | CLOSED
+
+  // Window configuration
+  nominationsOpenAt  DateTime
+  nominationsCloseAt DateTime
+  votingOpenAt       DateTime
+  votingCloseAt      DateTime
+
+  // Outcome
+  winnerId        String? @db.Uuid
+  totalVoteWeight Int     @default(0)
+  quorumReached   Boolean @default(false)
+
+  // Term configuration
+  termMonths    Int       @default(12)
+  nextElectionAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  group      Group?              @relation("GroupElections", fields: [groupId], references: [id], onDelete: SetNull)
+  county     County?             @relation("CountyElections", fields: [countyId], references: [id], onDelete: SetNull)
+  winner     User?               @relation("ElectionWinners", fields: [winnerId], references: [id], onDelete: SetNull)
+  candidates ElectionCandidate[]
+  votes      ElectionVote[]
+
+  @@index([groupId, status])
+  @@index([scope, status])
+  @@index([countyId, status])
+  @@index([votingCloseAt])
+  @@index([nominationsOpenAt])
+  @@map("elections")
+}
+
+model ElectionCandidate {
+  id         String    @id @default(uuid()) @db.Uuid
+  electionId String    @db.Uuid
+  userId     String    @db.Uuid
+
+  statement   String?   @db.Text
+  totalWeight Int       @default(0)
+  voteCount   Int       @default(0)
+  nominatedAt DateTime  @default(now())
+  withdrawnAt DateTime?
+
+  election Election      @relation(fields: [electionId], references: [id], onDelete: Cascade)
+  user     User          @relation("ElectionCandidates", fields: [userId], references: [id], onDelete: Cascade)
+  votes    ElectionVote[]
+
+  @@unique([electionId, userId])
+  @@index([electionId])
+  @@index([userId])
+  @@map("election_candidates")
+}
+
+model ElectionVote {
+  id          String   @id @default(uuid()) @db.Uuid
+  electionId  String   @db.Uuid
+  candidateId String   @db.Uuid
+  voterId     String   @db.Uuid
+
+  // PR balance snapshot at time of vote — locked for tally
+  weight Int
+
+  castAt DateTime @default(now())
+
+  election  Election          @relation(fields: [electionId], references: [id], onDelete: Cascade)
+  candidate ElectionCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  voter     User              @relation("ElectionVoters", fields: [voterId], references: [id], onDelete: Cascade)
+
+  @@unique([electionId, voterId]) // one vote per election per voter
+  @@index([electionId])
+  @@index([candidateId])
+  @@index([voterId])
+  @@map("election_votes")
 }
 
 

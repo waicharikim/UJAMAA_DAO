@@ -16,6 +16,9 @@ import {
 
 const router = Router();
 
+// GET /reputation/leaderboard — public
+router.get('/leaderboard', asyncHandler(ReputationController.getLeaderboard));
+
 // GET /reputation/me — authenticated
 router.get(
   '/me',

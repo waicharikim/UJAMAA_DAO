@@ -70,6 +70,7 @@ import educationRoutes from './modules/education/routes/education.routes.js';
 import integrationRoutes from './modules/integration/routes/bot.routes.js';
 import treasuryRoutes from './modules/treasury/routes/treasury.routes.js';
 import paymentRoutes from './modules/payments/routes/payment.routes.js';
+import electionRoutes from './modules/elections/routes/election.routes.js';
 
 // Bull Board dashboard
 import { ExpressAdapter } from '@bull-board/express';
@@ -81,6 +82,7 @@ import {
   deadLetterQueue,
   integrationQueue,
   notificationsQueue,
+  governanceQueue,
 } from '@core/queue/index.js';
 
 const app = express();
@@ -278,6 +280,7 @@ app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/economy', economyRoutes);
 app.use('/api/v1/community', communityRoutes);
 app.use('/api/v1/governance', governanceRoutes);
+app.use('/api/v1/elections', electionRoutes);
 app.use('/api/v1/projects', projectRoutes);
 app.use('/api/v1/marketplace', marketplaceRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
@@ -338,6 +341,7 @@ createBullBoard({
     new BullMQAdapter(deadLetterQueue),
     new BullMQAdapter(integrationQueue),
     new BullMQAdapter(notificationsQueue),
+    new BullMQAdapter(governanceQueue),
   ],
   serverAdapter,
 });
