@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation"
 import { Sidebar } from "./sidebar"
 import { Topbar } from "./topbar"
 import { MobileBottomNav } from "./mobile-bottom-nav"
+import { CommunityAuditGate } from "@/components/onboarding/community-audit-gate"
 
 interface AppShellProps {
   children: ReactNode
@@ -38,6 +39,9 @@ export function AppShell({ children }: AppShellProps) {
 
       {/* Mobile floating pill nav */}
       <MobileBottomNav />
+
+      {/* One-time community audit gate — shown once to newly verified members */}
+      <CommunityAuditGate />
     </div>
   )
 }
