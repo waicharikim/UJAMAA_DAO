@@ -31,14 +31,15 @@ function TokenChip({ icon: Icon, label, value, color }: TokenChipProps) {
 }
 
 const PAGE_TITLES: Record<string, string> = {
-  "/dashboard": "Dashboard",
-  "/proposals": "Governance",
-  "/projects": "Projects",
-  "/groups": "Community",
-  "/marketplace": "Marketplace",
-  "/treasury": "Treasury",
-  "/profile": "Profile",
-  "/admin": "Administration",
+  "/dashboard":  "Dashboard",
+  "/proposals":  "Governance",
+  "/projects":   "Projects",
+  "/groups":     "Community",
+  "/marketplace":"Marketplace",
+  "/treasury":   "Treasury",
+  "/conflicts":  "Conflicts",
+  "/profile":    "Profile",
+  "/admin":      "Administration",
 }
 
 function resolveTitle(pathname: string): string {

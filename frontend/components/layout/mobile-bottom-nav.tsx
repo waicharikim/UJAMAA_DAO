@@ -19,6 +19,7 @@ import {
   BookOpen,
   ScrollText,
   Trophy,
+  Flag,
 } from "lucide-react"
 import {
   Drawer,
@@ -35,12 +36,13 @@ const primaryNav = [
 ]
 
 const drawerNav = [
-  { label: "Projects", href: "/projects", icon: Briefcase },
-  { label: "Learn", href: "/education", icon: BookOpen },
-  { label: "Leaderboard", href: "/leaderboard", icon: Trophy },
-  { label: "Marketplace", href: "/marketplace", icon: Store },
-  { label: "Treasury", href: "/treasury", icon: Landmark },
-  { label: "Profile", href: "/profile", icon: User },
+  { label: "Projects",   href: "/projects",   icon: Briefcase },
+  { label: "Learn",      href: "/education",  icon: BookOpen },
+  { label: "Leaderboard",href: "/leaderboard",icon: Trophy },
+  { label: "Marketplace",href: "/marketplace",icon: Store },
+  { label: "Treasury",   href: "/treasury",   icon: Landmark },
+  { label: "Conflicts",  href: "/conflicts",  icon: Flag },
+  { label: "Profile",    href: "/profile",    icon: User },
 ]
 
 export function MobileBottomNav() {

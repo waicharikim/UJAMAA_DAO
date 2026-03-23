@@ -2008,4 +2008,10 @@ export const conflictApi = {
 
   getCase: (caseId: string): Promise<ConflictCaseDto> =>
     apiFetch<ConflictCaseDto>(`/conflicts/${caseId}`),
+
+  resolveCase: (caseId: string, resolution: string): Promise<ConflictCaseDto> =>
+    apiFetch<ConflictCaseDto>(`/conflicts/${caseId}/resolve`, {
+      method: "PATCH",
+      body: JSON.stringify({ resolution }),
+    }),
 }

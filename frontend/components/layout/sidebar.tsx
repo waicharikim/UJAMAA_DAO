@@ -23,6 +23,7 @@ import {
   Trophy,
   ScrollText,
   Scale,
+  Flag,
 } from "lucide-react"
 
 const primaryNav = [
@@ -40,6 +41,7 @@ const secondaryNav = [
   { label: "Leaderboard", href: "/leaderboard", icon: Trophy },
   { label: "Marketplace", href: "/marketplace", icon: Store },
   { label: "Treasury",    href: "/treasury",    icon: Landmark },
+  { label: "Conflicts",   href: "/conflicts",   icon: Flag },
   { label: "Profile",     href: "/profile",     icon: User },
 ]
 
