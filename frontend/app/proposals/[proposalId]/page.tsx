@@ -21,6 +21,9 @@ import {
   ShieldCheck,
   AlertTriangle,
   Info,
+  BookMarked,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react"
 
 const STATUS_META: Record<string, { label: string; className: string }> = {
@@ -87,6 +90,11 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
   const queryClient = useQueryClient()
   const [rejectNote, setRejectNote] = useState("")
   const [showRejectForm, setShowRejectForm] = useState(false)
+  const [showMemoryEdit, setShowMemoryEdit] = useState(false)
+  const [memoryRationale, setMemoryRationale] = useState("")
+  const [memoryAlternatives, setMemoryAlternatives] = useState("")
+  const [outcomeText, setOutcomeText] = useState("")
+  const [showOutcomeForm, setShowOutcomeForm] = useState(false)
 
   const { data: proposal, isLoading, isError } = useQuery({
     queryKey: ["proposal", proposalId],
@@ -196,6 +204,29 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
       window.location.href = "/projects"
     },
     onError: (err: any) => toast({ title: "Failed to launch project", description: err?.message, variant: "destructive" }),
+  })
+
+  const { mutate: saveMemory, isPending: savingMemory } = useMutation({
+    mutationFn: () => governanceApi.updateMemory(proposalId, {
+      rationale: memoryRationale || undefined,
+      alternatives: memoryAlternatives || undefined,
+    }),
+    onSuccess: () => {
+      invalidate()
+      setShowMemoryEdit(false)
+      toast({ title: "Memory saved" })
+    },
+    onError: (err: any) => toast({ title: "Save failed", description: err?.message, variant: "destructive" }),
+  })
+
+  const { mutate: saveOutcome, isPending: savingOutcome } = useMutation({
+    mutationFn: () => governanceApi.recordOutcome(proposalId, outcomeText),
+    onSuccess: () => {
+      invalidate()
+      setShowOutcomeForm(false)
+      toast({ title: "Outcome recorded" })
+    },
+    onError: (err: any) => toast({ title: "Save failed", description: err?.message, variant: "destructive" }),
   })
 
   if (!isAuthenticated) {
@@ -619,6 +650,156 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
           </CardContent>
         </Card>
       )}
+
+      {/* ── Ward Memory Layer ─────────────────────────────────── */}
+      <Card className="border-0 shadow-card">
+        <CardContent className="p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <BookMarked className="h-4 w-4" style={{ color: "#C9922A" }} />
+              <h2 className="text-sm font-bold text-[#0A1F14]">Ward Memory</h2>
+            </div>
+            {/* Creator edit button — only in draft/pending */}
+            {proposal?.creatorId === user?.id &&
+              ["DRAFT", "PENDING_REVIEW"].includes(proposal?.status ?? "") && (
+                <button
+                  onClick={() => {
+                    setMemoryRationale(proposal?.rationale ?? "")
+                    setMemoryAlternatives(proposal?.alternatives ?? "")
+                    setShowMemoryEdit((v) => !v)
+                  }}
+                  className="text-xs font-semibold flex items-center gap-1"
+                  style={{ color: "#C9922A" }}
+                >
+                  {showMemoryEdit ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                  {showMemoryEdit ? "Cancel" : "Edit"}
+                </button>
+              )}
+          </div>
+
+          {/* Rationale */}
+          {!showMemoryEdit && (proposal?.rationale || proposal?.alternatives) ? (
+            <div className="space-y-4">
+              {proposal.rationale && (
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#7A6E60" }}>
+                    Why this approach
+                  </p>
+                  <p className="text-sm text-[#0A1F14]/80 leading-relaxed">{proposal.rationale}</p>
+                </div>
+              )}
+              {proposal.alternatives && (
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#7A6E60" }}>
+                    Alternatives considered
+                  </p>
+                  <p className="text-sm text-[#0A1F14]/80 leading-relaxed">{proposal.alternatives}</p>
+                </div>
+              )}
+            </div>
+          ) : !showMemoryEdit ? (
+            <p className="text-xs text-[#7A6E60]">
+              No rationale or alternatives recorded yet.
+              {proposal?.creatorId === user?.id && ["DRAFT", "PENDING_REVIEW"].includes(proposal?.status ?? "") &&
+                " Add context above before submitting for vote."}
+            </p>
+          ) : null}
+
+          {/* Edit form */}
+          {showMemoryEdit && (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-[#0A1F14]">Why this approach</label>
+                <textarea
+                  value={memoryRationale}
+                  onChange={(e) => setMemoryRationale(e.target.value)}
+                  placeholder="Explain the reasoning behind this proposal over other options…"
+                  rows={3}
+                  maxLength={2000}
+                  className="w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm text-[#0A1F14] focus:outline-none focus:ring-2 focus:ring-amber/30 resize-none"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-[#0A1F14]">Alternatives considered</label>
+                <textarea
+                  value={memoryAlternatives}
+                  onChange={(e) => setMemoryAlternatives(e.target.value)}
+                  placeholder="What other options were evaluated and why were they not chosen?…"
+                  rows={3}
+                  maxLength={2000}
+                  className="w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm text-[#0A1F14] focus:outline-none focus:ring-2 focus:ring-amber/30 resize-none"
+                />
+              </div>
+              <button
+                onClick={() => saveMemory()}
+                disabled={savingMemory || (memoryRationale.length < 10 && memoryAlternatives.length < 10)}
+                className="flex items-center gap-2 rounded-full px-5 py-2 text-xs font-bold transition-all hover:scale-[1.02] disabled:opacity-50"
+                style={{ background: "#1D4731", color: "#fff" }}
+              >
+                {savingMemory && <Loader2 className="h-3 w-3 animate-spin" />}
+                {savingMemory ? "Saving…" : "Save Memory"}
+              </button>
+            </div>
+          )}
+
+          {/* Outcome section — visible for passed proposals */}
+          {["PASSED", "EXECUTING", "COMPLETED", "APPROVED"].includes(proposal?.status ?? "") && (
+            <div className="border-t border-black/[0.06] pt-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#1D4731" }}>
+                  Real-world outcome
+                </p>
+                {!proposal?.outcome &&
+                  (proposal?.creatorId === user?.id || isLeader) && (
+                    <button
+                      onClick={() => setShowOutcomeForm((v) => !v)}
+                      className="text-xs font-semibold flex items-center gap-1"
+                      style={{ color: "#1D4731" }}
+                    >
+                      {showOutcomeForm ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                      {showOutcomeForm ? "Cancel" : "Record"}
+                    </button>
+                  )}
+              </div>
+
+              {proposal?.outcome ? (
+                <div>
+                  <p className="text-sm text-[#0A1F14]/80 leading-relaxed">{proposal.outcome}</p>
+                  {proposal.outcomeRecordedAt && (
+                    <p className="text-[11px] text-[#7A6E60] mt-1">
+                      Recorded {formatDate(proposal.outcomeRecordedAt)}
+                    </p>
+                  )}
+                </div>
+              ) : !showOutcomeForm ? (
+                <p className="text-xs text-[#7A6E60]">No outcome recorded yet.</p>
+              ) : null}
+
+              {showOutcomeForm && (
+                <div className="space-y-2">
+                  <textarea
+                    value={outcomeText}
+                    onChange={(e) => setOutcomeText(e.target.value)}
+                    placeholder="What actually happened? Did the proposal achieve its goals?…"
+                    rows={3}
+                    maxLength={2000}
+                    className="w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm text-[#0A1F14] focus:outline-none focus:ring-2 focus:ring-tea-green/30 resize-none"
+                  />
+                  <button
+                    onClick={() => saveOutcome()}
+                    disabled={savingOutcome || outcomeText.length < 10}
+                    className="flex items-center gap-2 rounded-full px-5 py-2 text-xs font-bold transition-all hover:scale-[1.02] disabled:opacity-50"
+                    style={{ background: "#1D4731", color: "#fff" }}
+                  >
+                    {savingOutcome && <Loader2 className="h-3 w-3 animate-spin" />}
+                    {savingOutcome ? "Recording…" : "Record Outcome"}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

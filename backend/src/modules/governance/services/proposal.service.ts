@@ -536,6 +536,68 @@ class ProposalService {
 
     return { proposals, total, limit, offset };
   }
+
+  /**
+   * Update Ward Memory Layer fields (rationale + alternatives).
+   * Only the creator can update, and only while the proposal is in DRAFT or PENDING_REVIEW.
+   */
+  async updateMemory(
+    userId: string,
+    proposalId: string,
+    dto: { rationale?: string; alternatives?: string }
+  ) {
+    const proposal = await prisma.proposal.findUnique({
+      where: { id: proposalId },
+      select: { creatorId: true, status: true },
+    });
+    if (!proposal) throw ApiError.notFound('Proposal');
+    if (proposal.creatorId !== userId)
+      throw ApiError.forbidden('Only the proposal creator can update memory fields');
+    if (!['DRAFT', 'PENDING_REVIEW'].includes(proposal.status as string))
+      throw ApiError.badRequest('Memory fields can only be updated before voting begins');
+
+    return prisma.proposal.update({
+      where: { id: proposalId },
+      data: {
+        ...(dto.rationale !== undefined && { rationale: dto.rationale }),
+        ...(dto.alternatives !== undefined && { alternatives: dto.alternatives }),
+      },
+      select: { id: true, rationale: true, alternatives: true },
+    });
+  }
+
+  /**
+   * Record the real-world outcome of a passed proposal.
+   * Only the creator or group leader can record outcomes, and only after passing.
+   */
+  async recordOutcome(userId: string, proposalId: string, outcome: string) {
+    const proposal = await prisma.proposal.findUnique({
+      where: { id: proposalId },
+      select: { creatorId: true, status: true, groupId: true },
+    });
+    if (!proposal) throw ApiError.notFound('Proposal');
+
+    // Check it passed
+    const passedStatuses = ['PASSED', 'EXECUTING', 'COMPLETED'];
+    if (!passedStatuses.includes(proposal.status as string))
+      throw ApiError.badRequest('Outcome can only be recorded for passed proposals');
+
+    // Check caller is creator or group leader
+    const isCreator = proposal.creatorId === userId;
+    const isLeader = proposal.groupId
+      ? !!(await prisma.groupMember.findFirst({
+          where: { userId, groupId: proposal.groupId, role: 'LEADER', active: true },
+        }))
+      : false;
+    if (!isCreator && !isLeader)
+      throw ApiError.forbidden('Only the proposal creator or group leader can record outcomes');
+
+    return prisma.proposal.update({
+      where: { id: proposalId },
+      data: { outcome, outcomeRecordedAt: new Date() },
+      select: { id: true, outcome: true, outcomeRecordedAt: true },
+    });
+  }
 }
 
 export const proposalService = new ProposalService();

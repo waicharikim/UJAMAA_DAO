@@ -880,6 +880,11 @@ export interface ProposalDto {
   } | null
   votesSummary?: { total: number; yesWeight: number; noWeight: number }
   _count?: { votes: number }
+  // Ward Memory Layer
+  rationale?: string | null
+  alternatives?: string | null
+  outcome?: string | null
+  outcomeRecordedAt?: string | null
 }
 
 export const governanceApi = {
@@ -941,6 +946,18 @@ export const governanceApi = {
 
   getNeedsAction: (): Promise<{ proposals: ProposalDto[]; total: number }> =>
     apiFetch("/governance/needs-action"),
+
+  updateMemory: (proposalId: string, dto: { rationale?: string; alternatives?: string }) =>
+    apiFetch<{ id: string; rationale: string | null; alternatives: string | null }>(
+      `/governance/${proposalId}/memory`,
+      { method: "PATCH", body: JSON.stringify(dto) }
+    ),
+
+  recordOutcome: (proposalId: string, outcome: string) =>
+    apiFetch<{ id: string; outcome: string; outcomeRecordedAt: string }>(
+      `/governance/${proposalId}/outcome`,
+      { method: "PATCH", body: JSON.stringify({ outcome }) }
+    ),
 }
 
 // ─────────────────────────────────────────────────────────

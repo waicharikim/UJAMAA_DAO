@@ -152,4 +152,20 @@ export class ProposalController {
     });
     sendSuccess(res, result, 'Proposals retrieved');
   }
+
+  static async updateMemory(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const { proposalId } = req.params;
+    const { rationale, alternatives } = req.body;
+    const result = await proposalService.updateMemory(userId, proposalId, { rationale, alternatives });
+    sendSuccess(res, result, 'Memory updated');
+  }
+
+  static async recordOutcome(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const { proposalId } = req.params;
+    const { outcome } = req.body;
+    const result = await proposalService.recordOutcome(userId, proposalId, outcome);
+    sendSuccess(res, result, 'Outcome recorded');
+  }
 }

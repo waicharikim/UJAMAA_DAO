@@ -77,4 +77,27 @@ router.post(
 
 router.post('/:proposalId/tally', asyncHandler(ProposalController.tallyVotes));
 
+router.patch(
+  '/:proposalId/memory',
+  validateRequest({
+    schema: z.object({
+      rationale: z.string().min(10).max(2000).optional(),
+      alternatives: z.string().min(10).max(2000).optional(),
+    }),
+    target: 'body',
+  }),
+  asyncHandler(ProposalController.updateMemory)
+);
+
+router.patch(
+  '/:proposalId/outcome',
+  validateRequest({
+    schema: z.object({
+      outcome: z.string().min(10).max(2000),
+    }),
+    target: 'body',
+  }),
+  asyncHandler(ProposalController.recordOutcome)
+);
+
 export default router;
