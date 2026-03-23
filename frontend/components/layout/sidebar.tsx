@@ -22,11 +22,13 @@ import {
   AlertTriangle,
   Trophy,
   ScrollText,
+  Scale,
 } from "lucide-react"
 
 const primaryNav = [
   { label: "Dashboard",  href: "/dashboard",  icon: LayoutDashboard },
-  { label: "Governance", href: "/proposals",  icon: Vote },
+  { label: "Proposals",  href: "/proposals",  icon: Vote },
+  { label: "Governance", href: "/governance", icon: Scale },
   { label: "Elections",  href: "/elections",  icon: ScrollText },
   { label: "Projects",   href: "/projects",   icon: Briefcase },
   { label: "Community",  href: "/groups",     icon: Users },
