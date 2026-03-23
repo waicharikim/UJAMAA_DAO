@@ -6,6 +6,7 @@ import { Vote, Users, Briefcase, AlertTriangle, Rss, RefreshCw, ArrowRight, Book
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { feedApi, type FeedItemDto } from "@/lib/api"
+import { useLanguage } from "@/contexts/language-context"
 
 // ─── Relative timestamp ───────────────────────────────────────────────────────
 
@@ -137,6 +138,7 @@ interface ActivityFeedProps {
 
 export function ActivityFeed({ compact = false }: ActivityFeedProps) {
   const queryClient = useQueryClient()
+  const { t } = useLanguage()
 
   // Stable main feed — no auto-refetch, user-triggered only
   const {
@@ -184,7 +186,7 @@ export function ActivityFeed({ compact = false }: ActivityFeedProps) {
       {!compact && (
         <div className="flex items-center gap-2 mb-1">
           <Rss className="h-5 w-5" style={{ color: "#C9922A" }} />
-          <h2 className="font-display font-bold text-xl text-[#0E0B08]">Community Feed</h2>
+          <h2 className="font-display font-bold text-xl text-[#0E0B08]">{t("feed.title")}</h2>
         </div>
       )}
 
@@ -196,7 +198,7 @@ export function ActivityFeed({ compact = false }: ActivityFeedProps) {
           style={{ background: "rgba(201,146,42,0.12)", color: "#C9922A" }}
         >
           <RefreshCw className="h-3.5 w-3.5" />
-          New activity — tap to refresh
+          {t("feed.new_activity")}
         </button>
       )}
 
@@ -215,7 +217,7 @@ export function ActivityFeed({ compact = false }: ActivityFeedProps) {
       {/* Empty state */}
       {!isLoading && displayed.length === 0 && (
         <p className="text-sm py-8 text-center" style={{ color: "rgba(14,11,8,0.35)" }}>
-          No activity yet — be the first to create a proposal!
+          {t("feed.empty")}
         </p>
       )}
 
@@ -239,7 +241,7 @@ export function ActivityFeed({ compact = false }: ActivityFeedProps) {
           onClick={() => fetchNextPage()}
           disabled={isFetchingNextPage}
         >
-          {isFetchingNextPage ? "Loading…" : "Load more"}
+          {isFetchingNextPage ? "Loading…" : t("feed.load_more")}
         </Button>
       )}
     </div>

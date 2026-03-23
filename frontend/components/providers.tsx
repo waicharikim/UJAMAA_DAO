@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { AuthProvider } from "@/contexts/auth-context"
 import { RoleProvider } from "@/contexts/role-context"
 import { NotificationProvider } from "@/contexts/notification-context"
+import { LanguageProvider } from "@/contexts/language-context"
 
 // @privy-io/react-auth calls useContext at module-load time which breaks
 // SSR/static-generation. next/dynamic with ssr:false ensures the module is
@@ -34,7 +35,9 @@ export function Providers({ children }: { children: ReactNode }) {
       <AuthProvider>
         <WalletProvider>
           <RoleProvider>
-            <NotificationProvider>{children}</NotificationProvider>
+            <LanguageProvider>
+              <NotificationProvider>{children}</NotificationProvider>
+            </LanguageProvider>
           </RoleProvider>
         </WalletProvider>
       </AuthProvider>

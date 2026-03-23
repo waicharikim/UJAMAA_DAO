@@ -12,6 +12,7 @@ const WalletButton = dynamic(
   { ssr: false, loading: () => <div className="h-8 w-20 rounded-full bg-[#C9922A]/10 animate-pulse" /> },
 )
 import { NotificationsPopover } from "./notifications-popover"
+import { LanguageToggle } from "./language-toggle"
 import { useAuth } from "@/contexts/auth-context"
 
 // ── Token stat chip ─────────────────────────────────────────
@@ -97,6 +98,7 @@ export function Topbar({ collapsed, onToggle }: TopbarProps) {
 
       {/* Actions */}
       <div className="flex items-center gap-2">
+        <LanguageToggle />
         {isAuthenticated ? (
           <>
             <NotificationsPopover />
