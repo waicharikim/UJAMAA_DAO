@@ -158,7 +158,8 @@ class UserService {
       },
 
       economic: {
-        utilityTokens: user.utilityTokens,
+        utilityTokens:
+          (user.fiatBackedUtBalance ?? 0) + (user.earnedUtBalance ?? 0),
         participationRights: user.participationRights,
       },
 

@@ -109,7 +109,11 @@ function buildDescription(
     case AuditAction.MODULE_PUBLISHED:
       return `New learning material available: "${String(meta.title ?? 'Untitled')}"`;
     case AuditAction.WORK_LOGGED:
-      return `${actor} logged ${String(meta.hours ?? '?')} hours of ${String(meta.workType ?? 'work').replace(/_/g, ' ').toLowerCase()} on a project`;
+      return `${actor} logged ${String(meta.hours ?? '?')} hours of ${String(
+        meta.workType ?? 'work'
+      )
+        .replace(/_/g, ' ')
+        .toLowerCase()} on a project`;
     case AuditAction.WORK_VERIFIED:
       return meta.approved
         ? `${actor}'s work hours were approved (+${String(meta.ipAwarded ?? 0)} IP)`
@@ -147,9 +151,17 @@ function buildSafeMeta(
     case AuditAction.MODULE_PUBLISHED:
       return { title: raw.title };
     case AuditAction.WORK_LOGGED:
-      return { hours: raw.hours, workType: raw.workType, projectId: raw.projectId };
+      return {
+        hours: raw.hours,
+        workType: raw.workType,
+        projectId: raw.projectId,
+      };
     case AuditAction.WORK_VERIFIED:
-      return { approved: raw.approved, ipAwarded: raw.ipAwarded, projectId: raw.projectId };
+      return {
+        approved: raw.approved,
+        ipAwarded: raw.ipAwarded,
+        projectId: raw.projectId,
+      };
     default:
       return {};
   }

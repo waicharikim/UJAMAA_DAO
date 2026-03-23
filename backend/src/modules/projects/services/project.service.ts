@@ -385,14 +385,17 @@ export class ProjectService {
     });
     if (!milestone) throw ApiError.notFound('Milestone');
     if (milestone.status !== 'IN_PROGRESS') {
-      throw ApiError.badRequest('Can only log work on an in-progress milestone');
+      throw ApiError.badRequest(
+        'Can only log work on an in-progress milestone'
+      );
     }
 
     // Must be a project member
     const member = await prisma.projectMember.findFirst({
       where: { projectId: milestone.projectId, userId },
     });
-    if (!member) throw ApiError.forbidden('You must be a project member to log work');
+    if (!member)
+      throw ApiError.forbidden('You must be a project member to log work');
 
     const IP_PER_HOUR = 10;
     const baseIP = Math.round(dto.hours * IP_PER_HOUR);
@@ -421,24 +424,36 @@ export class ProjectService {
       { milestoneId: dto.milestoneId, hours: dto.hours, workType: dto.workType }
     );
 
-    logger.info({ userId, workLogId: workLog.id, milestoneId: dto.milestoneId }, 'Work logged');
+    logger.info(
+      { userId, workLogId: workLog.id, milestoneId: dto.milestoneId },
+      'Work logged'
+    );
 
     return this.mapWorkLog(workLog);
   }
 
-  async verifyWork(verifierId: string, dto: VerifyWorkDto): Promise<WorkLogResponseDto> {
+  async verifyWork(
+    verifierId: string,
+    dto: VerifyWorkDto
+  ): Promise<WorkLogResponseDto> {
     const workLog = await prisma.physicalWorkLog.findUnique({
       where: { id: dto.workLogId },
       include: { user: { select: { id: true, name: true, avatarUrl: true } } },
     });
     if (!workLog) throw ApiError.notFound('Work log');
-    if (workLog.verifiedAt) throw ApiError.conflict('Work log already verified');
+    if (workLog.verifiedAt)
+      throw ApiError.conflict('Work log already verified');
 
     // Must be project leader or a system verifier
-    const isLeader = await roleService.isProjectLeader(verifierId, workLog.projectId!);
+    const isLeader = await roleService.isProjectLeader(
+      verifierId,
+      workLog.projectId!
+    );
     const isVerifier = await roleService.isVerifier(verifierId);
     if (!isLeader && !isVerifier) {
-      throw ApiError.forbidden('Only project leaders or verifiers can verify work');
+      throw ApiError.forbidden(
+        'Only project leaders or verifiers can verify work'
+      );
     }
 
     const now = new Date();
@@ -449,7 +464,9 @@ export class ProjectService {
       const updated = await prisma.physicalWorkLog.update({
         where: { id: dto.workLogId },
         data: { verifiedAt: now, totalIPEarned },
-        include: { user: { select: { id: true, name: true, avatarUrl: true } } },
+        include: {
+          user: { select: { id: true, name: true, avatarUrl: true } },
+        },
       });
 
       // Award IP to the worker
@@ -467,7 +484,10 @@ export class ProjectService {
         { approved: true, totalIPEarned, workerId: workLog.userId }
       );
 
-      logger.info({ verifierId, workLogId: dto.workLogId, approved: true }, 'Work verified');
+      logger.info(
+        { verifierId, workLogId: dto.workLogId, approved: true },
+        'Work verified'
+      );
       return this.mapWorkLog(updated);
     } else {
       // Rejection — record via WorkVerification, don't award IP
@@ -490,7 +510,10 @@ export class ProjectService {
         { approved: false, feedback: dto.feedback, workerId: workLog.userId }
       );
 
-      logger.info({ verifierId, workLogId: dto.workLogId, approved: false }, 'Work rejected');
+      logger.info(
+        { verifierId, workLogId: dto.workLogId, approved: false },
+        'Work rejected'
+      );
       return this.mapWorkLog({ ...workLog, verifiedAt: null });
     }
   }
@@ -510,7 +533,9 @@ export class ProjectService {
 
   private mapWorkLog(w: any): WorkLogResponseDto {
     const isVerified = !!w.verifiedAt;
-    const isRejected = !isVerified && (w.verifications?.some((v: any) => v.status === 'REJECTED') ?? false);
+    const isRejected =
+      !isVerified &&
+      (w.verifications?.some((v: any) => v.status === 'REJECTED') ?? false);
 
     return {
       id: w.id,

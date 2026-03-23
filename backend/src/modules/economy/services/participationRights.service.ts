@@ -367,10 +367,7 @@ export class ParticipationRightsService {
     // Users whose last login is before the 60-day cutoff AND have more than the floor balance
     const inactiveUsers = await this.prisma.user.findMany({
       where: {
-        OR: [
-          { lastLoginAt: { lt: cutoff } },
-          { lastLoginAt: null },
-        ],
+        OR: [{ lastLoginAt: { lt: cutoff } }, { lastLoginAt: null }],
         participationRights: { gt: INACTIVITY_DECAY_FLOOR },
       },
       select: { id: true, participationRights: true },
@@ -412,7 +409,11 @@ export class ParticipationRightsService {
         AuditAction.PR_INACTIVITY_DECAY,
         'User',
         user.id,
-        { deducted: actualDeduction, newBalance, daysInactive: INACTIVITY_DECAY_THRESHOLD_DAYS }
+        {
+          deducted: actualDeduction,
+          newBalance,
+          daysInactive: INACTIVITY_DECAY_THRESHOLD_DAYS,
+        }
       );
 
       decayedCount++;

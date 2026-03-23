@@ -158,7 +158,10 @@ router.post(
       });
       if (!workLog) throw new ApiError('Work log not found', 404);
       if (!workLog.projectId) return false;
-      const isLeader = await roleService.isProjectLeader(req.user!.userId, workLog.projectId);
+      const isLeader = await roleService.isProjectLeader(
+        req.user!.userId,
+        workLog.projectId
+      );
       const isVerifier = await roleService.isVerifier(req.user!.userId);
       return isLeader || isVerifier;
     },
