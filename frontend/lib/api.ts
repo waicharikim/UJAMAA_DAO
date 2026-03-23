@@ -817,6 +817,12 @@ export const communityApi = {
       method: "DELETE",
     }),
 
+  dissolveGroup: (groupId: string, reason?: string) =>
+    apiFetch<{ success: boolean; groupId: string; status: string }>(`/community/${groupId}/dissolve`, {
+      method: "DELETE",
+      body: JSON.stringify({ reason }),
+    }),
+
   getDeclaration: (groupId: string): Promise<{
     id: string
     groupId: string

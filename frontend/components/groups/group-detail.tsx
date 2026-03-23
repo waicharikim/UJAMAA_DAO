@@ -75,10 +75,12 @@ function LeaderAdminPanel({ group }: { group: GroupDetailDto }) {
   const queryClient = useQueryClient()
   const { toast } = useToast()
   const groupId = group.groupId
-  const [tab, setTab] = useState<"settings" | "members">("settings")
+  const [tab, setTab] = useState<"settings" | "members" | "danger">("settings")
   const [nameVal, setNameVal] = useState(group.groupName)
   const [descVal, setDescVal] = useState(group.description ?? "")
   const [pendingRoles, setPendingRoles] = useState<Record<string, string>>({})
+  const [dissolveReason, setDissolveReason] = useState("")
+  const [dissolveConfirm, setDissolveConfirm] = useState("")
 
   const { data: members = [], isLoading: loadingMembers } = useQuery<GroupMemberDto[]>({
     queryKey: ["group-members-admin", groupId],
@@ -118,6 +120,16 @@ function LeaderAdminPanel({ group }: { group: GroupDetailDto }) {
     onError: (err: any) => toast({ title: "Remove failed", description: err?.message, variant: "destructive" }),
   })
 
+  const dissolveMutation = useMutation({
+    mutationFn: () => communityApi.dissolveGroup(groupId, dissolveReason),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["group", groupId] })
+      queryClient.invalidateQueries({ queryKey: ["groups"] })
+      toast({ title: "Group dissolved", description: "The group has been permanently closed." })
+    },
+    onError: (err: any) => toast({ title: "Dissolution failed", description: err?.message, variant: "destructive" }),
+  })
+
   return (
     <Card className="border-0 shadow-card overflow-hidden">
       <CardHeader className="px-6 pt-5 pb-0">
@@ -127,13 +139,15 @@ function LeaderAdminPanel({ group }: { group: GroupDetailDto }) {
         </div>
         {/* Tab strip */}
         <div className="flex gap-1 border-b border-black/[0.06]">
-          {(["settings", "members"] as const).map((t) => (
+          {(["settings", "members", "danger"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className="px-4 py-2 text-xs font-semibold capitalize transition-colors"
               style={tab === t
-                ? { color: "#1D4731", borderBottom: "2px solid #1D4731" }
+                ? t === "danger"
+                  ? { color: "#B03A1E", borderBottom: "2px solid #B03A1E" }
+                  : { color: "#1D4731", borderBottom: "2px solid #1D4731" }
                 : { color: "#7A6E60" }}
             >
               {t}
@@ -222,6 +236,56 @@ function LeaderAdminPanel({ group }: { group: GroupDetailDto }) {
             {!loadingMembers && members.length === 0 && (
               <p className="text-xs text-[#7A6E60]">No members yet.</p>
             )}
+          </div>
+        )}
+
+        {tab === "danger" && (
+          <div className="space-y-4">
+            <div
+              className="rounded-xl p-4 space-y-3"
+              style={{ background: "rgba(176,58,30,0.06)", border: "1px solid rgba(176,58,30,0.15)" }}
+            >
+              <h3 className="text-sm font-bold" style={{ color: "#B03A1E" }}>Dissolve Group</h3>
+              <p className="text-xs text-[#0E0B08]/60 leading-relaxed">
+                Dissolution is permanent and irreversible. All memberships will be deactivated
+                and the group will be closed. You cannot dissolve a group with funds in its treasury.
+              </p>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-[#0E0B08]">Reason for dissolution *</label>
+                <textarea
+                  value={dissolveReason}
+                  onChange={(e) => setDissolveReason(e.target.value)}
+                  placeholder="Explain why this group is being dissolved (min. 10 characters)…"
+                  rows={3}
+                  maxLength={500}
+                  className="w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm text-[#0E0B08] placeholder:text-[#7A6E60]/60 focus:outline-none focus:ring-2 focus:ring-[#B03A1E]/30 resize-none"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-[#0E0B08]">
+                  Type <span className="font-mono text-[#B03A1E]">DISSOLVE</span> to confirm
+                </label>
+                <input
+                  value={dissolveConfirm}
+                  onChange={(e) => setDissolveConfirm(e.target.value)}
+                  placeholder="DISSOLVE"
+                  className="w-full h-9 rounded-lg border border-black/10 bg-white px-3 text-sm text-[#0E0B08] font-mono focus:outline-none focus:ring-2 focus:ring-[#B03A1E]/30"
+                />
+              </div>
+              <button
+                onClick={() => dissolveMutation.mutate()}
+                disabled={
+                  dissolveMutation.isPending ||
+                  dissolveConfirm !== "DISSOLVE" ||
+                  dissolveReason.length < 10
+                }
+                className="flex items-center gap-2 rounded-full px-5 py-2 text-xs font-bold transition-all hover:scale-[1.02] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
+                style={{ background: "#B03A1E", color: "#fff" }}
+              >
+                {dissolveMutation.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+                {dissolveMutation.isPending ? "Dissolving…" : "Dissolve Group Permanently"}
+              </button>
+            </div>
           </div>
         )}
       </CardContent>

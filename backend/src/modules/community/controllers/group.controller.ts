@@ -120,4 +120,12 @@ export class GroupController {
     const declaration = await groupService.getDeclaration(groupId);
     sendSuccess(res, declaration, 'Declaration retrieved');
   }
+
+  static async dissolveGroup(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const { groupId } = req.params;
+    const { reason } = req.body;
+    const result = await groupService.dissolveGroup(userId, groupId, reason ?? '');
+    sendSuccess(res, result, 'Group dissolved');
+  }
 }

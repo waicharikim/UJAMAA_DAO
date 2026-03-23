@@ -21,6 +21,7 @@ import { VOLUNTARY_GROUP_PR_COST } from '../types.js';
 import { CreateVoluntaryGroupDto } from '@modules/community/types.js';
 import { auditService } from '../../audit/services/audit.service.js';
 import { AuditAction } from '../../audit/types.js';
+import { Prisma } from '@prisma/client';
 
 class GroupService {
   /**
@@ -155,6 +156,57 @@ ${wardName}  ·  ${dateStr}  ·  ${shortId}`;
         declarationText,
       },
     });
+  }
+
+  /**
+   * Dissolve a voluntary group.
+   * Only the leader can dissolve. System groups cannot be dissolved.
+   * Requires zero treasury balance (funds must be redistributed first).
+   */
+  async dissolveGroup(userId: string, groupId: string, reason: string) {
+    const membership = await prisma.groupMember.findUnique({
+      where: { userId_groupId: { userId, groupId } },
+    });
+    if (!membership || membership.role !== 'LEADER') {
+      throw ApiError.forbidden('Only the group leader can dissolve the group');
+    }
+
+    const group = await prisma.group.findUnique({
+      where: { id: groupId },
+      select: { isSystemGroup: true, treasuryBalance: true, name: true, status: true },
+    });
+    if (!group) throw ApiError.notFound('Group');
+    if (group.isSystemGroup) throw ApiError.badRequest('System groups cannot be dissolved');
+    if (group.status === 'DISSOLVED') throw ApiError.conflict('Group is already dissolved');
+    if (new Prisma.Decimal(group.treasuryBalance).greaterThan(0)) {
+      throw ApiError.badRequest(
+        'Cannot dissolve a group with funds in treasury. Redistribute or withdraw all funds first.'
+      );
+    }
+
+    // Mark dissolved + deactivate all memberships in a transaction
+    await prisma.$transaction([
+      prisma.group.update({
+        where: { id: groupId },
+        data: { status: 'DISSOLVED' },
+      }),
+      prisma.groupMember.updateMany({
+        where: { groupId },
+        data: { active: false },
+      }),
+    ]);
+
+    logger.info({ userId, groupId }, 'Group dissolved');
+
+    await auditService.log(
+      userId,
+      AuditAction.GROUP_DISSOLVED,
+      'Group',
+      groupId,
+      { name: group.name, reason }
+    );
+
+    return { success: true, groupId, status: 'DISSOLVED' };
   }
 
   /**

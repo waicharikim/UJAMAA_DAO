@@ -127,4 +127,15 @@ router.delete(
   asyncHandler(GroupController.removeMember)
 );
 
+router.delete(
+  '/:groupId/dissolve',
+  validateRequest({
+    schema: z.object({
+      reason: z.string().min(10).max(500).optional(),
+    }),
+    target: 'body',
+  }),
+  asyncHandler(GroupController.dissolveGroup)
+);
+
 export default router;
