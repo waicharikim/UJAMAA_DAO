@@ -9,6 +9,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { communityApi } from "@/lib/api"
 import { ArrowLeft, Loader2, Users } from "lucide-react"
 import Link from "next/link"
+import { WardDeclarationScreen } from "@/components/groups/ward-declaration-screen"
 
 const VOLUNTARY_TYPES = [
   { value: "BUSINESS_COLLECTIVE",    label: "Business Collective" },
@@ -44,6 +45,8 @@ export default function CreateGroupPage() {
     description: "",
   })
 
+  const [createdGroup, setCreatedGroup] = useState<{ id: string; name: string } | null>(null)
+
   const { mutate: submit, isPending } = useMutation({
     mutationFn: () =>
       communityApi.createVoluntaryGroup({
@@ -51,9 +54,9 @@ export default function CreateGroupPage() {
         voluntaryType: form.voluntaryType,
         description: form.description.trim() || undefined,
       }),
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       toast({ title: "Group created", description: "You are now the leader." })
-      router.push("/groups")
+      setCreatedGroup({ id: data.id, name: form.name.trim() })
     },
     onError: (err: any) => {
       toast({
@@ -65,6 +68,16 @@ export default function CreateGroupPage() {
   })
 
   const canSubmit = form.name.trim().length >= 3 && form.voluntaryType !== ""
+
+  if (createdGroup) {
+    return (
+      <WardDeclarationScreen
+        groupId={createdGroup.id}
+        wardName={createdGroup.name}
+        onContinue={() => router.push(`/groups/${createdGroup.id}`)}
+      />
+    )
+  }
 
   if (!isAuthenticated) {
     return (

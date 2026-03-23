@@ -7,9 +7,10 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Globe, MapPin, Landmark, Home, Users, CalendarDays, ChevronRight, Settings, Loader2 } from "lucide-react"
+import { Globe, MapPin, Landmark, Home, Users, CalendarDays, ChevronRight, Settings, Loader2, ScrollText } from "lucide-react"
 import { formatDate } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
+import { WardDeclarationScreen } from "@/components/groups/ward-declaration-screen"
 
 // ── Level display config ──────────────────────────────────────
 
@@ -236,6 +237,7 @@ interface GroupDetailProps {
 
 export function GroupDetail({ groupId }: GroupDetailProps) {
   const queryClient = useQueryClient()
+  const [showDeclaration, setShowDeclaration] = useState(false)
 
   const { data: group, isLoading, error } = useQuery({
     queryKey: ["group", groupId],
@@ -418,9 +420,29 @@ export function GroupDetail({ groupId }: GroupDetailProps) {
               You joined {formatDate(group.userJoinedAt)}
             </p>
           )}
+
+          {/* Founding declaration link — voluntary groups only */}
+          {!isSystemGroup && (
+            <button
+              onClick={() => setShowDeclaration(true)}
+              className="flex items-center gap-1.5 text-xs font-medium transition-colors hover:opacity-80"
+              style={{ color: "#C9922A" }}
+            >
+              <ScrollText className="h-3.5 w-3.5" />
+              View founding declaration
+            </button>
+          )}
         </div>
       </CardContent>
     </Card>
+
+    {showDeclaration && (
+      <WardDeclarationScreen
+        groupId={groupId}
+        wardName={group.groupName}
+        onContinue={() => setShowDeclaration(false)}
+      />
+    )}
 
     {/* Leader admin panel — only visible to group leaders */}
     {group.userRole === "LEADER" && !isSystemGroup && (

@@ -109,6 +109,8 @@ model Group {
   constituency Constituency? @relation(fields: [constituencyId], references: [id], onDelete: SetNull)
   county       County?       @relation("CountyGroups", fields: [countyId], references: [id], onDelete: SetNull)
 
+  declaration         WardDeclaration?
+
   members             GroupMember[]
   proposals           Proposal[]              @relation("GroupProposals")
   votes               GroupMemberVote[]       @relation("GroupVotes")
@@ -351,6 +353,24 @@ model BarazaAttendance {
   @@index([barazaGroupId, sessionDate])
   @@index([userId, prAwarded])
   @@map("baraza_attendance")
+}
+
+// ============================================================================
+// WARD DECLARATION — Genesis document stored on group creation
+// ============================================================================
+
+model WardDeclaration {
+  id              String   @id @default(uuid()) @db.Uuid
+  groupId         String   @unique @db.Uuid
+  wardName        String
+  registeredAt    DateTime
+  declarationText String   @db.Text
+
+  createdAt DateTime @default(now())
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@map("ward_declarations")
 }
 
 // ============================================================================

@@ -114,4 +114,10 @@ export class GroupController {
     await groupService.removeMember(actorId, groupId, targetUserId);
     sendSuccess(res, null, 'Member removed');
   }
+
+  static async getDeclaration(req: AuthRequest, res: Response) {
+    const { groupId } = req.params;
+    const declaration = await groupService.getDeclaration(groupId);
+    sendSuccess(res, declaration, 'Declaration retrieved');
+  }
 }

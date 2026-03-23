@@ -91,7 +91,81 @@ class GroupService {
       { type: dto.voluntaryType, name: dto.name }
     );
 
+    // Generate and store the Ward Declaration as the genesis document
+    await groupService.generateDeclaration(group.id, dto.name, group.createdAt);
+
     return group;
+  }
+
+  /**
+   * Generate and persist the Ward Declaration genesis document.
+   * Called on group creation. Also called explicitly for system groups by seed.
+   */
+  async generateDeclaration(groupId: string, wardName: string, registeredAt: Date) {
+    const dateStr = registeredAt.toLocaleDateString('en-KE', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
+    const shortId = groupId.split('-')[0].toUpperCase();
+
+    const declarationText = `You have always been the government.
+
+The word means: the people who make collective decisions about collective life. That is you. That has always been you.
+
+The infrastructure that was supposed to carry that fact was captured. Not lost. Captured. By people who understood that whoever controls the infrastructure of governance controls the outcomes of governance. They were right about the infrastructure. They were wrong about the people.
+
+This platform is returning that infrastructure to its original owner.
+
+${wardName} is now a governance unit. Not symbolically. Constitutionally. What you propose here is real. What you vote on here is binding. What you fund here belongs to your ward.
+
+Every transaction is on-chain. Every vote is permanent. Every participation record belongs to the person who earned it and cannot be taken away.
+
+Nobody controls this treasury alone.
+
+Not the ward admin. Not the platform. Not any funder, government, or external institution. The ward governs itself. That is the design. That is the point.
+
+You are inheriting a broken system.
+
+You are not obligated to maintain it.
+
+You are not waiting for permission to replace it.
+
+The people who captured governance were counting on you not knowing it was always yours. Now you know.
+
+The borehole you fund, the school library you build, the generator your ward installs — these are not small things. They are demonstrations. Evidence. Proof that communities have always been capable of governing themselves when given infrastructure equal to their capacity.
+
+Ujamaa.
+Familyhood. Cooperative economics.
+The principle that we rise or fall together.
+
+This is not a new idea. This is the oldest true idea.
+
+Welcome to your ward.
+
+${wardName}  ·  ${dateStr}  ·  ${shortId}`;
+
+    await prisma.wardDeclaration.upsert({
+      where: { groupId },
+      update: {},
+      create: {
+        groupId,
+        wardName,
+        registeredAt,
+        declarationText,
+      },
+    });
+  }
+
+  /**
+   * Retrieve the Ward Declaration for a group.
+   */
+  async getDeclaration(groupId: string) {
+    const declaration = await prisma.wardDeclaration.findUnique({
+      where: { groupId },
+    });
+    if (!declaration) throw ApiError.notFound('Ward declaration');
+    return declaration;
   }
 
   /**

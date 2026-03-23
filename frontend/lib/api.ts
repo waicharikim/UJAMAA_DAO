@@ -816,6 +816,15 @@ export const communityApi = {
     apiFetch<{ success: boolean }>(`/community/${groupId}/members/${userId}`, {
       method: "DELETE",
     }),
+
+  getDeclaration: (groupId: string): Promise<{
+    id: string
+    groupId: string
+    wardName: string
+    registeredAt: string
+    declarationText: string
+    createdAt: string
+  }> => apiFetch(`/community/${groupId}/declaration`),
 }
 
 // ─────────────────────────────────────────────────────────

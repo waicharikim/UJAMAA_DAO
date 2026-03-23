@@ -74,6 +74,8 @@ router.get(
 
 router.get('/:groupId/my-role', asyncHandler(GroupController.getMyRole));
 
+router.get('/:groupId/declaration', asyncHandler(GroupController.getDeclaration));
+
 router.get('/:groupId', asyncHandler(GroupController.getGroupDetail));
 
 router.get(
