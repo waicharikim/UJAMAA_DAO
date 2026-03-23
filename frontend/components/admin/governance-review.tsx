@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { CheckCircle, XCircle, Clock, Vote, FileText, ChevronDown, ChevronUp } from "lucide-react"
+import type { ProposalStatus } from "@/lib/api"
 import { governanceApi, auditApi, type ProposalDto } from "@/lib/api"
 import { formatRelativeTime, formatDate } from "@/lib/utils"
 
@@ -128,7 +129,9 @@ export function GovernanceReview() {
     queryKey: ["admin", "proposals", statusFilter],
     queryFn: () =>
       governanceApi.getProposals(
-        statusFilter !== "all" ? { status: statusFilter, limit: 50 } : { limit: 50 }
+        statusFilter !== "all"
+          ? { status: statusFilter as ProposalStatus, limit: 50 }
+          : { limit: 50 }
       ),
     staleTime: 30_000,
   })
