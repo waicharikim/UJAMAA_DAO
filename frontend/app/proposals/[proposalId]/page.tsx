@@ -24,6 +24,8 @@ import {
   BookMarked,
   ChevronDown,
   ChevronUp,
+  RefreshCw,
+  Archive,
 } from "lucide-react"
 
 const STATUS_META: Record<string, { label: string; className: string }> = {
@@ -800,6 +802,59 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
           )}
         </CardContent>
       </Card>
+
+      {/* ── Failure Protocol: What next? ─────────────────── */}
+      {proposal?.status === "REJECTED" && (
+        <Card className="border-0 shadow-card" style={{ borderLeft: "3px solid #B03A1E" }}>
+          <CardContent className="p-6 space-y-4">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" style={{ color: "#B03A1E" }} />
+              <h2 className="text-sm font-bold" style={{ color: "#B03A1E" }}>This proposal was rejected</h2>
+            </div>
+            {proposal.reviewNote && (
+              <div
+                className="rounded-xl px-4 py-3 text-sm text-[#0A1F14]/70 leading-relaxed"
+                style={{ background: "rgba(176,58,30,0.06)" }}
+              >
+                <span className="font-semibold">Review note: </span>{proposal.reviewNote}
+              </div>
+            )}
+            <p className="text-xs text-[#7A6E60]">
+              Rejection is not the end. Here are your options:
+            </p>
+            <div className="grid gap-3">
+              {proposal?.groupId && (
+                <Link
+                  href={`/proposals/create?groupId=${proposal.groupId}`}
+                  className="flex items-start gap-3 rounded-xl p-4 transition-colors hover:bg-[#F7F2E8]"
+                  style={{ border: "1px solid rgba(201,146,42,0.2)" }}
+                >
+                  <RefreshCw className="h-5 w-5 mt-0.5 flex-shrink-0" style={{ color: "#C9922A" }} />
+                  <div>
+                    <p className="text-sm font-semibold text-[#0A1F14]">Revise and resubmit</p>
+                    <p className="text-xs text-[#7A6E60] mt-0.5">
+                      Address the concerns raised and submit a revised proposal to your group.
+                    </p>
+                  </div>
+                </Link>
+              )}
+              <div
+                className="flex items-start gap-3 rounded-xl p-4"
+                style={{ border: "1px solid rgba(0,0,0,0.06)", background: "rgba(0,0,0,0.02)" }}
+              >
+                <Archive className="h-5 w-5 mt-0.5 flex-shrink-0" style={{ color: "#7A6E60" }} />
+                <div>
+                  <p className="text-sm font-semibold text-[#0A1F14]">Preserved in ward memory</p>
+                  <p className="text-xs text-[#7A6E60] mt-0.5">
+                    Rejected proposals remain permanently in the governance record.
+                    The deliberation, vote count, and any rationale you added are preserved.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

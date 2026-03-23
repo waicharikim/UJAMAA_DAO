@@ -1973,3 +1973,37 @@ export const leaderboardApi = {
     return apiFetch(`/reputation/leaderboard${qs ? `?${qs}` : ""}`)
   },
 }
+
+// ─────────────────────────────────────────────────────────
+// Conflicts API  — /api/v1/conflicts
+// ─────────────────────────────────────────────────────────
+
+export interface ConflictCaseDto {
+  id: string
+  status: "OPEN" | "INVESTIGATING" | "MEDIATION" | "CLOSED"
+  description: string
+  evidence: string[]
+  resolution: string | null
+  resolvedAt: string | null
+  createdAt: string
+  complainant: { id: string; name: string }
+  respondent:  { id: string; name: string }
+}
+
+export const conflictApi = {
+  fileConflict: (dto: {
+    respondentId: string
+    description: string
+    evidence?: string[]
+  }) =>
+    apiFetch<ConflictCaseDto>("/conflicts", {
+      method: "POST",
+      body: JSON.stringify(dto),
+    }),
+
+  getMyCases: (): Promise<ConflictCaseDto[]> =>
+    apiFetch<ConflictCaseDto[]>("/conflicts/my-cases"),
+
+  getCase: (caseId: string): Promise<ConflictCaseDto> =>
+    apiFetch<ConflictCaseDto>(`/conflicts/${caseId}`),
+}
