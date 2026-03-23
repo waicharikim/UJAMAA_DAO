@@ -413,7 +413,9 @@ router.post(
       verificationLevel: user.verificationLevel as any,
       roles: roleNames,
       globalImpactPoints: user.globalImpactPoints ?? 0,
-      utilityTokens: (user as any).utilityTokens ?? 0,
+      utilityTokens:
+        ((user as any).fiatBackedUtBalance ?? 0) +
+        ((user as any).earnedUtBalance ?? 0),
       participationRights: user.participationRights ?? 0,
       emailVerified: user.emailVerified,
       phoneVerified: user.phoneVerified,

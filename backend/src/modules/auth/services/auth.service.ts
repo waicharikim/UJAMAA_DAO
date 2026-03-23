@@ -488,7 +488,8 @@ class AuthService {
       communityVerified: user.communityVerified,
       roles,
       globalImpactPoints: user.globalImpactPoints,
-      utilityTokens: user.utilityTokens,
+      utilityTokens:
+        (user.fiatBackedUtBalance ?? 0) + (user.earnedUtBalance ?? 0),
       participationRights: user.participationRights,
       type: 'permanent',
       sessionId: session.id,

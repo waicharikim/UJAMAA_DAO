@@ -10,7 +10,7 @@ import { AuthRequest } from '../../../core/types/Ujamaadao.types.js';
 import { sendSuccess } from '../../../core/utils/response.js';
 import { proposalService } from '../services/proposal.service.js';
 import { prisma } from '../../../core/database/client.js';
-import { ProposalStatus } from '@prisma/client';
+import { ProposalStatus, ProposalScope } from '@prisma/client';
 
 export class ProposalController {
   static async createProposal(req: AuthRequest, res: Response) {
@@ -143,10 +143,11 @@ export class ProposalController {
   }
 
   static async listProposals(req: AuthRequest, res: Response) {
-    const { groupId, status, limit, offset } = req.query;
+    const { groupId, status, scope, limit, offset } = req.query;
     const result = await proposalService.listProposals({
       groupId: groupId as string | undefined,
       status: status as ProposalStatus | undefined,
+      scope: scope as ProposalScope | undefined,
       limit: limit ? parseInt(limit as string) : undefined,
       offset: offset ? parseInt(offset as string) : undefined,
     });

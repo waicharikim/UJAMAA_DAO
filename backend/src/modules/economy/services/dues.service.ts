@@ -74,7 +74,7 @@ class DuesService {
         // Award UT (1:1 KES to UT)
         await tx.user.update({
           where: { id: userId },
-          data: { utilityTokens: { increment: amountKes } },
+          data: { fiatBackedUtBalance: { increment: amountKes } },
         });
 
         // If user has an active dues commitment, mark as fulfilled for this period

@@ -149,7 +149,8 @@ class RefreshTokenService {
         communityVerified: user.communityVerified,
         roles: user.roles || [],
         globalImpactPoints: user.globalImpactPoints,
-        utilityTokens: user.utilityTokens,
+        utilityTokens:
+          (user.fiatBackedUtBalance ?? 0) + (user.earnedUtBalance ?? 0),
         participationRights: user.participationRights,
         sessionId: payload.sessionId,
       };

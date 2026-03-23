@@ -77,9 +77,9 @@ export const PR_CONFIG = {
   MAX_BALANCE: 500,
   MONTHLY_REGEN_BASE: 25,
   ACTIVE_USER_DAYS_THRESHOLD: 30,
-  INACTIVITY_DECAY_THRESHOLD_DAYS: 60,  // days before decay kicks in
-  INACTIVITY_DECAY_RATE: 0.05,          // 5% per month
-  INACTIVITY_DECAY_FLOOR: 100,          // minimum PR after decay
+  INACTIVITY_DECAY_THRESHOLD_DAYS: 60, // days before decay kicks in
+  INACTIVITY_DECAY_RATE: 0.05, // 5% per month
+  INACTIVITY_DECAY_FLOOR: 100, // minimum PR after decay
   LOW_WARNING_THRESHOLD: 20,
 
   // Onboarding rewards (staged)

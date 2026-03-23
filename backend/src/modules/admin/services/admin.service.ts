@@ -476,7 +476,9 @@ class AdminService {
       }),
       prisma.residenceChangeRequest.count({ where: { status: 'PENDING' } }),
       prisma.user.aggregate({ _sum: { participationRights: true } }),
-      prisma.user.aggregate({ _sum: { utilityTokens: true } }),
+      prisma.user.aggregate({
+        _sum: { fiatBackedUtBalance: true, earnedUtBalance: true },
+      }),
     ]);
 
     const verificationBreakdown: Record<string, number> = {};
@@ -499,7 +501,9 @@ class AdminService {
       },
       economy: {
         totalParticipationRights: prAggregate._sum.participationRights ?? 0,
-        totalUtilityTokens: utAggregate._sum.utilityTokens ?? 0,
+        totalUtilityTokens:
+          (utAggregate._sum.fiatBackedUtBalance ?? 0) +
+          (utAggregate._sum.earnedUtBalance ?? 0),
       },
     };
   }

@@ -754,7 +754,7 @@ export const communityApi = {
     description?: string
     avatarUrl?: string
   }) =>
-    apiFetch<unknown>("/community/voluntary/create", {
+    apiFetch<{ id: string; name: string; voluntaryType: string }>("/community/voluntary/create", {
       method: "POST",
       body: JSON.stringify(dto),
     }),
@@ -923,12 +923,14 @@ export const governanceApi = {
 
   getProposals: (params?: {
     groupId?: string
-    status?: string
+    scope?: ProposalScope
+    status?: ProposalStatus
     limit?: number
     offset?: number
   }): Promise<{ proposals: ProposalDto[]; total: number; limit: number; offset: number }> => {
     const q = new URLSearchParams()
     if (params?.groupId) q.set("groupId", params.groupId)
+    if (params?.scope) q.set("scope", params.scope)
     if (params?.status) q.set("status", params.status)
     if (params?.limit) q.set("limit", String(params.limit))
     if (params?.offset) q.set("offset", String(params.offset))

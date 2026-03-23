@@ -15,7 +15,7 @@ import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { governanceApi, type ProposalDto } from "@/lib/api"
+import { governanceApi, type ProposalDto, type ProposalStatus } from "@/lib/api"
 import { useAuth } from "@/contexts/auth-context"
 import {
   Scale,
@@ -143,15 +143,15 @@ export default function GovernancePage() {
     queryKey: ["governance-public", tab],
     queryFn: () =>
       governanceApi.getProposals({
-        scope: "COMMUNITY" as any,
-        status: tab === "ALL" ? undefined : (tab as any),
+        scope: "COMMUNITY",
+        status: tab === "ALL" ? undefined : (tab as ProposalStatus),
         limit: 30,
       }),
     enabled: isAuthenticated,
     staleTime: 30_000,
   })
 
-  const proposals = (data as any)?.proposals ?? []
+  const proposals = data?.proposals ?? []
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-3xl space-y-8">

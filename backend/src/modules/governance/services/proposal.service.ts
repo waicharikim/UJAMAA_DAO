@@ -495,13 +495,15 @@ class ProposalService {
   async listProposals(params: {
     groupId?: string;
     status?: ProposalStatus;
+    scope?: ProposalScope;
     limit?: number;
     offset?: number;
   }) {
-    const { groupId, status, limit = 20, offset = 0 } = params;
+    const { groupId, status, scope, limit = 20, offset = 0 } = params;
     const where = {
       ...(groupId ? { groupId } : {}),
       ...(status ? { status } : {}),
+      ...(scope ? { proposalScope: scope } : {}),
     };
 
     const [proposals, total] = await Promise.all([

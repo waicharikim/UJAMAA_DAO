@@ -54,7 +54,7 @@ export default function CreateGroupPage() {
         voluntaryType: form.voluntaryType,
         description: form.description.trim() || undefined,
       }),
-    onSuccess: (data: any) => {
+    onSuccess: (data) => {
       toast({ title: "Group created", description: "You are now the leader." })
       setCreatedGroup({ id: data.id, name: form.name.trim() })
     },

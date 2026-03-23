@@ -238,7 +238,8 @@ export function toUserResponse(user: any): AuthUserResponse {
     phoneVerified: user.phoneVerified,
     communityVerified: user.communityVerified,
     globalImpactPoints: user.globalImpactPoints,
-    utilityTokens: user.utilityTokens,
+    utilityTokens:
+      (user.fiatBackedUtBalance ?? 0) + (user.earnedUtBalance ?? 0),
     participationRights: user.participationRights,
     roles: user.userRoles?.map((ur: any) => ur.role.name),
     createdAt: user.createdAt,
