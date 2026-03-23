@@ -17,6 +17,8 @@ import {
   Shield,
   X,
   BookOpen,
+  ScrollText,
+  Trophy,
 } from "lucide-react"
 import {
   Drawer,
@@ -28,12 +30,14 @@ import {
 const primaryNav = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Governance", href: "/proposals", icon: Vote },
-  { label: "Projects", href: "/projects", icon: Briefcase },
+  { label: "Elections", href: "/elections", icon: ScrollText },
   { label: "Community", href: "/groups", icon: Users },
 ]
 
 const drawerNav = [
+  { label: "Projects", href: "/projects", icon: Briefcase },
   { label: "Learn", href: "/education", icon: BookOpen },
+  { label: "Leaderboard", href: "/leaderboard", icon: Trophy },
   { label: "Marketplace", href: "/marketplace", icon: Store },
   { label: "Treasury", href: "/treasury", icon: Landmark },
   { label: "Profile", href: "/profile", icon: User },

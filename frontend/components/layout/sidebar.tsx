@@ -20,11 +20,14 @@ import {
   ChevronRight,
   BookOpen,
   AlertTriangle,
+  Trophy,
+  ScrollText,
 } from "lucide-react"
 
 const primaryNav = [
   { label: "Dashboard",  href: "/dashboard",  icon: LayoutDashboard },
   { label: "Governance", href: "/proposals",  icon: Vote },
+  { label: "Elections",  href: "/elections",  icon: ScrollText },
   { label: "Projects",   href: "/projects",   icon: Briefcase },
   { label: "Community",  href: "/groups",     icon: Users },
   { label: "Learn",      href: "/education",  icon: BookOpen },
@@ -32,6 +35,7 @@ const primaryNav = [
 ]
 
 const secondaryNav = [
+  { label: "Leaderboard", href: "/leaderboard", icon: Trophy },
   { label: "Marketplace", href: "/marketplace", icon: Store },
   { label: "Treasury",    href: "/treasury",    icon: Landmark },
   { label: "Profile",     href: "/profile",     icon: User },

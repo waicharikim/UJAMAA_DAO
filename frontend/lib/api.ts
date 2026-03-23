@@ -1784,3 +1784,160 @@ export const feedApi = {
   getFeed: (cursor?: string): Promise<FeedPageDto> =>
     apiFetch<FeedPageDto>(`/feed${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`),
 }
+
+// ─────────────────────────────────────────────────────────
+// Elections API  — /api/v1/elections
+// ─────────────────────────────────────────────────────────
+
+export type ElectionStatus = "PENDING" | "NOMINATIONS_OPEN" | "VOTING_OPEN" | "CLOSED"
+export type ElectionScope = "GROUP" | "SYSTEM"
+
+export interface ElectionCandidateDto {
+  id: string
+  userId: string
+  userName: string
+  avatarUrl?: string
+  statement?: string
+  totalWeight: number
+  voteCount: number
+  withdrawnAt?: string
+}
+
+export interface ElectionSummaryDto {
+  id: string
+  roleKey: string
+  scope: ElectionScope
+  groupId?: string
+  groupName?: string
+  countyId?: string
+  status: ElectionStatus
+  nominationsOpenAt: string
+  nominationsCloseAt: string
+  votingOpenAt: string
+  votingCloseAt: string
+  candidateCount: number
+  totalVoteWeight: number
+  quorumReached: boolean
+  winnerId?: string
+  winnerName?: string
+  myVotedCandidateId?: string
+  myNominationId?: string
+}
+
+export interface ElectionDetailDto extends ElectionSummaryDto {
+  candidates: ElectionCandidateDto[]
+}
+
+export const electionsApi = {
+  listElections: (params?: {
+    groupId?: string
+    countyId?: string
+    scope?: ElectionScope
+    status?: ElectionStatus
+    page?: number
+    limit?: number
+  }): Promise<{ elections: ElectionSummaryDto[]; total: number; page: number; limit: number }> => {
+    const q = new URLSearchParams()
+    if (params?.groupId) q.set("groupId", params.groupId)
+    if (params?.countyId) q.set("countyId", params.countyId)
+    if (params?.scope) q.set("scope", params.scope)
+    if (params?.status) q.set("status", params.status)
+    if (params?.page) q.set("page", String(params.page))
+    if (params?.limit) q.set("limit", String(params.limit))
+    const qs = q.toString()
+    return apiFetch(`/elections${qs ? `?${qs}` : ""}`)
+  },
+
+  getMyElections: (): Promise<{ elections: ElectionSummaryDto[] }> =>
+    apiFetch("/elections/mine"),
+
+  getElection: (electionId: string): Promise<ElectionDetailDto> =>
+    apiFetch<ElectionDetailDto>(`/elections/${electionId}`),
+
+  nominate: (electionId: string, statement?: string) =>
+    apiFetch<{ id: string; userId: string; electionId: string }>(`/elections/${electionId}/nominate`, {
+      method: "POST",
+      body: JSON.stringify({ statement }),
+    }),
+
+  withdrawNomination: (electionId: string) =>
+    apiFetch<{ withdrawnAt: string }>(`/elections/${electionId}/nomination`, {
+      method: "DELETE",
+    }),
+
+  castVote: (electionId: string, candidateId: string) =>
+    apiFetch<{ id: string; electionId: string; candidateId: string }>(`/elections/${electionId}/vote`, {
+      method: "POST",
+      body: JSON.stringify({ candidateId }),
+    }),
+}
+
+// ─────────────────────────────────────────────────────────
+// UT Withdrawal API  — /api/v1/economy/ut
+// ─────────────────────────────────────────────────────────
+
+export interface UtWithdrawalDto {
+  id: string
+  amountKes: number
+  mpesaPhone: string
+  status: "PENDING" | "COMPLETED" | "FAILED"
+  completedAt: string | null
+  failureNote: string | null
+  createdAt: string
+}
+
+export const utWithdrawalApi = {
+  withdraw: (dto: { amountKes: number; mpesaPhone: string }) =>
+    apiFetch<{ id: string; status: string }>("/economy/ut/withdraw", {
+      method: "POST",
+      body: JSON.stringify(dto),
+    }),
+
+  getWithdrawals: (): Promise<{
+    withdrawals: UtWithdrawalDto[]
+    balances: { fiatBackedUtBalance: number; earnedUtBalance: number; utilityTokens: number }
+  }> =>
+    apiFetch("/economy/ut/withdrawals"),
+}
+
+// ─────────────────────────────────────────────────────────
+// Leaderboard (extends reputationApi)
+// ─────────────────────────────────────────────────────────
+
+export interface LeaderboardEntryDto {
+  rank: number
+  userId: string
+  name: string
+  avatarUrl?: string
+  participationRights: number
+  globalImpactPoints: number
+  combinedScore: number
+  ward: { id: string; name: string } | null
+  county: { id: string; name: string } | null
+}
+
+export const leaderboardApi = {
+  getLeaderboard: (params?: {
+    metric?: "pr" | "ip" | "combined"
+    scope?: "global" | "county" | "ward"
+    scopeId?: string
+    page?: number
+    limit?: number
+  }): Promise<{
+    entries: LeaderboardEntryDto[]
+    total: number
+    page: number
+    limit: number
+    metric: string
+    scope: string
+  }> => {
+    const q = new URLSearchParams()
+    if (params?.metric) q.set("metric", params.metric)
+    if (params?.scope) q.set("scope", params.scope)
+    if (params?.scopeId) q.set("scopeId", params.scopeId)
+    if (params?.page) q.set("page", String(params.page))
+    if (params?.limit) q.set("limit", String(params.limit))
+    const qs = q.toString()
+    return apiFetch(`/reputation/leaderboard${qs ? `?${qs}` : ""}`)
+  },
+}

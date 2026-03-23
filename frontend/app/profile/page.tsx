@@ -9,6 +9,7 @@ import { Award, Coins, Users, MapPin, History } from "lucide-react"
 import { reputationApi, type WardReputationBreakdownDto, type ImpactPointLogDto } from "@/lib/api"
 import { VerificationCard } from "@/components/profile/verification-card"
 import { DuesPaymentCard } from "@/components/payments/dues-payment-card"
+import { UtWithdrawalCard } from "@/components/payments/ut-withdrawal-card"
 
 function StatCard({
   label,
@@ -171,6 +172,9 @@ export default function ProfilePage() {
         ? <DuesPaymentCard />
         : null
       }
+
+      {/* UT withdrawal */}
+      <UtWithdrawalCard />
 
       {/* Ward reputation breakdown */}
       <Card className="border-0 shadow-card">

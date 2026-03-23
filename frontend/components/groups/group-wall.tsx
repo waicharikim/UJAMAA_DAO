@@ -3,10 +3,10 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useQuery } from "@tanstack/react-query"
-import { governanceApi, projectApi, type ProposalDto, type ProjectListItemDto } from "@/lib/api"
+import { governanceApi, projectApi, electionsApi, type ProposalDto, type ProjectListItemDto, type ElectionSummaryDto } from "@/lib/api"
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Vote, Briefcase, ArrowUpRight, CheckCircle2, Clock, XCircle, Circle } from "lucide-react"
+import { Vote, Briefcase, ArrowUpRight, CheckCircle2, Clock, XCircle, Circle, ScrollText, Users, CalendarDays } from "lucide-react"
 import { formatDate } from "@/lib/utils"
 
 // ── Status config ─────────────────────────────────────────
@@ -135,6 +135,51 @@ function ProjectCard({ project }: { project: ProjectListItemDto }) {
   )
 }
 
+// ── Election card ─────────────────────────────────────────
+
+function ElectionCard({ election }: { election: ElectionSummaryDto }) {
+  const statusColor =
+    election.status === "VOTING_OPEN"
+      ? "#C9922A"
+      : election.status === "NOMINATIONS_OPEN"
+      ? "#2A7A4B"
+      : "#888"
+
+  return (
+    <Link href={`/elections/${election.id}`} className="block group">
+      <div className="bg-white rounded-xl border border-black/[0.06] p-4 hover:border-black/[0.12] hover:shadow-sm transition-all duration-150">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-[#0E0B08] leading-snug line-clamp-2 group-hover:text-[#1D4731] transition-colors">
+              {election.roleKey.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())}
+            </p>
+          </div>
+          <ArrowUpRight className="h-3.5 w-3.5 flex-shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: "#1D4731" }} />
+        </div>
+
+        <div className="flex items-center gap-3 mt-3 flex-wrap text-[10px]">
+          <span
+            className="font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
+            style={{ color: statusColor, background: `${statusColor}22` }}
+          >
+            {election.status.replace(/_/g, " ")}
+          </span>
+          <span className="flex items-center gap-1 text-[#7A6E60]">
+            <Users className="h-2.5 w-2.5" />
+            {election.candidateCount} candidate{election.candidateCount !== 1 ? "s" : ""}
+          </span>
+          {election.status === "VOTING_OPEN" && (
+            <span className="flex items-center gap-1 text-[#7A6E60] ml-auto">
+              <CalendarDays className="h-2.5 w-2.5" />
+              Closes {formatDate(election.votingCloseAt)}
+            </span>
+          )}
+        </div>
+      </div>
+    </Link>
+  )
+}
+
 // ── Empty state ───────────────────────────────────────────
 
 function Empty({ label }: { label: string }) {
@@ -163,7 +208,7 @@ function WallSkeleton() {
 
 // ── Main component ────────────────────────────────────────
 
-type Tab = "proposals" | "projects"
+type Tab = "proposals" | "projects" | "elections"
 
 interface GroupWallProps {
   groupId: string
@@ -190,12 +235,23 @@ export function GroupWall({ groupId }: GroupWallProps) {
     staleTime: 30_000,
   })
 
+  const {
+    data: electionsData,
+    isLoading: loadingElections,
+  } = useQuery({
+    queryKey: ["group-elections", groupId],
+    queryFn: () => electionsApi.listElections({ groupId, limit: 20 }),
+    staleTime: 30_000,
+  })
+
   const proposals = proposalsData?.proposals ?? []
   const projects = projectsData?.projects ?? []
+  const elections = electionsData?.elections ?? []
 
   const tabs: { id: Tab; Icon: React.ElementType; label: string; count: number | null }[] = [
-    { id: "proposals", Icon: Vote,     label: "Proposals", count: proposalsData?.total ?? null },
-    { id: "projects",  Icon: Briefcase, label: "Projects",  count: projectsData?.total ?? null  },
+    { id: "proposals", Icon: Vote,       label: "Proposals", count: proposalsData?.total ?? null },
+    { id: "projects",  Icon: Briefcase,  label: "Projects",  count: projectsData?.total ?? null  },
+    { id: "elections", Icon: ScrollText, label: "Elections", count: electionsData?.total ?? null  },
   ]
 
   return (
@@ -254,6 +310,18 @@ export function GroupWall({ groupId }: GroupWallProps) {
             {!loadingProjects && projects.length > 0 && (
               <div className="space-y-3">
                 {projects.map((p) => <ProjectCard key={p.id} project={p} />)}
+              </div>
+            )}
+          </>
+        )}
+
+        {tab === "elections" && (
+          <>
+            {loadingElections && <WallSkeleton />}
+            {!loadingElections && elections.length === 0 && <Empty label="elections" />}
+            {!loadingElections && elections.length > 0 && (
+              <div className="space-y-3">
+                {elections.map((e) => <ElectionCard key={e.id} election={e} />)}
               </div>
             )}
           </>
