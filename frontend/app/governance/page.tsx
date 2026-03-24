@@ -178,10 +178,11 @@ export default function GovernancePage() {
     { key: "cost_blockchain_gas", label: configEntries?.find(c => c.key === "cost_blockchain_gas")?.label ?? "Blockchain gas (Base Sepolia → Base)",   Icon: TrendingUp },
   ]
 
+  // ADR-034: dues earn UT only (1:1 KES). PR comes from participation.
   const tiers = [
-    { tier: "Ordinary",  kesKey: "tier_ordinary_kes",  prKey: "tier_ordinary_pr",  defaultKes: 60,   defaultPr: 100 },
-    { tier: "Supporter", kesKey: "tier_supporter_kes", prKey: "tier_supporter_pr", defaultKes: 200,  defaultPr: 200 },
-    { tier: "Sponsor",   kesKey: "tier_sponsor_kes",   prKey: "tier_sponsor_pr",   defaultKes: 1_000, defaultPr: 500 },
+    { tier: "Ordinary",  kesKey: "tier_ordinary_kes",  defaultKes: 60 },
+    { tier: "Supporter", kesKey: "tier_supporter_kes", defaultKes: 200 },
+    { tier: "Sponsor",   kesKey: "tier_sponsor_kes",   defaultKes: 1_000 },
   ]
 
   return (
@@ -318,9 +319,8 @@ export default function GovernancePage() {
               How members cover costs (dues tiers)
             </p>
             <div className="grid grid-cols-3 gap-2">
-              {tiers.map(({ tier, kesKey, prKey, defaultKes, defaultPr }) => {
+              {tiers.map(({ tier, kesKey, defaultKes }) => {
                 const kes = cfg(kesKey, defaultKes)
-                const pr = cfg(prKey, defaultPr)
                 const total = costs.reduce((sum, { key }) => sum + cfg(key, 0), 0)
                 const needed = kes > 0 ? Math.ceil(total / kes) : 0
                 return (
@@ -333,7 +333,7 @@ export default function GovernancePage() {
                       {tier}
                     </p>
                     <p className="text-base font-bold text-[#0A1F14]">KES {kes}</p>
-                    <p className="text-[10px] text-[#7A6E60]">+{pr} PR/month</p>
+                    <p className="text-[10px] text-[#7A6E60]">+{kes} UT/month</p>
                     <p className="text-[10px] text-[#0A1F14]/40">{needed} members<br/>to break even</p>
                   </div>
                 )

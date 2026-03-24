@@ -1813,17 +1813,12 @@ async function seedPlatformConfig() {
       label: 'Blockchain gas (Base Sepolia → Base)',
       category: 'cost',
     },
-    // Dues tiers (KES per month)
+    // Dues tiers — KES per month only (ADR-034: dues earn UT, not PR)
+    // UT earned = KES paid (1:1). PR comes from participation only.
     {
       key: 'tier_ordinary_kes',
       value: '60',
       label: 'Ordinary tier — monthly dues (KES)',
-      category: 'tier',
-    },
-    {
-      key: 'tier_ordinary_pr',
-      value: '100',
-      label: 'Ordinary tier — PR awarded per month',
       category: 'tier',
     },
     {
@@ -1833,21 +1828,9 @@ async function seedPlatformConfig() {
       category: 'tier',
     },
     {
-      key: 'tier_supporter_pr',
-      value: '200',
-      label: 'Supporter tier — PR awarded per month',
-      category: 'tier',
-    },
-    {
       key: 'tier_sponsor_kes',
       value: '1000',
       label: 'Sponsor tier — monthly dues (KES)',
-      category: 'tier',
-    },
-    {
-      key: 'tier_sponsor_pr',
-      value: '500',
-      label: 'Sponsor tier — PR awarded per month',
       category: 'tier',
     },
   ];

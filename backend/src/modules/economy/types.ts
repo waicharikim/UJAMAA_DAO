@@ -52,20 +52,21 @@ export enum ParticipationRightsReason {
 }
 
 export enum DuesTier {
-  ORDINARY = 'ORDINARY', // 60 KES → +100 PR + UT
-  SUPPORTER = 'SUPPORTER', // 200 KES → +200 PR + UT
-  SPONSOR = 'SPONSOR', // 1000 KES → +500 PR + UT
+  ORDINARY = 'ORDINARY', // 60 KES → +60 UT (fiat-backed, 1:1 KES)
+  SUPPORTER = 'SUPPORTER', // 200 KES → +200 UT
+  SPONSOR = 'SPONSOR', // 1000 KES → +1000 UT
 }
 
+// ADR-034: Dues earn UT only — not PR.
+// Financial contribution supports platform sustainability; governance power (PR)
+// comes exclusively from participation: barazas, votes, education, projects.
 export const DUES_CONFIG = {
   TIERS: {
-    [DuesTier.ORDINARY]: { amountKes: 60, prReward: 100 },
-    [DuesTier.SUPPORTER]: { amountKes: 200, prReward: 200 },
-    [DuesTier.SPONSOR]: { amountKes: 1000, prReward: 500 },
+    [DuesTier.ORDINARY]: { amountKes: 60 },
+    [DuesTier.SUPPORTER]: { amountKes: 200 },
+    [DuesTier.SPONSOR]: { amountKes: 1000 },
   },
   GRACE_DAYS: 30,
-  // No automatic penalties — dues are fully optional
-  // Penalties only apply to explicit opt-in commitments (e.g. role/group agreements)
 } as const;
 
 export enum PRTransactionType {

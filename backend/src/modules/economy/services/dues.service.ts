@@ -61,17 +61,7 @@ class DuesService {
           },
         });
 
-        // Award PR
-        await participationRightsService.award(
-          userId,
-          tierConfig.prReward,
-          ParticipationRightsReason[
-            `DUES_${tier}` as keyof typeof ParticipationRightsReason
-          ],
-          { period, tier, amountKes }
-        );
-
-        // Award UT (1:1 KES to UT)
+        // Award UT (1:1 KES to UT — ADR-034: dues earn UT only, not PR)
         await tx.user.update({
           where: { id: userId },
           data: { fiatBackedUtBalance: { increment: amountKes } },
@@ -91,8 +81,8 @@ class DuesService {
         });
 
         logger.info(
-          { userId, tier, amountKes, period, prReward: tierConfig.prReward },
-          '[DUES] Payment recorded — UT + PR awarded'
+          { userId, tier, amountKes, period },
+          '[DUES] Payment recorded — UT awarded'
         );
 
         return record;
@@ -104,7 +94,7 @@ class DuesService {
       AuditAction.DUES_PAID,
       'dues_payment',
       payment.id,
-      { tier, amountKes, period, prReward: tierConfig.prReward, mpesaReceipt }
+      { tier, amountKes, period, mpesaReceipt }
     );
 
     // Allocate dues to ward group treasury (non-critical — catch any error so payment is unaffected)
