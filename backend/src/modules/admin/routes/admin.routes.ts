@@ -56,6 +56,7 @@ import {
   listUserRoles,
   generateReport,
 } from '../handlers/admin.handlers.js';
+import { adminService } from '../services/admin.service.js';
 
 const router = Router();
 
@@ -236,6 +237,31 @@ router.get(
   validateRequest({ schema: reportTypeParamSchema, target: 'params' }),
   validateRequest({ schema: reportQuerySchema, target: 'query' }),
   asyncHandler(generateReport)
+);
+
+// ============================================================================
+// PLATFORM CONFIG — admin mutation only (public read is in platform-config.routes.ts)
+// ============================================================================
+
+router.put(
+  '/platform-config/:key',
+  authorize({ allowedRoles: [SystemRoles.SUPER_ADMIN] }),
+  buildRateLimiter({ windowMs: 15 * 60 * 1000, max: 30 }),
+  asyncHandler(async (req, res) => {
+    const { key } = req.params as { key: string };
+    const { value } = req.body as { value: string };
+    if (!value || typeof value !== 'string' || value.trim().length === 0) {
+      res.status(400).json({ error: 'value is required' });
+      return;
+    }
+    const adminId = (req as any).user?.id as string;
+    const updated = await adminService.upsertPlatformConfig(
+      key,
+      value.trim(),
+      adminId
+    );
+    res.json(updated);
+  })
 );
 
 export default router;

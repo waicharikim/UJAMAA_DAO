@@ -72,6 +72,7 @@ import integrationRoutes from './modules/integration/routes/bot.routes.js';
 import treasuryRoutes from './modules/treasury/routes/treasury.routes.js';
 import paymentRoutes from './modules/payments/routes/payment.routes.js';
 import electionRoutes from './modules/elections/routes/election.routes.js';
+import platformConfigRoutes from './modules/admin/routes/platform-config.routes.js';
 
 // Bull Board dashboard
 import { ExpressAdapter } from '@bull-board/express';
@@ -295,6 +296,7 @@ app.use('/api/v1/education', educationRoutes);
 app.use('/api/v1/integration', integrationRoutes);
 app.use('/api/v1/treasury', treasuryRoutes);
 app.use('/api/v1/payments', paymentRoutes);
+app.use('/api/v1/platform-config', platformConfigRoutes);
 
 // ─────────────────────────────────────────────
 // BULL BOARD DASHBOARD — Visual queue monitoring

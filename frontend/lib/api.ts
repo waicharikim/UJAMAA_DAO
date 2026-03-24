@@ -1992,6 +1992,27 @@ export interface ConflictCaseDto {
   respondent:  { id: string; name: string }
 }
 
+// ── Platform Config ─────────────────────────────────────────────────────────
+
+export interface PlatformConfigDto {
+  key: string
+  value: string
+  label: string
+  category: string
+  updatedAt: string
+}
+
+export const platformConfigApi = {
+  getAll: (): Promise<PlatformConfigDto[]> =>
+    apiFetch<PlatformConfigDto[]>("/platform-config"),
+
+  update: (key: string, value: string): Promise<PlatformConfigDto> =>
+    apiFetch<PlatformConfigDto>(`/admin/platform-config/${key}`, {
+      method: "PUT",
+      body: JSON.stringify({ value }),
+    }),
+}
+
 export const conflictApi = {
   fileConflict: (dto: {
     respondentId: string

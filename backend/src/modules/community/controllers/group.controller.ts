@@ -125,7 +125,11 @@ export class GroupController {
     const userId = req.user!.userId;
     const { groupId } = req.params;
     const { reason } = req.body;
-    const result = await groupService.dissolveGroup(userId, groupId, reason ?? '');
+    const result = await groupService.dissolveGroup(
+      userId,
+      groupId,
+      reason ?? ''
+    );
     sendSuccess(res, result, 'Group dissolved');
   }
 }

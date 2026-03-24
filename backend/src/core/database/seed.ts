@@ -1780,12 +1780,97 @@ All votes, proposal texts, and results are stored immutably. No administrator ca
 }
 
 // ============================================================================
+// ============================================================================
+// PLATFORM CONFIG SEED
+// ============================================================================
+
+async function seedPlatformConfig() {
+  console.log('\n📊 Seeding platform configuration...');
+
+  const entries = [
+    // Monthly operating costs
+    {
+      key: 'cost_infrastructure',
+      value: '8500',
+      label: 'Infrastructure (servers, DB, storage)',
+      category: 'cost',
+    },
+    {
+      key: 'cost_sms',
+      value: '3200',
+      label: "SMS verification (Africa's Talking)",
+      category: 'cost',
+    },
+    {
+      key: 'cost_mpesa_fees',
+      value: '1800',
+      label: 'M-Pesa API fees (~1.5% on dues)',
+      category: 'cost',
+    },
+    {
+      key: 'cost_blockchain_gas',
+      value: '1200',
+      label: 'Blockchain gas (Base Sepolia → Base)',
+      category: 'cost',
+    },
+    // Dues tiers (KES per month)
+    {
+      key: 'tier_ordinary_kes',
+      value: '60',
+      label: 'Ordinary tier — monthly dues (KES)',
+      category: 'tier',
+    },
+    {
+      key: 'tier_ordinary_pr',
+      value: '100',
+      label: 'Ordinary tier — PR awarded per month',
+      category: 'tier',
+    },
+    {
+      key: 'tier_supporter_kes',
+      value: '200',
+      label: 'Supporter tier — monthly dues (KES)',
+      category: 'tier',
+    },
+    {
+      key: 'tier_supporter_pr',
+      value: '200',
+      label: 'Supporter tier — PR awarded per month',
+      category: 'tier',
+    },
+    {
+      key: 'tier_sponsor_kes',
+      value: '1000',
+      label: 'Sponsor tier — monthly dues (KES)',
+      category: 'tier',
+    },
+    {
+      key: 'tier_sponsor_pr',
+      value: '500',
+      label: 'Sponsor tier — PR awarded per month',
+      category: 'tier',
+    },
+  ];
+
+  for (const entry of entries) {
+    await prisma.platformConfig.upsert({
+      where: { key: entry.key },
+      update: { label: entry.label },
+      create: entry,
+    });
+  }
+
+  console.log(`   Seeded ${entries.length} platform config entries`);
+}
+
+// ============================================================================
 // MAIN SEED EXECUTION
 // ============================================================================
 
 async function main() {
   try {
     await seedSystemConfiguration();
+    await seedPlatformConfig();
     await seedIndustriesAndGoods();
     await seedGeography();
     await seedSystemGroups();

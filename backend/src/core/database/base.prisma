@@ -312,6 +312,7 @@ model User {
 
   // ---- System ----
   updatedConfigs            SystemConfiguration[]  @relation("ConfigUpdater")
+  platformConfigUpdates     PlatformConfig[]       @relation("PlatformConfigUpdates")
 
   @@index([email])
   @@index([walletAddress])

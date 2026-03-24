@@ -19,8 +19,8 @@ router.post(
   validateRequest({
     schema: z.object({
       respondentId: z.string().uuid(),
-      description:  z.string().min(20).max(2000),
-      evidence:     z.array(z.string()).max(5).optional(),
+      description: z.string().min(20).max(2000),
+      evidence: z.array(z.string()).max(5).optional(),
     }),
     target: 'body',
   }),

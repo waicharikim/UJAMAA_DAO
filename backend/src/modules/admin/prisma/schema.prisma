@@ -1,0 +1,17 @@
+// ============================================================================
+// MODULE: PLATFORM CONFIG
+// Key/value store for platform operational settings (costs, dues tiers, etc.)
+// ============================================================================
+
+model PlatformConfig {
+  key         String   @id @db.VarChar(100)
+  value       String   @db.VarChar(500)
+  label       String   @db.VarChar(200)
+  category    String   @db.VarChar(50)
+  updatedAt   DateTime @updatedAt
+  updatedById String?  @db.Uuid
+
+  updatedBy   User?    @relation("PlatformConfigUpdates", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@map("platform_config")
+}

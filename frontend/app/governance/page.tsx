@@ -15,7 +15,7 @@ import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { governanceApi, type ProposalDto, type ProposalStatus } from "@/lib/api"
+import { governanceApi, platformConfigApi, type ProposalDto, type ProposalStatus } from "@/lib/api"
 import { useAuth } from "@/contexts/auth-context"
 import {
   Scale,
@@ -156,7 +156,33 @@ export default function GovernancePage() {
     staleTime: 30_000,
   })
 
+  const { data: configEntries } = useQuery({
+    queryKey: ["platform-config"],
+    queryFn: platformConfigApi.getAll,
+    enabled: isAuthenticated,
+    staleTime: 5 * 60_000,
+  })
+
   const proposals = data?.proposals ?? []
+
+  // Build lookup helpers from live config
+  const cfg = (key: string, fallback: number) => {
+    const entry = configEntries?.find((c) => c.key === key)
+    return entry ? parseInt(entry.value, 10) : fallback
+  }
+
+  const costs = [
+    { key: "cost_infrastructure", label: configEntries?.find(c => c.key === "cost_infrastructure")?.label ?? "Infrastructure (servers, DB, storage)", Icon: Server },
+    { key: "cost_sms",            label: configEntries?.find(c => c.key === "cost_sms")?.label ?? "SMS verification (Africa's Talking)",      Icon: MessageSquare },
+    { key: "cost_mpesa_fees",     label: configEntries?.find(c => c.key === "cost_mpesa_fees")?.label ?? "M-Pesa API fees (~1.5% on dues)",         Icon: Banknote },
+    { key: "cost_blockchain_gas", label: configEntries?.find(c => c.key === "cost_blockchain_gas")?.label ?? "Blockchain gas (Base Sepolia → Base)",   Icon: TrendingUp },
+  ]
+
+  const tiers = [
+    { tier: "Ordinary",  kesKey: "tier_ordinary_kes",  prKey: "tier_ordinary_pr",  defaultKes: 60,   defaultPr: 100 },
+    { tier: "Supporter", kesKey: "tier_supporter_kes", prKey: "tier_supporter_pr", defaultKes: 200,  defaultPr: 200 },
+    { tier: "Sponsor",   kesKey: "tier_sponsor_kes",   prKey: "tier_sponsor_pr",   defaultKes: 1_000, defaultPr: 500 },
+  ]
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-3xl space-y-8">
@@ -258,22 +284,20 @@ export default function GovernancePage() {
               Estimated monthly costs
             </p>
             <div className="space-y-2">
-              {[
-                { Icon: Server,       label: "Infrastructure (servers, DB, storage)", kes: 8_500 },
-                { Icon: MessageSquare,label: "SMS verification (Africa's Talking)",    kes: 3_200 },
-                { Icon: Banknote,     label: "M-Pesa API fees (~1.5% on dues)",        kes: 1_800 },
-                { Icon: TrendingUp,   label: "Blockchain gas (Base Sepolia → Base)",   kes: 1_200 },
-              ].map(({ Icon, label, kes }) => (
-                <div key={label} className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <Icon className="h-3.5 w-3.5 flex-shrink-0 text-[#7A6E60]" />
-                    <span className="text-xs text-[#0A1F14]/70">{label}</span>
+              {costs.map(({ key, label, Icon }) => {
+                const kes = cfg(key, 0)
+                return (
+                  <div key={key} className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <Icon className="h-3.5 w-3.5 flex-shrink-0 text-[#7A6E60]" />
+                      <span className="text-xs text-[#0A1F14]/70">{label}</span>
+                    </div>
+                    <span className="text-xs font-semibold text-[#0A1F14] flex-shrink-0 tabular-nums">
+                      KES {kes.toLocaleString()}
+                    </span>
                   </div>
-                  <span className="text-xs font-semibold text-[#0A1F14] flex-shrink-0 tabular-nums">
-                    KES {kes.toLocaleString()}
-                  </span>
-                </div>
-              ))}
+                )
+              })}
 
               {/* Total */}
               <div
@@ -281,7 +305,9 @@ export default function GovernancePage() {
                 style={{ borderTop: "1px solid rgba(14,11,8,0.08)" }}
               >
                 <span className="text-xs font-bold text-[#0A1F14]">Total / month</span>
-                <span className="text-xs font-bold text-[#C9922A] tabular-nums">KES 14,700</span>
+                <span className="text-xs font-bold text-[#C9922A] tabular-nums">
+                  KES {costs.reduce((sum, { key }) => sum + cfg(key, 0), 0).toLocaleString()}
+                </span>
               </div>
             </div>
           </div>
@@ -292,24 +318,26 @@ export default function GovernancePage() {
               How members cover costs (dues tiers)
             </p>
             <div className="grid grid-cols-3 gap-2">
-              {[
-                { tier: "Ordinary", kes: 60,   pr: 100, needed: 245 },
-                { tier: "Supporter",kes: 200,  pr: 200, needed: 74  },
-                { tier: "Sponsor",  kes: 1_000, pr: 500, needed: 15  },
-              ].map(({ tier, kes, pr, needed }) => (
-                <div
-                  key={tier}
-                  className="rounded-xl p-3 space-y-1.5 text-center"
-                  style={{ background: "rgba(201,146,42,0.06)", border: "1px solid rgba(201,146,42,0.12)" }}
-                >
-                  <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#C9922A" }}>
-                    {tier}
-                  </p>
-                  <p className="text-base font-bold text-[#0A1F14]">KES {kes}</p>
-                  <p className="text-[10px] text-[#7A6E60]">+{pr} PR/month</p>
-                  <p className="text-[10px] text-[#0A1F14]/40">{needed} members<br/>to break even</p>
-                </div>
-              ))}
+              {tiers.map(({ tier, kesKey, prKey, defaultKes, defaultPr }) => {
+                const kes = cfg(kesKey, defaultKes)
+                const pr = cfg(prKey, defaultPr)
+                const total = costs.reduce((sum, { key }) => sum + cfg(key, 0), 0)
+                const needed = kes > 0 ? Math.ceil(total / kes) : 0
+                return (
+                  <div
+                    key={tier}
+                    className="rounded-xl p-3 space-y-1.5 text-center"
+                    style={{ background: "rgba(201,146,42,0.06)", border: "1px solid rgba(201,146,42,0.12)" }}
+                  >
+                    <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#C9922A" }}>
+                      {tier}
+                    </p>
+                    <p className="text-base font-bold text-[#0A1F14]">KES {kes}</p>
+                    <p className="text-[10px] text-[#7A6E60]">+{pr} PR/month</p>
+                    <p className="text-[10px] text-[#0A1F14]/40">{needed} members<br/>to break even</p>
+                  </div>
+                )
+              })}
             </div>
           </div>
 

@@ -841,6 +841,26 @@ class AdminService {
       rows,
     };
   }
+  // ============================================================================
+  // PLATFORM CONFIG
+  // ============================================================================
+
+  async getAllPlatformConfig() {
+    return prisma.platformConfig.findMany({
+      orderBy: [{ category: 'asc' }, { key: 'asc' }],
+    });
+  }
+
+  async upsertPlatformConfig(key: string, value: string, adminId: string) {
+    const existing = await prisma.platformConfig.findUnique({ where: { key } });
+    if (!existing) {
+      throw new ApiError(`Config key "${key}" not found`, 404);
+    }
+    return prisma.platformConfig.update({
+      where: { key },
+      data: { value, updatedById: adminId },
+    });
+  }
 }
 
 export const adminService = new AdminService();

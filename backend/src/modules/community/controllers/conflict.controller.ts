@@ -37,7 +37,11 @@ export class ConflictController {
     const actorId = req.user!.userId;
     const { caseId } = req.params;
     const { resolution } = req.body;
-    const result = await conflictService.resolveCase(actorId, caseId, resolution);
+    const result = await conflictService.resolveCase(
+      actorId,
+      caseId,
+      resolution
+    );
     sendSuccess(res, result, 'Case resolved');
   }
 }

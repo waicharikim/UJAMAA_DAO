@@ -50,7 +50,11 @@ class ConflictService {
     });
 
     logger.info(
-      { complainantId, respondentId: dto.respondentId, conflictId: conflict.id },
+      {
+        complainantId,
+        respondentId: dto.respondentId,
+        conflictId: conflict.id,
+      },
       'Conflict case filed'
     );
 
@@ -94,7 +98,7 @@ class ConflictService {
       where: { id: caseId },
       include: {
         complainant: { select: { id: true, name: true } },
-        respondent:  { select: { id: true, name: true } },
+        respondent: { select: { id: true, name: true } },
       },
     });
 
@@ -109,11 +113,7 @@ class ConflictService {
   /**
    * Resolve a conflict case (admin or assigned mediator only).
    */
-  async resolveCase(
-    actorId: string,
-    caseId: string,
-    resolution: string
-  ) {
+  async resolveCase(actorId: string, caseId: string, resolution: string) {
     const conflict = await prisma.conflictCase.findUnique({
       where: { id: caseId },
     });

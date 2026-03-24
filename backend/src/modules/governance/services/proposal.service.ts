@@ -554,15 +554,21 @@ class ProposalService {
     });
     if (!proposal) throw ApiError.notFound('Proposal');
     if (proposal.creatorId !== userId)
-      throw ApiError.forbidden('Only the proposal creator can update memory fields');
+      throw ApiError.forbidden(
+        'Only the proposal creator can update memory fields'
+      );
     if (!['DRAFT', 'PENDING_REVIEW'].includes(proposal.status as string))
-      throw ApiError.badRequest('Memory fields can only be updated before voting begins');
+      throw ApiError.badRequest(
+        'Memory fields can only be updated before voting begins'
+      );
 
     return prisma.proposal.update({
       where: { id: proposalId },
       data: {
         ...(dto.rationale !== undefined && { rationale: dto.rationale }),
-        ...(dto.alternatives !== undefined && { alternatives: dto.alternatives }),
+        ...(dto.alternatives !== undefined && {
+          alternatives: dto.alternatives,
+        }),
       },
       select: { id: true, rationale: true, alternatives: true },
     });
@@ -582,17 +588,26 @@ class ProposalService {
     // Check it passed
     const passedStatuses = ['PASSED', 'EXECUTING', 'COMPLETED'];
     if (!passedStatuses.includes(proposal.status as string))
-      throw ApiError.badRequest('Outcome can only be recorded for passed proposals');
+      throw ApiError.badRequest(
+        'Outcome can only be recorded for passed proposals'
+      );
 
     // Check caller is creator or group leader
     const isCreator = proposal.creatorId === userId;
     const isLeader = proposal.groupId
       ? !!(await prisma.groupMember.findFirst({
-          where: { userId, groupId: proposal.groupId, role: 'LEADER', active: true },
+          where: {
+            userId,
+            groupId: proposal.groupId,
+            role: 'LEADER',
+            active: true,
+          },
         }))
       : false;
     if (!isCreator && !isLeader)
-      throw ApiError.forbidden('Only the proposal creator or group leader can record outcomes');
+      throw ApiError.forbidden(
+        'Only the proposal creator or group leader can record outcomes'
+      );
 
     return prisma.proposal.update({
       where: { id: proposalId },

@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
 import { Settings, Shield, DollarSign, Bell, Globe, Lock } from "lucide-react"
+import { PlatformConfigEditor } from "./platform-config-editor"
 
 export function SystemSettings() {
   const { toast } = useToast()
@@ -379,6 +380,7 @@ export function SystemSettings() {
             </TabsContent>
 
             <TabsContent value="platform" className="space-y-6">
+              <PlatformConfigEditor />
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">

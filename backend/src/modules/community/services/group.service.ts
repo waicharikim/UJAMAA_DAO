@@ -102,7 +102,11 @@ class GroupService {
    * Generate and persist the Ward Declaration genesis document.
    * Called on group creation. Also called explicitly for system groups by seed.
    */
-  async generateDeclaration(groupId: string, wardName: string, registeredAt: Date) {
+  async generateDeclaration(
+    groupId: string,
+    wardName: string,
+    registeredAt: Date
+  ) {
     const dateStr = registeredAt.toLocaleDateString('en-KE', {
       day: 'numeric',
       month: 'long',
@@ -173,11 +177,18 @@ ${wardName}  ·  ${dateStr}  ·  ${shortId}`;
 
     const group = await prisma.group.findUnique({
       where: { id: groupId },
-      select: { isSystemGroup: true, treasuryBalance: true, name: true, status: true },
+      select: {
+        isSystemGroup: true,
+        treasuryBalance: true,
+        name: true,
+        status: true,
+      },
     });
     if (!group) throw ApiError.notFound('Group');
-    if (group.isSystemGroup) throw ApiError.badRequest('System groups cannot be dissolved');
-    if (group.status === 'DISSOLVED') throw ApiError.conflict('Group is already dissolved');
+    if (group.isSystemGroup)
+      throw ApiError.badRequest('System groups cannot be dissolved');
+    if (group.status === 'DISSOLVED')
+      throw ApiError.conflict('Group is already dissolved');
     if (new Prisma.Decimal(group.treasuryBalance).greaterThan(0)) {
       throw ApiError.badRequest(
         'Cannot dissolve a group with funds in treasury. Redistribute or withdraw all funds first.'
