@@ -27,6 +27,11 @@ import {
   Clock,
   Activity,
   ShieldCheck,
+  Coins,
+  Server,
+  MessageSquare,
+  Banknote,
+  TrendingUp,
 } from "lucide-react"
 
 // ── Status config ──────────────────────────────────────────────────────────
@@ -233,6 +238,87 @@ export default function GovernancePage() {
           ))}
         </div>
       )}
+
+      {/* Platform Finances */}
+      <Card className="border-0 shadow-card">
+        <CardContent className="p-6 space-y-5">
+          <div className="flex items-center gap-2">
+            <Coins className="h-4 w-4" style={{ color: "#C9922A" }} />
+            <h2 className="text-sm font-bold text-[#0A1F14]">What it costs to run UjamaaDAO</h2>
+          </div>
+
+          <p className="text-xs text-[#7A6E60] leading-relaxed">
+            Platform costs are transparent and governed by the community. Any change to fees,
+            spending priorities, or dues tiers requires a community proposal voted on here.
+          </p>
+
+          {/* Monthly cost breakdown */}
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[#0A1F14]/40 mb-2">
+              Estimated monthly costs
+            </p>
+            <div className="space-y-2">
+              {[
+                { Icon: Server,       label: "Infrastructure (servers, DB, storage)", kes: 8_500 },
+                { Icon: MessageSquare,label: "SMS verification (Africa's Talking)",    kes: 3_200 },
+                { Icon: Banknote,     label: "M-Pesa API fees (~1.5% on dues)",        kes: 1_800 },
+                { Icon: TrendingUp,   label: "Blockchain gas (Base Sepolia → Base)",   kes: 1_200 },
+              ].map(({ Icon, label, kes }) => (
+                <div key={label} className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <Icon className="h-3.5 w-3.5 flex-shrink-0 text-[#7A6E60]" />
+                    <span className="text-xs text-[#0A1F14]/70">{label}</span>
+                  </div>
+                  <span className="text-xs font-semibold text-[#0A1F14] flex-shrink-0 tabular-nums">
+                    KES {kes.toLocaleString()}
+                  </span>
+                </div>
+              ))}
+
+              {/* Total */}
+              <div
+                className="flex items-center justify-between gap-3 pt-2 mt-1"
+                style={{ borderTop: "1px solid rgba(14,11,8,0.08)" }}
+              >
+                <span className="text-xs font-bold text-[#0A1F14]">Total / month</span>
+                <span className="text-xs font-bold text-[#C9922A] tabular-nums">KES 14,700</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Dues tiers */}
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[#0A1F14]/40 mb-2">
+              How members cover costs (dues tiers)
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { tier: "Ordinary", kes: 60,   pr: 100, needed: 245 },
+                { tier: "Supporter",kes: 200,  pr: 200, needed: 74  },
+                { tier: "Sponsor",  kes: 1_000, pr: 500, needed: 15  },
+              ].map(({ tier, kes, pr, needed }) => (
+                <div
+                  key={tier}
+                  className="rounded-xl p-3 space-y-1.5 text-center"
+                  style={{ background: "rgba(201,146,42,0.06)", border: "1px solid rgba(201,146,42,0.12)" }}
+                >
+                  <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#C9922A" }}>
+                    {tier}
+                  </p>
+                  <p className="text-base font-bold text-[#0A1F14]">KES {kes}</p>
+                  <p className="text-[10px] text-[#7A6E60]">+{pr} PR/month</p>
+                  <p className="text-[10px] text-[#0A1F14]/40">{needed} members<br/>to break even</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <p className="text-[10px] text-[#7A6E60]/70 leading-relaxed italic">
+            These figures are estimates approved by the founding community. To propose changes,
+            create a Community-scope proposal and bring it to a vote.
+          </p>
+        </CardContent>
+      </Card>
 
       {/* How this works */}
       <Card className="border-0 shadow-card">
