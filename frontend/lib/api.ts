@@ -1863,14 +1863,14 @@ export interface ElectionDetailDto extends ElectionSummaryDto {
 }
 
 export const electionsApi = {
-  listElections: (params?: {
+  listElections: async (params?: {
     groupId?: string
     countyId?: string
     scope?: ElectionScope
     status?: ElectionStatus
     page?: number
     limit?: number
-  }): Promise<{ elections: ElectionSummaryDto[]; total: number; page: number; limit: number }> => {
+  }): Promise<{ elections: ElectionSummaryDto[]; total: number }> => {
     const q = new URLSearchParams()
     if (params?.groupId) q.set("groupId", params.groupId)
     if (params?.countyId) q.set("countyId", params.countyId)
@@ -1879,11 +1879,14 @@ export const electionsApi = {
     if (params?.page) q.set("page", String(params.page))
     if (params?.limit) q.set("limit", String(params.limit))
     const qs = q.toString()
-    return apiFetch(`/elections${qs ? `?${qs}` : ""}`)
+    const res = await apiFetch<{ total: number; items: ElectionSummaryDto[] }>(`/elections${qs ? `?${qs}` : ""}`)
+    return { elections: res.items ?? [], total: res.total ?? 0 }
   },
 
-  getMyElections: (): Promise<{ elections: ElectionSummaryDto[] }> =>
-    apiFetch("/elections/mine"),
+  getMyElections: async (): Promise<{ elections: ElectionSummaryDto[] }> => {
+    const res = await apiFetch<{ items: ElectionSummaryDto[] }>("/elections/mine")
+    return { elections: res.items ?? [] }
+  },
 
   getElection: (electionId: string): Promise<ElectionDetailDto> =>
     apiFetch<ElectionDetailDto>(`/elections/${electionId}`),
