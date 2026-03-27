@@ -236,6 +236,19 @@ model WebAuthnCredential {
   @@map("webauthn_credentials")
 }
 
+model WebAuthnChallenge {
+  id        String   @id @default(cuid())
+  challenge String   @unique
+  userId    String?  @db.Uuid   // set for registration; null for login
+  email     String?  @db.VarChar(255) // set for login lookup
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([challenge])
+  @@index([expiresAt])
+  @@map("webauthn_challenges")
+}
+
 // ============================================================================
 // MAGIC LINK TOKENS (with expiry)
 // ============================================================================

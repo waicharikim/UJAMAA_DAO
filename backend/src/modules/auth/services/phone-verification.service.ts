@@ -30,6 +30,8 @@ const SMS_CONFIG = {
   cleanupRetentionDays: 30, // delete unverified codes older than 30 days
 };
 
+export type VerificationChannel = 'sms' | 'whatsapp' | 'telegram';
+
 // Kenyan phone number validation (strict E.164 preferred)
 const KENYA_PHONE_REGEX = /^\+254[17]\d{8}$/;
 
@@ -39,30 +41,54 @@ class PhoneVerificationService {
    */
   async sendVerificationCode(
     phoneNumber: string,
-    userId?: string
-  ): Promise<{ success: boolean; expiresIn: number; devCode?: string }> {
+    userId?: string,
+    channel: VerificationChannel = 'sms'
+  ): Promise<{
+    success: boolean;
+    expiresIn: number;
+    devCode?: string;
+    telegramCode?: string;
+  }> {
     // Validate phone number format
     const normalized = this.normalizePhoneNumber(phoneNumber);
     if (!normalized) {
       throw ApiError.badRequest('Invalid phone number format');
     }
 
-    // Check if SMS is enabled
-    if (!SMS_CONFIG.enabled) {
-      logger.warn(
-        { operationType: 'SMS_MOCK', phoneNumber: normalized },
-        'SMS not enabled - using mock verification'
+    // Telegram: just store the code and return it — user sends it to the bot
+    if (channel === 'telegram') {
+      await this.checkResendCooldown(normalized);
+      const code = this.generateCode();
+      await this.storeVerificationCode(normalized, code, userId);
+      logger.info(
+        {
+          operationType: 'TELEGRAM_CODE_GENERATED',
+          userId,
+          metadata: { phoneNumber: normalized },
+        },
+        'Telegram verification code generated'
       );
-
-      const mockCode = this.generateCode();
-      console.log(`[SMS MOCK] To: ${normalized}, Code: ${mockCode}`);
-
-      await this.storeVerificationCode(normalized, mockCode, userId);
-
       return {
         success: true,
         expiresIn: SMS_CONFIG.codeExpiry / 1000,
-        // Returned in dev so the code is visible without a real SMS
+        telegramCode: code,
+      };
+    }
+
+    // Check if SMS/WhatsApp is enabled
+    if (!SMS_CONFIG.enabled) {
+      logger.warn(
+        { operationType: 'SMS_MOCK', phoneNumber: normalized, channel },
+        'SMS not enabled - using mock verification'
+      );
+      const mockCode = this.generateCode();
+      console.log(
+        `[${channel.toUpperCase()} MOCK] To: ${normalized}, Code: ${mockCode}`
+      );
+      await this.storeVerificationCode(normalized, mockCode, userId);
+      return {
+        success: true,
+        expiresIn: SMS_CONFIG.codeExpiry / 1000,
         devCode: mockCode,
       };
     }
@@ -72,41 +98,40 @@ class PhoneVerificationService {
 
     // Generate verification code
     const code = this.generateCode();
-
-    // Store code in database
     await this.storeVerificationCode(normalized, code, userId);
 
-    // Send SMS via provider
+    // Send via chosen channel
     try {
-      await this.sendSMS(normalized, code);
+      if (channel === 'whatsapp') {
+        await this.sendWhatsApp(normalized, code);
+      } else {
+        await this.sendSMS(normalized, code);
+      }
 
       logger.info(
         {
-          operationType: 'SMS_SENT',
+          operationType: 'CODE_SENT',
           userId,
-          metadata: { phoneNumber: normalized },
+          metadata: { phoneNumber: normalized, channel },
         },
-        'SMS verification code sent'
+        `Verification code sent via ${channel}`
       );
 
-      return {
-        success: true,
-        expiresIn: SMS_CONFIG.codeExpiry / 1000,
-      };
+      return { success: true, expiresIn: SMS_CONFIG.codeExpiry / 1000 };
     } catch (error) {
       logger.error(
         {
-          operationType: 'SMS_FAILURE',
+          operationType: 'SEND_FAILURE',
           userId,
           metadata: {
             phoneNumber: normalized,
+            channel,
             error: error instanceof Error ? error.message : String(error),
           },
         },
-        'Failed to send SMS'
+        `Failed to send code via ${channel}`
       );
-
-      throw ApiError.externalServiceError('Failed to send SMS');
+      throw ApiError.externalServiceError(`Failed to send code via ${channel}`);
     }
   }
 
@@ -290,6 +315,12 @@ class PhoneVerificationService {
   ): Promise<void> {
     const expiresAt = new Date(Date.now() + SMS_CONFIG.codeExpiry);
 
+    // Remove any existing unverified code for this number — unique constraint on
+    // (phoneNumber, verified=false) means only one pending code is allowed at a time.
+    await prisma.phoneVerification.deleteMany({
+      where: { phoneNumber, verified: false },
+    });
+
     await prisma.phoneVerification.create({
       data: {
         phoneNumber,
@@ -354,6 +385,36 @@ class PhoneVerificationService {
 
     // TODO: Implement actual Twilio API call
     console.log(`[Twilio] Would send to ${to}: ${message}`);
+  }
+
+  private async sendWhatsApp(phoneNumber: string, code: string): Promise<void> {
+    const apiKey = process.env.AT_API_KEY;
+    const username = process.env.AT_USERNAME;
+
+    if (!apiKey || !username) {
+      throw new Error("Africa's Talking credentials not configured");
+    }
+
+    const message = `Your UjamaaDAO verification code is: *${code}*\n\nValid for 15 minutes. Do not share this code.`;
+
+    // Africa's Talking WhatsApp API (requires WhatsApp Business Account)
+    const res = await fetch(
+      'https://content.africastalking.com/version1/messaging/whatsapp/send',
+      {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          apiKey: apiKey,
+        },
+        body: JSON.stringify({ username, to: phoneNumber, message }),
+      }
+    );
+
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`AT WhatsApp error ${res.status}: ${body}`);
+    }
   }
 
   private async sendViaAfricasTalking(

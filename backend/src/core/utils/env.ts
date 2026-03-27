@@ -236,6 +236,10 @@ const EnvSchema = z.object({
   SENTRY_ENVIRONMENT: z.string().optional(),
   SENTRY_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(1.0),
   AUDIT_LOG_FILE: z.string().optional(),
+
+  // WebAuthn / Passkeys
+  WEBAUTHN_RP_ID: z.string().optional().default('localhost'),
+  WEBAUTHN_ORIGIN: z.string().optional().default('http://localhost:3000'),
 });
 
 /**

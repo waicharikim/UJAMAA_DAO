@@ -146,6 +146,7 @@ export const walletLinkSchema = walletVerifySchema;
 
 export const sendPhoneCodeSchema = z.object({
   phoneNumber: phoneNumberSchema,
+  channel: z.enum(['sms', 'whatsapp', 'telegram']).optional().default('sms'),
 });
 
 export const verifyPhoneCodeSchema = z.object({

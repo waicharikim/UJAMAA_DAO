@@ -13,8 +13,15 @@ import {
   MarkAttendanceDto,
   BarazaGroupDto,
   AttendanceRecordDto,
+  BarazaSessionDto,
+  BarazaSessionReminderJobData,
 } from '../types.js';
 import { PR_CONFIG } from '../../economy/types.js';
+import {
+  NotificationType,
+  NotificationChannel,
+} from '../../notifications/types.js';
+import { notificationService } from '../../notifications/services/notification.service.js';
 
 // Prisma-level type alias
 type BarazaGroupRecord = Awaited<ReturnType<typeof prisma.barazaGroup.create>>;
@@ -28,13 +35,19 @@ class BarazaBotService {
     adminUserId: string,
     dto: RegisterBarazaGroupDto
   ): Promise<BarazaGroupRecord> {
+    // For Telegram groups without an explicit invite link, auto-generate one via the Bot API
+    let inviteLink = dto.inviteLink ?? undefined;
+    if (dto.platform === 'TELEGRAM' && !inviteLink) {
+      inviteLink = await this.createTelegramInviteLink(dto.externalId);
+    }
+
     const barazaGroup = await prisma.barazaGroup.create({
       data: {
         groupId: dto.groupId,
         platform: dto.platform as any,
         externalId: dto.externalId,
         name: dto.name,
-        inviteLink: dto.inviteLink ?? undefined,
+        inviteLink,
         isActive: true,
         registeredBy: adminUserId,
         metadata: dto.metadata
@@ -66,18 +79,14 @@ class BarazaBotService {
     });
     const groupIds = memberships.map((m) => m.groupId);
 
-    const profiles = await prisma.userMessagingProfile.findMany({
-      where: { userId },
-      select: { platform: true },
-    });
-    const platforms = profiles.map((p) => p.platform);
+    if (!groupIds.length) return [];
 
-    if (!groupIds.length || !platforms.length) return [];
-
+    // Return ALL active baraza groups for groups the user is a member of,
+    // regardless of whether they have a linked messaging profile.
+    // This lets users discover and join Telegram/Discord groups before linking.
     const groups = await prisma.barazaGroup.findMany({
       where: {
         groupId: { in: groupIds },
-        platform: { in: platforms as any[] },
         isActive: true,
       },
     });
@@ -231,6 +240,189 @@ class BarazaBotService {
   }
 
   /**
+   * Creates a BarazaSession and queues a 1-hour reminder job.
+   * Returns the session record.
+   */
+  async scheduleSession(
+    barazaGroupId: string,
+    scheduledAt: Date,
+    createdBy: string
+  ): Promise<BarazaSessionDto> {
+    const session = await prisma.barazaSession.create({
+      data: { barazaGroupId, scheduledAt, createdBy },
+    });
+
+    // Queue a delayed reminder job — fires 1 hour before scheduled time
+    const delay = scheduledAt.getTime() - Date.now() - 60 * 60 * 1000;
+    if (delay > 0) {
+      const barazaGroup = await prisma.barazaGroup.findUnique({
+        where: { id: barazaGroupId },
+      });
+      if (barazaGroup) {
+        const payload: BarazaSessionReminderJobData = {
+          barazaSessionId: session.id,
+          barazaGroupId,
+          chatId: barazaGroup.externalId,
+        };
+        const job = await integrationQueue.add(
+          BotJobName.BARAZA_SESSION_REMINDER,
+          payload,
+          {
+            delay,
+            jobId: `baraza-reminder-${session.id}`,
+          }
+        );
+        // Persist the BullMQ job ID so it can be cancelled if needed
+        await prisma.barazaSession.update({
+          where: { id: session.id },
+          data: { reminderJobId: job.id ?? null },
+        });
+      }
+    }
+
+    logger.info(
+      { operationType: 'BARAZA_SCHEDULE', barazaGroupId, scheduledAt },
+      'Baraza session scheduled'
+    );
+
+    return {
+      id: session.id,
+      barazaGroupId: session.barazaGroupId,
+      scheduledAt: session.scheduledAt,
+      openedAt: session.openedAt,
+      closedAt: session.closedAt,
+      createdBy: session.createdBy,
+      createdAt: session.createdAt,
+    };
+  }
+
+  /**
+   * Mark the upcoming session for a baraza group as open.
+   */
+  async openSession(barazaGroupId: string): Promise<BarazaSessionDto | null> {
+    const session = await prisma.barazaSession.findFirst({
+      where: { barazaGroupId, openedAt: null, closedAt: null },
+      orderBy: { scheduledAt: 'asc' },
+    });
+    if (!session) return null;
+
+    const updated = await prisma.barazaSession.update({
+      where: { id: session.id },
+      data: { openedAt: new Date() },
+    });
+
+    logger.info(
+      { operationType: 'BARAZA_OPEN', barazaGroupId, sessionId: session.id },
+      'Baraza session opened'
+    );
+
+    return {
+      id: updated.id,
+      barazaGroupId: updated.barazaGroupId,
+      scheduledAt: updated.scheduledAt,
+      openedAt: updated.openedAt,
+      closedAt: updated.closedAt,
+      createdBy: updated.createdBy,
+      createdAt: updated.createdAt,
+    };
+  }
+
+  /**
+   * Close the currently open session for a baraza group.
+   * Returns the session and attendance count.
+   */
+  async closeSession(
+    barazaGroupId: string
+  ): Promise<{ session: BarazaSessionDto; attendanceCount: number } | null> {
+    const session = await prisma.barazaSession.findFirst({
+      where: { barazaGroupId, openedAt: { not: null }, closedAt: null },
+    });
+    if (!session) return null;
+
+    const [updated, attendanceCount] = await Promise.all([
+      prisma.barazaSession.update({
+        where: { id: session.id },
+        data: { closedAt: new Date() },
+      }),
+      prisma.barazaAttendance.count({
+        where: {
+          barazaGroupId,
+          sessionDate: new Date().toISOString().slice(0, 10),
+        },
+      }),
+    ]);
+
+    logger.info(
+      {
+        operationType: 'BARAZA_CLOSE',
+        barazaGroupId,
+        sessionId: session.id,
+        attendanceCount,
+      },
+      'Baraza session closed'
+    );
+
+    return {
+      session: {
+        id: updated.id,
+        barazaGroupId: updated.barazaGroupId,
+        scheduledAt: updated.scheduledAt,
+        openedAt: updated.openedAt,
+        closedAt: updated.closedAt,
+        createdBy: updated.createdBy,
+        createdAt: updated.createdAt,
+      },
+      attendanceCount,
+    };
+  }
+
+  /**
+   * Returns the currently open session for a baraza group, or null.
+   */
+  async getOpenSession(barazaGroupId: string) {
+    return prisma.barazaSession.findFirst({
+      where: { barazaGroupId, openedAt: { not: null }, closedAt: null },
+    });
+  }
+
+  /**
+   * Notify all members of a group via platform + email.
+   * Telegram DMs are sent directly in the controller/job to reuse sendTelegramMessage.
+   */
+  async notifyGroupMembers(
+    barazaGroupId: string,
+    title: string,
+    message: string
+  ): Promise<void> {
+    const barazaGroup = await prisma.barazaGroup.findUnique({
+      where: { id: barazaGroupId },
+      include: {
+        group: { include: { members: { select: { userId: true } } } },
+      },
+    });
+    if (!barazaGroup) return;
+
+    const memberIds = barazaGroup.group.members.map((m) => m.userId);
+
+    for (const userId of memberIds) {
+      try {
+        await notificationService.send({
+          userId,
+          type: NotificationType.GENERAL_ANNOUNCEMENT,
+          title,
+          message,
+          channels: [NotificationChannel.IN_APP, NotificationChannel.EMAIL],
+        });
+      } catch (err) {
+        logger.warn(
+          { operationType: 'BARAZA_NOTIFY', userId, error: String(err) },
+          'Failed to send baraza notification to member'
+        );
+      }
+    }
+  }
+
+  /**
    * Fan-out invites when a new BarazaGroup is registered.
    */
   async fanOutInvitesForNewBaraza(barazaGroupId: string): Promise<void> {
@@ -262,6 +454,60 @@ class BarazaBotService {
         platform: barazaGroup.platform as any,
       });
     }
+  }
+  /**
+   * Calls the Telegram Bot API to create a permanent invite link for a chat.
+   * Returns the link string, or undefined if the bot token is not configured or the call fails.
+   */
+  private async createTelegramInviteLink(
+    chatId: string
+  ): Promise<string | undefined> {
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    if (!token) return undefined;
+
+    try {
+      const res = await fetch(
+        `https://api.telegram.org/bot${token}/createChatInviteLink`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: Number(chatId) }),
+        }
+      );
+      if (!res.ok) return undefined;
+      const data = (await res.json()) as {
+        ok: boolean;
+        result?: { invite_link: string };
+      };
+      return data.ok ? data.result?.invite_link : undefined;
+    } catch (err) {
+      logger.warn(
+        { err, chatId },
+        'Failed to create Telegram invite link — group will show without link'
+      );
+      return undefined;
+    }
+  }
+
+  /**
+   * Refreshes the stored Telegram invite link for a baraza group.
+   * Used when a group was registered before the bot had admin rights.
+   */
+  async refreshInviteLink(barazaGroupId: string): Promise<string | null> {
+    const group = await prisma.barazaGroup.findUnique({
+      where: { id: barazaGroupId },
+    });
+    if (!group || group.platform !== 'TELEGRAM') return null;
+
+    const link = await this.createTelegramInviteLink(group.externalId);
+    if (!link) return null;
+
+    await prisma.barazaGroup.update({
+      where: { id: barazaGroupId },
+      data: { inviteLink: link },
+    });
+
+    return link;
   }
 }
 

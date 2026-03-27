@@ -92,6 +92,14 @@ import {
   getUnresolvedEvents,
   resolveEvent,
 } from '../handlers/security-events.handlers.js';
+import {
+  webAuthnRegisterOptions,
+  webAuthnRegisterVerify,
+  webAuthnLoginOptions,
+  webAuthnLoginVerify,
+  listPasskeys,
+  deletePasskey,
+} from '../handlers/webauthn.handlers.js';
 
 const router = Router();
 
@@ -439,6 +447,42 @@ router.post(
       },
     });
   })
+);
+
+// ============================================================================
+// WEBAUTHN / PASSKEYS
+// ============================================================================
+
+// Registration (requires existing session)
+router.post(
+  '/webauthn/register/options',
+  authenticate,
+  asyncHandler(webAuthnRegisterOptions)
+);
+router.post(
+  '/webauthn/register/verify',
+  authenticate,
+  asyncHandler(webAuthnRegisterVerify)
+);
+
+// Authentication (no JWT required)
+router.post(
+  '/webauthn/login/options',
+  buildRateLimiter({ windowMs: 60_000, max: 10 }),
+  asyncHandler(webAuthnLoginOptions)
+);
+router.post(
+  '/webauthn/login/verify',
+  buildRateLimiter({ windowMs: 60_000, max: 10 }),
+  asyncHandler(webAuthnLoginVerify)
+);
+
+// Credential management
+router.get('/webauthn/credentials', authenticate, asyncHandler(listPasskeys));
+router.delete(
+  '/webauthn/credentials/:id',
+  authenticate,
+  asyncHandler(deletePasskey)
 );
 
 export default router;

@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { useRole } from "@/contexts/role-context"
+import { useLanguage } from "@/contexts/language-context"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 import {
@@ -24,25 +25,26 @@ import {
   ScrollText,
   Scale,
   Flag,
+  Globe,
 } from "lucide-react"
 
 const primaryNav = [
-  { label: "Dashboard",  href: "/dashboard",  icon: LayoutDashboard },
-  { label: "Proposals",  href: "/proposals",  icon: Vote },
-  { label: "Governance", href: "/governance", icon: Scale },
-  { label: "Elections",  href: "/elections",  icon: ScrollText },
-  { label: "Projects",   href: "/projects",   icon: Briefcase },
-  { label: "Community",  href: "/groups",     icon: Users },
-  { label: "Learn",      href: "/education",  icon: BookOpen },
-  { label: "Emergency",  href: "/emergency",  icon: AlertTriangle },
+  { key: "nav.dashboard",  href: "/dashboard",  icon: LayoutDashboard },
+  { key: "nav.proposals",  href: "/proposals",  icon: Vote },
+  { key: "nav.governance", href: "/governance", icon: Scale },
+  { key: "nav.elections",  href: "/elections",  icon: ScrollText },
+  { key: "nav.projects",   href: "/projects",   icon: Briefcase },
+  { key: "nav.community",  href: "/groups",     icon: Users },
+  { key: "nav.learn",      href: "/education",  icon: BookOpen },
+  { key: "nav.emergency",  href: "/emergency",  icon: AlertTriangle },
 ]
 
 const secondaryNav = [
-  { label: "Leaderboard", href: "/leaderboard", icon: Trophy },
-  { label: "Marketplace", href: "/marketplace", icon: Store },
-  { label: "Treasury",    href: "/treasury",    icon: Landmark },
-  { label: "Conflicts",   href: "/conflicts",   icon: Flag },
-  { label: "Profile",     href: "/profile",     icon: User },
+  { key: "nav.leaderboard", href: "/leaderboard", icon: Trophy },
+  { key: "nav.marketplace", href: "/marketplace", icon: Store },
+  { key: "nav.treasury",    href: "/treasury",    icon: Landmark },
+  { key: "nav.conflicts",   href: "/conflicts",   icon: Flag },
+  { key: "nav.profile",     href: "/profile",     icon: User },
 ]
 
 // Adinkra Gye Nyame motif in amber-on-tea-green
@@ -57,6 +59,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname()
   const { user, isAuthenticated, logout } = useAuth()
   const { hasAnyRole } = useRole()
+  const { lang, setLang, t } = useLanguage()
 
   const showAdmin = hasAnyRole(["admin", "super_admin", "county_coordinator", "compliance_officer"])
 
@@ -162,7 +165,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             <Link
               key={item.href}
               href={item.href}
-              title={collapsed ? item.label : undefined}
+              title={collapsed ? t(item.key) : undefined}
               className={cn(
                 "relative flex items-center gap-[11px] rounded-lg overflow-hidden transition-all duration-200",
                 collapsed ? "justify-center px-0 py-[10px]" : "px-3 py-[10px]",
@@ -189,7 +192,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   className="text-[13.5px] font-medium whitespace-nowrap transition-all duration-200"
                   style={{ color: active ? "#E9A52E" : "rgba(247,242,232,0.60)" }}
                 >
-                  {item.label}
+                  {t(item.key)}
                 </span>
               )}
             </Link>
@@ -213,7 +216,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             <Link
               key={item.href}
               href={item.href}
-              title={collapsed ? item.label : undefined}
+              title={collapsed ? t(item.key) : undefined}
               className={cn(
                 "relative flex items-center gap-[11px] rounded-lg overflow-hidden transition-all duration-200",
                 collapsed ? "justify-center px-0 py-[10px]" : "px-3 py-[10px]",
@@ -240,7 +243,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   className="text-[13.5px] font-medium whitespace-nowrap"
                   style={{ color: active ? "#E9A52E" : "rgba(247,242,232,0.60)" }}
                 >
-                  {item.label}
+                  {t(item.key)}
                 </span>
               )}
             </Link>
@@ -289,6 +292,50 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           </Link>
         )}
       </nav>
+
+      {/* Language toggle */}
+      <div
+        className={cn(
+          "relative z-10 px-[10px] py-2 flex",
+          collapsed ? "justify-center" : "justify-start"
+        )}
+        style={{ borderTop: "1px solid rgba(247,242,232,0.07)" }}
+      >
+        {collapsed ? (
+          <button
+            onClick={() => setLang(lang === "en" ? "sw" : "en")}
+            title={lang === "en" ? "Switch to Swahili" : "Switch to English"}
+            className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-[rgba(247,242,232,0.08)] transition-colors"
+          >
+            <Globe className="h-[14px] w-[14px]" style={{ color: "rgba(247,242,232,0.40)" }} />
+          </button>
+        ) : (
+          <div className="flex items-center gap-1 px-[10px]">
+            <Globe className="h-[12px] w-[12px] flex-shrink-0" style={{ color: "rgba(247,242,232,0.30)" }} />
+            <button
+              onClick={() => setLang("en")}
+              className="text-[11px] font-semibold px-1.5 py-0.5 rounded transition-colors"
+              style={{
+                color: lang === "en" ? "#E9A52E" : "rgba(247,242,232,0.30)",
+                background: lang === "en" ? "rgba(212,145,30,0.12)" : "transparent",
+              }}
+            >
+              EN
+            </button>
+            <span style={{ color: "rgba(247,242,232,0.15)", fontSize: 10 }}>|</span>
+            <button
+              onClick={() => setLang("sw")}
+              className="text-[11px] font-semibold px-1.5 py-0.5 rounded transition-colors"
+              style={{
+                color: lang === "sw" ? "#E9A52E" : "rgba(247,242,232,0.30)",
+                background: lang === "sw" ? "rgba(212,145,30,0.12)" : "transparent",
+              }}
+            >
+              SW
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Footer — user card + logout */}
       <div

@@ -42,6 +42,7 @@ const TRANSLATIONS: Record<string, Record<Language, string>> = {
   "nav.leaderboard": { en: "Leaderboard",  sw: "Orodha ya Ubora" },
   "nav.marketplace": { en: "Marketplace",  sw: "Soko" },
   "nav.treasury":    { en: "Treasury",     sw: "Hazina" },
+  "nav.conflicts":   { en: "Conflicts",    sw: "Migogoro" },
   "nav.profile":     { en: "Profile",      sw: "Wasifu" },
 
   // Common actions

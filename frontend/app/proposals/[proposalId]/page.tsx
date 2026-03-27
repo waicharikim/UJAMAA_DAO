@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/auth-context"
-import { governanceApi, communityApi, projectApi } from "@/lib/api"
+import { governanceApi, communityApi, projectApi, onboardingApi } from "@/lib/api"
 import {
   ArrowLeft,
   Loader2,
@@ -146,7 +146,13 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
   const { mutate: castVote, isPending: voting } = useMutation({
     mutationFn: (option: "YES" | "NO" | "ABSTAIN") =>
       governanceApi.castVote({ proposalId, option }),
-    onSuccess: () => { invalidate(); toast({ title: "Vote recorded" }) },
+    onSuccess: () => {
+      invalidate()
+      toast({ title: "Vote recorded" })
+      // Auto-complete governance_basics tutorial on first vote — fire-and-forget
+      onboardingApi.completeTutorial("governance_basics").catch(() => {})
+      queryClient.invalidateQueries({ queryKey: ["onboarding-progress"] })
+    },
     onError: (err: any) => toast({ title: "Vote failed", description: err?.message, variant: "destructive" }),
   })
 

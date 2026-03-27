@@ -7,6 +7,7 @@
 export enum BotJobName {
   BARAZA_ATTENDANCE_REWARD = 'BARAZA_ATTENDANCE_REWARD',
   BARAZA_SEND_INVITE = 'BARAZA_SEND_INVITE',
+  BARAZA_SESSION_REMINDER = 'BARAZA_SESSION_REMINDER',
 }
 
 // ─────────────────────────────────────────────
@@ -69,6 +70,22 @@ export interface BarazaSendInviteJobData {
   platform: 'TELEGRAM' | 'WHATSAPP' | 'DISCORD';
 }
 
+export interface BarazaSessionReminderJobData {
+  barazaSessionId: string;
+  barazaGroupId: string;
+  chatId: string; // Telegram externalId (string representation)
+}
+
+export interface BarazaSessionDto {
+  id: string;
+  barazaGroupId: string;
+  scheduledAt: Date;
+  openedAt: Date | null;
+  closedAt: Date | null;
+  createdBy: string;
+  createdAt: Date;
+}
+
 // ─────────────────────────────────────────────
 // Telegram (minimal subset needed for attendance tracking)
 // ─────────────────────────────────────────────
@@ -76,7 +93,7 @@ export interface BarazaSendInviteJobData {
 export interface TelegramUpdate {
   update_id: number;
   message?: {
-    from?: { id: number; username?: string };
+    from?: { id: number; username?: string; first_name?: string };
     chat: { id: number; type: string };
     text?: string;
   };

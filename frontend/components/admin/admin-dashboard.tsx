@@ -10,8 +10,9 @@ import { SystemSettings } from "./system-settings"
 import { AuditLogs } from "./audit-logs"
 import { FinancialOverview } from "./financial-overview"
 import { GovernanceReview } from "./governance-review"
-import { Settings, FileText, DollarSign, Shield, AlertTriangle, CheckCircle, Clock, Coins } from "lucide-react"
+import { Settings, FileText, DollarSign, Shield, AlertTriangle, CheckCircle, Clock, Coins, MessageSquare } from "lucide-react"
 import { adminApi, auditApi, type AdminStatsDto } from "@/lib/api"
+import { BarazaManagement } from "./baraza-management"
 import { formatRelativeTime } from "@/lib/utils"
 
 interface Props {
@@ -92,11 +93,12 @@ export function AdminDashboard({ stats }: Props) {
   return (
     <div className="space-y-6">
       <Tabs defaultValue="overview">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="governance">Governance</TabsTrigger>
           <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="financial">Financial</TabsTrigger>
+          <TabsTrigger value="barazas">Barazas</TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
           <TabsTrigger value="logs">Audit Logs</TabsTrigger>
         </TabsList>
@@ -222,6 +224,7 @@ export function AdminDashboard({ stats }: Props) {
         <TabsContent value="governance"><GovernanceReview /></TabsContent>
         <TabsContent value="users"><UserManagement /></TabsContent>
         <TabsContent value="financial"><FinancialOverview stats={stats} /></TabsContent>
+        <TabsContent value="barazas"><BarazaManagement /></TabsContent>
         <TabsContent value="settings"><SystemSettings /></TabsContent>
         <TabsContent value="logs"><AuditLogs /></TabsContent>
       </Tabs>

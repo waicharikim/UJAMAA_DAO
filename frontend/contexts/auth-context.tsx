@@ -180,9 +180,9 @@ interface AuthContextType extends Pick<AuthState, "user" | "token" | "isAuthenti
   /** Step 1 of magic link flow: sends the link email (existing users: email only; new users: full registration params) */
   requestMagicLink: (params: { email: string; name?: string; phoneNumber?: string; primaryWardId?: string; secondaryWardId?: string; industryIds?: string[]; goodsServiceIds?: string[]; messagingPlatforms?: Array<{ platform: "TELEGRAM" | "WHATSAPP" | "DISCORD"; handle?: string }> }) => Promise<void>
   /** Step 2a: called from /auth/callback for existing users (JWT magic link) */
-  verifyMagicLink: (token: string) => Promise<void>
+  verifyMagicLink: (token: string) => Promise<{ needsProfileCompletion: boolean }>
   /** Step 2b: called from /auth/callback for new users (hex email verification token) */
-  verifyEmailToken: (token: string) => Promise<void>
+  verifyEmailToken: (token: string) => Promise<{ needsProfileCompletion: boolean }>
   logout: () => Promise<void>
   /** Patch local user state with already-mapped Partial<User> fields */
   updateUser: (userData: Partial<User>) => void
@@ -249,15 +249,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ── step 2a: verify magic link token (existing users — JWT) ──
   // Backend returns { sessionToken, user, session, needsProfileCompletion } — field is sessionToken, not accessToken
   const verifyMagicLink = useCallback(
-    async (linkToken: string) => {
+    async (linkToken: string): Promise<{ needsProfileCompletion: boolean }> => {
       setIsLoading(true)
       try {
-        const { sessionToken, user: rawUser } = await authApi.verifyMagicLink(linkToken)
+        const { sessionToken, user: rawUser, needsProfileCompletion } = await authApi.verifyMagicLink(linkToken)
         tokenStore.set(sessionToken)
         setToken(sessionToken)
         const mappedUser = mapBackendUser(rawUser)
         setUser(mappedUser)
         toast({ title: "Welcome back!", description: `Logged in as ${mappedUser.email || mappedUser.username}.` })
+        return { needsProfileCompletion: needsProfileCompletion ?? false }
       } catch (err) {
         const message = err instanceof ApiError ? err.message : "Login link is invalid or expired."
         toast({ title: "Login failed", description: message, variant: "destructive" })
@@ -271,16 +272,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ── step 2b: verify email token (new users) ──
   const verifyEmailToken = useCallback(
-    async (linkToken: string) => {
+    async (linkToken: string): Promise<{ needsProfileCompletion: boolean }> => {
       setIsLoading(true)
       try {
-        const { sessionToken, user: rawUser } = await authApi.verifyEmailToken(linkToken)
+        const { sessionToken, user: rawUser, needsProfileCompletion } = await authApi.verifyEmailToken(linkToken)
         // sessionToken is a 7-day access JWT; no refresh token in this flow
         tokenStore.set(sessionToken)
         setToken(sessionToken)
         const mappedUser = mapBackendUser(rawUser)
         setUser(mappedUser)
         toast({ title: "Welcome to UjamaaDAO!", description: `Account verified. Karibu, ${mappedUser.username || mappedUser.email}!` })
+        return { needsProfileCompletion: needsProfileCompletion ?? false }
       } catch (err) {
         const message = err instanceof ApiError ? err.message : "Verification link is invalid or expired."
         toast({ title: "Verification failed", description: message, variant: "destructive" })

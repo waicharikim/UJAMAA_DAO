@@ -50,6 +50,7 @@ import {
   processBarazaAttendanceReward,
   processBarazaSendInvite,
 } from './modules/integration/jobs/baraza-reward.jobs.js';
+import { processBarazaSessionReminder } from './modules/integration/jobs/baraza-reminder.jobs.js';
 import { BotJobName } from './modules/integration/types.js';
 
 import {
@@ -184,6 +185,8 @@ const integrationWorker = createWorker('integration', async (job) => {
       await processBarazaAttendanceReward(job);
     } else if (job.name === BotJobName.BARAZA_SEND_INVITE) {
       await processBarazaSendInvite(job);
+    } else if (job.name === BotJobName.BARAZA_SESSION_REMINDER) {
+      await processBarazaSessionReminder(job);
     } else {
       logger.warn(
         { jobName: job.name, queue: 'integration' },

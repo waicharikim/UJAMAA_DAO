@@ -1,3 +1,10 @@
+import type {
+  PublicKeyCredentialCreationOptionsJSON,
+  PublicKeyCredentialRequestOptionsJSON,
+  RegistrationResponseJSON,
+  AuthenticationResponseJSON,
+} from '@simplewebauthn/browser'
+
 /**
  * UjamaaDAO API Client
  *
@@ -217,10 +224,10 @@ export const authApi = {
    * Send SMS verification code to phone number.
    * Requires: EMAIL_VERIFIED
    */
-  sendPhoneCode: (phoneNumber: string) =>
-    apiFetch<{ expiresIn: number; devCode?: string }>("/auth/phone/send-code", {
+  sendPhoneCode: (phoneNumber: string, channel: "sms" | "whatsapp" | "telegram" = "sms") =>
+    apiFetch<{ expiresIn: number; devCode?: string; telegramCode?: string }>("/auth/phone/send-code", {
       method: "POST",
-      body: JSON.stringify({ phoneNumber }),
+      body: JSON.stringify({ phoneNumber, channel }),
     }),
 
   /**
@@ -252,6 +259,33 @@ export const authApi = {
    * Recent security events. Requires: COMMUNITY_VERIFIED
    */
   getSecurityEvents: () => apiFetch<any[]>("/auth/security-events"),
+
+  /**
+   * POST /auth/wallet/nonce
+   * Get a challenge nonce for wallet linking. No auth required.
+   */
+  getWalletNonce: (walletAddress: string) =>
+    apiFetch<{ nonce: string; message: string; expiresIn: number }>("/auth/wallet/nonce", {
+      method: "POST",
+      body: JSON.stringify({ walletAddress }),
+    }),
+
+  /**
+   * POST /auth/wallet/link
+   * Link a wallet to the authenticated account. Requires auth + signature.
+   */
+  linkWallet: (walletAddress: string, signature: string) =>
+    apiFetch<{ id: string; walletAddress: string }>("/auth/wallet/link", {
+      method: "POST",
+      body: JSON.stringify({ walletAddress, signature }),
+    }),
+
+  /**
+   * DELETE /auth/wallet/disconnect
+   * Remove wallet from account. Requires auth.
+   */
+  disconnectWalletFromAccount: () =>
+    apiFetch<void>("/auth/wallet/disconnect", { method: "DELETE" }),
 }
 
 // ─────────────────────────────────────────────────────────
@@ -270,6 +304,58 @@ export const authApi = {
  *   metadata: { createdAt, lastLoginAt }
  * }
  */
+
+// ─────────────────────────────────────────────────────────
+// WebAuthn / Passkeys API
+// ─────────────────────────────────────────────────────────
+
+export const webAuthnApi = {
+  /** POST /auth/webauthn/register/options — generate registration options (authenticated) */
+  getRegistrationOptions: () =>
+    apiFetch<PublicKeyCredentialCreationOptionsJSON>('/auth/webauthn/register/options', {
+      method: 'POST',
+    }),
+
+  /** POST /auth/webauthn/register/verify — verify and store new passkey (authenticated) */
+  verifyRegistration: (response: RegistrationResponseJSON, credentialName?: string) =>
+    apiFetch<{ credentialId: string; credentialName: string | null }>(
+      '/auth/webauthn/register/verify',
+      {
+        method: 'POST',
+        body: JSON.stringify({ response, credentialName }),
+      }
+    ),
+
+  /** POST /auth/webauthn/login/options — get authentication options (unauthenticated) */
+  getLoginOptions: (email: string) =>
+    apiFetch<PublicKeyCredentialRequestOptionsJSON>('/auth/webauthn/login/options', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+
+  /** POST /auth/webauthn/login/verify — verify passkey and return sessionToken (unauthenticated) */
+  verifyLogin: (email: string, response: AuthenticationResponseJSON) =>
+    apiFetch<{ sessionToken: string }>('/auth/webauthn/login/verify', {
+      method: 'POST',
+      body: JSON.stringify({ email, response }),
+    }),
+
+  /** GET /auth/webauthn/credentials — list passkeys (authenticated) */
+  listCredentials: () =>
+    apiFetch<
+      {
+        id: string
+        credentialName: string | null
+        createdAt: string
+        lastUsedAt: string
+        transports: string[]
+      }[]
+    >('/auth/webauthn/credentials'),
+
+  /** DELETE /auth/webauthn/credentials/:id — remove a passkey (authenticated) */
+  deleteCredential: (id: string) =>
+    apiFetch<null>(`/auth/webauthn/credentials/${id}`, { method: 'DELETE' }),
+}
 
 export const userApi = {
   /**
@@ -601,6 +687,7 @@ export interface BarazaGroupDto {
   id: string
   groupId: string
   platform: "TELEGRAM" | "WHATSAPP" | "DISCORD"
+  externalId: string
   name: string
   inviteLink: string | null
   isActive: boolean
@@ -626,6 +713,11 @@ export const integrationApi = {
       body: JSON.stringify(dto),
     }),
 
+  refreshInviteLink: (groupId: string) =>
+    apiFetch<{ inviteLink: string }>(`/integration/baraza-groups/${groupId}/refresh-invite`, {
+      method: "POST",
+    }),
+
   recordAttendance: (
     groupId: string,
     dto: {
@@ -645,6 +737,10 @@ export const integrationApi = {
       method: "POST",
       body: JSON.stringify({}),
     }),
+
+  /** Admin only — all baraza groups across all wards */
+  getAllBarazaGroups: () =>
+    apiFetch<(BarazaGroupDto & { _count: { attendances: number } })[]>("/integration/baraza-groups/all"),
 }
 
 // ─────────────────────────────────────────────────────────
@@ -1617,7 +1713,7 @@ export const onboardingApi = {
     apiFetch<{
       progress: OnboardingProgressDto | null
       tutorials: OnboardingTutorialDto[]
-      completions: { tutorialId: string; completed: boolean; ipEarned: number; prEarned: number }[]
+      completions: { tutorialId: string; completed: boolean; ipEarned: number; prEarned: number; tutorial: { key: string } }[]
       milestones: { milestoneKey: string; achieved: boolean }[]
     }>("/onboarding/progress"),
 

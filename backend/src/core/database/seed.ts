@@ -742,39 +742,202 @@ async function seedOnboardingTutorials() {
     {
       key: 'platform_intro',
       title: 'Welcome to UjamaaDAO',
-      description: 'Introduction to the platform',
+      description:
+        'Learn what UjamaaDAO is, how Participation Rights (PR) work, and what you can do on the platform.',
       category: 'BASICS',
       order: 1,
       ipReward: 25,
       prReward: 10,
+      estimatedMinutes: 3,
+      requiredFor: null,
+      isOptional: false,
+      content: {
+        steps: [
+          {
+            title: 'What is UjamaaDAO?',
+            body: 'UjamaaDAO is a community-owned platform for Kenyan citizens to collaborate, govern, and grow together — ward by ward. Every member earns Participation Rights (PR) for showing up and contributing.',
+          },
+          {
+            title: 'Participation Rights (PR)',
+            body: 'PR is your non-transferable civic currency. You earn PR by attending barazas, voting on proposals, completing your profile, and contributing to your community. It cannot be bought or sold.',
+          },
+          {
+            title: 'Your verification journey',
+            body: 'Start by verifying your phone number, then get vouched for by 3 ward members to unlock governance. Each step unlocks more of the platform.',
+          },
+        ],
+      },
+    },
+    {
+      key: 'verify_phone',
+      title: 'Verify your phone number',
+      description:
+        'Add and verify your Kenyan phone number to unlock economy features and prove you are a real person.',
+      category: 'VERIFICATION',
+      order: 2,
+      ipReward: 30,
+      prReward: 15,
+      estimatedMinutes: 2,
+      requiredFor: null,
+      isOptional: false,
+      content: {
+        steps: [
+          {
+            title: 'Why verify your phone?',
+            body: 'Your phone number ties your UjamaaDAO account to a real Kenyan identity. It unlocks economy features, baraza attendance recording, and is required for community verification.',
+          },
+          {
+            title: 'How to verify',
+            body: 'Go to your Profile page and click "Verify Phone". You can receive your code via SMS, WhatsApp, or Telegram — whichever you prefer.',
+          },
+        ],
+      },
+    },
+    {
+      key: 'connect_wallet',
+      title: 'Connect your Web3 wallet',
+      description:
+        'Link a wallet to receive Utility Tokens (UT) and participate in on-chain governance.',
+      category: 'VERIFICATION',
+      order: 3,
+      ipReward: 30,
+      prReward: 15,
+      estimatedMinutes: 3,
+      requiredFor: null,
+      isOptional: true,
+      content: {
+        steps: [
+          {
+            title: 'What is a wallet for?',
+            body: 'Your Web3 wallet is where Utility Tokens (UT) land when you earn them. UT represents long-term commitment to the community and is used in on-chain governance.',
+          },
+          {
+            title: 'How to connect',
+            body: 'Click the wallet icon in your Profile. We support MetaMask and WalletConnect. Your wallet address is stored on-chain — never your private key.',
+          },
+        ],
+      },
+    },
+    {
+      key: 'community_verification',
+      title: 'Get community verified',
+      description:
+        'Have 3 verified ward members vouch for you to unlock proposals, voting, and full platform access.',
+      category: 'VERIFICATION',
+      order: 4,
+      ipReward: 50,
+      prReward: 25,
       estimatedMinutes: 5,
       requiredFor: null,
       isOptional: false,
+      content: {
+        steps: [
+          {
+            title: 'What is community verification?',
+            body: 'Community verification means 3 real people in your ward can confirm you are who you say you are. This is how UjamaaDAO stays human — no bots, no fake accounts.',
+          },
+          {
+            title: 'Who can vouch for you?',
+            body: 'Any COMMUNITY_VERIFIED member in your ward can vouch for you. If you do not know anyone yet, you can pay the platform fee as an alternative path.',
+          },
+          {
+            title: 'What does it unlock?',
+            body: 'Community verification gives you access to governance (proposals and voting), the economy module, baraza attendance PR, and your full ward dashboard.',
+          },
+        ],
+      },
     },
     {
       key: 'governance_basics',
-      title: 'How Governance Works',
-      description: 'Proposals, voting, and decision making',
+      title: 'How governance works',
+      description:
+        'Learn how to read proposals, cast votes, and understand what quorum means for your ward.',
       category: 'GOVERNANCE',
-      order: 2,
+      order: 5,
       ipReward: 50,
       prReward: 25,
-      estimatedMinutes: 10,
+      estimatedMinutes: 8,
       requiredFor: 'VOTING',
       isOptional: false,
+      content: {
+        steps: [
+          {
+            title: 'Proposals',
+            body: 'Any COMMUNITY_VERIFIED member can raise a proposal — a request for the community to decide something. Proposals go through a draft → review → voting → results lifecycle.',
+          },
+          {
+            title: 'Voting with PR',
+            body: 'Your PR balance is your voting power. More PR = more weight. PR is earned by showing up, not by buying. This keeps governance fair and participation-based.',
+          },
+          {
+            title: 'Quorum',
+            body: "A proposal only passes if enough members vote. Quorum rules are set per ward. Check the governance page for your ward's current thresholds.",
+          },
+        ],
+      },
     },
-    // Add more as needed...
+    {
+      key: 'attend_baraza',
+      title: 'Attend your first baraza',
+      description:
+        'Join your ward baraza group on Telegram and type /present to log attendance and earn PR.',
+      category: 'COMMUNITY',
+      order: 6,
+      ipReward: 40,
+      prReward: 20,
+      estimatedMinutes: 3,
+      requiredFor: null,
+      isOptional: false,
+      content: {
+        steps: [
+          {
+            title: 'What is a baraza?',
+            body: "A baraza is your ward's regular community meeting — held on Telegram. When you attend, you type /present and earn 15 PR automatically. Your ward leader opens and closes each session.",
+          },
+          {
+            title: 'How to join',
+            body: 'Find your baraza group link on your dashboard under "My Barazas". Join the Telegram group and introduce yourself. When the next session opens, type /present to be counted.',
+          },
+        ],
+      },
+    },
+    {
+      key: 'explore_marketplace',
+      title: 'Explore the marketplace',
+      description:
+        'Browse skills and goods offered by community members in your ward and beyond.',
+      category: 'MARKETPLACE',
+      order: 7,
+      ipReward: 20,
+      prReward: 10,
+      estimatedMinutes: 3,
+      requiredFor: null,
+      isOptional: true,
+      content: {
+        steps: [
+          {
+            title: 'Community-first marketplace',
+            body: 'The UjamaaDAO marketplace is for discovering what community members offer — skills, goods, services. All transactions stay within the community.',
+          },
+          {
+            title: 'Discovery only',
+            body: 'The marketplace is a discovery platform. Payments happen directly between members via M-Pesa. Browse freely — no account needed to view listings.',
+          },
+        ],
+      },
+    },
   ];
 
   for (const tutorial of tutorials) {
+    const { content, ...rest } = tutorial;
     await prisma.onboardingTutorial.upsert({
       where: { key: tutorial.key },
-      update: {},
+      update: { ...rest, content: content as any },
       create: {
         id: uuidv4(),
-        ...tutorial,
+        ...rest,
         active: true,
-        content: { steps: [] }, // Placeholder
+        content: content as any,
       },
     });
   }

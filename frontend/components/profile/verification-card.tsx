@@ -1,12 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import React, { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { authApi, userApi } from "@/lib/api"
 import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { CheckCircle, Circle, Loader2, Phone, Users, ShieldCheck } from "lucide-react"
+import { CheckCircle, Circle, Loader2, Phone, Users, ShieldCheck, MessageCircle, Send } from "lucide-react"
 import { PaymentModal } from "@/components/payments/payment-modal"
 
 // ─── Verification level ordering ──────────────────────────
@@ -24,25 +24,38 @@ function levelIndex(level: string | undefined) {
   return LEVELS.indexOf((level ?? "") as Level)
 }
 
+type Channel = "sms" | "whatsapp" | "telegram"
+
+const CHANNELS: { id: Channel; label: string; icon: React.ReactNode; hint: string }[] = [
+  { id: "sms",      label: "SMS",      icon: <Phone className="h-3.5 w-3.5" />,          hint: "Text message to your phone" },
+  { id: "whatsapp", label: "WhatsApp", icon: <MessageCircle className="h-3.5 w-3.5" />,  hint: "Message via WhatsApp" },
+  { id: "telegram", label: "Telegram", icon: <Send className="h-3.5 w-3.5" />,           hint: "Via @Ujamaadaobot" },
+]
+
 // ─── Phone verification step ───────────────────────────────
 function PhoneStep() {
   const { user, refreshUser } = useAuth()
   const { toast } = useToast()
   const [phone, setPhone] = useState(user?.phone ?? "")
+  const [channel, setChannel] = useState<Channel>("sms")
   const [code, setCode] = useState("")
   const [codeSent, setCodeSent] = useState(false)
   const [devCode, setDevCode] = useState<string | undefined>()
+  const [telegramCode, setTelegramCode] = useState<string | undefined>()
   const [verified, setVerified] = useState(false)
 
   const sendMutation = useMutation({
-    mutationFn: () => authApi.sendPhoneCode(phone),
+    mutationFn: () => authApi.sendPhoneCode(phone, channel),
     onSuccess: (data) => {
       setCodeSent(true)
-      if (data?.devCode) {
+      if (data?.telegramCode) {
+        setTelegramCode(data.telegramCode)
+      } else if (data?.devCode) {
         setDevCode(data.devCode)
-        toast({ title: "Dev mode — code auto-filled", description: `SMS not enabled. Code: ${data.devCode}` })
+        toast({ title: "Dev mode", description: `SMS not enabled. Code: ${data.devCode}` })
       } else {
-        toast({ title: "Code sent", description: "Check your phone for the 6-digit SMS code." })
+        const channelLabel = channel === "whatsapp" ? "WhatsApp" : "SMS"
+        toast({ title: "Code sent", description: `Check your ${channelLabel} for the 6-digit code.` })
       }
     },
     onError: (err: any) => {
@@ -57,11 +70,27 @@ function PhoneStep() {
         setVerified(true)
         await refreshUser()
       } else {
-        toast({ title: "Incorrect code", description: "Check the SMS and try again.", variant: "destructive" })
+        toast({ title: "Incorrect code", description: "Try again.", variant: "destructive" })
       }
     },
     onError: (err: any) => {
       toast({ title: "Verification failed", description: err?.message ?? "Try again.", variant: "destructive" })
+    },
+  })
+
+  // Telegram: poll refreshUser until phoneVerified flips
+  const checkTelegramMutation = useMutation({
+    mutationFn: async () => {
+      await refreshUser()
+      return user?.phone !== undefined || true
+    },
+    onSuccess: async () => {
+      await refreshUser()
+      if (user?.verificationLevel !== "EMAIL_VERIFIED") {
+        setVerified(true)
+      } else {
+        toast({ title: "Not yet verified", description: "Send the command to @Ujamaadaobot first, then check again.", variant: "destructive" })
+      }
     },
   })
 
@@ -84,12 +113,33 @@ function PhoneStep() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-[#0E0B08]/60 leading-relaxed">
-        Verify your Kenyan mobile number to unlock community verification and economic features.
-        A 6-digit code will be sent by SMS.
+        Verify your Kenyan mobile number to unlock community features. Choose how you'd like to receive your code.
       </p>
 
+      {/* Channel selector */}
+      {!codeSent && (
+        <div className="flex gap-2">
+          {CHANNELS.map((ch) => (
+            <button
+              key={ch.id}
+              onClick={() => setChannel(ch.id)}
+              className="flex-1 flex items-center justify-center gap-1.5 h-9 rounded-lg text-xs font-semibold border transition-all"
+              style={
+                channel === ch.id
+                  ? { background: "#1E3D2F", color: "#fff", borderColor: "#1E3D2F" }
+                  : { background: "white", color: "#0E0B08", borderColor: "rgba(0,0,0,0.12)" }
+              }
+            >
+              {ch.icon}
+              {ch.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Phone input */}
       <div className="space-y-2">
-        <label className="text-xs font-semibold text-[#0E0B08]">Phone number (Kenyan format)</label>
+        <label className="text-xs font-semibold text-[#0E0B08]">Phone number</label>
         <div className="flex gap-2">
           <input
             type="tel"
@@ -99,19 +149,57 @@ function PhoneStep() {
             disabled={codeSent}
             className="flex-1 h-10 rounded-lg border border-black/10 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#C9922A]/30 disabled:opacity-50"
           />
-          <button
-            onClick={() => sendMutation.mutate()}
-            disabled={sendMutation.isPending || !phone.match(/^\+254[17]\d{8}$/) || codeSent}
-            className="flex-shrink-0 h-10 rounded-lg px-4 text-sm font-semibold transition-all hover:opacity-90 disabled:opacity-40"
-            style={{ background: "#1E3D2F", color: "#fff" }}
-          >
-            {sendMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send code"}
-          </button>
+          {!codeSent && (
+            <button
+              onClick={() => sendMutation.mutate()}
+              disabled={sendMutation.isPending || !phone.match(/^\+254[17]\d{8}$/)}
+              className="flex-shrink-0 h-10 rounded-lg px-4 text-sm font-semibold transition-all hover:opacity-90 disabled:opacity-40"
+              style={{ background: "#1E3D2F", color: "#fff" }}
+            >
+              {sendMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send code"}
+            </button>
+          )}
         </div>
         <p className="text-[10px] text-[#0E0B08]/40">Format: +254 7XX XXX XXX or +254 1XX XXX XXX</p>
       </div>
 
-      {codeSent && (
+      {/* Telegram instructions */}
+      {codeSent && channel === "telegram" && telegramCode && (
+        <div className="space-y-3">
+          <div
+            className="rounded-xl p-4 space-y-2"
+            style={{ background: "rgba(34,158,217,0.08)", border: "1px solid rgba(34,158,217,0.2)" }}
+          >
+            <p className="text-xs font-semibold" style={{ color: "#1A7DB5" }}>Open @Ujamaadaobot on Telegram and send:</p>
+            <div
+              className="rounded-lg px-3 py-2 font-mono text-sm font-bold tracking-wider text-center select-all"
+              style={{ background: "rgba(34,158,217,0.12)", color: "#1A7DB5" }}
+            >
+              /verify {telegramCode}
+            </div>
+            <p className="text-[10px] text-[#0E0B08]/40">
+              This also links your Telegram account so /present works in baraza groups.
+            </p>
+          </div>
+          <button
+            onClick={() => checkTelegramMutation.mutate()}
+            disabled={checkTelegramMutation.isPending}
+            className="w-full h-10 rounded-lg text-sm font-semibold transition-all hover:opacity-90 disabled:opacity-40"
+            style={{ background: "#1E3D2F", color: "#fff" }}
+          >
+            {checkTelegramMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : "I've sent it — check verification"}
+          </button>
+          <button
+            onClick={() => { setCodeSent(false); setTelegramCode(undefined) }}
+            className="text-[11px] text-[#0E0B08]/40 hover:text-[#0E0B08]/70 transition-colors w-full text-center"
+          >
+            Use a different number
+          </button>
+        </div>
+      )}
+
+      {/* SMS / WhatsApp code entry */}
+      {codeSent && channel !== "telegram" && (
         <div className="space-y-2">
           {devCode && (
             <div
@@ -122,7 +210,7 @@ function PhoneStep() {
               <span className="tracking-widest font-bold">{devCode}</span>
             </div>
           )}
-          <label className="text-xs font-semibold text-[#0E0B08]">6-digit SMS code</label>
+          <label className="text-xs font-semibold text-[#0E0B08]">6-digit code</label>
           <div className="flex gap-2">
             <input
               type="text"
@@ -143,7 +231,7 @@ function PhoneStep() {
             </button>
           </div>
           <button
-            onClick={() => { setCodeSent(false); setCode("") }}
+            onClick={() => { setCodeSent(false); setCode(""); setDevCode(undefined) }}
             className="text-[11px] text-[#0E0B08]/40 hover:text-[#0E0B08]/70 transition-colors"
           >
             Use a different number

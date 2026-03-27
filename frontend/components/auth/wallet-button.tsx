@@ -37,8 +37,9 @@ export function WalletButton() {
 
   const handleConnect = async () => {
     await connectWallet()
-    // Refresh user so walletAddress propagates to auth context
-    await refreshUser().catch(() => {})
+    // Give the auto-link effect a moment to save the wallet to the backend,
+    // then refresh so walletAddress + verificationLevel propagate to auth context.
+    setTimeout(() => refreshUser().catch(() => {}), 1500)
   }
 
   if (isConnected && walletAddress) {

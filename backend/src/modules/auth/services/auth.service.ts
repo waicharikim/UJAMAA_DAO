@@ -39,6 +39,7 @@ import {
   MagicLinkAuthResult,
   toUserResponse,
   toSessionResponse,
+  needsOnboarding,
 } from '../types.js';
 import { auditService } from '../../audit/services/audit.service.js';
 import { AuditAction } from '../../audit/types.js';
@@ -517,7 +518,7 @@ class AuthService {
       user: toUserResponse(user),
       sessionToken: accessToken,
       session: toSessionResponse(session, true),
-      needsProfileCompletion: false,
+      needsProfileCompletion: needsOnboarding(user),
     };
   }
 

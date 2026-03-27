@@ -19,8 +19,8 @@ import { ApiError } from '../../../core/errors/ApiError.js';
  * Body: { phoneNumber: string }
  */
 export async function sendVerificationCode(req: AuthRequest, res: Response) {
-  const { phoneNumber } = req.body;
-  const userId = req.user?.userId; // Optional - can be used during onboarding or profile update
+  const { phoneNumber, channel = 'sms' } = req.body;
+  const userId = req.user?.userId;
 
   if (!phoneNumber) {
     throw ApiError.badRequest('Phone number is required');
@@ -28,7 +28,8 @@ export async function sendVerificationCode(req: AuthRequest, res: Response) {
 
   const result = await phoneVerificationService.sendVerificationCode(
     phoneNumber,
-    userId
+    userId,
+    channel
   );
 
   sendSuccess(
@@ -37,6 +38,9 @@ export async function sendVerificationCode(req: AuthRequest, res: Response) {
       success: result.success,
       expiresIn: result.expiresIn,
       ...(result.devCode !== undefined && { devCode: result.devCode }),
+      ...(result.telegramCode !== undefined && {
+        telegramCode: result.telegramCode,
+      }),
     },
     'Verification code sent successfully',
     200

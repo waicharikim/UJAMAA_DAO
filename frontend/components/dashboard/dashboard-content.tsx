@@ -15,6 +15,7 @@ import { ActivityFeed } from "@/components/feed/activity-feed"
 import { BarazaGroupsCard } from "@/components/integration/baraza-groups-card"
 import { SystemGroupsCard } from "@/components/community/system-groups-card"
 import { EmergencyAlertsCard } from "@/components/emergency/emergency-alerts-card"
+import { GettingStartedCard } from "@/components/onboarding/getting-started-card"
 
 // ─── Stat card skeleton ───────────────────────────────────
 function StatSkeleton() {
@@ -280,7 +281,7 @@ function VerificationNudge({ level }: { level: string }) {
               <p className="text-xs" style={{ color: "rgba(14,11,8,0.5)" }}>Complete phone verification to unlock economy features and community access.</p>
             </div>
           </div>
-          <Link href="/verify">
+          <Link href="/profile">
             <Button size="sm" className="flex-shrink-0 font-semibold text-xs" style={{ background: "#D4911E", color: "#0A1F14" }}>
               Start →
             </Button>
@@ -301,7 +302,7 @@ function VerificationNudge({ level }: { level: string }) {
               <p className="text-xs" style={{ color: "rgba(14,11,8,0.5)" }}>Get 3 ward members to vouch for you and unlock governance participation.</p>
             </div>
           </div>
-          <Link href="/verify">
+          <Link href="/profile">
             <Button size="sm" className="flex-shrink-0 font-semibold text-xs" style={{ background: "#1D4731", color: "#fff" }}>
               Request Vouching →
             </Button>
@@ -582,6 +583,7 @@ export function DashboardContent() {
           </div>
 
           <div className="space-y-4">
+            <GettingStartedCard />
             <SystemGroupsCard />
             <Suspense fallback={<Skeleton className="h-48 w-full rounded-xl" />}>
               <BarazaGroupsCard />

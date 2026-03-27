@@ -98,6 +98,9 @@ services:
       - FLW_PUBLIC_KEY=${FLW_PUBLIC_KEY:-FLWPUBK_TEST-placeholder}
       - FLW_SECRET_KEY=${FLW_SECRET_KEY:-FLWSECK_TEST-placeholder}
       - FLW_WEBHOOK_SECRET=${FLW_WEBHOOK_SECRET:-}
+      # ── Telegram (webhook handler sends reply DMs from web service) ──────
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET:-}
       # VERSION B: Uncomment for metrics
       # - STATSD_HOST=web-metrics
       # - STATSD_PORT=8125

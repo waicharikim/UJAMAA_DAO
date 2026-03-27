@@ -44,6 +44,7 @@ export class OnboardingService {
         completed: true,
         ipEarned: true,
         prEarned: true,
+        tutorial: { select: { key: true } },
       },
     });
 

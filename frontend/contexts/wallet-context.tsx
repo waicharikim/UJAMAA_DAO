@@ -16,6 +16,8 @@ import {
   createContext,
   useContext,
   useCallback,
+  useEffect,
+  useRef,
   type ReactNode,
 } from "react"
 import {
@@ -26,6 +28,7 @@ import {
   useLogout,
 } from "@privy-io/react-auth"
 import { useToast } from "@/hooks/use-toast"
+import { authApi } from "@/lib/api"
 
 // ── Shared interface ──────────────────────────────────────────────────────────
 
@@ -90,6 +93,36 @@ function PrivyWalletAdapter({ children }: { children: ReactNode }) {
   const walletAddress = wallets[0]?.address ?? null
   const isConnected = wallets.length > 0
   const isConnecting = !ready
+
+  // Auto-link wallet to backend when Privy connects a wallet.
+  // Uses nonce → personal_sign → /auth/wallet/link flow.
+  // Silently ignores 409 (already linked) and 401 (not yet logged in).
+  const linkedRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!walletAddress || linkedRef.current === walletAddress) return
+    const wallet = wallets[0]
+    if (!wallet) return
+
+    ;(async () => {
+      try {
+        const { message } = await authApi.getWalletNonce(walletAddress)
+        const provider = await wallet.getEthereumProvider()
+        const signature = await provider.request({
+          method: "personal_sign",
+          params: [message, walletAddress],
+        }) as string
+        await authApi.linkWallet(walletAddress, signature)
+        linkedRef.current = walletAddress
+      } catch (err: any) {
+        // 409 = already linked, 401 = not authenticated yet — both are fine
+        if (err?.status !== 409 && err?.status !== 401) {
+          console.warn("[wallet] backend link failed", err)
+        } else {
+          linkedRef.current = walletAddress
+        }
+      }
+    })()
+  }, [walletAddress, wallets])
 
   const connectWallet = useCallback(async () => {
     privyConnect()

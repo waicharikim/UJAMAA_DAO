@@ -329,6 +329,7 @@ model BarazaGroup {
 
   group        Group             @relation(fields: [groupId], references: [id], onDelete: Cascade)
   attendances  BarazaAttendance[]
+  sessions     BarazaSession[]
 
   @@unique([groupId, platform, externalId])
   @@index([groupId, isActive])
@@ -336,18 +337,37 @@ model BarazaGroup {
   @@map("baraza_groups")
 }
 
-model BarazaAttendance {
+model BarazaSession {
   id            String      @id @default(uuid()) @db.Uuid
   barazaGroupId String      @db.Uuid
-  userId        String      @db.Uuid
-  sessionDate   String      // "YYYY-MM-DD" — one reward per user per baraza per day
-  prAwarded     Boolean     @default(false)
-  prAmount      Int         @default(0)
-  reportedAt    DateTime    @default(now())
-  reportedBy    String?     // "telegram_bot" | "discord_bot" | "manual"
+  scheduledAt   DateTime
+  openedAt      DateTime?
+  closedAt      DateTime?
+  createdBy     String      @db.Uuid
+  reminderJobId String?     // BullMQ job ID — stored to allow future cancellation
+  createdAt     DateTime    @default(now())
 
-  barazaGroup   BarazaGroup @relation(fields: [barazaGroupId], references: [id], onDelete: Cascade)
-  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  barazaGroup   BarazaGroup      @relation(fields: [barazaGroupId], references: [id], onDelete: Cascade)
+  attendances   BarazaAttendance[]
+
+  @@index([barazaGroupId, scheduledAt])
+  @@map("baraza_sessions")
+}
+
+model BarazaAttendance {
+  id              String         @id @default(uuid()) @db.Uuid
+  barazaGroupId   String         @db.Uuid
+  userId          String         @db.Uuid
+  barazaSessionId String?        @db.Uuid
+  sessionDate     String         // "YYYY-MM-DD" — one reward per user per baraza per day
+  prAwarded       Boolean        @default(false)
+  prAmount        Int            @default(0)
+  reportedAt      DateTime       @default(now())
+  reportedBy      String?        // "telegram_bot" | "discord_bot" | "manual"
+
+  barazaGroup     BarazaGroup    @relation(fields: [barazaGroupId], references: [id], onDelete: Cascade)
+  barazaSession   BarazaSession? @relation(fields: [barazaSessionId], references: [id])
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, barazaGroupId, sessionDate])
   @@index([barazaGroupId, sessionDate])

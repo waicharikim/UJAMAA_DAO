@@ -7,6 +7,7 @@ import { Sidebar } from "./sidebar"
 import { Topbar } from "./topbar"
 import { MobileBottomNav } from "./mobile-bottom-nav"
 import { CommunityAuditGate } from "@/components/onboarding/community-audit-gate"
+import { OnboardingWizard } from "@/components/onboarding/onboarding-wizard"
 
 interface AppShellProps {
   children: ReactNode
@@ -42,6 +43,9 @@ export function AppShell({ children }: AppShellProps) {
 
       {/* One-time community audit gate — shown once to newly verified members */}
       <CommunityAuditGate />
+
+      {/* First-time walkthrough wizard — shown once to new users */}
+      <OnboardingWizard />
     </div>
   )
 }

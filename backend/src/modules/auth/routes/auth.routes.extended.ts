@@ -234,6 +234,7 @@ router.delete(
 
 const sendCodeSchema = z.object({
   phoneNumber: z.string().min(10).max(15),
+  channel: z.enum(['sms', 'whatsapp', 'telegram']).default('sms'),
 });
 
 /**
@@ -248,11 +249,12 @@ router.post(
   catchAsync(
     async (req: AuthRequest, res: Response<any, Record<string, any>>) => {
       const userId = req.user!.userId;
-      const { phoneNumber } = req.body;
+      const { phoneNumber, channel } = req.body;
 
       const result = await phoneVerificationService.sendVerificationCode(
         phoneNumber,
-        userId
+        userId,
+        channel
       );
 
       sendSuccess(res, result, 'Verification code sent successfully');

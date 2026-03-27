@@ -17,8 +17,10 @@ import {
   handleDiscordWebhook,
   registerBarazaGroup,
   getBarazaGroups,
+  getAllBarazaGroups,
   recordAttendance,
   deactivateBarazaGroup,
+  refreshInviteLink,
 } from '../controllers/bot.controller.js';
 
 const router = Router();
@@ -68,6 +70,15 @@ router.post(
 
 router.get('/baraza-groups', authenticate, getBarazaGroups);
 
+router.get(
+  '/baraza-groups/all',
+  authenticate,
+  authorize({
+    allowedRoles: [SystemRoles.WARD_ADMIN, SystemRoles.SUPER_ADMIN],
+  }),
+  getAllBarazaGroups
+);
+
 router.post(
   '/baraza-groups/:id/attendance',
   authenticate,
@@ -85,6 +96,16 @@ router.post(
     allowedRoles: [SystemRoles.WARD_ADMIN, SystemRoles.SUPER_ADMIN],
   }),
   deactivateBarazaGroup
+);
+
+// Refresh invite link for a Telegram baraza group (admin or the linked group leader)
+router.post(
+  '/baraza-groups/:id/refresh-invite',
+  authenticate,
+  authorize({
+    allowedRoles: [SystemRoles.WARD_ADMIN, SystemRoles.SUPER_ADMIN],
+  }),
+  refreshInviteLink
 );
 
 export default router;
