@@ -158,7 +158,8 @@ export class ProjectService {
       userId,
       AuditAction.MILESTONE_SUBMITTED,
       'Milestone',
-      dto.milestoneId
+      dto.milestoneId,
+      { projectId: milestone.projectId }
     );
 
     return { status: MilestoneStatus.AWAITING_VERIFICATION };

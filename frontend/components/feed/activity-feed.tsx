@@ -36,11 +36,19 @@ const CATEGORY = {
 // ─── Deep-link helper ─────────────────────────────────────────────────────────
 
 function entityHref(item: FeedItemDto): string | null {
-  if (!item.entityId) return null
   switch (item.category) {
-    case "governance":  return `/proposals/${item.entityId}`
-    case "community":   return `/groups/${item.entityId}`
-    case "project":     return `/projects/${item.entityId}`
+    case "governance":
+      return item.entityId ? `/proposals/${item.entityId}` : null
+    case "community":
+      // GROUP_JOINED / GROUP_CREATED: entityId = groupId
+      return item.entityId ? `/groups/${item.entityId}` : null
+    case "project": {
+      // PROJECT_CREATED: entityId = projectId  ✓
+      // MILESTONE_*:     entityId = milestoneId — use meta.projectId instead
+      const projectId =
+        (item.meta?.projectId as string | undefined) ?? item.entityId
+      return projectId ? `/projects/${projectId}` : null
+    }
     case "marketplace": return `/marketplace`
     case "education":   return `/education`
     default:            return null
@@ -224,7 +232,7 @@ export function ActivityFeed({ compact = false }: ActivityFeedProps) {
       {/* Compact footer */}
       {compact && allItems.length > 0 && (
         <Link
-          href="/feed"
+          href="/dashboard"
           className="flex items-center justify-end gap-1 text-xs font-medium pt-1"
           style={{ color: "#C9922A" }}
         >

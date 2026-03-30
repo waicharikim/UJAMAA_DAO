@@ -804,7 +804,7 @@ class UserService {
       where: { userId_type: { userId, type: 'COMMUNITY' } },
     });
 
-    if (!request || !['VOUCHING', 'PAYMENT_PENDING'].includes(request.status)) {
+    if (!request || request.status !== 'PAYMENT_PENDING') {
       throw ApiError.conflict('No active verification request');
     }
 

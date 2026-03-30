@@ -89,7 +89,7 @@ class GroupService {
       AuditAction.GROUP_CREATED,
       'Group',
       group.id,
-      { type: dto.voluntaryType, name: dto.name }
+      { type: dto.voluntaryType, name: dto.name, wardId: group.wardId ?? null }
     );
 
     // Generate and store the Ward Declaration as the genesis document
