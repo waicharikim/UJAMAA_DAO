@@ -237,7 +237,7 @@ ${wardName}  ·  ${dateStr}  ·  ${shortId}`;
   async joinGroup(userId: string, groupId: string) {
     const group = await prisma.group.findUnique({
       where: { id: groupId },
-      select: { isSystemGroup: true },
+      select: { isSystemGroup: true, name: true },
     });
 
     if (!group) throw ApiError.notFound('Group');
@@ -278,7 +278,9 @@ ${wardName}  ·  ${dateStr}  ·  ${shortId}`;
 
     logger.info({ userId, groupId }, 'Joined voluntary group');
 
-    await auditService.log(userId, AuditAction.GROUP_JOINED, 'Group', groupId);
+    await auditService.log(userId, AuditAction.GROUP_JOINED, 'Group', groupId, {
+      groupName: group.name,
+    });
 
     return membership;
   }

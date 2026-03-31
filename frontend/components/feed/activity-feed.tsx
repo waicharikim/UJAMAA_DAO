@@ -33,6 +33,83 @@ const CATEGORY = {
   education:   { Icon: BookOpen,      color: "#2A7A4B", bg: "rgba(42,122,75,0.10)",  label: "Learning"    },
 } as const
 
+// ─── Detail chips ─────────────────────────────────────────────────────────────
+
+const SCOPE_LABEL: Record<string, string> = { COMMUNITY: "Platform-wide", GROUP: "Group" }
+const STATUS_LABEL: Record<string, { label: string; color: string }> = {
+  DRAFT:                { label: "Draft",           color: "#6B7280" },
+  PENDING_REVIEW:       { label: "In Review",       color: "#B45309" },
+  APPROVED_FOR_VOTING:  { label: "Open for Voting", color: "#2563EB" },
+  VOTING:               { label: "Voting",          color: "#7C3AED" },
+  PASSED:               { label: "Passed",          color: "#16A34A" },
+  REJECTED:             { label: "Rejected",        color: "#DC2626" },
+}
+const EMERGENCY_ICON: Record<string, string> = {
+  FIRE: "🔥", FLOOD: "🌊", MEDICAL: "🚑", SECURITY: "🔒", ACCIDENT: "🚗", OTHER: "⚠️",
+}
+
+function DetailChips({ item }: { item: FeedItemDto }) {
+  const chips: { label: string; color: string; bg: string }[] = []
+
+  if (item.category === "governance") {
+    const scope = item.meta?.scope as string | undefined
+    const newStatus = item.meta?.newStatus as string | undefined
+    if (scope && SCOPE_LABEL[scope]) {
+      chips.push({ label: SCOPE_LABEL[scope], color: "#C9922A", bg: "rgba(201,146,42,0.10)" })
+    }
+    if (newStatus && STATUS_LABEL[newStatus]) {
+      const s = STATUS_LABEL[newStatus]
+      chips.push({ label: s.label, color: s.color, bg: `${s.color}1A` })
+    }
+  }
+
+  if (item.category === "project") {
+    const approved = item.meta?.approved as boolean | undefined
+    const projectTitle = item.meta?.projectTitle as string | undefined
+    if (approved !== undefined) {
+      chips.push(
+        approved
+          ? { label: "Approved ✓", color: "#16A34A", bg: "rgba(22,163,74,0.10)" }
+          : { label: "Rejected", color: "#DC2626", bg: "rgba(220,38,38,0.10)" }
+      )
+    }
+    if (projectTitle) {
+      chips.push({ label: projectTitle, color: "#2A6B7C", bg: "rgba(42,107,124,0.10)" })
+    }
+  }
+
+  if (item.category === "emergency") {
+    const type = item.meta?.type as string | undefined
+    if (type) {
+      const icon = EMERGENCY_ICON[type] ?? "⚠️"
+      chips.push({ label: `${icon} ${type.charAt(0) + type.slice(1).toLowerCase()}`, color: "#B03A1E", bg: "rgba(176,58,30,0.10)" })
+    }
+  }
+
+  if (item.category === "marketplace") {
+    const type = item.meta?.type as string | undefined
+    if (type) {
+      chips.push({ label: type.charAt(0) + type.slice(1).toLowerCase(), color: "#6B4F9E", bg: "rgba(107,79,158,0.10)" })
+    }
+  }
+
+  if (!chips.length) return null
+
+  return (
+    <div className="flex flex-wrap gap-1.5 mt-2.5">
+      {chips.map((c, i) => (
+        <span
+          key={i}
+          className="inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full"
+          style={{ color: c.color, background: c.bg }}
+        >
+          {c.label}
+        </span>
+      ))}
+    </div>
+  )
+}
+
 // ─── Deep-link helper ─────────────────────────────────────────────────────────
 
 function entityHref(item: FeedItemDto): string | null {
@@ -119,6 +196,9 @@ function FeedCard({ item, compact }: { item: FeedItemDto; compact: boolean }) {
         <p className="text-sm font-medium text-[#0E0B08] leading-snug line-clamp-2">
           {item.description}
         </p>
+
+        {/* Contextual detail chips */}
+        <DetailChips item={item} />
 
         {/* View link — full mode only, when deep-linkable */}
         {!compact && href && (

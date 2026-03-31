@@ -97,7 +97,7 @@ export class ProjectService {
       AuditAction.PROJECT_CREATED,
       'Project',
       project.id,
-      { proposalId: dto.proposalId }
+      { proposalId: dto.proposalId, title: project.title }
     );
 
     return project;
@@ -137,6 +137,7 @@ export class ProjectService {
   async submitMilestone(userId: string, dto: SubmitMilestoneDto) {
     const milestone = await prisma.milestone.findUnique({
       where: { id: dto.milestoneId },
+      include: { project: { select: { title: true } } },
     });
 
     if (!milestone) throw ApiError.notFound('Milestone');
@@ -159,7 +160,11 @@ export class ProjectService {
       AuditAction.MILESTONE_SUBMITTED,
       'Milestone',
       dto.milestoneId,
-      { projectId: milestone.projectId }
+      {
+        projectId: milestone.projectId,
+        milestoneName: milestone.title,
+        projectTitle: milestone.project.title,
+      }
     );
 
     return { status: MilestoneStatus.AWAITING_VERIFICATION };
@@ -205,7 +210,12 @@ export class ProjectService {
       AuditAction.MILESTONE_VERIFIED,
       'Milestone',
       dto.milestoneId,
-      { approved: dto.approved, projectId: milestone.projectId }
+      {
+        approved: dto.approved,
+        projectId: milestone.projectId,
+        milestoneName: milestone.title,
+        projectTitle: milestone.project.title,
+      }
     );
 
     if (dto.approved && milestone.submittedById) {

@@ -162,7 +162,7 @@ class ProposalService {
           AuditAction.PROPOSAL_STATUS_CHANGED,
           'Proposal',
           proposalId,
-          { newStatus: ProposalStatus.REJECTED, stage: 1 }
+          { newStatus: ProposalStatus.REJECTED, stage: 1, title: proposal.title }
         );
         return updated;
       }
@@ -180,7 +180,7 @@ class ProposalService {
           AuditAction.PROPOSAL_STATUS_CHANGED,
           'Proposal',
           proposalId,
-          { newStatus: ProposalStatus.APPROVED_FOR_VOTING, stage: 1 }
+          { newStatus: ProposalStatus.APPROVED_FOR_VOTING, stage: 1, title: proposal.title }
         );
         return updated;
       }
@@ -206,7 +206,7 @@ class ProposalService {
         AuditAction.PROPOSAL_STATUS_CHANGED,
         'Proposal',
         proposalId,
-        { newStatus: ProposalStatus.PENDING_REVIEW, stage: 1 }
+        { newStatus: ProposalStatus.PENDING_REVIEW, stage: 1, title: proposal.title }
       );
       return forwarded;
     }
@@ -236,7 +236,7 @@ class ProposalService {
         AuditAction.PROPOSAL_STATUS_CHANGED,
         'Proposal',
         proposalId,
-        { newStatus, stage: 2 }
+        { newStatus, stage: 2, title: proposal.title }
       );
       return updated;
     }
@@ -284,6 +284,14 @@ class ProposalService {
     });
 
     logger.info({ proposalId, days }, 'Voting started');
+
+    await auditService.log(
+      userId,
+      AuditAction.PROPOSAL_STATUS_CHANGED,
+      'Proposal',
+      proposalId,
+      { newStatus: ProposalStatus.VOTING, title: proposal.title }
+    );
 
     // Notify group members that voting is open (up to 50 most recent members)
     if (proposal.groupId) {
@@ -427,7 +435,7 @@ class ProposalService {
           AuditAction.PROPOSAL_STATUS_CHANGED,
           'Proposal',
           proposalId,
-          { newStatus, quorum, approved, tallySource: 'auto' }
+          { newStatus, quorum, approved, tallySource: 'auto', title: proposal.title }
         )
         .catch(() => {
           /* non-critical */

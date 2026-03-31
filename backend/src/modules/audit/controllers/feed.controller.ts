@@ -92,19 +92,29 @@ function buildDescription(
     case AuditAction.PROPOSAL_CREATED:
       return `${actor} submitted a proposal: "${String(meta.title ?? 'Untitled')}"`;
     case AuditAction.PROPOSAL_STATUS_CHANGED:
-      return `A proposal moved to ${humanStatus(String(meta.newStatus ?? ''))}`;
+      return meta.title
+        ? `"${String(meta.title)}" moved to ${humanStatus(String(meta.newStatus ?? ''))}`
+        : `A proposal moved to ${humanStatus(String(meta.newStatus ?? ''))}`;
     case AuditAction.PROPOSAL_VOTE_CAST:
       return 'A member voted on a proposal';
     case AuditAction.GROUP_CREATED:
       return `${actor} created a new group: "${String(meta.name ?? 'New Group')}"`;
     case AuditAction.GROUP_JOINED:
-      return `${actor} joined a community group`;
+      return meta.groupName
+        ? `${actor} joined "${String(meta.groupName)}"`
+        : `${actor} joined a community group`;
     case AuditAction.PROJECT_CREATED:
-      return `${actor} started a new project`;
+      return meta.title
+        ? `${actor} started a new project: "${String(meta.title)}"`
+        : `${actor} started a new project`;
     case AuditAction.MILESTONE_SUBMITTED:
-      return `${actor} submitted a project milestone for review`;
+      return meta.milestoneName
+        ? `${actor} submitted "${String(meta.milestoneName)}" for review`
+        : `${actor} submitted a project milestone for review`;
     case AuditAction.MILESTONE_VERIFIED:
-      return `A project milestone was ${meta.approved ? 'approved' : 'rejected'}`;
+      return meta.milestoneName
+        ? `"${String(meta.milestoneName)}" was ${meta.approved ? 'approved' : 'rejected'}`
+        : `A project milestone was ${meta.approved ? 'approved' : 'rejected'}`;
     case AuditAction.EMERGENCY_REPORTED:
       return 'An emergency was reported in this area';
     case AuditAction.LISTING_CREATED:
@@ -124,19 +134,19 @@ function buildSafeMeta(
     case AuditAction.PROPOSAL_CREATED:
       return { title: raw.title, scope: raw.scope };
     case AuditAction.PROPOSAL_STATUS_CHANGED:
-      return { newStatus: raw.newStatus, stage: raw.stage };
+      return { newStatus: raw.newStatus, stage: raw.stage, title: raw.title };
     case AuditAction.PROPOSAL_VOTE_CAST:
       return {};
     case AuditAction.GROUP_CREATED:
       return { name: raw.name, type: raw.type };
     case AuditAction.GROUP_JOINED:
-      return {};
+      return { groupName: raw.groupName };
     case AuditAction.PROJECT_CREATED:
-      return { proposalId: raw.proposalId };
+      return { proposalId: raw.proposalId, title: raw.title };
     case AuditAction.MILESTONE_SUBMITTED:
-      return {};
+      return { projectId: raw.projectId, milestoneName: raw.milestoneName, projectTitle: raw.projectTitle };
     case AuditAction.MILESTONE_VERIFIED:
-      return { approved: raw.approved, projectId: raw.projectId };
+      return { approved: raw.approved, projectId: raw.projectId, milestoneName: raw.milestoneName, projectTitle: raw.projectTitle };
     case AuditAction.EMERGENCY_REPORTED:
       return { type: raw.type };
     case AuditAction.LISTING_CREATED:
