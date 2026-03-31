@@ -49,7 +49,7 @@ export function MobileBottomNav() {
   const pathname = usePathname()
   const { hasAnyRole } = useRole()
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const showAdmin = hasAnyRole(["admin", "super_admin", "county_coordinator", "compliance_officer"])
+  const showAdmin = hasAnyRole(["super_admin", "compliance_officer", "ward_admin", "constituency_admin", "county_admin"])
 
   return (
     <>

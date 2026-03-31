@@ -7,8 +7,15 @@ import { ProtectedRoute } from "@/components/auth/protected-route"
 import { AdminDashboard } from "@/components/admin/admin-dashboard"
 import { Users, Shield, TrendingUp, AlertTriangle } from "lucide-react"
 import { adminApi } from "@/lib/api"
+import { useRole } from "@/contexts/role-context"
+
+const LOCATION_ADMIN_ROLES = ["ward_admin", "constituency_admin", "county_admin"]
+const ALL_ADMIN_ROLES = ["super_admin", "compliance_officer", ...LOCATION_ADMIN_ROLES]
 
 export default function AdminPage() {
+  const { hasAnyRole } = useRole()
+  const isLocationAdmin = hasAnyRole(LOCATION_ADMIN_ROLES) && !hasAnyRole(["super_admin", "compliance_officer"])
+
   const { data: stats, isLoading } = useQuery({
     queryKey: ["admin", "stats"],
     queryFn: () => adminApi.getStats(),
@@ -55,17 +62,21 @@ export default function AdminPage() {
   ]
 
   return (
-    <ProtectedRoute requiredRoles={["admin", "super_admin", "compliance_officer"]}>
+    <ProtectedRoute requiredRoles={ALL_ADMIN_ROLES}>
       <div className="container mx-auto px-4 py-8 space-y-8">
         <PageHeader
-          title="System Administration"
-          description="Monitor platform health, manage users, and configure system settings."
-          badge="Admin Only"
+          title={isLocationAdmin ? "Location Administration" : "System Administration"}
+          description={
+            isLocationAdmin
+              ? "Review proposals and manage activities in your area."
+              : "Monitor platform health, manage users, and configure system settings."
+          }
+          badge={isLocationAdmin ? "Location Admin" : "Admin Only"}
         />
 
         <StatsGrid stats={statsCards} />
 
-        <AdminDashboard stats={stats} />
+        <AdminDashboard stats={stats} isLocationAdmin={isLocationAdmin} />
       </div>
     </ProtectedRoute>
   )

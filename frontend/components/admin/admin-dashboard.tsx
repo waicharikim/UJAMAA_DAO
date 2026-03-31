@@ -17,9 +17,10 @@ import { formatRelativeTime } from "@/lib/utils"
 
 interface Props {
   stats?: AdminStatsDto
+  isLocationAdmin?: boolean
 }
 
-export function AdminDashboard({ stats }: Props) {
+export function AdminDashboard({ stats, isLocationAdmin = false }: Props) {
   const { data: auditResult } = useQuery({
     queryKey: ["admin", "audit-recent"],
     queryFn: () => auditApi.search({ limit: 5 }),
@@ -90,16 +91,19 @@ export function AdminDashboard({ stats }: Props) {
     }
   }
 
+  // Location admins (ward/constituency/county) only see the tabs relevant to their role
+  const locationAdminTabs = ["overview", "governance", "barazas", "logs"]
+
   return (
     <div className="space-y-6">
-      <Tabs defaultValue="overview">
-        <TabsList className="grid w-full grid-cols-7">
+      <Tabs defaultValue={isLocationAdmin ? "governance" : "overview"}>
+        <TabsList className={`grid w-full ${isLocationAdmin ? "grid-cols-4" : "grid-cols-7"}`}>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="governance">Governance</TabsTrigger>
-          <TabsTrigger value="users">Users</TabsTrigger>
-          <TabsTrigger value="financial">Financial</TabsTrigger>
+          {!isLocationAdmin && <TabsTrigger value="users">Users</TabsTrigger>}
+          {!isLocationAdmin && <TabsTrigger value="financial">Financial</TabsTrigger>}
           <TabsTrigger value="barazas">Barazas</TabsTrigger>
-          <TabsTrigger value="settings">Settings</TabsTrigger>
+          {!isLocationAdmin && <TabsTrigger value="settings">Settings</TabsTrigger>}
           <TabsTrigger value="logs">Audit Logs</TabsTrigger>
         </TabsList>
 

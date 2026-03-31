@@ -61,7 +61,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { hasAnyRole } = useRole()
   const { lang, setLang, t } = useLanguage()
 
-  const showAdmin = hasAnyRole(["admin", "super_admin", "county_coordinator", "compliance_officer"])
+  const showAdmin = hasAnyRole(["super_admin", "compliance_officer", "ward_admin", "constituency_admin", "county_admin"])
 
   return (
     <aside
