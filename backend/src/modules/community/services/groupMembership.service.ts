@@ -519,17 +519,19 @@ class GroupMembershipService {
     filters: {
       isSystem?: boolean;
       voluntaryType?: string;
+      systemType?: string;
       search?: string;
       limit?: number;
       offset?: number;
     } = {}
   ) {
-    const { isSystem, voluntaryType, search, limit = 20, offset = 0 } = filters;
+    const { isSystem, voluntaryType, systemType, search, limit = 20, offset = 0 } = filters;
 
     const where: Prisma.GroupWhereInput = {
       status: GroupStatus.ACTIVE,
       ...(isSystem !== undefined && { isSystemGroup: isSystem }),
       ...(voluntaryType && { voluntaryType: voluntaryType as any }),
+      ...(systemType && { systemType: systemType as SystemGroupType }),
       ...(search && {
         name: { contains: search, mode: 'insensitive' as const },
       }),

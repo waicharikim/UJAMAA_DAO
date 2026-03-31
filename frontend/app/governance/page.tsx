@@ -174,7 +174,7 @@ export default function GovernancePage() {
   const costs = [
     { key: "cost_infrastructure", label: configEntries?.find(c => c.key === "cost_infrastructure")?.label ?? "Infrastructure (servers, DB, storage)", Icon: Server },
     { key: "cost_sms",            label: configEntries?.find(c => c.key === "cost_sms")?.label ?? "SMS verification (Africa's Talking)",      Icon: MessageSquare },
-    { key: "cost_mpesa_fees",     label: configEntries?.find(c => c.key === "cost_mpesa_fees")?.label ?? "M-Pesa API fees (~1.5% on dues)",         Icon: Banknote },
+    { key: "cost_mpesa_fees",     label: configEntries?.find(c => c.key === "cost_mpesa_fees")?.label ?? "M-Pesa API fees (~1.5% on contributions)",  Icon: Banknote },
     { key: "cost_blockchain_gas", label: configEntries?.find(c => c.key === "cost_blockchain_gas")?.label ?? "Blockchain gas (Base Sepolia → Base)",   Icon: TrendingUp },
   ]
 
@@ -276,7 +276,7 @@ export default function GovernancePage() {
 
           <p className="text-xs text-[#7A6E60] leading-relaxed">
             Platform costs are transparent and governed by the community. Any change to fees,
-            spending priorities, or dues tiers requires a community proposal voted on here.
+            spending priorities, or contribution tiers requires a community proposal voted on here.
           </p>
 
           {/* Monthly cost breakdown */}
@@ -313,10 +313,10 @@ export default function GovernancePage() {
             </div>
           </div>
 
-          {/* Dues tiers */}
+          {/* Contribution tiers */}
           <div>
             <p className="text-[10px] font-bold uppercase tracking-widest text-[#0A1F14]/40 mb-2">
-              How members cover costs (dues tiers)
+              How members cover costs (contribution tiers)
             </p>
             <div className="grid grid-cols-3 gap-2">
               {tiers.map(({ tier, kesKey, defaultKes }) => {

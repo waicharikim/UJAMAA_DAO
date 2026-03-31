@@ -151,6 +151,10 @@ export class ProposalController {
       scope: scope as ProposalScope | undefined,
       limit: limit ? parseInt(limit as string) : undefined,
       offset: offset ? parseInt(offset as string) : undefined,
+      callerContext: {
+        roles: req.user!.roles ?? [],
+        primaryWardId: req.user!.primaryWardId,
+      },
     });
     sendSuccess(res, result, 'Proposals retrieved');
   }

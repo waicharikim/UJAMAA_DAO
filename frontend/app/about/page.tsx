@@ -29,7 +29,7 @@ const PILLARS = [
   {
     label: "Prosper Together",
     icon: Coins,
-    description: "Community treasury managed on-chain, funded by dues, and unlocked by collective decision — every shilling traceable to outcomes.",
+    description: "Community treasury managed on-chain, funded by contributions, and unlocked by collective decision — every shilling traceable to outcomes.",
   },
 ]
 
@@ -277,7 +277,7 @@ export default function AboutPage() {
                 icon: Coins,
                 label: "Community Treasury",
                 tag: "On-chain · Multi-sig",
-                desc: "Funded by dues and community income. Spent only through governance proposals with quorum.",
+                desc: "Funded by contributions and community income. Spent only through governance proposals with quorum.",
               },
             ].map((item) => {
               const Icon = item.icon

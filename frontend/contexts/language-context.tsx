@@ -80,7 +80,7 @@ const TRANSLATIONS: Record<string, Record<Language, string>> = {
   // Economy
   "economy.pr_balance":      { en: "Participation Rights", sw: "Haki za Kushiriki" },
   "economy.withdraw":        { en: "Withdraw",              sw: "Toa pesa" },
-  "economy.dues":            { en: "Dues",                  sw: "Ada" },
+  "economy.dues":            { en: "Contributions",         sw: "Michango" },
 
   // Ward Declaration
   "declaration.view": { en: "View founding declaration", sw: "Angalia tamko la uanzishaji" },

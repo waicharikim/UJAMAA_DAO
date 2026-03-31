@@ -873,6 +873,7 @@ export const communityApi = {
   getGroups: (params?: {
     isSystem?: boolean
     voluntaryType?: string
+    systemType?: string
     search?: string
     limit?: number
     offset?: number
@@ -880,6 +881,7 @@ export const communityApi = {
     const q = new URLSearchParams()
     if (params?.isSystem !== undefined) q.set("isSystem", String(params.isSystem))
     if (params?.voluntaryType) q.set("voluntaryType", params.voluntaryType)
+    if (params?.systemType) q.set("systemType", params.systemType)
     if (params?.search) q.set("search", params.search)
     if (params?.limit) q.set("limit", String(params.limit))
     if (params?.offset) q.set("offset", String(params.offset))

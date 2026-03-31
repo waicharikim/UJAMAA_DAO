@@ -71,12 +71,13 @@ export class GroupController {
 
   static async getGroups(req: AuthRequest, res: Response) {
     const userId = req.user!.userId;
-    const { isSystem, voluntaryType, search, limit, offset } =
+    const { isSystem, voluntaryType, systemType, search, limit, offset } =
       req.query as Record<string, string>;
     const result = await groupMembershipService.getGroups(userId, {
       isSystem:
         isSystem === 'true' ? true : isSystem === 'false' ? false : undefined,
       voluntaryType,
+      systemType,
       search,
       limit: limit ? parseInt(limit) : undefined,
       offset: offset ? parseInt(offset) : undefined,

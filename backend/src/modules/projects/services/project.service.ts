@@ -11,6 +11,7 @@ import { roleService } from '../../../core/services/role.service.js';
 import { ApiError } from '../../../core/errors/ApiError.js';
 import { logger } from '../../../core/logger/logger.js';
 import { auditService } from '../../audit/services/audit.service.js';
+import { treasuryService } from '../../treasury/services/treasury.service.js';
 import { AuditAction } from '../../audit/types.js';
 import { ParticipationRightsReason } from '../../economy/types.js';
 import { ImpactPointReason } from '../../reputation/types.js';
@@ -99,6 +100,27 @@ export class ProjectService {
       project.id,
       { proposalId: dto.proposalId, title: project.title }
     );
+
+    // Debit group treasury if proposal had a funding amount committed
+    if (proposal.groupFundingAmount && Number(proposal.groupFundingAmount) > 0 && proposal.groupId) {
+      try {
+        await treasuryService.withdraw(
+          proposal.groupId,
+          {
+            amount: Number(proposal.groupFundingAmount),
+            description: `Project funding: ${proposal.title}`,
+            projectId: project.id,
+            referenceType: 'PROJECT_FUNDING',
+          },
+          userId
+        );
+      } catch (err) {
+        logger.warn(
+          { groupId: proposal.groupId, projectId: project.id, err },
+          '[PROJECT] Treasury debit failed — project still created'
+        );
+      }
+    }
 
     return project;
   }

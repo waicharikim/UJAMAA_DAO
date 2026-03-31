@@ -7,7 +7,7 @@
  * Updated: Align with actual Prisma schema (GroupMemberVote, ProposalStatus, budget)
  */
 
-import { ProposalStatus, ProposalType, ProposalScope } from '@prisma/client';
+import { Prisma, ProposalStatus, ProposalType, ProposalScope } from '@prisma/client';
 import { prisma } from '../../../core/database/client.js';
 import { participationRightsService } from '../../economy/services/participationRights.service.js';
 import { ParticipationRightsReason } from '../../economy/types.js';
@@ -527,9 +527,42 @@ class ProposalService {
     scope?: ProposalScope;
     limit?: number;
     offset?: number;
+    callerContext?: { roles: string[]; primaryWardId?: string };
   }) {
-    const { groupId, status, scope, limit = 20, offset = 0 } = params;
-    const where = {
+    const { groupId, status, scope, limit = 20, offset = 0, callerContext } = params;
+
+    // Scope proposals to location admin's jurisdiction when applicable
+    let locationWhere: Prisma.ProposalWhereInput = {};
+    if (!groupId && callerContext?.roles) {
+      const roles = callerContext.roles;
+      const wardId = callerContext.primaryWardId;
+      const isSuperAdmin =
+        roles.includes('system:super_admin') ||
+        roles.includes('system:compliance_officer');
+
+      if (!isSuperAdmin && wardId) {
+        if (roles.includes('location:ward_admin')) {
+          locationWhere = { group: { wardId } };
+        } else if (roles.includes('location:constituency_admin')) {
+          const ward = await prisma.ward.findUnique({
+            where: { id: wardId },
+            select: { constituencyId: true },
+          });
+          if (ward?.constituencyId)
+            locationWhere = { group: { constituencyId: ward.constituencyId } };
+        } else if (roles.includes('location:county_admin')) {
+          const ward = await prisma.ward.findUnique({
+            where: { id: wardId },
+            select: { countyId: true },
+          });
+          if (ward?.countyId)
+            locationWhere = { group: { countyId: ward.countyId } };
+        }
+      }
+    }
+
+    const where: Prisma.ProposalWhereInput = {
+      ...locationWhere,
       ...(groupId ? { groupId } : {}),
       ...(status ? { status } : {}),
       ...(scope ? { proposalScope: scope } : {}),

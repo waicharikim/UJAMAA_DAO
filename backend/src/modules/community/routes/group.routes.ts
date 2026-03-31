@@ -63,6 +63,7 @@ router.get(
     schema: z.object({
       isSystem: z.enum(['true', 'false']).optional(),
       voluntaryType: z.string().optional(),
+      systemType: z.string().optional(),
       search: z.string().optional(),
       limit: z.string().optional(),
       offset: z.string().optional(),

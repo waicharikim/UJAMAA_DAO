@@ -279,7 +279,7 @@ export default function TreasuryPage() {
                 </div>
               ) : !txData?.transactions.length ? (
                 <p className="text-sm text-center py-8" style={{ color: "rgba(14,11,8,0.35)" }}>
-                  No transactions yet. Dues payments will appear here once received.
+                  No transactions yet. Contributions will appear here once received.
                 </p>
               ) : (
                 <>

@@ -112,7 +112,7 @@ export function PlatformConfigEditor() {
               ))}
             </div>
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-[#0A1F14]/40 mb-1">Dues tiers</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[#0A1F14]/40 mb-1">Contribution tiers</p>
               {tierEntries.map((e) => (
                 <ConfigRow key={e.key} entry={e} onSave={(key, value) => updateMutation.mutate({ key, value })} />
               ))}

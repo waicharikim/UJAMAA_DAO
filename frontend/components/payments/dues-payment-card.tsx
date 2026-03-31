@@ -69,7 +69,7 @@ export function DuesPaymentCard() {
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
             <Banknote className="h-4 w-4" style={{ color: "#1E3D2F" }} />
-            Monthly Dues
+            Monthly Contributions
           </CardTitle>
         </CardHeader>
 
@@ -81,7 +81,7 @@ export function DuesPaymentCard() {
             </div>
           ) : isError ? (
             <div className="py-2 space-y-2">
-              <p className="text-xs text-warm-gray">Unable to load dues history.</p>
+              <p className="text-xs text-warm-gray">Unable to load contribution history.</p>
               <button
                 onClick={() => queryClient.refetchQueries({ queryKey: ["dues-history"] })}
                 className="text-xs font-semibold underline underline-offset-2"
@@ -106,8 +106,8 @@ export function DuesPaymentCard() {
                 }
                 <p className="text-sm font-semibold" style={{ color: paidThisMonth ? "#1E3D2F" : "#C9922A" }}>
                   {paidThisMonth
-                    ? `Dues paid for ${period}`
-                    : `Dues unpaid for ${period}`
+                    ? `Contribution paid for ${period}`
+                    : `Contribution unpaid for ${period}`
                   }
                 </p>
               </div>
@@ -171,7 +171,7 @@ export function DuesPaymentCard() {
 
               {!recentPaid.length && paidThisMonth === false && (
                 <p className="text-xs text-center py-2" style={{ color: "rgba(14,11,8,0.35)" }}>
-                  No dues paid yet. Monthly dues keep your membership active.
+                  No contributions paid yet. Monthly contributions keep your membership active.
                 </p>
               )}
             </>
@@ -185,7 +185,7 @@ export function DuesPaymentCard() {
         purpose="DUES"
         purposeMeta={{ tier: selectedTier, period }}
         amount={tier.amount}
-        label={`Monthly dues — ${tier.label}`}
+        label={`Monthly contribution — ${tier.label}`}
         onSuccess={handleSuccess}
       />
     </>
