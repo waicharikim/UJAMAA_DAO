@@ -135,18 +135,28 @@ class ProposalService {
     const group = proposal.group;
     const groupId = proposal.groupId;
 
-    // ── STAGE 1: LEADER forwards DRAFT ──────────────────────────────────────
+    // ── STAGE 1: forward DRAFT ───────────────────────────────────────────────
+    // System groups: location admin (same authority as Stage 2)
+    // Voluntary groups: group LEADER only
     if (proposal.status === ProposalStatus.DRAFT) {
-      const membership = groupId
-        ? await prisma.groupMember.findFirst({
-            where: { userId, groupId, active: true },
-            select: { role: true },
-          })
-        : null;
-      if (!membership || !['LEADER', 'ADMIN'].includes(membership.role))
-        throw ApiError.forbidden(
-          'Only group leaders or admins can forward proposals for review'
-        );
+      const isSystemGroup = group?.isSystemGroup ?? false;
+      if (isSystemGroup) {
+        if (!group || !canLocationAdminApprove(group, callerSystemRoles))
+          throw ApiError.forbidden(
+            `Requires ${group ? requiredRoleLabel(group) : 'platform administrator'} to forward this proposal`
+          );
+      } else {
+        const membership = groupId
+          ? await prisma.groupMember.findFirst({
+              where: { userId, groupId, active: true },
+              select: { role: true },
+            })
+          : null;
+        if (!membership || membership.role !== 'LEADER')
+          throw ApiError.forbidden(
+            'Only the group leader can forward proposals for review'
+          );
+      }
 
       if (dto.decision === 'REJECT') {
         const updated = await prisma.proposal.update({
@@ -245,9 +255,11 @@ class ProposalService {
   }
 
   /**
-   * Start voting period (group LEADER, requires APPROVED_FOR_VOTING status)
+   * Start voting period, requires APPROVED_FOR_VOTING status.
+   * Voluntary groups: group LEADER only.
+   * System groups: location admin (ward/constituency/county).
    */
-  async startVoting(userId: string, proposalId: string) {
+  async startVoting(userId: string, proposalId: string, callerSystemRoles: string[] = []) {
     const proposal = await prisma.proposal.findUnique({
       where: { id: proposalId },
       include: { group: true },
@@ -259,14 +271,23 @@ class ProposalService {
         'Proposal must be approved before voting can start'
       );
 
-    const membership = proposal.groupId
-      ? await prisma.groupMember.findFirst({
-          where: { userId, groupId: proposal.groupId, active: true },
-          select: { role: true },
-        })
-      : null;
-    if (!membership || !['LEADER', 'ADMIN'].includes(membership.role))
-      throw ApiError.forbidden('Only group leaders or admins can start voting');
+    const group = proposal.group;
+    const isSystemGroup = group?.isSystemGroup ?? false;
+    if (isSystemGroup) {
+      if (!group || !canLocationAdminApprove(group, callerSystemRoles))
+        throw ApiError.forbidden(
+          `Requires ${group ? requiredRoleLabel(group) : 'platform administrator'} to start voting`
+        );
+    } else {
+      const membership = proposal.groupId
+        ? await prisma.groupMember.findFirst({
+            where: { userId, groupId: proposal.groupId, active: true },
+            select: { role: true },
+          })
+        : null;
+      if (!membership || membership.role !== 'LEADER')
+        throw ApiError.forbidden('Only the group leader can start voting');
+    }
 
     const isEmergency = proposal.proposalType === ProposalType.EMERGENCY;
     const groupScope = proposal.group?.locationScope;

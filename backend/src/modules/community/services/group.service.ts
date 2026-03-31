@@ -321,8 +321,8 @@ ${wardName}  ·  ${dateStr}  ·  ${shortId}`;
     const membership = await prisma.groupMember.findUnique({
       where: { userId_groupId: { userId, groupId } },
     });
-    if (!membership || !['LEADER', 'ADMIN'].includes(membership.role)) {
-      throw ApiError.forbidden('Only the group leader or admin can update settings');
+    if (!membership || membership.role !== 'LEADER') {
+      throw ApiError.forbidden('Only the group leader can update settings');
     }
 
     const group = await prisma.group.findUnique({ where: { id: groupId } });
@@ -350,8 +350,8 @@ ${wardName}  ·  ${dateStr}  ·  ${shortId}`;
     const actor = await prisma.groupMember.findUnique({
       where: { userId_groupId: { userId: actorId, groupId } },
     });
-    if (!actor || !['LEADER', 'ADMIN'].includes(actor.role)) {
-      throw ApiError.forbidden('Only the group leader or admin can change member roles');
+    if (!actor || actor.role !== 'LEADER') {
+      throw ApiError.forbidden('Only the group leader can change member roles');
     }
     if (targetUserId === actorId) {
       throw ApiError.badRequest('Cannot change your own role');

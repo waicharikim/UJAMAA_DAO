@@ -36,7 +36,8 @@ export class ProposalController {
   static async startVoting(req: AuthRequest, res: Response) {
     const userId = req.user!.userId;
     const { proposalId } = req.body;
-    const result = await proposalService.startVoting(userId, proposalId);
+    const systemRoles = req.user!.roles ?? [];
+    const result = await proposalService.startVoting(userId, proposalId, systemRoles);
     sendSuccess(res, result, 'Voting started');
   }
 
