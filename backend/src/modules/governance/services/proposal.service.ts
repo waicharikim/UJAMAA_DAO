@@ -143,9 +143,9 @@ class ProposalService {
             select: { role: true },
           })
         : null;
-      if (!membership || membership.role !== 'LEADER')
+      if (!membership || !['LEADER', 'ADMIN'].includes(membership.role))
         throw ApiError.forbidden(
-          'Only group leaders can forward proposals for review'
+          'Only group leaders or admins can forward proposals for review'
         );
 
       if (dto.decision === 'REJECT') {
@@ -265,8 +265,8 @@ class ProposalService {
           select: { role: true },
         })
       : null;
-    if (!membership || membership.role !== 'LEADER')
-      throw ApiError.forbidden('Only group leaders can start voting');
+    if (!membership || !['LEADER', 'ADMIN'].includes(membership.role))
+      throw ApiError.forbidden('Only group leaders or admins can start voting');
 
     const isEmergency = proposal.proposalType === ProposalType.EMERGENCY;
     const groupScope = proposal.group?.locationScope;
