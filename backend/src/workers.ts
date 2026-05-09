@@ -13,6 +13,7 @@
  * Features: graceful shutdown, full error handling, failed job alerts, dead-letter queue
  */
 
+import './tracer.js';
 import * as Sentry from '@sentry/node';
 import { logger } from './core/logger/logger.js';
 import { registerAllJobs } from './core/jobs/register.js';

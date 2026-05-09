@@ -103,6 +103,11 @@ services:
       - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET:-}
       # ── Sentry (error monitoring) ────────────────────────────────────────
       - SENTRY_DSN=${SENTRY_DSN:-}
+      # ── DataDog APM ──────────────────────────────────────────────────────
+      - DD_AGENT_HOST=datadog
+      - DD_TRACE_AGENT_PORT=8126
+      - DD_ENV=${NODE_ENV:-development}
+      - DD_SERVICE=ujamaa-api
       # VERSION B: Uncomment for metrics
       # - STATSD_HOST=web-metrics
       # - STATSD_PORT=8125
@@ -216,6 +221,11 @@ services:
       - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET:-}
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
       - DISCORD_PUBLIC_KEY=${DISCORD_PUBLIC_KEY:-}
+      # ── DataDog APM ──────────────────────────────────────────────────────
+      - DD_AGENT_HOST=datadog
+      - DD_TRACE_AGENT_PORT=8126
+      - DD_ENV=${NODE_ENV:-development}
+      - DD_SERVICE=ujamaa-worker
       # VERSION B: Uncomment for metrics
       # - STATSD_HOST=worker-metrics
       # - STATSD_PORT=8125
@@ -381,6 +391,32 @@ services:
       timeout: 3s
       retries: 5
       start_period: 5s
+
+  # ─────────────────────────────────────────────
+  # DATADOG AGENT
+  # ─────────────────────────────────────────────
+  datadog:
+    image: gcr.io/datadoghq/agent:7
+    container_name: ujamaa_datadog
+    restart: unless-stopped
+    environment:
+      - DD_API_KEY=${DD_API_KEY}
+      - DD_SITE=us5.datadoghq.com
+      - DD_APM_ENABLED=true
+      - DD_APM_NON_LOCAL_TRAFFIC=true
+      - DD_LOGS_ENABLED=true
+      - DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true
+      - DD_CONTAINER_EXCLUDE=name:ujamaa_datadog
+      - DD_DOGSTATSD_NON_LOCAL_TRAFFIC=true
+      - DD_PROCESS_AGENT_ENABLED=true
+      - DD_HOSTNAME=ujamaa-dev
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc/:/host/proc/:ro
+      - /sys/fs/cgroup:/host/sys/fs/cgroup:ro
+      - ./datadog/conf.d:/etc/datadog-agent/conf.d:ro
+    networks:
+      - backend
 
   # ═════════════════════════════════════════════════════════════════════════
   # VERSION B: OBSERVABILITY STACK (COMMENTED OUT)
