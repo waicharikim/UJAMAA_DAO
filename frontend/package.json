@@ -6,7 +6,9 @@
     "dev": "next dev --turbopack",
     "build": "next build --experimental-build-mode compile",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:e2e": "playwright test",
+    "test:bs": "browserstack-node-sdk playwright test"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -44,11 +46,13 @@
     "zod": "^3.25.28"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "@tailwindcss/typography": "^0.5.19",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "autoprefixer": "^10.4.21",
+    "browserstack-node-sdk": "^1.53.2",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "postcss": "^8.5.4",
