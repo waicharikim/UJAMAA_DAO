@@ -13,6 +13,7 @@
  * Features: graceful shutdown, full error handling, failed job alerts, dead-letter queue
  */
 
+import * as Sentry from '@sentry/node';
 import { logger } from './core/logger/logger.js';
 import { registerAllJobs } from './core/jobs/register.js';
 import { createWorker, createQueue } from './core/queue/index.js';
@@ -93,6 +94,7 @@ async function shutdownWorkers(signal: string): Promise<void> {
       'Error closing workers during shutdown'
     );
   }
+  await Sentry.close(2000);
   process.exit(0);
 }
 
@@ -126,11 +128,26 @@ const economyWorker = createWorker('economy', async (job) => {
 
   try {
     if (name === MONTHLY_PR_REGENERATION_JOB) {
-      await processMonthlyPRRegeneration();
+      await Sentry.withMonitor(MONTHLY_PR_REGENERATION_JOB, () => processMonthlyPRRegeneration(), {
+        schedule: { type: 'crontab', value: '5 0 1 * *' },
+        checkinMargin: 5,
+        maxRuntime: 30,
+        timezone: 'Africa/Nairobi',
+      });
     } else if (name === MONTHLY_PR_INACTIVITY_DECAY_JOB) {
-      await processInactivityDecay();
+      await Sentry.withMonitor(MONTHLY_PR_INACTIVITY_DECAY_JOB, () => processInactivityDecay(), {
+        schedule: { type: 'crontab', value: '10 0 2 * *' },
+        checkinMargin: 5,
+        maxRuntime: 30,
+        timezone: 'Africa/Nairobi',
+      });
     } else if (name === DAILY_COMMITMENT_PENALTIES_JOB) {
-      await processCommitmentPenalties();
+      await Sentry.withMonitor(DAILY_COMMITMENT_PENALTIES_JOB, () => processCommitmentPenalties(), {
+        schedule: { type: 'crontab', value: '0 2 * * *' },
+        checkinMargin: 5,
+        maxRuntime: 15,
+        timezone: 'Africa/Nairobi',
+      });
     } else {
       logger.warn(
         { jobName: name, queue: 'economy' },
@@ -155,9 +172,19 @@ const economyWorker = createWorker('economy', async (job) => {
 const userCleanupWorker = createWorker('user-cleanup', async (job) => {
   try {
     if (job.name === USER_CLEANUP_JOB_NAME) {
-      await processUserCleanup(job);
+      await Sentry.withMonitor(USER_CLEANUP_JOB_NAME, () => processUserCleanup(job), {
+        schedule: { type: 'interval', value: 4, unit: 'hour' },
+        checkinMargin: 10,
+        maxRuntime: 20,
+        timezone: 'Africa/Nairobi',
+      });
     } else if (job.name === AUTH_CLEANUP_JOB_NAME) {
-      await processAuthCleanup(job);
+      await Sentry.withMonitor(AUTH_CLEANUP_JOB_NAME, () => processAuthCleanup(job), {
+        schedule: { type: 'crontab', value: '0 3 * * *' },
+        checkinMargin: 5,
+        maxRuntime: 10,
+        timezone: 'Africa/Nairobi',
+      });
     } else {
       logger.warn(
         { jobName: job.name, queue: 'user-cleanup' },
@@ -211,13 +238,33 @@ const integrationWorker = createWorker('integration', async (job) => {
 const governanceWorker = createWorker('governance', async (job) => {
   try {
     if (job.name === SCHEDULE_ELECTIONS_JOB) {
-      await processScheduleElections();
+      await Sentry.withMonitor(SCHEDULE_ELECTIONS_JOB, () => processScheduleElections(), {
+        schedule: { type: 'crontab', value: '0 1 1 * *' },
+        checkinMargin: 5,
+        maxRuntime: 20,
+        timezone: 'Africa/Nairobi',
+      });
     } else if (job.name === OPEN_NOMINATIONS_JOB) {
-      await processOpenNominations();
+      await Sentry.withMonitor(OPEN_NOMINATIONS_JOB, () => processOpenNominations(), {
+        schedule: { type: 'crontab', value: '15 0 * * *' },
+        checkinMargin: 5,
+        maxRuntime: 10,
+        timezone: 'Africa/Nairobi',
+      });
     } else if (job.name === OPEN_VOTING_JOB) {
-      await processOpenVoting();
+      await Sentry.withMonitor(OPEN_VOTING_JOB, () => processOpenVoting(), {
+        schedule: { type: 'crontab', value: '20 0 * * *' },
+        checkinMargin: 5,
+        maxRuntime: 10,
+        timezone: 'Africa/Nairobi',
+      });
     } else if (job.name === TALLY_RESULTS_JOB) {
-      await processTallyResults();
+      await Sentry.withMonitor(TALLY_RESULTS_JOB, () => processTallyResults(), {
+        schedule: { type: 'crontab', value: '25 0 * * *' },
+        checkinMargin: 5,
+        maxRuntime: 15,
+        timezone: 'Africa/Nairobi',
+      });
     } else {
       logger.warn(
         { jobName: job.name, queue: 'governance' },
@@ -242,7 +289,12 @@ const governanceWorker = createWorker('governance', async (job) => {
 const notificationsWorker = createWorker('notifications', async (job) => {
   try {
     if (job.name === DUES_REMINDER_JOB) {
-      await processDuesReminder();
+      await Sentry.withMonitor(DUES_REMINDER_JOB, () => processDuesReminder(), {
+        schedule: { type: 'crontab', value: '0 8 * * *' },
+        checkinMargin: 5,
+        maxRuntime: 15,
+        timezone: 'Africa/Nairobi',
+      });
     } else {
       logger.warn(
         { jobName: job.name, queue: 'notifications' },
