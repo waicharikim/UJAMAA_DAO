@@ -23,6 +23,7 @@
  * Security Hardened: February 2026
  */
 
+import * as Sentry from '@sentry/node';
 import express, { RequestHandler } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -363,6 +364,8 @@ logger.info(
 // ============================================================================
 
 app.use(requestCleanupMiddleware as RequestHandler);
+Sentry.setupExpressErrorHandler(app);
+
 app.use(notFoundHandler as RequestHandler);
 app.use(errorHandler as any);
 

@@ -101,6 +101,8 @@ services:
       # ── Telegram (webhook handler sends reply DMs from web service) ──────
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET:-}
+      # ── Sentry (error monitoring) ────────────────────────────────────────
+      - SENTRY_DSN=${SENTRY_DSN:-}
       # VERSION B: Uncomment for metrics
       # - STATSD_HOST=web-metrics
       # - STATSD_PORT=8125

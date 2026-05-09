@@ -703,6 +703,16 @@ export interface RegisterBarazaGroupDto {
   metadata?: Record<string, unknown>
 }
 
+export interface BarazaSessionDto {
+  id: string
+  barazaGroupId: string
+  scheduledAt: string
+  openedAt: string | null
+  closedAt: string | null
+  createdBy: string
+  createdAt: string
+}
+
 export const integrationApi = {
   getBarazaGroups: () =>
     apiFetch<BarazaGroupDto[]>("/integration/baraza-groups"),
@@ -741,6 +751,27 @@ export const integrationApi = {
   /** Admin only — all baraza groups across all wards */
   getAllBarazaGroups: () =>
     apiFetch<(BarazaGroupDto & { _count: { attendances: number } })[]>("/integration/baraza-groups/all"),
+
+  getSessions: (barazaGroupId: string) =>
+    apiFetch<BarazaSessionDto[]>(`/integration/baraza-groups/${barazaGroupId}/sessions`),
+
+  scheduleSession: (barazaGroupId: string, scheduledAt: string) =>
+    apiFetch<BarazaSessionDto>(`/integration/baraza-groups/${barazaGroupId}/sessions/schedule`, {
+      method: "POST",
+      body: JSON.stringify({ scheduledAt }),
+    }),
+
+  openSession: (barazaGroupId: string) =>
+    apiFetch<BarazaSessionDto>(`/integration/baraza-groups/${barazaGroupId}/sessions/open`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
+  closeSession: (barazaGroupId: string) =>
+    apiFetch<{ session: BarazaSessionDto; attendanceCount: number }>(
+      `/integration/baraza-groups/${barazaGroupId}/sessions/close`,
+      { method: "POST", body: JSON.stringify({}) }
+    ),
 }
 
 // ─────────────────────────────────────────────────────────

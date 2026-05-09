@@ -12,6 +12,7 @@
  * Security Hardened: February 2026
  */
 
+import './instrument.js';
 import app, { servicesReady } from './app.js';
 import { logger } from './core/logger/logger.js';
 import { prisma } from './core/database/client.js';

@@ -21,6 +21,10 @@ import {
   recordAttendance,
   deactivateBarazaGroup,
   refreshInviteLink,
+  listSessions,
+  scheduleSessionHttp,
+  openSessionHttp,
+  closeSessionHttp,
 } from '../controllers/bot.controller.js';
 
 const router = Router();
@@ -106,6 +110,38 @@ router.post(
     allowedRoles: [SystemRoles.WARD_ADMIN, SystemRoles.SUPER_ADMIN],
   }),
   refreshInviteLink
+);
+
+// ─────────────────────────────────────────────
+// Session management
+// ─────────────────────────────────────────────
+
+const scheduleSessionSchema = z.object({
+  scheduledAt: z.string().min(1),
+});
+
+router.get('/baraza-groups/:id/sessions', authenticate, listSessions);
+
+router.post(
+  '/baraza-groups/:id/sessions/schedule',
+  authenticate,
+  authorize({ allowedRoles: [SystemRoles.WARD_ADMIN, SystemRoles.SUPER_ADMIN] }),
+  validateRequest({ schema: scheduleSessionSchema, target: 'body' }),
+  scheduleSessionHttp
+);
+
+router.post(
+  '/baraza-groups/:id/sessions/open',
+  authenticate,
+  authorize({ allowedRoles: [SystemRoles.WARD_ADMIN, SystemRoles.SUPER_ADMIN] }),
+  openSessionHttp
+);
+
+router.post(
+  '/baraza-groups/:id/sessions/close',
+  authenticate,
+  authorize({ allowedRoles: [SystemRoles.WARD_ADMIN, SystemRoles.SUPER_ADMIN] }),
+  closeSessionHttp
 );
 
 export default router;

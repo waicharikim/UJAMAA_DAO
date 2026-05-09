@@ -789,3 +789,128 @@ export async function deactivateBarazaGroup(
     next(err);
   }
 }
+
+// ─────────────────────────────────────────────
+// Session management (HTTP API)
+// ─────────────────────────────────────────────
+
+export async function listSessions(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const barazaGroupId = req.params.id;
+    const limit = Math.min(parseInt(String(req.query.limit ?? 20), 10), 50);
+
+    const sessions = await prisma.barazaSession.findMany({
+      where: { barazaGroupId },
+      orderBy: { scheduledAt: 'desc' },
+      take: limit,
+    });
+
+    sendSuccess(res, sessions);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function scheduleSessionHttp(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const user = (req as any).user;
+    const barazaGroupId = req.params.id;
+    const { scheduledAt } = req.body as { scheduledAt: string };
+
+    const dt = new Date(scheduledAt);
+    if (isNaN(dt.getTime()) || dt <= new Date()) {
+      throw ApiError.badRequest('scheduledAt must be a valid future ISO datetime');
+    }
+
+    const barazaGroup = await prisma.barazaGroup.findUnique({
+      where: { id: barazaGroupId },
+    });
+    if (!barazaGroup) throw ApiError.notFound('Baraza group not found');
+
+    if (!user.roles.includes(SystemRoles.SUPER_ADMIN)) {
+      const managedIds = await getManagedGroupIds(user.userId);
+      if (!managedIds.includes(barazaGroup.groupId)) {
+        throw ApiError.forbidden('You do not have admin rights over this baraza group');
+      }
+    }
+
+    const session = await barazaBotService.scheduleSession(
+      barazaGroupId,
+      dt,
+      user.userId
+    );
+    sendSuccess(res, session, 'Session scheduled', 201);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function openSessionHttp(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const user = (req as any).user;
+    const barazaGroupId = req.params.id;
+
+    const barazaGroup = await prisma.barazaGroup.findUnique({
+      where: { id: barazaGroupId },
+    });
+    if (!barazaGroup) throw ApiError.notFound('Baraza group not found');
+
+    if (!user.roles.includes(SystemRoles.SUPER_ADMIN)) {
+      const managedIds = await getManagedGroupIds(user.userId);
+      if (!managedIds.includes(barazaGroup.groupId)) {
+        throw ApiError.forbidden('You do not have admin rights over this baraza group');
+      }
+    }
+
+    const session = await barazaBotService.openSession(barazaGroupId);
+    if (!session) {
+      throw ApiError.badRequest('No scheduled session found — schedule one first');
+    }
+    sendSuccess(res, session, 'Session opened');
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function closeSessionHttp(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const user = (req as any).user;
+    const barazaGroupId = req.params.id;
+
+    const barazaGroup = await prisma.barazaGroup.findUnique({
+      where: { id: barazaGroupId },
+    });
+    if (!barazaGroup) throw ApiError.notFound('Baraza group not found');
+
+    if (!user.roles.includes(SystemRoles.SUPER_ADMIN)) {
+      const managedIds = await getManagedGroupIds(user.userId);
+      if (!managedIds.includes(barazaGroup.groupId)) {
+        throw ApiError.forbidden('You do not have admin rights over this baraza group');
+      }
+    }
+
+    const result = await barazaBotService.closeSession(barazaGroupId);
+    if (!result) {
+      throw ApiError.badRequest('No open session to close');
+    }
+    sendSuccess(res, result, 'Session closed');
+  } catch (err) {
+    next(err);
+  }
+}

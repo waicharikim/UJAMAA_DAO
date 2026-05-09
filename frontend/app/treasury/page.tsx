@@ -33,7 +33,9 @@ import {
   ArrowDownCircle,
   MapPin,
   RefreshCw,
+  Plus,
 } from "lucide-react"
+import { FundGroupModal } from "@/components/payments/fund-group-modal"
 
 // ── Helpers ───────────────────────────────────────────────
 
@@ -127,6 +129,7 @@ function TransactionRow({ tx }: { tx: WalletTransactionDto }) {
 export default function TreasuryPage() {
   const { user } = useAuth()
   const [page, setPage] = useState(1)
+  const [fundOpen, setFundOpen] = useState(false)
 
   // 1. Get user's group memberships
   const { data: memberships, isLoading: groupsLoading } = useQuery({
@@ -178,16 +181,26 @@ export default function TreasuryPage() {
             }
           </p>
         </div>
-        {wardGroup && (
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => refetch()}
+            onClick={() => setFundOpen(true)}
             className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition-all hover:opacity-80"
-            style={{ background: "rgba(30,61,47,0.08)", color: "#1E3D2F" }}
+            style={{ background: "#1E3D2F", color: "#fff" }}
           >
-            <RefreshCw className="h-3.5 w-3.5" />
-            Refresh
+            <Plus className="h-3.5 w-3.5" />
+            Fund a Group
           </button>
-        )}
+          {wardGroup && (
+            <button
+              onClick={() => refetch()}
+              className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition-all hover:opacity-80"
+              style={{ background: "rgba(30,61,47,0.08)", color: "#1E3D2F" }}
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              Refresh
+            </button>
+          )}
+        </div>
       </div>
 
       {/* No ward group yet */}
@@ -324,6 +337,8 @@ export default function TreasuryPage() {
           </p>
         </>
       )}
+
+      <FundGroupModal open={fundOpen} onClose={() => setFundOpen(false)} />
     </div>
   )
 }

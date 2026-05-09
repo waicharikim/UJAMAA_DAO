@@ -8,13 +8,13 @@
 FROM node:20-alpine AS base
 WORKDIR /app
 # Install dependencies only when package.json changes
-COPY package.json package-lock.json ./
+COPY package.json package-lock.json .npmrc ./
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DEV — dependencies installed, source mounted at runtime by docker-compose
 # ─────────────────────────────────────────────────────────────────────────────
 FROM base AS dev
-RUN npm ci
+RUN npm ci --legacy-peer-deps
 # Source code is mounted by docker-compose volume — not copied here
 EXPOSE 3000
 ENV NODE_ENV=development

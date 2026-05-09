@@ -1,6 +1,7 @@
 import path from "path"
 import { fileURLToPath } from "url"
 import { createRequire } from "module"
+// withSentryConfig not used — instrumentation.ts handles Sentry init; source maps via CI build step
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const require = createRequire(import.meta.url)

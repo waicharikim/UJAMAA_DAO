@@ -4,11 +4,12 @@ import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   MessageSquare, Plus, Loader2, CheckCircle, XCircle,
-  Users, ExternalLink, Trash2,
+  Users, ExternalLink, Trash2, CalendarDays, ChevronDown, ChevronUp,
+  Play, Square,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { integrationApi, communityApi, type RegisterBarazaGroupDto } from "@/lib/api"
+import { integrationApi, communityApi, type RegisterBarazaGroupDto, type BarazaSessionDto } from "@/lib/api"
 import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/hooks/use-toast"
 
@@ -171,6 +172,173 @@ function RegisterForm({ onDone }: { onDone: () => void }) {
   )
 }
 
+// ── Sessions panel (per baraza group) ────────────────────────────────────────
+
+function sessionStatus(s: BarazaSessionDto): "upcoming" | "open" | "closed" {
+  if (s.closedAt) return "closed"
+  if (s.openedAt) return "open"
+  return "upcoming"
+}
+
+const STATUS_STYLES = {
+  upcoming: { label: "Scheduled", bg: "rgba(201,146,42,0.12)", color: "#C9922A" },
+  open:     { label: "Open",      bg: "rgba(30,61,47,0.12)",   color: "#1E3D2F" },
+  closed:   { label: "Closed",    bg: "rgba(14,11,8,0.08)",    color: "#0E0B08" },
+}
+
+function SessionsPanel({ barazaGroupId }: { barazaGroupId: string }) {
+  const { toast } = useToast()
+  const queryClient = useQueryClient()
+  const [expanded, setExpanded] = useState(false)
+  const [scheduleInput, setScheduleInput] = useState("")
+  const [showScheduleForm, setShowScheduleForm] = useState(false)
+
+  const { data: sessions, isLoading } = useQuery({
+    queryKey: ["baraza-sessions", barazaGroupId],
+    queryFn: () => integrationApi.getSessions(barazaGroupId),
+    enabled: expanded,
+    staleTime: 30_000,
+  })
+
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: ["baraza-sessions", barazaGroupId] })
+
+  const scheduleMutation = useMutation({
+    mutationFn: () => integrationApi.scheduleSession(barazaGroupId, new Date(scheduleInput).toISOString()),
+    onSuccess: () => { invalidate(); setShowScheduleForm(false); setScheduleInput(""); toast({ title: "Session scheduled" }) },
+    onError: (err: any) => toast({ title: "Failed", description: err?.message, variant: "destructive" }),
+  })
+
+  const openMutation = useMutation({
+    mutationFn: () => integrationApi.openSession(barazaGroupId),
+    onSuccess: () => { invalidate(); toast({ title: "Session opened — members can /present now" }) },
+    onError: (err: any) => toast({ title: "Failed", description: err?.message, variant: "destructive" }),
+  })
+
+  const closeMutation = useMutation({
+    mutationFn: () => integrationApi.closeSession(barazaGroupId),
+    onSuccess: (data) => {
+      invalidate()
+      toast({ title: `Session closed — ${data.attendanceCount} attended` })
+    },
+    onError: (err: any) => toast({ title: "Failed", description: err?.message, variant: "destructive" }),
+  })
+
+  const openSession = sessions?.find((s) => sessionStatus(s) === "open")
+  const hasScheduled = sessions?.some((s) => sessionStatus(s) === "upcoming")
+
+  return (
+    <div className="mt-2 border-t pt-2" style={{ borderColor: "rgba(14,11,8,0.06)" }}>
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="flex items-center gap-1.5 text-xs text-[#0E0B08]/50 hover:text-[#0E0B08] transition-colors py-1"
+      >
+        <CalendarDays className="h-3.5 w-3.5" />
+        Sessions
+        {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+      </button>
+
+      {expanded && (
+        <div className="mt-2 space-y-2">
+          {/* Action buttons */}
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              onClick={() => setShowScheduleForm((v) => !v)}
+              className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-all hover:opacity-80"
+              style={{ background: "rgba(201,146,42,0.1)", color: "#C9922A" }}
+            >
+              <Plus className="h-3 w-3" /> Schedule
+            </button>
+
+            {hasScheduled && !openSession && (
+              <button
+                onClick={() => openMutation.mutate()}
+                disabled={openMutation.isPending}
+                className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-all hover:opacity-80 disabled:opacity-40"
+                style={{ background: "rgba(30,61,47,0.1)", color: "#1E3D2F" }}
+              >
+                {openMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+                Open
+              </button>
+            )}
+
+            {openSession && (
+              <button
+                onClick={() => closeMutation.mutate()}
+                disabled={closeMutation.isPending}
+                className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-all hover:opacity-80 disabled:opacity-40"
+                style={{ background: "rgba(176,58,30,0.1)", color: "#B03A1E" }}
+              >
+                {closeMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Square className="h-3 w-3" />}
+                Close
+              </button>
+            )}
+          </div>
+
+          {/* Schedule form */}
+          {showScheduleForm && (
+            <div className="flex items-center gap-2 rounded-lg border p-2" style={{ borderColor: "rgba(14,11,8,0.08)" }}>
+              <input
+                type="datetime-local"
+                value={scheduleInput}
+                onChange={(e) => setScheduleInput(e.target.value)}
+                className="flex-1 text-xs rounded border border-black/10 px-2 py-1 focus:outline-none"
+              />
+              <button
+                onClick={() => scheduleMutation.mutate()}
+                disabled={!scheduleInput || scheduleMutation.isPending}
+                className="text-[10px] font-semibold px-2 py-1 rounded-lg disabled:opacity-40 hover:opacity-80"
+                style={{ background: "#1E3D2F", color: "#fff" }}
+              >
+                {scheduleMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
+              </button>
+            </div>
+          )}
+
+          {/* Session list */}
+          {isLoading ? (
+            <div className="h-8 rounded-lg bg-black/4 animate-pulse" />
+          ) : !sessions?.length ? (
+            <p className="text-[10px] text-[#0E0B08]/35 py-1">No sessions yet. Schedule one above.</p>
+          ) : (
+            <div className="space-y-1">
+              {sessions.slice(0, 8).map((s) => {
+                const st = sessionStatus(s)
+                const style = STATUS_STYLES[st]
+                return (
+                  <div
+                    key={s.id}
+                    className="flex items-center gap-2 rounded-lg px-2 py-1.5"
+                    style={{ background: "rgba(14,11,8,0.02)", border: "1px solid rgba(14,11,8,0.05)" }}
+                  >
+                    <span
+                      className="text-[9px] font-bold rounded-full px-1.5 py-0.5 flex-shrink-0"
+                      style={{ background: style.bg, color: style.color }}
+                    >
+                      {style.label}
+                    </span>
+                    <span className="text-[10px] text-[#0E0B08]/70 flex-1">
+                      {new Date(s.scheduledAt).toLocaleString("en-KE", {
+                        weekday: "short", day: "numeric", month: "short",
+                        hour: "2-digit", minute: "2-digit", timeZone: "Africa/Nairobi",
+                      })}
+                    </span>
+                    {s.closedAt && (
+                      <span className="text-[9px] text-[#0E0B08]/35">
+                        {new Date(s.closedAt).toLocaleTimeString("en-KE", { hour: "2-digit", minute: "2-digit", timeZone: "Africa/Nairobi" })}
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main component ───────────────────────────────────────────────────────────
 
 export function BarazaManagement() {
@@ -266,9 +434,10 @@ export function BarazaManagement() {
                 return (
                   <div
                     key={g.id}
-                    className="flex items-center gap-3 rounded-xl px-4 py-3"
+                    className="flex flex-col rounded-xl px-4 py-3"
                     style={{ background: "rgba(26,18,11,0.02)", border: "1px solid rgba(26,18,11,0.06)" }}
                   >
+                  <div className="flex items-center gap-3">
                     <span
                       className="flex-shrink-0 text-[11px] font-bold rounded-full px-2 py-0.5"
                       style={{ background: ps.bg, color: ps.color }}
@@ -306,6 +475,9 @@ export function BarazaManagement() {
                     >
                       <Trash2 className="h-3.5 w-3.5 text-[#B03A1E]/60" />
                     </button>
+                  </div>
+
+                  <SessionsPanel barazaGroupId={g.id} />
                   </div>
                 )
               })}
