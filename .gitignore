@@ -9,3 +9,7 @@ npm-debug.log*
 
 # Let's Encrypt — never commit live certs
 traefik/acme.json
+
+# Internal AI workflow files — not for public consumption
+ai_workflows/
+CLAUDE.md
