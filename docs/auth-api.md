@@ -179,11 +179,68 @@ Get the current user's own security event log.
 
 #### `POST /auth/phone/send-code`
 Send phone OTP. Rate limited to 3 per minute.
-**Body:** `{ "phoneNumber": "..." }`
+**Body:** `{ "phoneNumber": "...", "channel": "sms" | "whatsapp" | "telegram" }` (`channel` defaults to `"sms"`)
 
 #### `POST /auth/phone/verify-code`
 Verify phone OTP.
 **Body:** `{ "phoneNumber": "...", "code": "..." }`
+
+---
+
+### WebAuthn / Passkeys — `EMAIL_VERIFIED`
+
+> Passkeys let users authenticate with Face ID, Touch ID, or a hardware key — no email required after the first setup.
+
+#### `POST /auth/passkeys/register/options`
+Begin passkey registration. Returns a WebAuthn challenge object to pass to the browser's `navigator.credentials.create()`.
+
+**No body required.** Requires a valid session token.
+
+---
+
+#### `POST /auth/passkeys/register/verify`
+Complete passkey registration. Send the credential returned by `navigator.credentials.create()`.
+
+**Body:** `{ "credential": { ... } }` (WebAuthn `PublicKeyCredential` JSON)
+
+**Response `200`:** `{ "success": true, "passkey": { "id": "...", "name": "..." } }`
+
+---
+
+#### `POST /auth/passkeys/login/options`
+Begin passkey login. Returns a challenge for `navigator.credentials.get()`.
+
+**Body:** `{ "email": "..." }` (optional — narrows challenge to a specific user)
+
+**No auth required.**
+
+---
+
+#### `POST /auth/passkeys/login/verify`
+Complete passkey login. Send the assertion returned by `navigator.credentials.get()`.
+
+**Body:** `{ "credential": { ... } }` (WebAuthn `PublicKeyCredential` JSON)
+
+**Response `200`:** `{ "sessionToken": "...", "user": { ... } }`
+
+**No auth required.**
+
+---
+
+#### `GET /auth/passkeys`
+List all registered passkeys for the authenticated user.
+
+**Response `200`:** `{ "passkeys": [{ "id": "...", "name": "...", "createdAt": "..." }] }`
+
+---
+
+#### `DELETE /auth/passkeys/:id`
+Delete a registered passkey.
+
+**Notes:**
+- Passkey challenges are stored in `WebAuthnChallenge` DB table with a 5-minute TTL.
+- Challenge key is `userId` for authenticated users or `email` for login flow.
+- Front-end components: `PasskeyLoginButton` (on auth/callback page), `PasskeyManager` (profile Settings tab).
 
 ---
 

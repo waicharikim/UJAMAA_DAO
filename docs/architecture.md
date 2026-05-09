@@ -1,6 +1,6 @@
 # UjamaaDAO – System Architecture
 
-**Last updated:** March 2026
+**Last updated:** May 2026
 
 ---
 
@@ -57,20 +57,26 @@ All routes are mounted at `/api/v1/` in `backend/src/app.ts`.
 | user | `/api/v1/users` | tested | 35 |
 | economy | `/api/v1/economy` | tested | 34 |
 | community | `/api/v1/community` | tested | 82 |
+| conflicts | `/api/v1/conflicts` | tested (community) | — |
 | governance | `/api/v1/governance` | tested | 58 |
+| elections | `/api/v1/elections` | partial | — |
 | projects | `/api/v1/projects` | tested | 41 |
 | marketplace | `/api/v1/marketplace` | tested | 35 |
-| emergency | `/api/v1/emergency` | tested | 42 |
 | notifications | `/api/v1/notifications` | tested | 43 |
+| emergency | `/api/v1/emergency` | tested | 30 |
+| audit | `/api/v1/audit` | partial | — |
+| feed | `/api/v1/feed` | partial | — |
 | onboarding | `/api/v1/onboarding` | tested | 22 |
 | reputation | `/api/v1/reputation` | tested | 23 |
 | education | `/api/v1/education` | tested | 42 |
-| admin | `/api/v1/admin` | tested | 24 |
-| audit | `/api/v1/audit` | tested | 23 |
-| treasury | `/api/v1/treasury` | tested | 32 |
-| integration | `/api/v1/integration` | tested | 30 |
+| integration | `/api/v1/integration` | partial | — |
+| treasury | `/api/v1/treasury` | scaffold | — |
+| payments | `/api/v1/payments` | partial | — |
+| admin | `/api/v1/admin` | partial | — |
+| platform-config | `/api/v1/platform-config` | partial | — |
+| verification | `/api/v1/verify-community` | tested | 36 |
 
-Health endpoints: `GET /health` · `GET /ready` · `GET /api/v1/docs`
+Health endpoints: `GET /health` · `GET /ready`
 
 ---
 
@@ -87,12 +93,18 @@ trust proxy → helmet/CORS → body parsing (10 MB limit)
 
 ## Authentication
 
-Primary authentication is **magic link (email-based)**:
-- New users: `POST /auth/magic-link/send` → `GET /auth/verify-email?token=<hex>`
-- Existing users: `POST /auth/magic-link/send` → `GET /auth/login?token=<jwt>`
-- Token field: always `sessionToken`. Lifetime: 7 days. No short-lived/refresh rotation (ADR-022).
+Three authentication methods — no passwords:
 
-Secondary: wallet signature (`POST /auth/wallet/nonce` + `POST /auth/wallet/verify`).
+| Method | Flow |
+|---|---|
+| **Magic link (new user)** | `POST /auth/magic-link/send` (full profile) → hex token in email → `GET /auth/verify-email?token=<hex>` → `sessionToken` |
+| **Magic link (returning)** | `POST /auth/magic-link/send` (email only) → JWT in email → `GET /auth/login?token=<jwt>` → `sessionToken` |
+| **WebAuthn / passkey** | `POST /auth/passkeys/register/options` → browser `navigator.credentials.create()` → `POST /auth/passkeys/register/verify` — then login: `POST /auth/passkeys/login/options` → `navigator.credentials.get()` → `POST /auth/passkeys/login/verify` → `sessionToken` |
+| **Wallet signature** | `POST /auth/wallet/nonce` → sign nonce → `POST /auth/wallet/verify` → `sessionToken` |
+
+Token field: always `sessionToken`. Lifetime: 7 days. No short-lived/refresh rotation (ADR-022).
+
+WebAuthn challenge storage: `WebAuthnChallenge` DB model, 5-minute TTL, keyed by `userId` (authenticated) or `email` (login flow).
 
 ---
 
@@ -112,14 +124,16 @@ Most protected routes require `COMMUNITY_VERIFIED`. 2FA and wallet routes requir
 
 ## Background Jobs & Queues
 
-Four BullMQ queues, all visible on Bull Board at `/admin/queues`:
+Six BullMQ queues, all visible on Bull Board at `/admin/queues`:
 
 | Queue | Jobs |
 |---|---|
-| `economy` | `monthly-pr-regeneration` (1st of month), `daily-commitment-penalties` (02:00), `dues-reminder` (08:00 daily, fires days 26–28) |
+| `economy` | `monthly-pr-regeneration` (1st of month), `monthly-pr-inactivity-decay` (1st of month), `daily-commitment-penalties` (02:00), `dues-reminder` (08:00 daily, fires days 26–28 only) |
+| `governance` | `schedule-elections` (1st of month 01:00), `open-nominations` (daily 00:15), `open-voting` (daily 00:20), `tally-results` (daily 00:25) |
 | `user-cleanup` | `user-cleanup` (every 4h), `auth-cleanup` (03:00) |
-| `integration` | `baraza-attendance-reward`, `baraza-send-invite` |
-| `dead-letter` | Failed jobs after max retries |
+| `notifications` | Dues-reminder delivery (scheduled above) |
+| `integration` | `BARAZA_ATTENDANCE_REWARD`, `BARAZA_SEND_INVITE`, `BARAZA_SESSION_REMINDER` (event-triggered, not scheduled) |
+| `dead-letter` | Failed jobs after max retries — logged + enqueued here, `sendJobFailureAlert` fires |
 
 All new repeatable jobs must register in `backend/src/core/jobs/register.ts`.
 
@@ -220,6 +234,10 @@ Traefik is **disabled** in dev (ADR-023). Direct port access only.
 ## Observability
 
 - **Logging** — Pino structured JSON, `operationType` field on every log line.
-- **Bull Board** — `/admin/queues` (HTTP basic auth: `admin` / `DASHBOARD_PASSWORD`).
-- **Audit log** — `GET /api/v1/audit/search` returns real records for active events.
-- Prometheus + Grafana + Loki + Jaeger are configured but **disabled by default**.
+- **Sentry** — error tracking wired on both backend (Node.js SDK) and frontend (Next.js SDK). Captures unhandled exceptions, BullMQ job failures, and frontend component errors.
+- **DataDog APM** — application performance monitoring wired on the backend. Traces, metrics, and distributed request tracing.
+- **BrowserStack** — cross-browser/device testing wired for frontend QA.
+- **Bull Board** — `/admin/queues` (HTTP basic auth: `admin` / `DASHBOARD_PASSWORD`). All 6 queues visible.
+- **Audit log** — `GET /api/v1/audit/search` returns real records. 6+ active audit events: `USER_CREATED`, `EMAIL_VERIFIED`, `PR_AWARDED`, `PR_SPENT`, `DUES_PAID`, `COMMITMENT_CREATED`.
+- **Activity feed** — `GET /api/v1/feed` — cursor-paginated, auth-required, privacy-safe stream of 9 event types with deep-links.
+- Prometheus + Grafana + Loki + Jaeger are configured but **disabled by default** in the Docker Compose.

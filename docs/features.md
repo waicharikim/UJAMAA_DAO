@@ -1,7 +1,7 @@
 # UjamaaDAO – Feature Inventory
 
-**Status:** March 2026 – Current Implementation + Planned / Designed Features
-**Version:** 1.2 (updated March 2026 — session 39)
+**Status:** May 2026 – Current Implementation + Planned / Designed Features
+**Version:** 1.3 (updated May 2026 — session 55)
 
 > Use this as the single source of truth for what exists, what is designed, and what is still to come.
 > Update the summary table at the end of every session that changes module status.
@@ -245,23 +245,28 @@
 
 ---
 
-## Summary Table – Feature Maturity (March 2026)
+## Summary Table – Feature Maturity (May 2026)
+
+**Total: 749 green tests across 13 tested modules**
 
 | Area | Backend Status | Frontend Status | Notes / Next Work |
 |---|---|---|---|
-| Identity & Verification | tested (104 tests) | functional | SMS credentials (AT sandbox → real) |
+| Identity & Verification | tested (104 auth + 36 verification = 140 tests) | functional | WebAuthn/passkeys live; SMS AT credentials → real |
 | Profile & Personal Data | tested (35 tests) | functional | Avatar upload pending |
 | Participation Rights (PR) | tested (34 tests) | functional | On-chain mint wired; Base Sepolia deploy pending |
-| Community / Wards / Groups | tested (82 tests) | functional | Baraza / chat integration live |
-| Governance / Voting | tested (58 tests) | functional | 2-stage location review chain live |
+| Community / Wards / Groups | tested (82 tests) | functional | Baraza integration live; conflict protocol live |
+| Governance / Voting | tested (58 tests) | functional | 2-stage location review chain; proposal memory layer live |
 | Projects & Milestones | tested (41 tests) | functional | Milestone submission + verification live |
 | Marketplace | tested (35 tests) | functional | Discovery-only per Rule 1 |
-| Education / Onboarding | tested (42+22 tests) | functional | Module completion, tutorial, vouch flow |
+| Education | tested (42 tests) | functional | Module completion, react-markdown prose rendering |
+| Onboarding | tested (22 tests) | functional | Auto-completion via AUTO_CONDITIONS map |
 | Notifications | tested (43 tests) | functional | Dues-reminder job + governance hooks live |
-| Emergency | tested (42 tests) | functional | Alert lifecycle (ACTIVE→IN_PROGRESS→RESOLVED) live |
-| Admin Tools | tested (24 tests) | functional | Role assignment, report generation, audit wired |
-| Audit | tested (23 tests) | functional | 13+ audit events active; audit routes tested |
-| Treasury | tested (32 tests) | stub page | Dues allocation (Phase 1) live; M-Pesa flows pending |
-| Integration (Baraza) | tested (30 tests) | functional | Telegram/Discord/WhatsApp attendance + invite jobs |
-| Reputation / Impact Points | tested (23 tests) | functional | Ward-level impact tracking live |
-| Platform / Cross-cutting | complete | complete | Add i18n when needed |
+| Emergency | tested (30 tests) | functional | Alert lifecycle (ACTIVE→IN_PROGRESS→RESOLVED) live |
+| Reputation / Impact Points | tested (23 tests) | functional | Ward-level impact tracking, leaderboard live |
+| Payments (M-Pesa) | partial (no tests) | functional | Buni STK push end-to-end verified; unit tests pending |
+| Admin Tools | partial (no tests) | functional | stats/users/config endpoints live; Baraza management tab |
+| Audit / Feed | partial (no tests) | functional | 6+ audit events active; feed cursor-paginated stream |
+| Elections | partial (no tests) | functional | Full backend lifecycle; frontend list + detail pages |
+| Integration (Baraza) | partial (no tests) | functional | Telegram/Discord/WhatsApp; attendance + invite jobs |
+| Treasury | scaffold | stub page | Schema only; M-Pesa flows + on-chain layer planned |
+| Platform / Cross-cutting | complete | complete | EN/SW i18n live; PWA installable |

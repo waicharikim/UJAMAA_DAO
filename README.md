@@ -6,16 +6,17 @@ UjamaaDAO is a neighborhood sovereignty platform for Kenyan wards — cooperativ
 
 ---
 
-## Project Status (March 2026)
+## Project Status (May 2026)
 
 | Layer | Status |
 |---|---|
-| Backend API | ✅ Running — 16 modules, all tested (679 tests green, 42 test files), CI green |
-| Prisma schema | ✅ 83 models, migrations applied, E2E flow verified |
-| Docker/Infra | ✅ All services running (`make dev`) — API, worker, postgres, redis, frontend, MailHog |
-| Frontend | ✅ Active — 17 routes, Chai palette design system, magic-link auth, Privy wallet |
-| M-Pesa | 🔶 Stubbed — service exists, always returns success (real Daraja API integration pending) |
+| Backend API | ✅ Running — 21 routes mounted, 749 tests green across 13 tested modules |
+| Prisma schema | ✅ 80 models, migrations applied, E2E flow verified |
+| Docker/Infra | ✅ All services running (`make dev`) — API, worker, Postgres, Redis, frontend, MailHog, Anvil |
+| Frontend | ✅ 26+ routes, Chai palette design system, magic-link + passkey auth, Privy wallet, PWA installable |
+| Payments | ✅ M-Pesa STK push via Buni by KCB — end-to-end verified (push sent, callback received, DB updated) |
 | Smart Contracts | 🔶 Written and tested — `PrToken.sol` (soulbound) + `UtToken.sol`, 13 Foundry tests green; Base Sepolia deploy pending (minter wallet not funded) |
+| Observability | ✅ Sentry (backend + frontend), DataDog APM, BrowserStack wired |
 
 ---
 
@@ -25,21 +26,21 @@ UjamaaDAO is a neighborhood sovereignty platform for Kenyan wards — cooperativ
 UJAMAA_DAO/
 ├── backend/            # Node.js 22 + Express + Prisma backend
 │   ├── src/
-│   │   ├── app.ts          # Express app, middleware, route mounts
-│   │   ├── index.ts        # Server entry, startup assertions
-│   │   ├── workers.ts      # BullMQ worker entry (4 background jobs)
-│   │   ├── core/           # Shared infrastructure (logger, queue, rbac, errors…)
-│   │   └── modules/        # Feature modules (auth, user, economy, community, …)
-│   ├── prisma/             # Merged schema (83 models) + migrations
-│   ├── tests/              # Vitest suites — 679 tests (42 test files, all modules)
+│   │   ├── app.ts          # Express app, middleware, route mounts (21 routes)
+│   │   ├── index.ts        # Server entry, startup assertions, graceful shutdown
+│   │   ├── workers.ts      # BullMQ worker (10 scheduled + 3 event-triggered jobs)
+│   │   ├── core/           # Shared infrastructure (logger, queue, rbac, errors, blockchain)
+│   │   └── modules/        # 21 feature modules
+│   ├── prisma/             # Merged schema (80 models) + migrations
+│   ├── tests/              # Vitest suites — 749 tests, 13 tested modules
 │   ├── Makefile            # All dev commands
 │   └── .env.example
 │
-├── frontend/           # Next.js 15 frontend
-│   ├── app/            # App Router pages (15 routes)
-│   ├── components/     # UI components (layout, auth, landing, dashboard…)
-│   ├── contexts/       # Auth + wallet (Privy) contexts
-│   ├── lib/            # Typed API client (authApi, userApi, economyApi)
+├── frontend/           # Next.js 16.1.6 frontend
+│   ├── app/            # App Router pages (26+ routes)
+│   ├── components/     # UI components (layout, auth, landing, dashboard, groups, …)
+│   ├── contexts/       # Auth + wallet (Privy) + notification + language contexts
+│   ├── lib/            # Typed API client (22 API namespaces)
 │   └── stubs/          # Webpack stubs for unused Privy transitive deps
 │
 ├── contracts/          # Solidity (Foundry) — Base L2
@@ -47,20 +48,13 @@ UJAMAA_DAO/
 │   ├── src/            # PrToken.sol (soulbound ERC-20) + UtToken.sol
 │   └── test/           # 13 Foundry tests green
 │
-├── docker/             # Docker Compose configs
-│   ├── docker-compose.yml          # Development stack
+├── docker/             # Docker Compose configs + environment
+│   ├── docker-compose.yml          # Development stack (8 services)
 │   └── docker-compose.prod.yml     # Production stack
 │
-├── traefik/            # Traefik reverse proxy config
+├── traefik/            # Traefik reverse proxy config (disabled in dev — ADR-023)
 │
-├── ai_workflows/       # Claude AI context files (project brain)
-│   ├── CLAUDE.md       # Full project context — read every session
-│   ├── SESSION_STATE.md # Live snapshot — read this first
-│   ├── PROGRESS_LOG.md # Session history
-│   ├── DECISIONS.md    # All ADRs (ADR-001 through ADR-022)
-│   └── AGENTS.md       # Claude agent hats and workflow
-│
-└── docs/               # API and module documentation (auth, user, economy, community, governance, …)
+└── docs/               # API and module documentation
 ```
 
 ---
@@ -69,7 +63,7 @@ UJAMAA_DAO/
 
 ### Prerequisites
 - Docker + Docker Compose
-- Node.js 22 (for local schema tooling and frontend build — all services run in Docker)
+- Node.js 22 (for local schema tooling — all services run in Docker)
 
 ### Run Everything
 
@@ -78,10 +72,10 @@ cd backend
 make dev
 ```
 
-This starts: API (`:4000`), worker, PostgreSQL, Redis, frontend (`:3000`), MailHog (`:8025`).
+This starts: API (`:4000`), worker, PostgreSQL (`:5432`), PostgreSQL test (`:5433`), Redis (`:6380`), frontend (`:3000`), MailHog (`:8025`), Anvil EVM (`:8545`).
 
 ```bash
-# On first run — apply migrations
+# On first run — apply migrations and seed
 make db-migrate
 
 # Check the API is healthy
@@ -89,10 +83,10 @@ curl http://localhost:4000/health
 ```
 
 ### Frontend
-Visit **`http://localhost:3000`** — full UI with landing page, registration, and dashboard.
+Visit **`http://localhost:3000`** — landing page, 4-step registration, dashboard, governance, groups, marketplace, and more.
 
 ### Dev Email (Magic Links)
-Visit **`http://localhost:8025`** — MailHog catches all outgoing emails in development.
+Visit **`http://localhost:8025`** — MailHog catches all outgoing emails in development. No configuration needed.
 
 ---
 
@@ -100,17 +94,19 @@ Visit **`http://localhost:8025`** — MailHog catches all outgoing emails in dev
 
 | Layer | Technology |
 |---|---|
-| Runtime | Node.js 22, TypeScript strict |
+| Runtime | Node.js 22, TypeScript strict mode |
 | Framework | Express |
-| Database | PostgreSQL 15 + Prisma ORM (83 models) |
-| Queue | BullMQ + Redis |
-| Logger | Pino (structured, `operationType` context) |
-| Testing | Vitest + Supertest — 679 tests, 42 test files, CI green |
-| Auth | Email magic links (JWT + hex token), Africa's Talking SMS |
-| Frontend | Next.js 16 (App Router + Turbopack), TanStack Query v5, Tailwind v3, shadcn/ui |
+| Database | PostgreSQL 15 + Prisma ORM (80 models) |
+| Queue | BullMQ + Redis — 10 scheduled jobs + 3 event-triggered |
+| Logger | Pino (structured JSON, `operationType` context) |
+| Testing | Vitest + Supertest — 749 tests, 13 tested modules |
+| Auth | Email magic links (JWT + hex token), WebAuthn/passkeys, Africa's Talking SMS OTP |
+| Payments | Buni by KCB — M-Pesa STK push (end-to-end verified) |
+| Frontend | Next.js 16.1.6 (App Router + Turbopack), TanStack Query v5, Tailwind v3, shadcn/ui |
 | Wallet | Privy (`@privy-io/react-auth` v3.14.1) — embedded wallets on Base L2 |
 | Contracts | Foundry (forge/cast/anvil) — Base Sepolia → Base Mainnet |
-| Infra | Docker Compose + Traefik reverse proxy |
+| Observability | Sentry (backend + frontend), DataDog APM, BrowserStack |
+| Infra | Docker Compose (8 services), Traefik (disabled in dev) |
 | CI | GitHub Actions — type-check · lint · prisma validate · build |
 
 ---
@@ -127,11 +123,61 @@ Visit **`http://localhost:8025`** — MailHog catches all outgoing emails in dev
 
 ## Authentication Flow
 
-UjamaaDAO uses **email magic links** — no passwords, no seed phrases.
+UjamaaDAO supports three login methods — no passwords.
 
-- **New users**: 4-step registration form → email verification link → session token
-- **Returning users**: Enter email on landing page → magic link email → session token
-- **Wallet**: Privy embedded wallet created automatically on first login (invisible to user)
+| Method | Flow |
+|---|---|
+| **Email magic link (new user)** | 4-step registration form → email verification link → session token |
+| **Email magic link (returning user)** | Enter email → magic link email → click → session token |
+| **WebAuthn / passkey** | Register biometric from profile → subsequent logins via `PasskeyLoginButton` (Face ID, Touch ID, etc.) |
+| **Wallet signature** | Privy embedded wallet → nonce challenge → sign → session |
+
+Token lifetime: 7 days. No short-lived/refresh rotation — single `sessionToken` field in all responses.
+
+---
+
+## Verification Levels
+
+Users progress through verification gates. Most API endpoints require `COMMUNITY_VERIFIED`.
+
+```
+UNVERIFIED → EMAIL_VERIFIED → PHONE_VERIFIED → COMMUNITY_VERIFIED → FULL_VERIFIED
+```
+
+- `EMAIL_VERIFIED` — after clicking magic link or verification email
+- `PHONE_VERIFIED` — after SMS OTP
+- `COMMUNITY_VERIFIED` — 3 vouches from ward members OR M-Pesa verification payment
+- `FULL_VERIFIED` — wallet linked + location proof
+
+---
+
+## Background Jobs
+
+10 scheduled jobs + 3 event-triggered, running on 6 BullMQ queues:
+
+| Queue | Scheduled Jobs |
+|---|---|
+| `economy` | Monthly PR regeneration (1st), monthly PR inactivity decay (1st), daily commitment penalties (02:00), dues reminder (08:00, fires days 26–28) |
+| `governance` | Schedule elections (1st, 01:00), open nominations (daily 00:15), open voting (daily 00:20), tally results (daily 00:25) |
+| `user-cleanup` | User cleanup (every 4h), auth cleanup (03:00) |
+| `integration` | Baraza attendance reward, Baraza send invite, Baraza session reminder (event-triggered) |
+| `notifications` | Dues reminder (scheduled above, visible here) |
+| `dead-letter` | Failed jobs after max retries |
+
+Bull Board dashboard: `http://localhost:4000/admin/queues` (HTTP basic auth: `admin` / `DASHBOARD_PASSWORD` env var).
+
+---
+
+## M-Pesa Payments
+
+Payments use **Buni by KCB** — Kenya's KCB Bank M-Pesa STK push integration.
+
+Flow:
+1. `POST /api/v1/payments/initiate` — triggers STK push to user's phone
+2. Buni calls `POST /api/v1/payments/webhook/buni` with the result (~30 seconds later)
+3. `GET /api/v1/payments/status/:txRef` — poll payment status
+
+All payments go to platform-controlled M-Pesa accounts. No P2P transfers.
 
 ---
 
@@ -139,14 +185,29 @@ UjamaaDAO uses **email magic links** — no passwords, no seed phrases.
 
 | File | Contents |
 |---|---|
-| [`ai_workflows/SESSION_STATE.md`](ai_workflows/SESSION_STATE.md) | Live project snapshot — read first each session |
-| [`ai_workflows/CLAUDE.md`](ai_workflows/CLAUDE.md) | Full project context, module status, conventions |
-| [`ai_workflows/DECISIONS.md`](ai_workflows/DECISIONS.md) | All architectural decisions (ADR-001 – ADR-031) |
-| [`ai_workflows/PROGRESS_LOG.md`](ai_workflows/PROGRESS_LOG.md) | Session-by-session build history |
-| [`backend/README.md`](backend/README.md) | Backend setup, commands, architecture |
-| [`frontend/README.md`](frontend/README.md) | Frontend setup, design system, page inventory |
-| [`contracts/README.md`](contracts/README.md) | Smart contract architecture and next steps |
-| [`docs/`](docs/) | API documentation per module |
+| [`docs/architecture.md`](docs/architecture.md) | System architecture, ports, middleware, queues, blockchain |
+| [`docs/auth-api.md`](docs/auth-api.md) | Auth endpoints — magic link, passkeys, wallet, 2FA, sessions |
+| [`docs/user-api.md`](docs/user-api.md) | User profile, industries, goods/services, verification |
+| [`docs/group-api.md`](docs/group-api.md) | Community groups, members, declarations, conflicts |
+| [`docs/proposal-api.md`](docs/proposal-api.md) | Governance proposals, voting, memory layer |
+| [`docs/economy-api.md`](docs/economy-api.md) | PR balance, dues, commitments, UT withdrawals |
+| [`docs/economy-design.md`](docs/economy-design.md) | Token mechanics — PR, UT, Impact Points design rationale |
+| [`docs/payments-api.md`](docs/payments-api.md) | M-Pesa STK push via Buni — initiate, webhook, status |
+| [`docs/notifications-api.md`](docs/notifications-api.md) | In-app notifications, preferences, mark-read |
+| [`docs/marketplace-api.md`](docs/marketplace-api.md) | Listing discovery (no payments) |
+| [`docs/verification-api.md`](docs/verification-api.md) | Community verification — vouching, payment fallback |
+| [`docs/emergency-api.md`](docs/emergency-api.md) | Incident reporting and alert lifecycle |
+| [`docs/education-api.md`](docs/education-api.md) | Learning modules, completion tracking |
+| [`docs/reputation-api.md`](docs/reputation-api.md) | Impact Points, leaderboard, ward reputation |
+| [`docs/onboarding-api.md`](docs/onboarding-api.md) | Onboarding progress, tutorial completion |
+| [`docs/elections-api.md`](docs/elections-api.md) | Group elections, nominations, voting, tally |
+| [`docs/integration-api.md`](docs/integration-api.md) | Baraza messaging (Telegram/WhatsApp/Discord) |
+| [`docs/audit-api.md`](docs/audit-api.md) | Audit log search and activity feed |
+| [`docs/admin-api.md`](docs/admin-api.md) | Admin panel — users, stats, config, Baraza management |
+| [`docs/treasury.md`](docs/treasury.md) | Treasury structure, M-Pesa flows, UT two-pool model |
+| [`docs/whitepaper.md`](docs/whitepaper.md) | Project vision and philosophy |
+| [`docs/features.md`](docs/features.md) | Feature inventory by module |
+| [`docs/ecosystem.md`](docs/ecosystem.md) | Ecosystem overview |
 
 ---
 
