@@ -1,7 +1,7 @@
 import path from "path"
 import { fileURLToPath } from "url"
 import { createRequire } from "module"
-// withSentryConfig not used — instrumentation.ts handles Sentry init; source maps via CI build step
+import { withSentryConfig } from "@sentry/nextjs"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const require = createRequire(import.meta.url)
@@ -64,4 +64,11 @@ const nextConfig = {
   },
 }
 
-export default withPWA(nextConfig)
+export default withSentryConfig(withPWA(nextConfig), {
+  org: "ujamaa-6p",
+  project: "javascript-nextjs",
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  widenClientFileUpload: true,
+  tunnelRoute: "/monitoring",
+  silent: !process.env.CI,
+})
