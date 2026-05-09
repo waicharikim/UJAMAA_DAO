@@ -874,6 +874,20 @@ export async function openSessionHttp(
       }
     }
 
+    const pending = await prisma.barazaSession.findFirst({
+      where: { barazaGroupId, openedAt: null, closedAt: null },
+      orderBy: { scheduledAt: 'asc' },
+    });
+    if (!pending) {
+      throw ApiError.badRequest('No scheduled session found — schedule one first');
+    }
+    const diffMs = Math.abs(Date.now() - new Date(pending.scheduledAt).getTime());
+    if (diffMs > 4 * 60 * 60 * 1000) {
+      throw ApiError.badRequest(
+        'Session can only be opened within 4 hours of its scheduled time'
+      );
+    }
+
     const session = await barazaBotService.openSession(barazaGroupId);
     if (!session) {
       throw ApiError.badRequest('No scheduled session found — schedule one first');
