@@ -2,15 +2,11 @@ import { Request, Response } from 'express';
 import { paymentService } from '../services/payment.service.js';
 import { sendSuccess } from '../../../core/utils/response.js';
 import { ApiError } from '../../../core/errors/ApiError.js';
-import {
-  InitiatePaymentDto,
-  FlwWebhookPayload,
-  BuniCallbackPayload,
-} from '../types.js';
+import { InitiatePaymentDto, BuniCallbackPayload } from '../types.js';
 
 /**
  * POST /api/v1/payments/initiate
- * Auth required — start an M-Pesa STK push (Buni) or get a card payment link (Flutterwave)
+ * Auth required — start an M-Pesa STK push via Buni
  */
 export async function initiatePayment(
   req: Request,
@@ -22,24 +18,6 @@ export async function initiatePayment(
   const dto: InitiatePaymentDto = req.body;
   const result = await paymentService.initiatePayment(userId, dto);
   sendSuccess(res, result, 'Payment initiated', 200);
-}
-
-/**
- * POST /api/v1/payments/webhook
- * NO auth — Flutterwave card webhook; signature verified in service
- */
-export async function handleWebhook(
-  req: Request,
-  res: Response
-): Promise<void> {
-  const signature =
-    (req.headers['verif-hash'] as string) ||
-    (req.headers['x-flutterwave-signature'] as string) ||
-    '';
-  const payload = req.body as FlwWebhookPayload;
-
-  await paymentService.handleWebhook(payload, signature);
-  res.status(200).json({ status: 'ok' });
 }
 
 /**

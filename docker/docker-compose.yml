@@ -94,10 +94,6 @@ services:
       - BUNI_CLIENT_ID=${BUNI_CLIENT_ID:-}
       - BUNI_CLIENT_SECRET=${BUNI_CLIENT_SECRET:-}
       - BUNI_BASE_URL=${BUNI_BASE_URL:-https://uat.buni.kcbgroup.com}
-      # ── Flutterwave (Card payments only) ────────────────────────────────
-      - FLW_PUBLIC_KEY=${FLW_PUBLIC_KEY:-FLWPUBK_TEST-placeholder}
-      - FLW_SECRET_KEY=${FLW_SECRET_KEY:-FLWSECK_TEST-placeholder}
-      - FLW_WEBHOOK_SECRET=${FLW_WEBHOOK_SECRET:-}
       # ── Telegram (webhook handler sends reply DMs from web service) ──────
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET:-}

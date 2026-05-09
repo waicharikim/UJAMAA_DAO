@@ -4,9 +4,8 @@
  * Payment Service
  *
  * M-Pesa STK Push  →  Buni by KCB  (POST /mm/api/request/1.0.0/stkpush)
- * Card payments    →  Flutterwave  (hosted checkout link)
  *
- * Both providers are stubbed when NODE_ENV=test.
+ * Stubbed when NODE_ENV=test.
  */
 
 import crypto from 'crypto';
@@ -18,7 +17,6 @@ import { treasuryService } from '../../treasury/services/treasury.service.js';
 import {
   InitiatePaymentDto,
   PaymentPurpose,
-  FlwWebhookPayload,
   BuniCallbackPayload,
   BuniStkPushResponse,
   BuniTokenResponse,
@@ -33,10 +31,6 @@ const BUNI_CLIENT_ID = process.env.BUNI_CLIENT_ID || '';
 const BUNI_CLIENT_SECRET = process.env.BUNI_CLIENT_SECRET || '';
 const BUNI_BASE_URL =
   process.env.BUNI_BASE_URL || 'https://uat.buni.kcbgroup.com';
-
-const FLW_PUBLIC_KEY = process.env.FLW_PUBLIC_KEY || '';
-const FLW_SECRET_KEY = process.env.FLW_SECRET_KEY || '';
-const FLW_WEBHOOK_SECRET = process.env.FLW_WEBHOOK_SECRET || '';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:4000';
 
@@ -102,24 +96,17 @@ function resolveAmount(
   throw ApiError.badRequest('Cannot determine payment amount');
 }
 
-/** Lazy-load Flutterwave SDK for card payments */
-async function getFlw() {
-  const Flutterwave = (await import('flutterwave-node-v3')).default;
-  return new Flutterwave(FLW_PUBLIC_KEY, FLW_SECRET_KEY);
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 
 class PaymentService {
   /**
-   * Initiate a payment.
-   *   MPESA  → Buni STK push  (result arrives at POST /payments/webhook/buni)
-   *   CARD   → Flutterwave hosted link  (result arrives at POST /payments/webhook)
+   * Initiate an M-Pesa payment via Buni STK push.
+   * Result arrives at POST /payments/webhook/buni
    */
   async initiatePayment(
     userId: string,
     dto: InitiatePaymentDto
-  ): Promise<{ txRef: string; paymentLink?: string }> {
+  ): Promise<{ txRef: string }> {
     const { method, purpose, purposeMeta = {} } = dto;
 
     const amount = resolveAmount(purpose, purposeMeta);
@@ -146,21 +133,14 @@ class PaymentService {
     });
 
     if (process.env.NODE_ENV === 'test') {
-      const paymentLink =
-        method === 'CARD'
-          ? `https://checkout.flutterwave.com/v3/hosted/pay/test-${txRef}`
-          : undefined;
       logger.debug(
         { txRef, method, purpose },
         '[PAYMENTS] Test mode — stubbed'
       );
-      return { txRef, paymentLink };
+      return { txRef };
     }
 
-    if (method === 'MPESA') {
-      return this._initiateMpesaBuni(txRef, amount, user, purposeMeta);
-    }
-    return this._initiateCardFlw(txRef, amount, user, purposeMeta);
+    return this._initiateMpesaBuni(txRef, amount, user, purposeMeta);
   }
 
   // ─── Buni M-Pesa STK Push ──────────────────────────────────────────────────
@@ -173,7 +153,7 @@ class PaymentService {
       phoneNumber: string | null;
       name: string | null;
     },
-    meta: Record<string, unknown>
+    _meta: Record<string, unknown>
   ): Promise<{ txRef: string }> {
     const rawPhone = user.phoneNumber;
     if (!rawPhone) {
@@ -241,53 +221,6 @@ class PaymentService {
 
     logger.info({ txRef, checkoutRequestId }, '[BUNI] STK push sent');
     return { txRef };
-  }
-
-  // ─── Flutterwave Card ──────────────────────────────────────────────────────
-
-  private async _initiateCardFlw(
-    txRef: string,
-    amount: number,
-    user: {
-      email: string | null;
-      phoneNumber: string | null;
-      name: string | null;
-    },
-    meta: Record<string, unknown>
-  ): Promise<{ txRef: string; paymentLink: string }> {
-    const flw = await getFlw();
-
-    const payload = {
-      tx_ref: txRef,
-      amount,
-      currency: 'KES',
-      redirect_url: `${BASE_URL}/api/v1/payments/status/${txRef}`,
-      customer: {
-        email: user.email || `${txRef}@ujamaa.placeholder`,
-        phonenumber: user.phoneNumber || '',
-        name: user.name || 'UjamaaDAO Member',
-      },
-      customizations: {
-        title: 'UjamaaDAO',
-        description: `Payment for ${meta.purpose || 'UjamaaDAO service'}`,
-        logo: `${BASE_URL}/logo.png`,
-      },
-      meta,
-    };
-
-    const response = await (flw.Charge as any).card(payload);
-    const link = response?.data?.link;
-
-    if (!link) {
-      await prisma.paymentRecord.update({
-        where: { txRef },
-        data: { status: 'FAILED' },
-      });
-      throw ApiError.transactionFailed('Failed to generate card payment link');
-    }
-
-    logger.info({ txRef }, '[FLW] Card payment link created');
-    return { txRef, paymentLink: link };
   }
 
   // ─── Buni webhook (Safaricom STK callback) ─────────────────────────────────
@@ -368,76 +301,6 @@ class PaymentService {
       statusCode: '0',
       statusMessage: 'Notification received successfully',
     };
-  }
-
-  // ─── Flutterwave webhook (card) ────────────────────────────────────────────
-
-  /**
-   * Handle Flutterwave webhook — card payments only.
-   * Verifies x-flutterwave-signature header.
-   */
-  async handleWebhook(
-    payload: FlwWebhookPayload,
-    signature: string
-  ): Promise<void> {
-    if (FLW_WEBHOOK_SECRET && process.env.NODE_ENV !== 'test') {
-      const hash = crypto
-        .createHmac('sha256', FLW_WEBHOOK_SECRET)
-        .update(JSON.stringify(payload))
-        .digest('hex');
-      if (hash !== signature) {
-        throw ApiError.authenticationError('Invalid webhook signature');
-      }
-    }
-
-    if (payload.event !== 'charge.completed') {
-      logger.debug(
-        { event: payload.event },
-        '[FLW] Ignoring non-charge webhook'
-      );
-      return;
-    }
-
-    const { tx_ref: txRef, flw_ref: flwRef, status, amount } = payload.data;
-
-    const record = await prisma.paymentRecord.findUnique({ where: { txRef } });
-    if (!record) {
-      logger.warn({ txRef }, '[FLW] Webhook for unknown txRef — ignoring');
-      return;
-    }
-
-    if (record.status !== 'PENDING') {
-      logger.info(
-        { txRef, status: record.status },
-        '[FLW] Already processed — idempotent skip'
-      );
-      return;
-    }
-
-    if (status !== 'successful') {
-      await prisma.paymentRecord.update({
-        where: { txRef },
-        data: { status: 'FAILED', flwRef },
-      });
-      logger.warn(
-        { txRef, flwStatus: status },
-        '[FLW] Charge failed — record FAILED'
-      );
-      return;
-    }
-
-    await prisma.paymentRecord.update({
-      where: { txRef },
-      data: { status: 'COMPLETED', flwRef, completedAt: new Date() },
-    });
-
-    await this._routeCompletedPayment(
-      record.userId,
-      record.purpose as PaymentPurpose,
-      record.purposeMeta as Record<string, unknown> | null,
-      txRef,
-      amount
-    );
   }
 
   // ─── Downstream routing ────────────────────────────────────────────────────

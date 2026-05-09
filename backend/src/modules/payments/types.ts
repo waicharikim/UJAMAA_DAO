@@ -3,7 +3,7 @@
  * Payment module types and DTOs
  */
 
-export type PaymentMethod = 'MPESA' | 'CARD';
+export type PaymentMethod = 'MPESA';
 export type PaymentPurpose = 'DUES' | 'VERIFICATION' | 'TREASURY_DEPOSIT';
 export type PaymentStatus = 'PENDING' | 'COMPLETED' | 'FAILED';
 
@@ -84,72 +84,4 @@ export interface BuniTokenResponse {
   expires_in: number;
   token_type: string;
   scope: string;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-
-/** Shape returned by Flutterwave charge.mpesa() */
-export interface FlwMpesaChargeResponse {
-  status: string; // "success" | "error"
-  message: string;
-  data?: {
-    id: number;
-    tx_ref: string;
-    flw_ref: string;
-    device_fingerprint: string;
-    amount: number;
-    charged_amount: number;
-    app_fee: number;
-    merchant_fee: number;
-    processor_response: string;
-    auth_model: string;
-    currency: string;
-    ip: string;
-    narration: string;
-    status: string;
-    payment_type: string;
-    fraud_status: string;
-    charge_type: string;
-    created_at: string;
-    account_id: number;
-    customer: {
-      id: number;
-      phone_number: string;
-      name: string;
-      email: string;
-      created_at: string;
-    };
-    meta: Record<string, string | number | boolean | null>;
-  };
-}
-
-/** Shape returned by Flutterwave payment.create() for hosted checkout */
-export interface FlwPaymentLinkResponse {
-  status: string; // "success" | "error"
-  message: string;
-  data?: {
-    link: string;
-  };
-}
-
-/** Shape of the Flutterwave webhook payload */
-export interface FlwWebhookPayload {
-  event: string; // "charge.completed"
-  data: {
-    id: number;
-    tx_ref: string;
-    flw_ref: string;
-    amount: number;
-    currency: string;
-    charged_amount: number;
-    status: string; // "successful" | "failed"
-    payment_type: string;
-    meta?: Record<string, string | number | boolean | null>;
-    customer: {
-      id: number;
-      name: string;
-      phone_number?: string;
-      email: string;
-    };
-  };
 }

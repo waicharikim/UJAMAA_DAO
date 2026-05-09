@@ -107,8 +107,7 @@ export class UtWithdrawalService {
       '[UT] Withdrawal requested — payout pending'
     );
 
-    // TODO: Trigger real M-Pesa B2C via Flutterwave when FLW_SECRET_KEY is set
-    // await paymentsService.initiateB2CPayout({ phone: mpesaPhone, amount: amountKes, ref: withdrawal.id })
+    // TODO: Trigger M-Pesa B2C payout via Buni when credentials are available
 
     return {
       transactionRef: withdrawal.id,
