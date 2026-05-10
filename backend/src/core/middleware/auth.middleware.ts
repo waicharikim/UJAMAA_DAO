@@ -29,6 +29,7 @@ import { ApiError } from '../errors/ApiError.js';
 import { logSecurityEvent, createRequestLogger } from '../logger/logger.js';
 import { sessionService } from '../../modules/auth/services/session.service.js';
 import { tokenBlacklistService } from '../services/token-blacklist.service.js';
+import { prisma } from '../database/client.js';
 import { generateCorrelationId } from './errorHandler.js';
 
 // Token validation constants
@@ -185,6 +186,26 @@ async function validateAndPopulateUser(
       );
       throw new Error('Session has been revoked');
     }
+  }
+
+  // Layer 6: Check user account status (blocks suspended/banned accounts)
+  const account = await prisma.user.findUnique({
+    where: { id: payload.sub },
+    select: { status: true },
+  });
+  if (!account || account.status !== 'ACTIVE') {
+    logSecurityEvent(
+      'Suspended or banned account attempted access',
+      'AUTH_FAILURE',
+      'HIGH',
+      `Account status: ${account?.status ?? 'NOT_FOUND'}`,
+      {
+        userId: payload.sub,
+        ipAddress: req.ip,
+        metadata: { correlationId: req.correlationId },
+      }
+    );
+    throw new Error('Account is not active');
   }
 
   // Populate request context with validated user data

@@ -154,10 +154,7 @@ app.use(
       if (!origin) return callback(null, true); // Allow non-browser (Postman, curl, etc.)
 
       const isAllowed =
-        allowedOrigins.includes('*') ||
-        allowedOrigins.some(
-          (allowed) => origin === allowed || origin.endsWith(`.${allowed}`)
-        );
+        allowedOrigins.includes('*') || allowedOrigins.includes(origin);
 
       if (isAllowed) {
         callback(null, true);
