@@ -2,9 +2,9 @@
  * @file tests/payments/payment.routes.test.ts
  * Integration tests for payment module routes.
  *
- * POST /api/v1/payments/initiate
- * POST /api/v1/payments/webhook
- * GET  /api/v1/payments/status/:txRef
+ * POST /api/v1/payments/initiate         — auth required
+ * POST /api/v1/payments/webhook/buni     — no auth; Buni STK callback
+ * GET  /api/v1/payments/status/:txRef    — auth required
  */
 
 vi.mock('../../src/core/services/token-blacklist.service.js', () => ({
@@ -38,7 +38,12 @@ import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import request from 'supertest';
 import app, { servicesReady } from '../../src/app.js';
 import { prisma } from '../../src/core/database/client.js';
-import { seedLocation, createPaymentTestUser, makePaymentToken, seedPaymentRecord } from './helpers.js';
+import {
+  seedLocation,
+  createPaymentTestUser,
+  makePaymentToken,
+  seedPaymentRecord,
+} from './helpers.js';
 
 const BASE = '/api/v1/payments';
 
@@ -62,14 +67,14 @@ describe('Payment Routes', () => {
   // ─────────────────────────────────────────────
 
   describe('POST /initiate', () => {
-    it('returns 401 with no token', async () => {
+    it('returns 401 with no auth token', async () => {
       const res = await request(app)
         .post(`${BASE}/initiate`)
         .send({ method: 'MPESA', purpose: 'DUES', purposeMeta: { tier: 'ORDINARY', period: '2026-03' } });
       expect(res.status).toBe(401);
     });
 
-    it('returns 400 for missing method field', async () => {
+    it('returns 400 when method is missing', async () => {
       const res = await request(app)
         .post(`${BASE}/initiate`)
         .set('Authorization', `Bearer ${token}`)
@@ -77,7 +82,7 @@ describe('Payment Routes', () => {
       expect(res.status).toBe(400);
     });
 
-    it('returns 400 for invalid method value', async () => {
+    it('returns 400 for an invalid method value (not MPESA)', async () => {
       const res = await request(app)
         .post(`${BASE}/initiate`)
         .set('Authorization', `Bearer ${token}`)
@@ -85,15 +90,23 @@ describe('Payment Routes', () => {
       expect(res.status).toBe(400);
     });
 
-    it('returns 400 for missing purpose field', async () => {
+    it('returns 400 when purpose is missing', async () => {
       const res = await request(app)
         .post(`${BASE}/initiate`)
         .set('Authorization', `Bearer ${token}`)
-        .send({ method: 'MPESA', purposeMeta: {} });
+        .send({ method: 'MPESA' });
       expect(res.status).toBe(400);
     });
 
-    it('initiates MPESA DUES payment successfully (200)', async () => {
+    it('returns 400 for an invalid purpose value', async () => {
+      const res = await request(app)
+        .post(`${BASE}/initiate`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ method: 'MPESA', purpose: 'BRIBE' });
+      expect(res.status).toBe(400);
+    });
+
+    it('initiates an MPESA DUES ORDINARY payment and returns txRef (200)', async () => {
       const res = await request(app)
         .post(`${BASE}/initiate`)
         .set('Authorization', `Bearer ${token}`)
@@ -102,106 +115,42 @@ describe('Payment Routes', () => {
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.data.txRef).toMatch(/^UJ-/);
-      expect(res.body.data.paymentLink).toBeUndefined();
+
+      const record = await prisma.paymentRecord.findUnique({ where: { txRef: res.body.data.txRef } });
+      expect(record!.status).toBe('PENDING');
+      expect(Number(record!.amount)).toBe(60);
     });
 
-    it('initiates CARD DUES payment and returns paymentLink (200)', async () => {
-      const res = await request(app)
-        .post(`${BASE}/initiate`)
-        .set('Authorization', `Bearer ${token}`)
-        .send({ method: 'CARD', purpose: 'DUES', purposeMeta: { tier: 'SUPPORTER', period: '2026-03' } });
-
-      expect(res.status).toBe(200);
-      expect(res.body.data.txRef).toBeDefined();
-      expect(res.body.data.paymentLink).toBeDefined();
-    });
-
-    it('initiates VERIFICATION payment (200)', async () => {
+    it('initiates a VERIFICATION payment (100 KES)', async () => {
       const res = await request(app)
         .post(`${BASE}/initiate`)
         .set('Authorization', `Bearer ${token}`)
         .send({ method: 'MPESA', purpose: 'VERIFICATION' });
 
       expect(res.status).toBe(200);
-      expect(res.body.data.txRef).toBeDefined();
+      expect(res.body.data.txRef).toMatch(/^UJ-/);
+
+      const record = await prisma.paymentRecord.findUnique({ where: { txRef: res.body.data.txRef } });
+      expect(Number(record!.amount)).toBe(100);
     });
-  });
 
-  // ─────────────────────────────────────────────
-  // POST /webhook
-  // ─────────────────────────────────────────────
-
-  describe('POST /webhook', () => {
-    it('returns 400 for invalid webhook body', async () => {
+    it('initiates a TREASURY_DEPOSIT payment', async () => {
       const res = await request(app)
-        .post(`${BASE}/webhook`)
-        .send({ event: 'charge.completed' }); // missing required data fields
+        .post(`${BASE}/initiate`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ method: 'MPESA', purpose: 'TREASURY_DEPOSIT', purposeMeta: { groupId: 'some-group', amount: 250 } });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.txRef).toMatch(/^UJ-/);
+    });
+
+    it('returns 400 when DUES tier is unknown (unknown tier in meta)', async () => {
+      const res = await request(app)
+        .post(`${BASE}/initiate`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ method: 'MPESA', purpose: 'DUES', purposeMeta: { tier: 'PLATINUM', period: '2026-03' } });
+
       expect(res.status).toBe(400);
-    });
-
-    it('processes a successful DUES webhook (200)', async () => {
-      // Create a pending payment
-      const initRes = await request(app)
-        .post(`${BASE}/initiate`)
-        .set('Authorization', `Bearer ${token}`)
-        .send({ method: 'MPESA', purpose: 'DUES', purposeMeta: { tier: 'ORDINARY', period: '2026-03' } });
-      const { txRef } = initRes.body.data;
-
-      // Seed onboarding progress (required by duesService.recordPayment → participationRightsService.award)
-      await prisma.onboardingProgress.create({ data: { userId } });
-
-      const res = await request(app)
-        .post(`${BASE}/webhook`)
-        .send({
-          event: 'charge.completed',
-          data: {
-            id: 100,
-            tx_ref: txRef,
-            flw_ref: 'FLW-WEBHOOK-100',
-            amount: 60,
-            currency: 'KES',
-            charged_amount: 60,
-            status: 'successful',
-            payment_type: 'mpesa',
-            customer: { id: 1, name: 'Test', email: 'test@test.com' },
-          },
-        });
-
-      expect(res.status).toBe(200);
-      expect(res.body.status).toBe('ok');
-
-      // Payment record should be COMPLETED
-      const record = await prisma.paymentRecord.findUnique({ where: { txRef } });
-      expect(record!.status).toBe('COMPLETED');
-    });
-
-    it('returns 200 for failed charge (graceful handling)', async () => {
-      const initRes = await request(app)
-        .post(`${BASE}/initiate`)
-        .set('Authorization', `Bearer ${token}`)
-        .send({ method: 'MPESA', purpose: 'DUES', purposeMeta: { tier: 'ORDINARY', period: '2026-03' } });
-      const { txRef } = initRes.body.data;
-
-      const res = await request(app)
-        .post(`${BASE}/webhook`)
-        .send({
-          event: 'charge.completed',
-          data: {
-            id: 101,
-            tx_ref: txRef,
-            flw_ref: 'FLW-WEBHOOK-101',
-            amount: 60,
-            currency: 'KES',
-            charged_amount: 0,
-            status: 'failed',
-            payment_type: 'mpesa',
-            customer: { id: 1, name: 'Test', email: 'test@test.com' },
-          },
-        });
-
-      expect(res.status).toBe(200);
-      const record = await prisma.paymentRecord.findUnique({ where: { txRef } });
-      expect(record!.status).toBe('FAILED');
     });
   });
 
@@ -210,21 +159,36 @@ describe('Payment Routes', () => {
   // ─────────────────────────────────────────────
 
   describe('POST /webhook/buni', () => {
-    it('returns 400 for invalid body (missing Body field)', async () => {
+    it('returns 400 when Body is missing entirely', async () => {
       const res = await request(app)
         .post(`${BASE}/webhook/buni`)
         .send({ event: 'stk_push' });
       expect(res.status).toBe(400);
     });
 
-    it('processes a successful Buni STK callback and returns KCB ack (200)', async () => {
-      const checkoutRequestId = `CRI-ROUTE-${Date.now()}`;
+    it('returns 400 when stkCallback is missing from Body', async () => {
+      const res = await request(app)
+        .post(`${BASE}/webhook/buni`)
+        .send({ Body: {} });
+      expect(res.status).toBe(400);
+    });
+
+    it('returns 400 when required stkCallback fields are missing', async () => {
+      const res = await request(app)
+        .post(`${BASE}/webhook/buni`)
+        .send({ Body: { stkCallback: { MerchantRequestID: 'X' } } });
+      expect(res.status).toBe(400);
+    });
+
+    it('processes a successful Buni STK callback (ResultCode 0) and returns KCB ack', async () => {
+      const checkoutRequestId = `CRI-ROUTE-OK-${Date.now()}`;
       const record = await seedPaymentRecord(userId, {
-        txRef: `UJ-BUNI-ROUTE-${Date.now()}`,
+        txRef: `UJ-ROUTE-OK-${Date.now()}`,
         flwRef: checkoutRequestId,
         method: 'MPESA',
         purpose: 'DUES',
         purposeMeta: { tier: 'ORDINARY', period: '2026-03' },
+        amount: 60,
       });
 
       await prisma.onboardingProgress.create({ data: { userId } });
@@ -257,10 +221,10 @@ describe('Payment Routes', () => {
       expect(updated!.status).toBe('COMPLETED');
     });
 
-    it('returns 200 for failed STK result (graceful — marks FAILED)', async () => {
-      const checkoutRequestId = `CRI-CANCEL-${Date.now()}`;
+    it('processes a failed STK callback (ResultCode 1032) and marks record FAILED', async () => {
+      const checkoutRequestId = `CRI-ROUTE-CANCEL-${Date.now()}`;
       const record = await seedPaymentRecord(userId, {
-        txRef: `UJ-BUNI-CANCEL-${Date.now()}`,
+        txRef: `UJ-ROUTE-CANCEL-${Date.now()}`,
         flwRef: checkoutRequestId,
       });
 
@@ -269,7 +233,7 @@ describe('Payment Routes', () => {
         .send({
           Body: {
             stkCallback: {
-              MerchantRequestID: 'MR-CANCEL-001',
+              MerchantRequestID: 'MR-ROUTE-002',
               CheckoutRequestID: checkoutRequestId,
               ResultCode: 1032,
               ResultDesc: 'Request cancelled by user.',
@@ -283,6 +247,47 @@ describe('Payment Routes', () => {
       const updated = await prisma.paymentRecord.findUnique({ where: { id: record.id } });
       expect(updated!.status).toBe('FAILED');
     });
+
+    it('returns 200 ack even for an unknown CheckoutRequestID (graceful)', async () => {
+      const res = await request(app)
+        .post(`${BASE}/webhook/buni`)
+        .send({
+          Body: {
+            stkCallback: {
+              MerchantRequestID: 'MR-UNKNOWN',
+              CheckoutRequestID: 'CRI-NEVER-EXISTED',
+              ResultCode: 0,
+              ResultDesc: 'Success',
+            },
+          },
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.statusCode).toBe('0');
+    });
+
+    it('does not require auth (no token → still 200 for valid body)', async () => {
+      const checkoutRequestId = `CRI-NOAUTH-${Date.now()}`;
+      await seedPaymentRecord(userId, {
+        txRef: `UJ-NOAUTH-${Date.now()}`,
+        flwRef: checkoutRequestId,
+      });
+
+      const res = await request(app)
+        .post(`${BASE}/webhook/buni`)
+        .send({
+          Body: {
+            stkCallback: {
+              MerchantRequestID: 'MR-NOAUTH',
+              CheckoutRequestID: checkoutRequestId,
+              ResultCode: 1037,
+              ResultDesc: 'Timeout',
+            },
+          },
+        });
+
+      expect(res.status).toBe(200);
+    });
   });
 
   // ─────────────────────────────────────────────
@@ -290,40 +295,87 @@ describe('Payment Routes', () => {
   // ─────────────────────────────────────────────
 
   describe('GET /status/:txRef', () => {
-    it('returns 401 with no token', async () => {
+    it('returns 401 with no auth token', async () => {
       const res = await request(app).get(`${BASE}/status/UJ-SOME-REF`);
       expect(res.status).toBe(401);
     });
 
-    it('returns 404 for non-existent txRef', async () => {
+    it('returns 404 for a non-existent txRef', async () => {
       const res = await request(app)
-        .get(`${BASE}/status/UJ-NONEXISTENT`)
+        .get(`${BASE}/status/UJ-NONEXISTENT-99999`)
         .set('Authorization', `Bearer ${token}`);
       expect(res.status).toBe(404);
     });
 
-    it('returns payment record for owner (200)', async () => {
-      const record = await seedPaymentRecord(userId, { txRef: `UJ-STATUS-${Date.now()}` });
+    it('returns the payment record for the owner (200)', async () => {
+      const record = await seedPaymentRecord(userId, {
+        txRef: `UJ-STATUS-${Date.now()}`,
+        method: 'MPESA',
+        purpose: 'DUES',
+        purposeMeta: { tier: 'ORDINARY', period: '2026-03' },
+        amount: 60,
+      });
 
       const res = await request(app)
         .get(`${BASE}/status/${record.txRef}`)
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
       expect(res.body.data.txRef).toBe(record.txRef);
       expect(res.body.data.status).toBe('PENDING');
+      expect(Number(res.body.data.amount)).toBe(60);
     });
 
-    it('returns 403 when accessing another user\'s record', async () => {
-      // Create second user
-      const other = await createPaymentTestUser(`other-${Date.now()}@test.com`);
-      const otherRecord = await seedPaymentRecord(other.id, { txRef: `UJ-OTHER-${Date.now()}` });
+    it('returns 403 when a different user requests the record', async () => {
+      const other = await createPaymentTestUser(`other-route-${Date.now()}@test.com`);
+      const otherRecord = await seedPaymentRecord(other.id, {
+        txRef: `UJ-OTHER-${Date.now()}`,
+      });
 
       const res = await request(app)
         .get(`${BASE}/status/${otherRecord.txRef}`)
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(403);
+    });
+
+    it('returns COMPLETED status after a webhook completes the payment', async () => {
+      const checkoutRequestId = `CRI-STATUS-RT-${Date.now()}`;
+      const record = await seedPaymentRecord(userId, {
+        txRef: `UJ-STATUS-RT-${Date.now()}`,
+        flwRef: checkoutRequestId,
+        method: 'MPESA',
+        purpose: 'DUES',
+        purposeMeta: { tier: 'ORDINARY', period: '2026-03' },
+        amount: 60,
+      });
+
+      await prisma.onboardingProgress.create({ data: { userId } });
+
+      // Simulate webhook arriving
+      await request(app)
+        .post(`${BASE}/webhook/buni`)
+        .send({
+          Body: {
+            stkCallback: {
+              MerchantRequestID: 'MR-STATUS-RT',
+              CheckoutRequestID: checkoutRequestId,
+              ResultCode: 0,
+              ResultDesc: 'Success',
+              CallbackMetadata: {
+                Item: [{ Name: 'Amount', Value: 60 }],
+              },
+            },
+          },
+        });
+
+      const statusRes = await request(app)
+        .get(`${BASE}/status/${record.txRef}`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(statusRes.status).toBe(200);
+      expect(statusRes.body.data.status).toBe('COMPLETED');
     });
   });
 });
