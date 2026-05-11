@@ -7,7 +7,12 @@
  * Updated: Align with actual Prisma schema (GroupMemberVote, ProposalStatus, budget)
  */
 
-import { Prisma, ProposalStatus, ProposalType, ProposalScope } from '@prisma/client';
+import {
+  Prisma,
+  ProposalStatus,
+  ProposalType,
+  ProposalScope,
+} from '@prisma/client';
 import { prisma } from '../../../core/database/client.js';
 import { participationRightsService } from '../../economy/services/participationRights.service.js';
 import { ParticipationRightsReason } from '../../economy/types.js';
@@ -172,7 +177,11 @@ class ProposalService {
           AuditAction.PROPOSAL_STATUS_CHANGED,
           'Proposal',
           proposalId,
-          { newStatus: ProposalStatus.REJECTED, stage: 1, title: proposal.title }
+          {
+            newStatus: ProposalStatus.REJECTED,
+            stage: 1,
+            title: proposal.title,
+          }
         );
         return updated;
       }
@@ -190,7 +199,11 @@ class ProposalService {
           AuditAction.PROPOSAL_STATUS_CHANGED,
           'Proposal',
           proposalId,
-          { newStatus: ProposalStatus.APPROVED_FOR_VOTING, stage: 1, title: proposal.title }
+          {
+            newStatus: ProposalStatus.APPROVED_FOR_VOTING,
+            stage: 1,
+            title: proposal.title,
+          }
         );
         return updated;
       }
@@ -216,7 +229,11 @@ class ProposalService {
         AuditAction.PROPOSAL_STATUS_CHANGED,
         'Proposal',
         proposalId,
-        { newStatus: ProposalStatus.PENDING_REVIEW, stage: 1, title: proposal.title }
+        {
+          newStatus: ProposalStatus.PENDING_REVIEW,
+          stage: 1,
+          title: proposal.title,
+        }
       );
       return forwarded;
     }
@@ -259,7 +276,11 @@ class ProposalService {
    * Voluntary groups: group LEADER only.
    * System groups: location admin (ward/constituency/county).
    */
-  async startVoting(userId: string, proposalId: string, callerSystemRoles: string[] = []) {
+  async startVoting(
+    userId: string,
+    proposalId: string,
+    callerSystemRoles: string[] = []
+  ) {
     const proposal = await prisma.proposal.findUnique({
       where: { id: proposalId },
       include: { group: true },
@@ -456,7 +477,13 @@ class ProposalService {
           AuditAction.PROPOSAL_STATUS_CHANGED,
           'Proposal',
           proposalId,
-          { newStatus, quorum, approved, tallySource: 'auto', title: proposal.title }
+          {
+            newStatus,
+            quorum,
+            approved,
+            tallySource: 'auto',
+            title: proposal.title,
+          }
         )
         .catch(() => {
           /* non-critical */
@@ -529,7 +556,14 @@ class ProposalService {
     offset?: number;
     callerContext?: { roles: string[]; primaryWardId?: string };
   }) {
-    const { groupId, status, scope, limit = 20, offset = 0, callerContext } = params;
+    const {
+      groupId,
+      status,
+      scope,
+      limit = 20,
+      offset = 0,
+      callerContext,
+    } = params;
 
     // Scope proposals to location admin's jurisdiction when applicable
     let locationWhere: Prisma.ProposalWhereInput = {};

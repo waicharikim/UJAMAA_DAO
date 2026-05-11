@@ -102,7 +102,11 @@ export class ProjectService {
     );
 
     // Debit group treasury if proposal had a funding amount committed
-    if (proposal.groupFundingAmount && Number(proposal.groupFundingAmount) > 0 && proposal.groupId) {
+    if (
+      proposal.groupFundingAmount &&
+      Number(proposal.groupFundingAmount) > 0 &&
+      proposal.groupId
+    ) {
       try {
         await treasuryService.withdraw(
           proposal.groupId,

@@ -525,7 +525,14 @@ class GroupMembershipService {
       offset?: number;
     } = {}
   ) {
-    const { isSystem, voluntaryType, systemType, search, limit = 20, offset = 0 } = filters;
+    const {
+      isSystem,
+      voluntaryType,
+      systemType,
+      search,
+      limit = 20,
+      offset = 0,
+    } = filters;
 
     const where: Prisma.GroupWhereInput = {
       status: GroupStatus.ACTIVE,

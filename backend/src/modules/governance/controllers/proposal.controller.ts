@@ -37,7 +37,11 @@ export class ProposalController {
     const userId = req.user!.userId;
     const { proposalId } = req.body;
     const systemRoles = req.user!.roles ?? [];
-    const result = await proposalService.startVoting(userId, proposalId, systemRoles);
+    const result = await proposalService.startVoting(
+      userId,
+      proposalId,
+      systemRoles
+    );
     sendSuccess(res, result, 'Voting started');
   }
 

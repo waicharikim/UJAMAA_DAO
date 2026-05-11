@@ -8,7 +8,5 @@ Sentry.init({
   tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.2 : 1.0,
   includeLocalVariables: true,
   enableLogs: true,
-  integrations: [
-    Sentry.nodeRuntimeMetricsIntegration(),
-  ],
+  integrations: [Sentry.nodeRuntimeMetricsIntegration()],
 });

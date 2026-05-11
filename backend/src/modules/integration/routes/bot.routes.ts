@@ -125,7 +125,9 @@ router.get('/baraza-groups/:id/sessions', authenticate, listSessions);
 router.post(
   '/baraza-groups/:id/sessions/schedule',
   authenticate,
-  authorize({ allowedRoles: [SystemRoles.WARD_ADMIN, SystemRoles.SUPER_ADMIN] }),
+  authorize({
+    allowedRoles: [SystemRoles.WARD_ADMIN, SystemRoles.SUPER_ADMIN],
+  }),
   validateRequest({ schema: scheduleSessionSchema, target: 'body' }),
   scheduleSessionHttp
 );
@@ -133,14 +135,18 @@ router.post(
 router.post(
   '/baraza-groups/:id/sessions/open',
   authenticate,
-  authorize({ allowedRoles: [SystemRoles.WARD_ADMIN, SystemRoles.SUPER_ADMIN] }),
+  authorize({
+    allowedRoles: [SystemRoles.WARD_ADMIN, SystemRoles.SUPER_ADMIN],
+  }),
   openSessionHttp
 );
 
 router.post(
   '/baraza-groups/:id/sessions/close',
   authenticate,
-  authorize({ allowedRoles: [SystemRoles.WARD_ADMIN, SystemRoles.SUPER_ADMIN] }),
+  authorize({
+    allowedRoles: [SystemRoles.WARD_ADMIN, SystemRoles.SUPER_ADMIN],
+  }),
   closeSessionHttp
 );
 

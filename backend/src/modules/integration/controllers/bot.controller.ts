@@ -827,7 +827,9 @@ export async function scheduleSessionHttp(
 
     const dt = new Date(scheduledAt);
     if (isNaN(dt.getTime()) || dt <= new Date()) {
-      throw ApiError.badRequest('scheduledAt must be a valid future ISO datetime');
+      throw ApiError.badRequest(
+        'scheduledAt must be a valid future ISO datetime'
+      );
     }
 
     const barazaGroup = await prisma.barazaGroup.findUnique({
@@ -838,7 +840,9 @@ export async function scheduleSessionHttp(
     if (!user.roles.includes(SystemRoles.SUPER_ADMIN)) {
       const managedIds = await getManagedGroupIds(user.userId);
       if (!managedIds.includes(barazaGroup.groupId)) {
-        throw ApiError.forbidden('You do not have admin rights over this baraza group');
+        throw ApiError.forbidden(
+          'You do not have admin rights over this baraza group'
+        );
       }
     }
 
@@ -870,7 +874,9 @@ export async function openSessionHttp(
     if (!user.roles.includes(SystemRoles.SUPER_ADMIN)) {
       const managedIds = await getManagedGroupIds(user.userId);
       if (!managedIds.includes(barazaGroup.groupId)) {
-        throw ApiError.forbidden('You do not have admin rights over this baraza group');
+        throw ApiError.forbidden(
+          'You do not have admin rights over this baraza group'
+        );
       }
     }
 
@@ -879,9 +885,13 @@ export async function openSessionHttp(
       orderBy: { scheduledAt: 'asc' },
     });
     if (!pending) {
-      throw ApiError.badRequest('No scheduled session found — schedule one first');
+      throw ApiError.badRequest(
+        'No scheduled session found — schedule one first'
+      );
     }
-    const diffMs = Math.abs(Date.now() - new Date(pending.scheduledAt).getTime());
+    const diffMs = Math.abs(
+      Date.now() - new Date(pending.scheduledAt).getTime()
+    );
     if (diffMs > 4 * 60 * 60 * 1000) {
       throw ApiError.badRequest(
         'Session can only be opened within 4 hours of its scheduled time'
@@ -890,7 +900,9 @@ export async function openSessionHttp(
 
     const session = await barazaBotService.openSession(barazaGroupId);
     if (!session) {
-      throw ApiError.badRequest('No scheduled session found — schedule one first');
+      throw ApiError.badRequest(
+        'No scheduled session found — schedule one first'
+      );
     }
     sendSuccess(res, session, 'Session opened');
   } catch (err) {
@@ -915,7 +927,9 @@ export async function closeSessionHttp(
     if (!user.roles.includes(SystemRoles.SUPER_ADMIN)) {
       const managedIds = await getManagedGroupIds(user.userId);
       if (!managedIds.includes(barazaGroup.groupId)) {
-        throw ApiError.forbidden('You do not have admin rights over this baraza group');
+        throw ApiError.forbidden(
+          'You do not have admin rights over this baraza group'
+        );
       }
     }
 

@@ -144,9 +144,18 @@ function buildSafeMeta(
     case AuditAction.PROJECT_CREATED:
       return { proposalId: raw.proposalId, title: raw.title };
     case AuditAction.MILESTONE_SUBMITTED:
-      return { projectId: raw.projectId, milestoneName: raw.milestoneName, projectTitle: raw.projectTitle };
+      return {
+        projectId: raw.projectId,
+        milestoneName: raw.milestoneName,
+        projectTitle: raw.projectTitle,
+      };
     case AuditAction.MILESTONE_VERIFIED:
-      return { approved: raw.approved, projectId: raw.projectId, milestoneName: raw.milestoneName, projectTitle: raw.projectTitle };
+      return {
+        approved: raw.approved,
+        projectId: raw.projectId,
+        milestoneName: raw.milestoneName,
+        projectTitle: raw.projectTitle,
+      };
     case AuditAction.EMERGENCY_REPORTED:
       return { type: raw.type };
     case AuditAction.LISTING_CREATED:
