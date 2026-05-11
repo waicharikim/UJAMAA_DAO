@@ -837,16 +837,22 @@ export class ProjectService {
       },
     });
 
-    const job = await projectQueue.add(
-      ProjectJobName.WORK_SESSION_CLOSE,
-      { sessionId: session.id },
-      { delay: durationMs, jobId: `ws-close-${session.id}` }
-    );
-
-    await prisma.workSession.update({
-      where: { id: session.id },
-      data: { closeJobId: job.id ?? null },
-    });
+    try {
+      const job = await projectQueue.add(
+        ProjectJobName.WORK_SESSION_CLOSE,
+        { sessionId: session.id },
+        { delay: durationMs, jobId: `ws-close-${session.id}` }
+      );
+      await prisma.workSession.update({
+        where: { id: session.id },
+        data: { closeJobId: job.id ?? null },
+      });
+    } catch (err) {
+      logger.warn(
+        { operationType: 'WORK_SESSION', sessionId: session.id, err: String(err) },
+        'Could not schedule auto-close job — session will require manual close'
+      );
+    }
 
     logger.info(
       {
