@@ -1,25 +1,33 @@
 # UjamaaDAO Project Module Documentation
 
-> **Module status:** `tested` — project routes at `/api/v1/projects` (41 tests).
-> Milestone submission + verification live. `GET /projects` (paginated) + `GET /projects/:projectId` (full detail with milestones).
+> **Module status:** `tested` — project routes at `/api/v1/projects` (106 tests across 4 files).
+> Full lifecycle: create from proposal → milestones → work logging → contributions → QR witness-chain presence verification.
 
 ## Overview
 
-The Project module manages the lifecycle of projects created from approved proposals within UjamaaDAO. It allows creating, reading, updating, listing, and deleting projects. Projects encapsulate higher-level metadata and link to milestones for phased progress and funding.
+The Project module manages the full lifecycle of projects created from approved governance proposals. Members join projects, contribute funds (UT), log physical work, and verify attendance via a QR witness-chain system. Milestones track phased progress.
 
 ### Core Features
 
 - Create projects from approved proposals
-- Retrieve project details by ID
-- List projects with optional filtering and pagination
-- Update project metadata and status
-- Delete projects securely
+- List and retrieve project details (paginated, filterable)
+- Start, submit, and verify milestones
+- Log and verify physical work
+- Join projects and contribute UT funds
+- Claim and complete tasks (with IP reward)
+- QR-based physical presence sessions with a witness-chain attestation model
 
 ### Business Rules
 
-- Projects can only be created from proposals in `APPROVED` status
-- Updates and deletions require existing projects and appropriate authorization
-- Projects maintain location and budgeting information aligned with originating proposals
+- Projects are only created from proposals in `APPROVED` status
+- Milestone start/verify requires project leader or verifier role
+- Work logging requires `COMMUNITY_VERIFIED`
+- Joining and contributing requires `COMMUNITY_VERIFIED`
+- Contributions debit `fiatBackedUtBalance` from the member and credit the project's `GroupTreasury` (1 UT = 1 KES)
+- Task completion awards 10 Impact Points to the completer
+- QR work sessions: each checked-in member may attest up to 2 others (witness chain); attested members get `depth = attestor.depth + 1`
+- Sessions auto-close via BullMQ delayed job; auto-approved (10 IP to all) only if ≥1 direct scan (depth=0) exists; otherwise flagged for leader review
+- Session creation schedules a BullMQ `WORK_SESSION_CLOSE` job with `jobId: ws-close-{sessionId}` for deduplication
 
 ---
 
@@ -29,96 +37,376 @@ The Project module manages the lifecycle of projects created from approved propo
 
 `/api/v1/projects`
 
+All routes require authentication (`Authorization: Bearer <sessionToken>`).
+
 ---
 
-### POST `/`
+### GET `/`
+
+List projects with optional filters.
+
+- **Auth required:** Yes
+- **Query Parameters:**
+  - `ownerGroupId` (optional): Filter by owning group UUID
+  - `ownerUserId` (optional): Filter by owning user UUID
+  - `status` (optional): `PLANNING | ACTIVE | ON_HOLD | CANCELLED | COMPLETED`
+  - `limit` (optional, default 20, max 100)
+  - `offset` (optional, default 0)
+- **Responses:**
+  - `200 OK` — Paginated array of project objects
+  - `401 Unauthorized`
+
+---
+
+### GET `/:projectId`
+
+Get a project by ID, including milestones and participants.
+
+- **Auth required:** Yes
+- **Path Parameters:** `projectId` (UUID)
+- **Responses:**
+  - `200 OK` — Full project object with milestones
+  - `401 Unauthorized`
+  - `404 Not Found`
+
+---
+
+### POST `/from-proposal`
 
 Create a new project from an approved proposal.
 
-- **Auth required:** Yes (JWT)
+- **Auth required:** Yes
 - **Request Body:**
 
 ```json
 {
-  "proposalId": "UUID",
-  "title": "string (min 3 char)",
-  "description": "string (min 5 char)",
-  "budget": "integer (≥ 0, optional)",
-  "timeline": "string (optional)"
+  "proposalId": "UUID"
 }
+```
 
-    Responses:
-        201 Created – Returns created project object.
-        400 Bad Request – Validation errors or proposal not approved.
-        401 Unauthorized – Missing or invalid authentication.
-        404 Not Found – Proposal does not exist.
+- **Responses:**
+  - `201 Created` — Created project object
+  - `400 Bad Request` — Proposal not in APPROVED status
+  - `404 Not Found` — Proposal not found
 
-GET /:id
+---
 
-Get a project by its ID.
+### POST `/milestone/start`
 
-    Auth required: Yes
-    Path Parameters:
-        id: Project UUID
-    Responses:
-        200 OK – Project object including linked proposal, participants, and milestones.
-        401 Unauthorized – Missing or invalid authentication.
-        404 Not Found – Project id not found.
+Start a milestone. Requires project leader role.
 
-GET /
+- **Auth required:** Yes (project leader)
+- **Request Body:**
 
-List projects with optional filters.
-
-    Auth required: Yes
-    Query Parameters:
-        status (optional): Filter by project status (ACTIVE, COMPLETED, etc.)
-        constituency (optional): Filter projects by constituency
-        county (optional): Filter projects by county
-        limit (optional, default 20): Number of records per page (max 100)
-        offset (optional, default 0): Number of records to skip
-    Responses:
-        200 OK – Array of project objects.
-        401 Unauthorized – Missing or invalid authentication.
-
-PATCH /:id
-
-Update a project partially.
-
-    Auth required: Yes
-    Path Parameters:
-        id: Project UUID
-    Request Body: Partial project properties to update
-
+```json
 {
-  "title": "string (optional)",
-  "description": "string (optional)",
-  "budget": "integer (optional)",
-  "timeline": "string (optional)",
-  "status": "string enum (optional)"
+  "milestoneId": "UUID"
 }
+```
 
-    Responses:
-        200 OK – Updated project object.
-        400 Bad Request – Validation errors.
-        401 Unauthorized
-        404 Not Found
+- **Responses:**
+  - `200 OK` — Updated milestone object
+  - `403 Forbidden` — Not project leader
+  - `404 Not Found`
 
-DELETE /:id
+---
 
-Delete a project.
+### POST `/milestone/submit`
 
-    Auth required: Yes
-    Path Parameters:
-        id: Project UUID
-    Responses:
-        204 No Content – Successfully deleted.
-        401 Unauthorized
-        404 Not Found
+Submit a milestone with proof.
 
-Errors
-Code 	Error 	Description
-400 	ValidationError 	Input fields did not meet schema requirements
-401 	Unauthorized 	Authentication failure or missing token
-403 	Forbidden 	Insufficient permissions (not typical here)
-404 	Not Found 	Requested resource does not exist
-500 	Internal Server Error 	Unexpected server error
+- **Auth required:** Yes
+- **Request Body:**
+
+```json
+{
+  "milestoneId": "UUID",
+  "proofUrl": "https://...",
+  "description": "string"
+}
+```
+
+- **Responses:**
+  - `200 OK` — Updated milestone object
+  - `400 Bad Request` — Validation error
+
+---
+
+### POST `/milestone/verify`
+
+Approve or reject a milestone submission. Requires project leader or verifier role.
+
+- **Auth required:** Yes (project leader or verifier)
+- **Request Body:**
+
+```json
+{
+  "milestoneId": "UUID",
+  "approved": true,
+  "feedback": "string (optional)"
+}
+```
+
+- **Responses:**
+  - `200 OK` — Updated milestone
+  - `403 Forbidden` — Not leader or verifier
+
+---
+
+### POST `/work-log`
+
+Log physical work on a milestone. Requires `COMMUNITY_VERIFIED`.
+
+- **Auth required:** Yes (`COMMUNITY_VERIFIED`)
+- **Request Body:**
+
+```json
+{
+  "milestoneId": "UUID",
+  "workType": "MANUAL_LABOR | SKILLED_WORK | SUPERVISION",
+  "description": "string (10–1000 chars)",
+  "hours": 2.5,
+  "photoUrls": ["https://..."],
+  "witnessIds": ["UUID"]
+}
+```
+
+- **Responses:**
+  - `201 Created` — Work log record
+  - `400 Bad Request` — Validation error
+  - `403 Forbidden` — Not community verified
+
+---
+
+### POST `/work-log/verify`
+
+Approve or reject a work log. Requires project leader or verifier role.
+
+- **Auth required:** Yes (project leader or verifier)
+- **Request Body:**
+
+```json
+{
+  "workLogId": "UUID",
+  "approved": true,
+  "feedback": "string (optional, max 500 chars)"
+}
+```
+
+- **Responses:**
+  - `200 OK` — Updated work log
+  - `403 Forbidden` — Not leader or verifier
+  - `404 Not Found`
+
+---
+
+### GET `/milestone/:milestoneId/work-logs`
+
+List all work logs for a milestone.
+
+- **Auth required:** Yes
+- **Path Parameters:** `milestoneId` (UUID)
+- **Responses:**
+  - `200 OK` — Array of work log objects
+  - `404 Not Found`
+
+---
+
+### POST `/tasks/:taskId/claim`
+
+Claim an open task.
+
+- **Auth required:** Yes
+- **Path Parameters:** `taskId` (cuid string)
+- **Responses:**
+  - `200 OK` — Updated task object
+  - `409 Conflict` — Task already claimed
+
+---
+
+### PATCH `/tasks/:taskId/done`
+
+Mark a claimed task as complete. Awards 10 Impact Points to the completer.
+
+- **Auth required:** Yes
+- **Path Parameters:** `taskId` (cuid string)
+- **Responses:**
+  - `200 OK` — Updated task + awarded IP
+  - `403 Forbidden` — Task not claimed by this user
+
+---
+
+## QR Work Sessions
+
+A QR work session captures physical presence at a project site using a witness-chain model. The session creator generates a QR code. Anyone who scans it is recorded at depth 0 (direct scan). Each checked-in member can then attest up to 2 other people present (e.g. those without smartphones), who are recorded at depth+1.
+
+Auto-close fires at session expiry via BullMQ:
+- **≥1 direct scan (depth=0)** → status `APPROVED`, all present members receive 10 IP
+- **0 direct scans** → status `FLAGGED` for leader manual review
+
+### POST `/work-sessions`
+
+Create a QR work session for a milestone. Requires `COMMUNITY_VERIFIED`.
+
+- **Auth required:** Yes (`COMMUNITY_VERIFIED`)
+- **Request Body:**
+
+```json
+{
+  "milestoneId": "UUID",
+  "durationMinutes": 120
+}
+```
+
+- **Constraints:** `durationMinutes` 30–480
+- **Responses:**
+  - `201 Created`
+
+```json
+{
+  "sessionId": "UUID",
+  "qrSecret": "48-char hex string",
+  "expiresAt": "ISO8601 timestamp",
+  "status": "OPEN"
+}
+```
+
+- `403 Forbidden` — Not community verified
+- `404 Not Found` — Milestone not found
+
+---
+
+### POST `/work-sessions/scan`
+
+Check in to an open session by scanning the QR code. Records the user at depth 0.
+
+- **Auth required:** Yes
+- **Request Body:**
+
+```json
+{
+  "qrSecret": "48-char hex string"
+}
+```
+
+- **Responses:**
+  - `200 OK` — `{ sessionId, depth: 0, checkedIn: true }`
+  - `404 Not Found` — Invalid or expired QR
+  - `409 Conflict` — Already checked in
+
+---
+
+### POST `/work-sessions/:sessionId/attest`
+
+Attest another user's physical presence. The attestor must be checked in and may attest at most 2 people. The target is recorded at `attestor.depth + 1`.
+
+- **Auth required:** Yes
+- **Path Parameters:** `sessionId` (UUID)
+- **Request Body:**
+
+```json
+{
+  "targetUserId": "UUID"
+}
+```
+
+- **Responses:**
+  - `201 Created` — `{ sessionId, targetUserId, depth }`
+  - `400 Bad Request` — Attestation limit reached (max 2), self-attest, or session not OPEN
+  - `403 Forbidden` — Attestor not checked in to this session
+  - `409 Conflict` — Target already checked in
+
+---
+
+### POST `/work-sessions/:sessionId/close`
+
+Manually close a session before expiry. Requires project leader role. Triggers the same APPROVED/FLAGGED logic as the auto-close job.
+
+- **Auth required:** Yes (project leader)
+- **Path Parameters:** `sessionId` (UUID)
+- **Responses:**
+  - `200 OK` — `{ sessionId, status: "APPROVED" | "FLAGGED", presenceCount }`
+  - `403 Forbidden` — Not project leader
+  - `404 Not Found`
+
+---
+
+### GET `/work-sessions/:sessionId`
+
+Get a work session with all presence records.
+
+- **Auth required:** Yes
+- **Path Parameters:** `sessionId` (UUID)
+- **Responses:**
+
+```json
+{
+  "sessionId": "UUID",
+  "milestoneId": "UUID",
+  "projectId": "UUID",
+  "status": "OPEN | APPROVED | FLAGGED",
+  "expiresAt": "ISO8601",
+  "presences": [
+    {
+      "userId": "UUID",
+      "userName": "string",
+      "depth": 0,
+      "attestedById": null,
+      "ipAwarded": false
+    }
+  ]
+}
+```
+
+- `404 Not Found`
+
+---
+
+## Project Membership & Contributions
+
+### POST `/:projectId/join`
+
+Join a project as a participant. Requires `COMMUNITY_VERIFIED`.
+
+- **Auth required:** Yes (`COMMUNITY_VERIFIED`)
+- **Path Parameters:** `projectId` (UUID)
+- **Responses:**
+  - `201 Created` — Project membership record
+  - `403 Forbidden` — Not community verified
+  - `409 Conflict` — Already a member
+
+---
+
+### POST `/:projectId/contribute`
+
+Contribute UT funds to a project. Debits `fiatBackedUtBalance` from the caller and credits the project's `GroupTreasury`. 1 UT = 1 KES.
+
+- **Auth required:** Yes (`COMMUNITY_VERIFIED`)
+- **Path Parameters:** `projectId` (UUID)
+- **Request Body:**
+
+```json
+{
+  "amount": 500
+}
+```
+
+- **Constraints:** `amount` 1–100,000 (integer)
+- **Responses:**
+  - `201 Created` — Contribution record with new balance
+  - `400 Bad Request` — Insufficient `fiatBackedUtBalance`
+  - `403 Forbidden` — Not community verified
+  - `404 Not Found` — Project not found
+
+---
+
+## Error Reference
+
+| Code | Error | Description |
+|---|---|---|
+| 400 | ValidationError | Input fields failed schema validation |
+| 401 | Unauthorized | Missing or invalid authentication token |
+| 403 | Forbidden | Insufficient verification level or missing role |
+| 404 | Not Found | Requested resource does not exist |
+| 409 | Conflict | Duplicate record (already joined, already checked in, etc.) |
+| 500 | Internal Server Error | Unexpected server error |
