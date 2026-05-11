@@ -682,7 +682,7 @@ class ProposalService {
     if (!proposal) throw ApiError.notFound('Proposal');
 
     // Check it passed
-    const passedStatuses = ['PASSED', 'EXECUTING', 'COMPLETED'];
+    const passedStatuses = ['APPROVED', 'EXECUTING', 'COMPLETED'];
     if (!passedStatuses.includes(proposal.status as string))
       throw ApiError.badRequest(
         'Outcome can only be recorded for passed proposals'
