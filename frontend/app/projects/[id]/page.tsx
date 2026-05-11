@@ -9,6 +9,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { WorkSessionPanel } from "@/components/projects/work-session-panel"
 import {
   ArrowLeft,
   Briefcase,
@@ -23,6 +24,8 @@ import {
   Loader2,
   ExternalLink,
   ClipboardList,
+  UserPlus,
+  Coins,
 } from "lucide-react"
 import { formatDate } from "@/lib/utils"
 
@@ -97,11 +100,15 @@ const LOG_STATUS_COLORS: Record<string, { color: string; bg: string }> = {
 function MilestoneCard({
   milestone,
   isMember,
+  isLeader,
   projectId,
+  projectMembers,
 }: {
   milestone: ProjectMilestoneDto
   isMember: boolean
+  isLeader: boolean
   projectId: string
+  projectMembers: ProjectDetailDto["members"]
 }) {
   const queryClient = useQueryClient()
   const { toast } = useToast()
@@ -349,6 +356,16 @@ function MilestoneCard({
             </div>
           )}
 
+          {/* QR work session */}
+          {canLogWork && (
+            <WorkSessionPanel
+              milestoneId={milestone.id}
+              projectId={projectId}
+              projectMembers={projectMembers}
+              isLeader={isLeader}
+            />
+          )}
+
           {/* Work logs list */}
           {workLogsData && workLogsData.workLogs.length > 0 && (
             <div className="space-y-1.5 pt-1">
@@ -399,11 +416,36 @@ function MilestoneCard({
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const { user } = useAuth()
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+
+  const [contributeAmount, setContributeAmount] = useState("")
+  const [showContributeForm, setShowContributeForm] = useState(false)
 
   const { data: project, isLoading, error } = useQuery<ProjectDetailDto>({
     queryKey: ["project", id],
     queryFn:  () => projectApi.getProject(id),
     staleTime: 30_000,
+  })
+
+  const joinMutation = useMutation({
+    mutationFn: () => projectApi.joinProject(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", id] })
+      toast({ title: "Joined project ✓" })
+    },
+    onError: (e: any) => toast({ title: "Failed", description: e?.message, variant: "destructive" }),
+  })
+
+  const contributeMutation = useMutation({
+    mutationFn: () => projectApi.contribute(id, parseInt(contributeAmount, 10)),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["project", id] })
+      setShowContributeForm(false)
+      setContributeAmount("")
+      toast({ title: `Contributed ${contributeAmount} UT ✓`, description: `New balance: ${data.newBalance} UT` })
+    },
+    onError: (e: any) => toast({ title: "Failed", description: e?.message, variant: "destructive" }),
   })
 
   if (isLoading) {
@@ -427,6 +469,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
   const projectCfg = PROJECT_STATUS[project.status] ?? PROJECT_STATUS.PLANNING
   const isMember   = project.members.some((m) => m.userId === user?.id)
+  const isLeader   = project.members.some((m) => m.userId === user?.id && m.role === "LEADER")
   const progress   = project.milestonesCount > 0
     ? Math.round((project.completedMilestonesCount / project.milestonesCount) * 100)
     : 0
@@ -505,6 +548,66 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             </div>
           )}
 
+          {/* Join / Contribute actions */}
+          {user && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {!isMember && (
+                <button
+                  onClick={() => joinMutation.mutate()}
+                  disabled={joinMutation.isPending}
+                  className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-all hover:opacity-90 disabled:opacity-50"
+                  style={{ background: "#1D4731", color: "#fff" }}
+                >
+                  {joinMutation.isPending
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <UserPlus className="h-3.5 w-3.5" />}
+                  Join Project
+                </button>
+              )}
+              {isMember && !showContributeForm && (
+                <button
+                  onClick={() => setShowContributeForm(true)}
+                  className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-all hover:opacity-90"
+                  style={{ background: "rgba(201,146,42,0.12)", color: "#C9922A" }}
+                >
+                  <Coins className="h-3.5 w-3.5" />
+                  Contribute UT
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Contribute form */}
+          {showContributeForm && (
+            <div className="mt-4 flex items-center gap-2">
+              <input
+                type="number"
+                min={1}
+                max={100000}
+                placeholder="Amount (UT)"
+                value={contributeAmount}
+                onChange={(e) => setContributeAmount(e.target.value)}
+                className="w-32 h-9 rounded-lg border border-black/10 bg-white px-3 text-xs focus:outline-none focus:ring-2 focus:ring-amber/40"
+              />
+              <button
+                onClick={() => contributeMutation.mutate()}
+                disabled={contributeMutation.isPending || !contributeAmount || parseInt(contributeAmount, 10) < 1}
+                className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition-all hover:opacity-90 disabled:opacity-50"
+                style={{ background: "#C9922A", color: "#fff" }}
+              >
+                {contributeMutation.isPending
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : "Confirm"}
+              </button>
+              <button
+                onClick={() => { setShowContributeForm(false); setContributeAmount("") }}
+                className="text-xs text-[#0E0B08]/40 hover:text-[#0E0B08]/70 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+
           <p className="text-[10px] text-[#0E0B08]/35 mt-3">
             Created {formatDate(project.createdAt)}
           </p>
@@ -523,7 +626,9 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                   key={m.id}
                   milestone={m}
                   isMember={isMember}
+                  isLeader={isLeader}
                   projectId={id}
+                  projectMembers={project.members}
                 />
               ))}
           </div>

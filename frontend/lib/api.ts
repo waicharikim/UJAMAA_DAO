@@ -1135,6 +1135,32 @@ export interface ProjectDetailDto extends ProjectListItemDto {
   proposal: { id: string; title: string; status: string } | null
 }
 
+export interface WorkPresenceDto {
+  userId: string
+  userName: string | null
+  depth: number
+  attestedById: string | null
+  ipAwarded: boolean
+  awardedAt: string | null
+}
+
+export interface WorkSessionDto {
+  sessionId: string
+  milestoneId: string
+  projectId: string
+  qrSecret: string
+  status: "OPEN" | "APPROVED" | "FLAGGED"
+  expiresAt: string
+  createdById: string
+  presences: WorkPresenceDto[]
+}
+
+export interface ScanQrResponseDto {
+  sessionId: string
+  depth: number
+  checkedIn: boolean
+}
+
 export interface WorkLogResponseDto {
   id: string
   milestoneId: string
@@ -1216,6 +1242,45 @@ export const projectApi = {
 
   getWorkLogs: (milestoneId: string): Promise<{ workLogs: WorkLogResponseDto[]; total: number }> =>
     apiFetch(`/projects/milestone/${milestoneId}/work-logs`),
+
+  joinProject: (projectId: string): Promise<{ projectId: string; userId: string; role: string }> =>
+    apiFetch(`/projects/${projectId}/join`, { method: "POST" }),
+
+  contribute: (projectId: string, amount: number): Promise<{ newBalance: number }> =>
+    apiFetch(`/projects/${projectId}/contribute`, {
+      method: "POST",
+      body: JSON.stringify({ amount }),
+    }),
+
+  claimTask: (taskId: string): Promise<unknown> =>
+    apiFetch(`/projects/tasks/${taskId}/claim`, { method: "POST" }),
+
+  completeTask: (taskId: string): Promise<unknown> =>
+    apiFetch(`/projects/tasks/${taskId}/done`, { method: "PATCH" }),
+
+  createWorkSession: (dto: { milestoneId: string; durationMinutes: number }): Promise<WorkSessionDto> =>
+    apiFetch("/projects/work-sessions", {
+      method: "POST",
+      body: JSON.stringify(dto),
+    }),
+
+  scanQr: (qrSecret: string): Promise<ScanQrResponseDto> =>
+    apiFetch("/projects/work-sessions/scan", {
+      method: "POST",
+      body: JSON.stringify({ qrSecret }),
+    }),
+
+  attestPresence: (sessionId: string, targetUserId: string): Promise<{ sessionId: string; targetUserId: string; depth: number }> =>
+    apiFetch(`/projects/work-sessions/${sessionId}/attest`, {
+      method: "POST",
+      body: JSON.stringify({ targetUserId }),
+    }),
+
+  closeWorkSession: (sessionId: string): Promise<{ sessionId: string; status: "APPROVED" | "FLAGGED"; presenceCount: number }> =>
+    apiFetch(`/projects/work-sessions/${sessionId}/close`, { method: "POST" }),
+
+  getWorkSession: (sessionId: string): Promise<WorkSessionDto> =>
+    apiFetch(`/projects/work-sessions/${sessionId}`),
 }
 
 // ─────────────────────────────────────────────────────────
