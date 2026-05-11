@@ -75,4 +75,36 @@ export class ProjectController {
     const result = await projectService.listWorkLogs(milestoneId);
     sendSuccess(res, result, 'Work logs retrieved');
   }
+
+  static async joinProject(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const { projectId } = req.params;
+    const result = await projectService.joinProject(userId, projectId);
+    sendSuccess(res, result, 'Joined project', 201);
+  }
+
+  static async contribute(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const { projectId } = req.params;
+    const result = await projectService.contributeToProject(
+      userId,
+      projectId,
+      req.body
+    );
+    sendSuccess(res, result, 'Contribution recorded', 201);
+  }
+
+  static async claimTask(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const { taskId } = req.params;
+    const result = await projectService.claimTask(userId, taskId);
+    sendSuccess(res, result, 'Task claimed');
+  }
+
+  static async completeTask(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const { taskId } = req.params;
+    const result = await projectService.completeTask(userId, taskId);
+    sendSuccess(res, result, 'Task completed');
+  }
 }

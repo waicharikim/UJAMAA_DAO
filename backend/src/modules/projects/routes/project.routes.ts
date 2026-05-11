@@ -178,4 +178,53 @@ router.get(
   asyncHandler(ProjectController.listWorkLogs)
 );
 
+// ── Task Actions ─────────────────────────────────────────────────────────────
+// These must be defined before /:projectId to avoid Express treating 'tasks' as a projectId
+
+router.post(
+  '/tasks/:taskId/claim',
+  validateRequest({
+    schema: z.object({ taskId: z.string().uuid() }),
+    target: 'params',
+  }),
+  asyncHandler(ProjectController.claimTask)
+);
+
+router.patch(
+  '/tasks/:taskId/done',
+  validateRequest({
+    schema: z.object({ taskId: z.string().uuid() }),
+    target: 'params',
+  }),
+  asyncHandler(ProjectController.completeTask)
+);
+
+// ── Project Membership & Contributions ───────────────────────────────────────
+
+router.post(
+  '/:projectId/join',
+  authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
+  validateRequest({
+    schema: z.object({ projectId: z.string().uuid() }),
+    target: 'params',
+  }),
+  asyncHandler(ProjectController.joinProject)
+);
+
+router.post(
+  '/:projectId/contribute',
+  authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
+  validateRequest({
+    schema: z.object({ projectId: z.string().uuid() }),
+    target: 'params',
+  }),
+  validateRequest({
+    schema: z.object({
+      amount: z.number().int().positive().max(100_000),
+    }),
+    target: 'body',
+  }),
+  asyncHandler(ProjectController.contribute)
+);
+
 export default router;

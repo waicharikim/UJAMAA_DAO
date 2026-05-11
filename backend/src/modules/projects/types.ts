@@ -139,3 +139,31 @@ export interface WorkLogListDto {
   workLogs: WorkLogResponseDto[];
   total: number;
 }
+
+// ── Contribution DTOs ─────────────────────────────────────────────────────────
+
+export interface ContributeToProjectDto {
+  amount: number; // UT amount (1 UT = 1 KES)
+}
+
+export interface ContributionResponseDto {
+  projectId: string;
+  amount: number;
+  newBalance: number;
+  transactionId: string;
+}
+
+// ── Task DTOs ─────────────────────────────────────────────────────────────────
+
+export interface ClaimTaskResponseDto {
+  taskId: string;
+  projectId: string;
+  milestoneId: string;
+  status: string;
+}
+
+export interface CompleteTaskResponseDto {
+  taskId: string;
+  status: 'DONE';
+  ipAwarded: number;
+}

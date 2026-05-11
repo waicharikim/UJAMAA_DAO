@@ -29,6 +29,10 @@ import type {
   VerifyWorkDto,
   WorkLogResponseDto,
   WorkLogListDto,
+  ContributeToProjectDto,
+  ContributionResponseDto,
+  ClaimTaskResponseDto,
+  CompleteTaskResponseDto,
 } from '../types.js';
 import { ProjectStatus, MilestoneStatus } from '../types.js';
 
@@ -566,6 +570,219 @@ export class ProjectService {
       workLogs: workLogs.map((w) => this.mapWorkLog(w)),
       total: workLogs.length,
     };
+  }
+
+  // ── Join project ─────────────────────────────────────────────────────────
+
+  async joinProject(userId: string, projectId: string) {
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { id: true, title: true, status: true },
+    });
+    if (!project) throw ApiError.notFound('Project');
+    if (project.status === 'CANCELLED' || project.status === 'COMPLETED')
+      throw ApiError.badRequest('Cannot join a completed or cancelled project');
+
+    try {
+      const member = await prisma.projectMember.create({
+        data: { projectId, userId, role: 'CONTRIBUTOR' },
+        include: {
+          user: { select: { id: true, name: true, avatarUrl: true } },
+        },
+      });
+
+      await globalImpactPointService
+        .award(userId, 5, ImpactPointReason.PROJECT_JOINED, { projectId })
+        .catch(() => {});
+
+      await auditService
+        .log(userId, AuditAction.PROJECT_CREATED, 'Project', projectId, {
+          action: 'MEMBER_JOINED',
+        })
+        .catch(() => {});
+
+      return {
+        projectId: member.projectId,
+        userId: member.userId,
+        role: member.role,
+        joinedAt: member.joinedAt.toISOString(),
+        user: member.user,
+      };
+    } catch (err: any) {
+      if (err?.code === 'P2002')
+        throw ApiError.conflict('Already a member of this project');
+      throw err;
+    }
+  }
+
+  // ── UT contribution ───────────────────────────────────────────────────────
+
+  async contributeToProject(
+    userId: string,
+    projectId: string,
+    dto: ContributeToProjectDto
+  ): Promise<ContributionResponseDto> {
+    if (dto.amount <= 0) throw ApiError.badRequest('Amount must be positive');
+    if (dto.amount > 100_000)
+      throw ApiError.badRequest('Maximum single contribution is 100,000 UT');
+
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { id: true, title: true, status: true, ownerGroupId: true },
+    });
+    if (!project) throw ApiError.notFound('Project');
+    if (project.status !== 'ACTIVE' && project.status !== 'PLANNING')
+      throw ApiError.badRequest('Project is not accepting contributions');
+    if (!project.ownerGroupId)
+      throw ApiError.badRequest(
+        'Only group-owned projects accept UT contributions'
+      );
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { fiatBackedUtBalance: true },
+    });
+    if (!user) throw ApiError.notFound('User');
+    if (user.fiatBackedUtBalance < dto.amount)
+      throw ApiError.forbidden(
+        `Insufficient UT balance. You have ${user.fiatBackedUtBalance} UT.`
+      );
+
+    const [updatedUser, tx] = await prisma.$transaction(async (t) => {
+      const updated = await t.user.update({
+        where: { id: userId },
+        data: { fiatBackedUtBalance: { decrement: dto.amount } },
+        select: { fiatBackedUtBalance: true },
+      });
+
+      const treasury = await treasuryService.getOrCreateTreasury(
+        project.ownerGroupId!
+      );
+
+      const walletTx = await t.walletTransaction.create({
+        data: {
+          treasuryId: treasury.id,
+          amount: dto.amount,
+          transactionType: 'CREDIT',
+          description: `Contribution to project: ${project.title}`,
+          referenceType: 'PROJECT_CONTRIBUTION',
+          projectId,
+          initiatedById: userId,
+        },
+      });
+
+      await t.groupTreasury.update({
+        where: { id: treasury.id },
+        data: { balance: { increment: dto.amount } },
+      });
+
+      return [updated, walletTx];
+    });
+
+    await participationRightsService
+      .award(userId, 10, ParticipationRightsReason.PROJECT_CONTRIBUTED, {
+        projectId,
+        amount: dto.amount,
+      })
+      .catch(() => {});
+
+    await globalImpactPointService
+      .award(userId, 10, ImpactPointReason.PROJECT_CONTRIBUTED, {
+        projectId,
+        amount: dto.amount,
+      })
+      .catch(() => {});
+
+    logger.info(
+      { userId, projectId, amount: dto.amount },
+      'Project contribution recorded'
+    );
+
+    return {
+      projectId,
+      amount: dto.amount,
+      newBalance: updatedUser.fiatBackedUtBalance,
+      transactionId: tx.id,
+    };
+  }
+
+  // ── Task claim + completion ───────────────────────────────────────────────
+
+  async claimTask(
+    userId: string,
+    taskId: string
+  ): Promise<ClaimTaskResponseDto> {
+    const task = await prisma.task.findUnique({
+      where: { id: taskId },
+      select: {
+        id: true,
+        projectId: true,
+        milestoneId: true,
+        status: true,
+        assignedToId: true,
+        milestone: { select: { status: true } },
+      },
+    });
+    if (!task) throw ApiError.notFound('Task');
+    if (task.status !== 'TODO')
+      throw ApiError.badRequest('Task is not available to claim');
+    if (task.assignedToId) throw ApiError.conflict('Task is already claimed');
+    if (task.milestone.status !== 'IN_PROGRESS')
+      throw ApiError.badRequest(
+        'Milestone must be in progress before claiming tasks'
+      );
+
+    if (task.projectId) {
+      const isMember = await prisma.projectMember.findUnique({
+        where: { projectId_userId: { projectId: task.projectId, userId } },
+      });
+      if (!isMember)
+        throw ApiError.forbidden('Join the project before claiming tasks');
+    }
+
+    await prisma.task.update({
+      where: { id: taskId },
+      data: { assignedToId: userId, status: 'IN_PROGRESS' },
+    });
+
+    return {
+      taskId,
+      projectId: task.projectId ?? '',
+      milestoneId: task.milestoneId,
+      status: 'IN_PROGRESS',
+    };
+  }
+
+  async completeTask(
+    userId: string,
+    taskId: string
+  ): Promise<CompleteTaskResponseDto> {
+    const task = await prisma.task.findUnique({
+      where: { id: taskId },
+      select: { id: true, projectId: true, status: true, assignedToId: true },
+    });
+    if (!task) throw ApiError.notFound('Task');
+    if (task.assignedToId !== userId)
+      throw ApiError.forbidden(
+        'Only the assigned member can complete this task'
+      );
+    if (task.status !== 'IN_PROGRESS')
+      throw ApiError.badRequest('Task must be in progress to mark as done');
+
+    await prisma.task.update({
+      where: { id: taskId },
+      data: { status: 'DONE' },
+    });
+
+    const IP_REWARD = 10;
+    await participationRightsService
+      .award(userId, 5, ParticipationRightsReason.TASK_COMPLETED, { taskId })
+      .catch(() => {});
+    await globalImpactPointService
+      .award(userId, IP_REWARD, ImpactPointReason.TASK_COMPLETED, { taskId })
+      .catch(() => {});
+
+    return { taskId, status: 'DONE', ipAwarded: IP_REWARD };
   }
 
   private mapWorkLog(w: any): WorkLogResponseDto {
