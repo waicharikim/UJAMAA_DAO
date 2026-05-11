@@ -184,7 +184,7 @@ router.get(
 router.post(
   '/tasks/:taskId/claim',
   validateRequest({
-    schema: z.object({ taskId: z.string().uuid() }),
+    schema: z.object({ taskId: z.string().min(1) }),
     target: 'params',
   }),
   asyncHandler(ProjectController.claimTask)
@@ -193,7 +193,7 @@ router.post(
 router.patch(
   '/tasks/:taskId/done',
   validateRequest({
-    schema: z.object({ taskId: z.string().uuid() }),
+    schema: z.object({ taskId: z.string().min(1) }),
     target: 'params',
   }),
   asyncHandler(ProjectController.completeTask)
