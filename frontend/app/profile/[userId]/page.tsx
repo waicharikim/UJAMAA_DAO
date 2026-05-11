@@ -1,13 +1,16 @@
 "use client"
 
-import { useParams } from "next/navigation"
+import { useState } from "react"
+import { useParams, useRouter } from "next/navigation"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/hooks/use-toast"
-import { userApi } from "@/lib/api"
+import { userApi, conflictApi } from "@/lib/api"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { CheckCircle, MapPin, Shield, Users, Award } from "lucide-react"
+import { Textarea } from "@/components/ui/textarea"
+import { Button } from "@/components/ui/button"
+import { CheckCircle, MapPin, Shield, Users, Award, Flag, X } from "lucide-react"
 
 const LEVEL_COLORS: Record<string, { bg: string; color: string; label: string }> = {
   FULL_VERIFIED:      { bg: "rgba(42,82,64,0.12)",    color: "#1E3D2F", label: "Fully verified" },
@@ -19,9 +22,12 @@ const LEVEL_COLORS: Record<string, { bg: string; color: string; label: string }>
 
 export default function PublicProfilePage() {
   const { userId } = useParams<{ userId: string }>()
+  const router = useRouter()
   const { user: currentUser } = useAuth()
   const { toast } = useToast()
   const queryClient = useQueryClient()
+  const [showConflictForm, setShowConflictForm] = useState(false)
+  const [conflictDescription, setConflictDescription] = useState("")
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ["public-profile", userId],
@@ -42,6 +48,26 @@ export default function PublicProfilePage() {
     onError: (err: any) => {
       toast({ title: "Vouch failed", description: err?.message ?? "Try again.", variant: "destructive" })
     },
+  })
+
+  const fileConflictMutation = useMutation({
+    mutationFn: () =>
+      conflictApi.fileConflict({
+        respondentId: userId,
+        description: conflictDescription.trim(),
+      }),
+    onSuccess: (data) => {
+      toast({ title: "Conflict report filed", description: "The other party will be notified." })
+      setShowConflictForm(false)
+      setConflictDescription("")
+      router.push(`/conflicts/${data.id}`)
+    },
+    onError: (err: any) =>
+      toast({
+        title: "Failed to file report",
+        description: err?.message ?? "Please try again.",
+        variant: "destructive",
+      }),
   })
 
   const isSelf = currentUser?.id === userId
@@ -140,6 +166,66 @@ export default function PublicProfilePage() {
               <p className="text-xs text-[#0E0B08]/40 text-center">
                 You need to be community-verified to vouch for others.
               </p>
+            </div>
+          )}
+
+          {/* File conflict — available to any logged-in user viewing another's profile */}
+          {!isSelf && currentUser && (
+            <div className="mt-4 pt-4 border-t" style={{ borderColor: "rgba(14,11,8,0.07)" }}>
+              {!showConflictForm ? (
+                <button
+                  onClick={() => setShowConflictForm(true)}
+                  className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-semibold transition-all hover:opacity-80"
+                  style={{ background: "rgba(176,58,30,0.08)", color: "#B03A1E" }}
+                >
+                  <Flag className="h-3.5 w-3.5" />
+                  Report a conflict with {profile.name?.split(" ")[0] ?? "this person"}
+                </button>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold uppercase tracking-widest" style={{ color: "#B03A1E" }}>
+                      Conflict Report
+                    </p>
+                    <button
+                      onClick={() => { setShowConflictForm(false); setConflictDescription("") }}
+                      className="text-[#0E0B08]/30 hover:text-[#0E0B08]/60 transition-colors"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <p className="text-xs text-[#0E0B08]/50">
+                    Describe the conflict clearly. Include relevant dates and impact on the ward.
+                  </p>
+                  <Textarea
+                    placeholder="e.g. On 15 April, this member defaulted on a group commitment and refused mediation…"
+                    rows={4}
+                    value={conflictDescription}
+                    onChange={(e) => setConflictDescription(e.target.value)}
+                    className="text-sm resize-none"
+                  />
+                  <p className="text-[10px]" style={{ color: "rgba(14,11,8,0.35)" }}>
+                    {conflictDescription.length} / 2000 · minimum 20 characters
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => fileConflictMutation.mutate()}
+                      disabled={conflictDescription.trim().length < 20 || fileConflictMutation.isPending}
+                      className="flex-1 rounded-xl text-xs font-bold"
+                      style={{ background: "#B03A1E", color: "#fff" }}
+                    >
+                      {fileConflictMutation.isPending ? "Filing…" : "Submit Report"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => { setShowConflictForm(false); setConflictDescription("") }}
+                      className="rounded-xl text-xs"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
