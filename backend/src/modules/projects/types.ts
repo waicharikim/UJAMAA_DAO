@@ -167,3 +167,64 @@ export interface CompleteTaskResponseDto {
   status: 'DONE';
   ipAwarded: number;
 }
+
+// ── Work Session (QR presence chain) DTOs ─────────────────────────────────────
+
+export type WorkSessionStatus = 'OPEN' | 'APPROVED' | 'FLAGGED';
+
+export interface CreateWorkSessionDto {
+  milestoneId: string;
+  durationMinutes: number; // 30–480
+}
+
+export interface WorkSessionDto {
+  id: string;
+  milestoneId: string;
+  projectId: string;
+  qrSecret: string;
+  expiresAt: string;
+  status: WorkSessionStatus;
+  closedAt: string | null;
+  presenceCount: number;
+  createdAt: string;
+}
+
+export interface WorkPresenceDto {
+  id: string;
+  sessionId: string;
+  userId: string;
+  user: { id: string; name: string | null; avatarUrl: string | null };
+  depth: number;
+  ipAwarded: number;
+  awardedAt: string | null;
+  createdAt: string;
+}
+
+export interface AttestPresenceDto {
+  sessionId: string;
+  targetUserId: string;
+}
+
+export interface ScanQrResponseDto {
+  sessionId: string;
+  depth: number;
+  expiresAt: string;
+  attestationsRemaining: number;
+}
+
+export interface AttestResponseDto {
+  presenceId: string;
+  targetUserId: string;
+  depth: number;
+  attestationsRemaining: number;
+}
+
+// ── Job names ─────────────────────────────────────────────────────────────────
+
+export const ProjectJobName = {
+  WORK_SESSION_CLOSE: 'WORK_SESSION_CLOSE',
+} as const;
+
+export interface WorkSessionCloseJobData {
+  sessionId: string;
+}

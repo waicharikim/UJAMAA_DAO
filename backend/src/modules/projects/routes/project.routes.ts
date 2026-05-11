@@ -199,6 +199,71 @@ router.patch(
   asyncHandler(ProjectController.completeTask)
 );
 
+// ── QR Work Sessions ─────────────────────────────────────────────────────────
+
+router.post(
+  '/work-sessions',
+  authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
+  validateRequest({
+    schema: z.object({
+      milestoneId: z.string().uuid(),
+      durationMinutes: z.number().int().min(30).max(480),
+    }),
+    target: 'body',
+  }),
+  asyncHandler(ProjectController.createWorkSession)
+);
+
+router.post(
+  '/work-sessions/scan',
+  validateRequest({
+    schema: z.object({ qrSecret: z.string().min(1) }),
+    target: 'body',
+  }),
+  asyncHandler(ProjectController.scanQr)
+);
+
+router.post(
+  '/work-sessions/:sessionId/attest',
+  validateRequest({
+    schema: z.object({ sessionId: z.string().uuid() }),
+    target: 'params',
+  }),
+  validateRequest({
+    schema: z.object({ targetUserId: z.string().uuid() }),
+    target: 'body',
+  }),
+  asyncHandler(ProjectController.attestPresence)
+);
+
+router.post(
+  '/work-sessions/:sessionId/close',
+  validateRequest({
+    schema: z.object({ sessionId: z.string().uuid() }),
+    target: 'params',
+  }),
+  authorize({
+    scopeCheck: async (req) => {
+      const session = await prisma.workSession.findUnique({
+        where: { id: req.params.sessionId },
+        select: { projectId: true },
+      });
+      if (!session) return false;
+      return roleService.isProjectLeader(req.user!.userId, session.projectId);
+    },
+  }),
+  asyncHandler(ProjectController.closeWorkSession)
+);
+
+router.get(
+  '/work-sessions/:sessionId',
+  validateRequest({
+    schema: z.object({ sessionId: z.string().uuid() }),
+    target: 'params',
+  }),
+  asyncHandler(ProjectController.getWorkSession)
+);
+
 // ── Project Membership & Contributions ───────────────────────────────────────
 
 router.post(

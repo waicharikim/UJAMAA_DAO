@@ -128,6 +128,7 @@ export const userCleanupQueue = createQueue('user-cleanup');
 export const integrationQueue = createQueue('integration');
 export const notificationsQueue = createQueue('notifications');
 export const governanceQueue = createQueue('governance');
+export const projectQueue = createQueue('project');
 
 // Dead-letter queue for permanently failed jobs (after max retries)
 export const deadLetterQueue = createQueue('dead-letter');

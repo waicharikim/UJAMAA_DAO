@@ -107,4 +107,43 @@ export class ProjectController {
     const result = await projectService.completeTask(userId, taskId);
     sendSuccess(res, result, 'Task completed');
   }
+
+  // ── QR Work Sessions ──────────────────────────────────────────────────────
+
+  static async createWorkSession(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const result = await projectService.createWorkSession(userId, req.body);
+    sendSuccess(res, result, 'Work session created', 201);
+  }
+
+  static async scanQr(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const { qrSecret } = req.body;
+    const result = await projectService.scanQr(userId, qrSecret);
+    sendSuccess(res, result, 'Checked in successfully');
+  }
+
+  static async attestPresence(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const { sessionId } = req.params;
+    const { targetUserId } = req.body;
+    const result = await projectService.attestPresence(
+      userId,
+      sessionId,
+      targetUserId
+    );
+    sendSuccess(res, result, 'Presence attested', 201);
+  }
+
+  static async closeWorkSession(req: AuthRequest, res: Response) {
+    const { sessionId } = req.params;
+    const result = await projectService.closeWorkSession(sessionId);
+    sendSuccess(res, result, 'Work session closed');
+  }
+
+  static async getWorkSession(req: AuthRequest, res: Response) {
+    const { sessionId } = req.params;
+    const result = await projectService.getWorkSession(sessionId);
+    sendSuccess(res, result);
+  }
 }

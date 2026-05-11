@@ -61,6 +61,11 @@ import {
 } from './modules/notifications/jobs/dues-reminder.jobs.js';
 
 import {
+  ProjectJobName,
+  processWorkSessionClose,
+} from './modules/projects/jobs/work-session.jobs.js';
+
+import {
   SCHEDULE_ELECTIONS_JOB,
   OPEN_NOMINATIONS_JOB,
   OPEN_VOTING_JOB,
@@ -87,6 +92,7 @@ async function shutdownWorkers(signal: string): Promise<void> {
       integrationWorker.close(),
       notificationsWorker.close(),
       governanceWorker.close(),
+      projectWorker.close(),
     ]);
     logger.info({ operationType: 'WORKER' }, 'All workers drained and closed');
   } catch (err) {
@@ -310,6 +316,31 @@ const governanceWorker = createWorker('governance', async (job) => {
         stack: err instanceof Error ? err.stack : undefined,
       },
       'Governance job failed'
+    );
+    throw err;
+  }
+});
+
+const projectWorker = createWorker('project', async (job) => {
+  try {
+    if (job.name === ProjectJobName.WORK_SESSION_CLOSE) {
+      await processWorkSessionClose(job);
+    } else {
+      logger.warn(
+        { jobName: job.name, queue: 'project' },
+        'Unknown project job received'
+      );
+    }
+  } catch (err) {
+    logger.error(
+      {
+        jobId: job.id,
+        jobName: job.name,
+        queue: 'project',
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      },
+      'Project job failed'
     );
     throw err;
   }
