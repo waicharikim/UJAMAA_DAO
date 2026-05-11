@@ -56,39 +56,39 @@ async function connectDatabase(maxRetries = 5, delay = 2000): Promise<void> {
   }
 }
 
+/** Fail-fast environment checks. Throws in production when required vars are missing/insecure. */
+function assertStartupRequirements(): void {
+  if (!process.env.ENCRYPTION_KEY) {
+    if (NODE_ENV === 'production') {
+      throw new Error('ENCRYPTION_KEY must be set in production');
+    }
+    logger.warn(
+      { operationType: 'STARTUP' },
+      'ENCRYPTION_KEY not set — crypto features will fail (acceptable in dev only)'
+    );
+  }
+
+  const jwtSecret = process.env.JWT_SECRET || '';
+  if (NODE_ENV === 'production' && jwtSecret.length < 32) {
+    throw new Error('JWT_SECRET must be at least 32 characters in production');
+  }
+  if (
+    NODE_ENV === 'production' &&
+    jwtSecret === '6e603cfa9affb7677020ad6a930bd3f076867ff38d100586dc5d985bed845ad0'
+  ) {
+    throw new Error(
+      'JWT_SECRET is set to the insecure development default — set a unique secret in production'
+    );
+  }
+}
+
 async function startServer() {
   try {
     // ==========================================================================
     // 0. STARTUP ASSERTIONS — fail fast before touching any service
     // ==========================================================================
 
-    // ENCRYPTION_KEY: required for all crypto operations
-    if (!process.env.ENCRYPTION_KEY) {
-      if (NODE_ENV === 'production') {
-        throw new Error('ENCRYPTION_KEY must be set in production');
-      }
-      logger.warn(
-        { operationType: 'STARTUP' },
-        'ENCRYPTION_KEY not set — crypto features will fail (acceptable in dev only)'
-      );
-    }
-
-    // JWT_SECRET: reject short or obviously-default values in production
-    const jwtSecret = process.env.JWT_SECRET || '';
-    if (NODE_ENV === 'production' && jwtSecret.length < 32) {
-      throw new Error(
-        'JWT_SECRET must be at least 32 characters in production'
-      );
-    }
-    if (
-      NODE_ENV === 'production' &&
-      jwtSecret ===
-        '6e603cfa9affb7677020ad6a930bd3f076867ff38d100586dc5d985bed845ad0'
-    ) {
-      throw new Error(
-        'JWT_SECRET is set to the insecure development default — set a unique secret in production'
-      );
-    }
+    assertStartupRequirements();
 
     // ==========================================================================
     // 1. WAIT FOR ALL ASYNC SERVICES TO BE READY

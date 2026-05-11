@@ -124,6 +124,114 @@ function TransactionRow({ tx }: { tx: WalletTransactionDto }) {
   )
 }
 
+function TreasuryBalanceCards({ treasury }: { treasury: { balance: number; tokenBalance: number; updatedAt: string } }) {
+  return (
+    <div className="grid grid-cols-2 gap-4">
+      <Card className="border-0 shadow-card">
+        <CardContent className="p-5">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-[#0E0B08]/40 mb-1">KES Balance</p>
+              <p className="text-[28px] font-bold text-[#0E0B08] leading-none">
+                {treasury.balance.toLocaleString()}
+              </p>
+              <p className="text-xs text-[#0E0B08]/40 mt-1">Kenyan Shillings</p>
+            </div>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "#1E3D2F" }}>
+              <TrendingUp className="h-4 w-4 text-white" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-0 shadow-card">
+        <CardContent className="p-5">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-[#0E0B08]/40 mb-1">UT Balance</p>
+              <p className="text-[28px] font-bold text-[#0E0B08] leading-none">
+                {treasury.tokenBalance.toLocaleString()}
+              </p>
+              <p className="text-xs text-[#0E0B08]/40 mt-1">Utility Tokens</p>
+            </div>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "#C9922A" }}>
+              <Coins className="h-4 w-4 text-white" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function TxHistoryCard({
+  txData,
+  txLoading,
+  page,
+  setPage,
+}: {
+  txData: any
+  txLoading: boolean
+  page: number
+  setPage: (fn: (p: number) => number) => void
+}) {
+  const totalPages = txData?.pagination.totalPages ?? 1
+
+  return (
+    <Card className="border-0 shadow-card">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <TrendingDown className="h-4 w-4" style={{ color: "#C9922A" }} />
+          Transaction History
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {txLoading ? (
+          <div className="space-y-3">
+            {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-12 rounded-xl" />)}
+          </div>
+        ) : !txData?.transactions.length ? (
+          <p className="text-sm text-center py-8" style={{ color: "rgba(14,11,8,0.35)" }}>
+            No transactions yet. Contributions will appear here once received.
+          </p>
+        ) : (
+          <>
+            <div>
+              {txData.transactions.map((tx: WalletTransactionDto) => (
+                <TransactionRow key={tx.id} tx={tx} />
+              ))}
+            </div>
+
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-4 pt-4 border-t" style={{ borderColor: "rgba(14,11,8,0.06)" }}>
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all hover:opacity-80 disabled:opacity-30"
+                  style={{ background: "rgba(14,11,8,0.06)", color: "#0E0B08" }}
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" /> Previous
+                </button>
+                <span className="text-xs text-[#0E0B08]/40">
+                  Page {page} of {totalPages}
+                </span>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all hover:opacity-80 disabled:opacity-30"
+                  style={{ background: "rgba(14,11,8,0.06)", color: "#0E0B08" }}
+                >
+                  Next <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 // ── Main page ─────────────────────────────────────────────
 
 export default function TreasuryPage() {
@@ -131,7 +239,6 @@ export default function TreasuryPage() {
   const [page, setPage] = useState(1)
   const [fundOpen, setFundOpen] = useState(false)
 
-  // 1. Get user's group memberships
   const { data: memberships, isLoading: groupsLoading } = useQuery({
     queryKey: ["my-groups"],
     queryFn:  communityApi.getMyGroups,
@@ -139,12 +246,8 @@ export default function TreasuryPage() {
     enabled:  !!user,
   })
 
-  // 2. Find the WARD system group
-  const wardGroup = memberships?.find(
-    (m) => m.isSystem && m.systemType === "WARD"
-  )
+  const wardGroup = memberships?.find((m) => m.isSystem && m.systemType === "WARD")
 
-  // 3. Fetch treasury
   const { data: treasury, isLoading: treasuryLoading, refetch } = useQuery({
     queryKey: ["treasury", wardGroup?.groupId],
     queryFn:  () => treasuryApi.getTreasury(wardGroup!.groupId),
@@ -152,7 +255,6 @@ export default function TreasuryPage() {
     enabled:  !!wardGroup,
   })
 
-  // 4. Fetch transactions (paginated)
   const { data: txData, isLoading: txLoading } = useQuery({
     queryKey: ["treasury-transactions", wardGroup?.groupId, page],
     queryFn:  () => treasuryApi.getTransactions(wardGroup!.groupId, { page, limit: 15 }),
@@ -161,16 +263,13 @@ export default function TreasuryPage() {
   })
 
   const isLoading = groupsLoading || treasuryLoading
-  const totalPages = txData?.pagination.totalPages ?? 1
 
-  // ── Location label ──────────────────────────────────────
   const locationParts = [wardGroup?.ward?.name, wardGroup?.constituency?.name, wardGroup?.county?.name].filter(Boolean)
   const locationLabel = locationParts.join(", ")
 
   return (
     <div className="px-4 md:px-8 py-6 space-y-6 max-w-3xl mx-auto">
 
-      {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="font-display font-bold text-3xl text-[#0E0B08]">Ward Treasury</h2>
@@ -203,7 +302,6 @@ export default function TreasuryPage() {
         </div>
       </div>
 
-      {/* No ward group yet */}
       {!groupsLoading && !wardGroup && (
         <Card className="border-0 shadow-card text-center py-14">
           <CardContent>
@@ -218,50 +316,12 @@ export default function TreasuryPage() {
         </Card>
       )}
 
-      {/* Loading */}
       {isLoading && <TreasurySkeleton />}
 
-      {/* Treasury dashboard */}
       {!isLoading && treasury && (
         <>
-          {/* Balance cards */}
-          <div className="grid grid-cols-2 gap-4">
-            <Card className="border-0 shadow-card">
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-widest text-[#0E0B08]/40 mb-1">KES Balance</p>
-                    <p className="text-[28px] font-bold text-[#0E0B08] leading-none">
-                      {treasury.balance.toLocaleString()}
-                    </p>
-                    <p className="text-xs text-[#0E0B08]/40 mt-1">Kenyan Shillings</p>
-                  </div>
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "#1E3D2F" }}>
-                    <TrendingUp className="h-4 w-4 text-white" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+          <TreasuryBalanceCards treasury={treasury} />
 
-            <Card className="border-0 shadow-card">
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-widest text-[#0E0B08]/40 mb-1">UT Balance</p>
-                    <p className="text-[28px] font-bold text-[#0E0B08] leading-none">
-                      {treasury.tokenBalance.toLocaleString()}
-                    </p>
-                    <p className="text-xs text-[#0E0B08]/40 mt-1">Utility Tokens</p>
-                  </div>
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "#C9922A" }}>
-                    <Coins className="h-4 w-4 text-white" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Quick stats from transactions */}
           {txData && txData.pagination.total > 0 && (
             <div
               className="flex items-center justify-between rounded-2xl px-5 py-3"
@@ -277,61 +337,8 @@ export default function TreasuryPage() {
             </div>
           )}
 
-          {/* Transaction history */}
-          <Card className="border-0 shadow-card">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <TrendingDown className="h-4 w-4" style={{ color: "#C9922A" }} />
-                Transaction History
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {txLoading ? (
-                <div className="space-y-3">
-                  {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-12 rounded-xl" />)}
-                </div>
-              ) : !txData?.transactions.length ? (
-                <p className="text-sm text-center py-8" style={{ color: "rgba(14,11,8,0.35)" }}>
-                  No transactions yet. Contributions will appear here once received.
-                </p>
-              ) : (
-                <>
-                  <div>
-                    {txData.transactions.map((tx) => (
-                      <TransactionRow key={tx.id} tx={tx} />
-                    ))}
-                  </div>
+          <TxHistoryCard txData={txData} txLoading={txLoading} page={page} setPage={setPage} />
 
-                  {/* Pagination */}
-                  {totalPages > 1 && (
-                    <div className="flex items-center justify-between mt-4 pt-4 border-t" style={{ borderColor: "rgba(14,11,8,0.06)" }}>
-                      <button
-                        onClick={() => setPage((p) => Math.max(1, p - 1))}
-                        disabled={page === 1}
-                        className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all hover:opacity-80 disabled:opacity-30"
-                        style={{ background: "rgba(14,11,8,0.06)", color: "#0E0B08" }}
-                      >
-                        <ChevronLeft className="h-3.5 w-3.5" /> Previous
-                      </button>
-                      <span className="text-xs text-[#0E0B08]/40">
-                        Page {page} of {totalPages}
-                      </span>
-                      <button
-                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                        disabled={page === totalPages}
-                        className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all hover:opacity-80 disabled:opacity-30"
-                        style={{ background: "rgba(14,11,8,0.06)", color: "#0E0B08" }}
-                      >
-                        Next <ChevronRight className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  )}
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Footer note */}
           <p className="text-xs text-center text-[#0E0B08]/30 pb-2">
             Treasury funds are managed by ward leadership. All transactions are recorded on-chain for transparency.
           </p>

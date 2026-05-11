@@ -110,43 +110,24 @@ function buildGeographicContext(payload: JwtPayload): GeographicContext {
 }
 
 /**
- * Core validation logic - verifies JWT and populates request context
- *
- * Validation layers:
- * 1. JWT signature and structure
- * 2. Token expiry
- * 3. Token blacklist (revocation check)
- * 4. Session validity (database check)
+ * Layers 3-6: JTI, blacklist, session DB, and account status checks.
+ * Called after the JWT signature and expiry are already verified.
  */
-async function validateAndPopulateUser(
-  req: AuthRequest,
-  token: string
+async function validateTokenClaims(
+  payload: JwtPayload,
+  req: AuthRequest
 ): Promise<void> {
-  // Layer 1: Verify JWT signature and decode payload
-  const payload = verifyJwtToken<JwtPayload>(token);
-
-  // Layer 2: Check token expiry
-  if (payload.exp && payload.exp * 1000 < Date.now()) {
-    throw new Error('Token expired');
-  }
-
-  // Layer 3: Validate JTI presence (required for revocation)
   if (!payload.jti) {
     logSecurityEvent(
       'Token missing JTI claim',
       'TOKEN_MANIPULATION',
       'HIGH',
       'JWT token lacks jti claim - cannot be revoked if compromised',
-      {
-        userId: payload.sub,
-        ipAddress: req.ip,
-        metadata: { correlationId: req.correlationId },
-      }
+      { userId: payload.sub, ipAddress: req.ip, metadata: { correlationId: req.correlationId } }
     );
     throw new Error('Invalid token structure');
   }
 
-  // Layer 4: Check if token has been explicitly revoked (blacklist)
   const isRevoked = await tokenBlacklistService.isRevoked(payload.jti);
   if (isRevoked) {
     logSecurityEvent(
@@ -157,16 +138,12 @@ async function validateAndPopulateUser(
       {
         userId: payload.sub,
         ipAddress: req.ip,
-        metadata: {
-          jti: payload.jti.slice(0, 8) + '...',
-          correlationId: req.correlationId,
-        },
+        metadata: { jti: payload.jti.slice(0, 8) + '...', correlationId: req.correlationId },
       }
     );
     throw new Error('Token has been revoked');
   }
 
-  // Layer 5: Validate session in database (enables instant logout)
   if (payload.sessionId) {
     const isValid = await sessionService.validateSession(payload.sessionId);
     if (!isValid) {
@@ -178,17 +155,13 @@ async function validateAndPopulateUser(
         {
           userId: payload.sub,
           ipAddress: req.ip,
-          metadata: {
-            sessionId: payload.sessionId,
-            correlationId: req.correlationId,
-          },
+          metadata: { sessionId: payload.sessionId, correlationId: req.correlationId },
         }
       );
       throw new Error('Session has been revoked');
     }
   }
 
-  // Layer 6: Check user account status (blocks suspended/banned accounts)
   const account = await prisma.user.findUnique({
     where: { id: payload.sub },
     select: { status: true },
@@ -199,23 +172,37 @@ async function validateAndPopulateUser(
       'AUTH_FAILURE',
       'HIGH',
       `Account status: ${account?.status ?? 'NOT_FOUND'}`,
-      {
-        userId: payload.sub,
-        ipAddress: req.ip,
-        metadata: { correlationId: req.correlationId },
-      }
+      { userId: payload.sub, ipAddress: req.ip, metadata: { correlationId: req.correlationId } }
     );
     throw new Error('Account is not active');
   }
+}
 
-  // Populate request context with validated user data
+/**
+ * Core validation logic - verifies JWT and populates request context
+ *
+ * Validation layers:
+ * 1. JWT signature and structure
+ * 2. Token expiry
+ * 3–6. Token claims (JTI, blacklist, session DB, account status) via validateTokenClaims
+ */
+async function validateAndPopulateUser(
+  req: AuthRequest,
+  token: string
+): Promise<void> {
+  const payload = verifyJwtToken<JwtPayload>(token);
+
+  if (payload.exp && payload.exp * 1000 < Date.now()) {
+    throw new Error('Token expired');
+  }
+
+  await validateTokenClaims(payload, req);
+
   req.user = jwtPayloadToAuthUser(payload);
   req.userId = payload.sub;
   req.isWalletAuthenticated = !!payload.walletAddress;
   req.walletAddress = payload.walletAddress ?? undefined;
-
   req.geographicContext = buildGeographicContext(payload);
-
   req.economicContext = {
     globalImpactPoints: safeNumericValue(payload.globalImpactPoints),
     utilityTokens: safeNumericValue(payload.utilityTokens),

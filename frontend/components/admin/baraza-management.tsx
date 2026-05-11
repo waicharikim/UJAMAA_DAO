@@ -35,7 +35,6 @@ function RegisterForm({ onDone }: { onDone: () => void }) {
     inviteLink: "",
   })
 
-  // Super admins see all system groups; ward admins see only groups they lead/admin
   const { data: allGroupsData } = useQuery({
     queryKey: ["community-groups-system"],
     queryFn: () => communityApi.getGroups({ isSystem: true, limit: 200 }),
@@ -75,11 +74,14 @@ function RegisterForm({ onDone }: { onDone: () => void }) {
 
   const valid = form.groupId && form.externalId && form.name && form.platform
 
+  const externalIdLabel =
+    form.platform === "TELEGRAM" ? "Telegram chat ID (numeric)" :
+    form.platform === "DISCORD"  ? "Discord channel ID" : "WhatsApp group ID"
+
   return (
     <div className="space-y-4 border rounded-xl p-5" style={{ background: "rgba(26,18,11,0.02)" }}>
       <p className="text-sm font-semibold text-[#0E0B08]">Register new baraza group</p>
 
-      {/* Ward group selector */}
       <div className="space-y-1">
         <label className="text-xs font-semibold text-[#0E0B08]/70">Ward group</label>
         <select
@@ -94,7 +96,6 @@ function RegisterForm({ onDone }: { onDone: () => void }) {
         </select>
       </div>
 
-      {/* Platform */}
       <div className="space-y-1">
         <label className="text-xs font-semibold text-[#0E0B08]/70">Platform</label>
         <select
@@ -108,12 +109,8 @@ function RegisterForm({ onDone }: { onDone: () => void }) {
         </select>
       </div>
 
-      {/* External ID */}
       <div className="space-y-1">
-        <label className="text-xs font-semibold text-[#0E0B08]/70">
-          {form.platform === "TELEGRAM" ? "Telegram chat ID (numeric)" :
-           form.platform === "DISCORD" ? "Discord channel ID" : "WhatsApp group ID"}
-        </label>
+        <label className="text-xs font-semibold text-[#0E0B08]/70">{externalIdLabel}</label>
         <input
           type="text"
           value={form.externalId}
@@ -128,7 +125,6 @@ function RegisterForm({ onDone }: { onDone: () => void }) {
         )}
       </div>
 
-      {/* Display name */}
       <div className="space-y-1">
         <label className="text-xs font-semibold text-[#0E0B08]/70">Display name</label>
         <input
@@ -140,7 +136,6 @@ function RegisterForm({ onDone }: { onDone: () => void }) {
         />
       </div>
 
-      {/* Invite link */}
       <div className="space-y-1">
         <label className="text-xs font-semibold text-[#0E0B08]/70">Invite link (optional)</label>
         <input
@@ -172,7 +167,7 @@ function RegisterForm({ onDone }: { onDone: () => void }) {
   )
 }
 
-// ── Sessions panel (per baraza group) ────────────────────────────────────────
+// ── Sessions panel helpers ────────────────────────────────────────────────────
 
 function sessionStatus(s: BarazaSessionDto): "upcoming" | "open" | "closed" {
   if (s.closedAt) return "closed"
@@ -186,12 +181,120 @@ const STATUS_STYLES = {
   closed:   { label: "Closed",    bg: "rgba(14,11,8,0.08)",    color: "#0E0B08" },
 }
 
-function SessionsPanel({ barazaGroupId }: { barazaGroupId: string }) {
+// ── Session action bar (schedule / open / close) ──────────────────────────────
+
+function SessionActionBar({
+  barazaGroupId,
+  sessions,
+  onInvalidate,
+}: {
+  barazaGroupId: string
+  sessions?: BarazaSessionDto[]
+  onInvalidate: () => void
+}) {
   const { toast } = useToast()
-  const queryClient = useQueryClient()
-  const [expanded, setExpanded] = useState(false)
   const [scheduleInput, setScheduleInput] = useState("")
   const [showScheduleForm, setShowScheduleForm] = useState(false)
+
+  const scheduleMutation = useMutation({
+    mutationFn: () =>
+      integrationApi.scheduleSession(barazaGroupId, new Date(scheduleInput).toISOString()),
+    onSuccess: () => {
+      onInvalidate()
+      setShowScheduleForm(false)
+      setScheduleInput("")
+      toast({ title: "Session scheduled" })
+    },
+    onError: (err: any) =>
+      toast({ title: "Failed", description: err?.message, variant: "destructive" }),
+  })
+
+  const openMutation = useMutation({
+    mutationFn: () => integrationApi.openSession(barazaGroupId),
+    onSuccess: () => {
+      onInvalidate()
+      toast({ title: "Session opened — members can /present now" })
+    },
+    onError: (err: any) =>
+      toast({ title: "Failed", description: err?.message, variant: "destructive" }),
+  })
+
+  const closeMutation = useMutation({
+    mutationFn: () => integrationApi.closeSession(barazaGroupId),
+    onSuccess: (data) => {
+      onInvalidate()
+      toast({ title: `Session closed — ${data.attendanceCount} attended` })
+    },
+    onError: (err: any) =>
+      toast({ title: "Failed", description: err?.message, variant: "destructive" }),
+  })
+
+  const openSession = sessions?.find((s) => sessionStatus(s) === "open")
+  const hasScheduled = sessions?.some((s) => sessionStatus(s) === "upcoming")
+
+  return (
+    <>
+      <div className="flex flex-wrap gap-1.5">
+        <button
+          onClick={() => setShowScheduleForm((v) => !v)}
+          className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-all hover:opacity-80"
+          style={{ background: "rgba(201,146,42,0.1)", color: "#C9922A" }}
+        >
+          <Plus className="h-3 w-3" /> Schedule
+        </button>
+
+        {hasScheduled && !openSession && (
+          <button
+            onClick={() => openMutation.mutate()}
+            disabled={openMutation.isPending}
+            className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-all hover:opacity-80 disabled:opacity-40"
+            style={{ background: "rgba(30,61,47,0.1)", color: "#1E3D2F" }}
+          >
+            {openMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+            Open
+          </button>
+        )}
+
+        {openSession && (
+          <button
+            onClick={() => closeMutation.mutate()}
+            disabled={closeMutation.isPending}
+            className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-all hover:opacity-80 disabled:opacity-40"
+            style={{ background: "rgba(176,58,30,0.1)", color: "#B03A1E" }}
+          >
+            {closeMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Square className="h-3 w-3" />}
+            Close
+          </button>
+        )}
+      </div>
+
+      {showScheduleForm && (
+        <div className="flex items-center gap-2 rounded-lg border p-2" style={{ borderColor: "rgba(14,11,8,0.08)" }}>
+          <input
+            type="datetime-local"
+            value={scheduleInput}
+            onChange={(e) => setScheduleInput(e.target.value)}
+            className="flex-1 text-xs rounded border border-black/10 px-2 py-1 focus:outline-none"
+          />
+          <button
+            onClick={() => scheduleMutation.mutate()}
+            disabled={!scheduleInput || scheduleMutation.isPending}
+            className="text-[10px] font-semibold px-2 py-1 rounded-lg disabled:opacity-40 hover:opacity-80"
+            style={{ background: "#1E3D2F", color: "#fff" }}
+          >
+            {scheduleMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
+          </button>
+        </div>
+      )}
+    </>
+  )
+}
+
+// ── Sessions panel (per baraza group) ────────────────────────────────────────
+
+function SessionsPanel({ barazaGroupId }: { barazaGroupId: string }) {
+  const queryClient = useQueryClient()
+  const [expanded, setExpanded] = useState(false)
 
   const { data: sessions, isLoading } = useQuery({
     queryKey: ["baraza-sessions", barazaGroupId],
@@ -202,30 +305,6 @@ function SessionsPanel({ barazaGroupId }: { barazaGroupId: string }) {
 
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: ["baraza-sessions", barazaGroupId] })
-
-  const scheduleMutation = useMutation({
-    mutationFn: () => integrationApi.scheduleSession(barazaGroupId, new Date(scheduleInput).toISOString()),
-    onSuccess: () => { invalidate(); setShowScheduleForm(false); setScheduleInput(""); toast({ title: "Session scheduled" }) },
-    onError: (err: any) => toast({ title: "Failed", description: err?.message, variant: "destructive" }),
-  })
-
-  const openMutation = useMutation({
-    mutationFn: () => integrationApi.openSession(barazaGroupId),
-    onSuccess: () => { invalidate(); toast({ title: "Session opened — members can /present now" }) },
-    onError: (err: any) => toast({ title: "Failed", description: err?.message, variant: "destructive" }),
-  })
-
-  const closeMutation = useMutation({
-    mutationFn: () => integrationApi.closeSession(barazaGroupId),
-    onSuccess: (data) => {
-      invalidate()
-      toast({ title: `Session closed — ${data.attendanceCount} attended` })
-    },
-    onError: (err: any) => toast({ title: "Failed", description: err?.message, variant: "destructive" }),
-  })
-
-  const openSession = sessions?.find((s) => sessionStatus(s) === "open")
-  const hasScheduled = sessions?.some((s) => sessionStatus(s) === "upcoming")
 
   return (
     <div className="mt-2 border-t pt-2" style={{ borderColor: "rgba(14,11,8,0.06)" }}>
@@ -240,62 +319,12 @@ function SessionsPanel({ barazaGroupId }: { barazaGroupId: string }) {
 
       {expanded && (
         <div className="mt-2 space-y-2">
-          {/* Action buttons */}
-          <div className="flex flex-wrap gap-1.5">
-            <button
-              onClick={() => setShowScheduleForm((v) => !v)}
-              className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-all hover:opacity-80"
-              style={{ background: "rgba(201,146,42,0.1)", color: "#C9922A" }}
-            >
-              <Plus className="h-3 w-3" /> Schedule
-            </button>
+          <SessionActionBar
+            barazaGroupId={barazaGroupId}
+            sessions={sessions}
+            onInvalidate={invalidate}
+          />
 
-            {hasScheduled && !openSession && (
-              <button
-                onClick={() => openMutation.mutate()}
-                disabled={openMutation.isPending}
-                className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-all hover:opacity-80 disabled:opacity-40"
-                style={{ background: "rgba(30,61,47,0.1)", color: "#1E3D2F" }}
-              >
-                {openMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
-                Open
-              </button>
-            )}
-
-            {openSession && (
-              <button
-                onClick={() => closeMutation.mutate()}
-                disabled={closeMutation.isPending}
-                className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-all hover:opacity-80 disabled:opacity-40"
-                style={{ background: "rgba(176,58,30,0.1)", color: "#B03A1E" }}
-              >
-                {closeMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Square className="h-3 w-3" />}
-                Close
-              </button>
-            )}
-          </div>
-
-          {/* Schedule form */}
-          {showScheduleForm && (
-            <div className="flex items-center gap-2 rounded-lg border p-2" style={{ borderColor: "rgba(14,11,8,0.08)" }}>
-              <input
-                type="datetime-local"
-                value={scheduleInput}
-                onChange={(e) => setScheduleInput(e.target.value)}
-                className="flex-1 text-xs rounded border border-black/10 px-2 py-1 focus:outline-none"
-              />
-              <button
-                onClick={() => scheduleMutation.mutate()}
-                disabled={!scheduleInput || scheduleMutation.isPending}
-                className="text-[10px] font-semibold px-2 py-1 rounded-lg disabled:opacity-40 hover:opacity-80"
-                style={{ background: "#1E3D2F", color: "#fff" }}
-              >
-                {scheduleMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
-              </button>
-            </div>
-          )}
-
-          {/* Session list */}
           {isLoading ? (
             <div className="h-8 rounded-lg bg-black/4 animate-pulse" />
           ) : !sessions?.length ? (
@@ -325,7 +354,9 @@ function SessionsPanel({ barazaGroupId }: { barazaGroupId: string }) {
                     </span>
                     {s.closedAt && (
                       <span className="text-[9px] text-[#0E0B08]/35">
-                        {new Date(s.closedAt).toLocaleTimeString("en-KE", { hour: "2-digit", minute: "2-digit", timeZone: "Africa/Nairobi" })}
+                        {new Date(s.closedAt).toLocaleTimeString("en-KE", {
+                          hour: "2-digit", minute: "2-digit", timeZone: "Africa/Nairobi",
+                        })}
                       </span>
                     )}
                   </div>
@@ -335,6 +366,68 @@ function SessionsPanel({ barazaGroupId }: { barazaGroupId: string }) {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Baraza group card ─────────────────────────────────────────────────────────
+
+function BarazaGroupCard({
+  group,
+  onDeactivate,
+  isDeactivating,
+}: {
+  group: any
+  onDeactivate: (id: string) => void
+  isDeactivating: boolean
+}) {
+  const ps = PLATFORM_STYLES[group.platform]
+  return (
+    <div
+      className="flex flex-col rounded-xl px-4 py-3"
+      style={{ background: "rgba(26,18,11,0.02)", border: "1px solid rgba(26,18,11,0.06)" }}
+    >
+      <div className="flex items-center gap-3">
+        <span
+          className="flex-shrink-0 text-[11px] font-bold rounded-full px-2 py-0.5"
+          style={{ background: ps.bg, color: ps.color }}
+        >
+          {ps.label}
+        </span>
+
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-[#0E0B08] truncate">{group.name}</p>
+          <p className="text-[10px] text-[#0E0B08]/40 font-mono">{group.externalId}</p>
+        </div>
+
+        <span className="flex items-center gap-1 text-xs text-[#0E0B08]/40 flex-shrink-0">
+          <Users className="h-3 w-3" />
+          {group._count?.attendances ?? 0} sessions
+        </span>
+
+        {group.inviteLink && (
+          <a
+            href={group.inviteLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-shrink-0 p-1.5 rounded-lg hover:bg-black/6 transition-colors"
+          >
+            <ExternalLink className="h-3.5 w-3.5 text-[#0E0B08]/40" />
+          </a>
+        )}
+
+        <button
+          onClick={() => {
+            if (confirm(`Deactivate "${group.name}"?`)) onDeactivate(group.id)
+          }}
+          disabled={isDeactivating}
+          className="flex-shrink-0 p-1.5 rounded-lg hover:bg-red-50 transition-colors"
+        >
+          <Trash2 className="h-3.5 w-3.5 text-[#B03A1E]/60" />
+        </button>
+      </div>
+
+      <SessionsPanel barazaGroupId={group.id} />
     </div>
   )
 }
@@ -368,7 +461,6 @@ export function BarazaManagement() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h3 className="font-semibold text-[#0E0B08]">Baraza Groups</h3>
@@ -387,10 +479,8 @@ export function BarazaManagement() {
         </button>
       </div>
 
-      {/* Register form */}
       {showForm && <RegisterForm onDone={() => setShowForm(false)} />}
 
-      {/* Stats row */}
       <div className="grid grid-cols-3 gap-4">
         {[
           { label: "Active groups",  value: active.length },
@@ -406,7 +496,6 @@ export function BarazaManagement() {
         ))}
       </div>
 
-      {/* Active groups */}
       <Card className="border-0 shadow-card">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-sm">
@@ -429,64 +518,19 @@ export function BarazaManagement() {
             </div>
           ) : (
             <div className="space-y-2">
-              {active.map((g) => {
-                const ps = PLATFORM_STYLES[g.platform]
-                return (
-                  <div
-                    key={g.id}
-                    className="flex flex-col rounded-xl px-4 py-3"
-                    style={{ background: "rgba(26,18,11,0.02)", border: "1px solid rgba(26,18,11,0.06)" }}
-                  >
-                  <div className="flex items-center gap-3">
-                    <span
-                      className="flex-shrink-0 text-[11px] font-bold rounded-full px-2 py-0.5"
-                      style={{ background: ps.bg, color: ps.color }}
-                    >
-                      {ps.label}
-                    </span>
-
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-[#0E0B08] truncate">{g.name}</p>
-                      <p className="text-[10px] text-[#0E0B08]/40 font-mono">{g.externalId}</p>
-                    </div>
-
-                    <span className="flex items-center gap-1 text-xs text-[#0E0B08]/40 flex-shrink-0">
-                      <Users className="h-3 w-3" />
-                      {g._count?.attendances ?? 0} sessions
-                    </span>
-
-                    {g.inviteLink && (
-                      <a
-                        href={g.inviteLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex-shrink-0 p-1.5 rounded-lg hover:bg-black/6 transition-colors"
-                      >
-                        <ExternalLink className="h-3.5 w-3.5 text-[#0E0B08]/40" />
-                      </a>
-                    )}
-
-                    <button
-                      onClick={() => {
-                        if (confirm(`Deactivate "${g.name}"?`)) deactivateMutation.mutate(g.id)
-                      }}
-                      disabled={deactivateMutation.isPending}
-                      className="flex-shrink-0 p-1.5 rounded-lg hover:bg-red-50 transition-colors"
-                    >
-                      <Trash2 className="h-3.5 w-3.5 text-[#B03A1E]/60" />
-                    </button>
-                  </div>
-
-                  <SessionsPanel barazaGroupId={g.id} />
-                  </div>
-                )
-              })}
+              {active.map((g) => (
+                <BarazaGroupCard
+                  key={g.id}
+                  group={g}
+                  onDeactivate={(id) => deactivateMutation.mutate(id)}
+                  isDeactivating={deactivateMutation.isPending}
+                />
+              ))}
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Inactive groups (collapsed) */}
       {inactive.length > 0 && (
         <Card className="border-0 shadow-card">
           <CardHeader className="pb-3">

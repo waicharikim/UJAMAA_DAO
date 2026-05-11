@@ -36,6 +36,8 @@ type BarazaGroupRow = {
   isActive: boolean;
 };
 
+type TelegramFrom = { id: number; username?: string; first_name?: string };
+
 // ─────────────────────────────────────────────
 // Telegram messaging helper
 // ─────────────────────────────────────────────
@@ -83,6 +85,65 @@ async function sendTelegramMessage(
 }
 
 // ─────────────────────────────────────────────
+// Shared auth helpers
+// ─────────────────────────────────────────────
+
+/**
+ * Verifies the Telegram sender is a LEADER of barazaGroup.groupId.
+ * Returns the caller's userId on success; sends an error DM and returns null otherwise.
+ */
+async function requireTelegramLeader(
+  from: TelegramFrom,
+  chatId: number,
+  barazaGroup: BarazaGroupRow,
+  deniedMessage = '❌ Ni LEADER peke yake anaweza kuendesha amri hii.'
+): Promise<string | null> {
+  const profile = await prisma.userMessagingProfile.findFirst({
+    where: { platform: 'TELEGRAM', externalUserId: String(from.id) },
+  });
+  const isLeader = profile
+    ? await prisma.groupMember.findFirst({
+        where: { userId: profile.userId, groupId: barazaGroup.groupId, role: 'LEADER' },
+      })
+    : null;
+  if (!isLeader) {
+    await sendTelegramMessage(from.id, deniedMessage, chatId);
+    return null;
+  }
+  return profile!.userId;
+}
+
+/** Returns groupIds where the user holds LEADER or ADMIN role. */
+async function getManagedGroupIds(userId: string): Promise<string[]> {
+  const memberships = await prisma.groupMember.findMany({
+    where: { userId, role: 'LEADER' },
+    select: { groupId: true },
+  });
+  return memberships.map((m: { groupId: string }) => m.groupId);
+}
+
+/**
+ * Fetches the BarazaGroup row and throws if not found or the HTTP caller lacks
+ * admin rights (SUPER_ADMIN or group LEADER).
+ */
+async function requireHttpBarazaAdmin(
+  user: { userId: string; roles: string[] },
+  barazaGroupId: string
+): Promise<BarazaGroupRow> {
+  const barazaGroup = await prisma.barazaGroup.findUnique({
+    where: { id: barazaGroupId },
+  });
+  if (!barazaGroup) throw ApiError.notFound('Baraza group not found');
+  if (!user.roles.includes(SystemRoles.SUPER_ADMIN)) {
+    const managedIds = await getManagedGroupIds(user.userId);
+    if (!managedIds.includes(barazaGroup.groupId)) {
+      throw ApiError.forbidden('You do not have admin rights over this baraza group');
+    }
+  }
+  return barazaGroup as BarazaGroupRow;
+}
+
+// ─────────────────────────────────────────────
 // Telegram webhook
 // ─────────────────────────────────────────────
 
@@ -117,28 +178,22 @@ export async function handleTelegramWebhook(
     where: { platform: 'TELEGRAM', externalId: String(chatId), isActive: true },
   })) as BarazaGroupRow | null;
 
-  // Route commands
   if (text.startsWith('/schedule')) {
-    if (barazaGroup)
-      await handleScheduleCommand(text, from, chatId, barazaGroup);
+    if (barazaGroup) await handleScheduleCommand(text, from, chatId, barazaGroup);
     return;
   }
-
   if (text.startsWith('/open')) {
     if (barazaGroup) await handleOpenCommand(from, chatId, barazaGroup);
     return;
   }
-
   if (text.startsWith('/close')) {
     if (barazaGroup) await handleCloseCommand(from, chatId, barazaGroup);
     return;
   }
-
   if (text.startsWith('/verify')) {
     await handleVerifyCommand(text, from, chatId);
     return;
   }
-
   if (!text.startsWith('/present')) return;
 
   // ── /present ──────────────────────────────────
@@ -149,12 +204,22 @@ export async function handleTelegramWebhook(
     );
     return;
   }
+  await handlePresentCommand(from, chatId, barazaGroup);
+}
 
+// ─────────────────────────────────────────────
+// /present — member marks attendance
+// ─────────────────────────────────────────────
+
+async function handlePresentCommand(
+  from: TelegramFrom | undefined,
+  chatId: number,
+  barazaGroup: BarazaGroupRow
+): Promise<void> {
   try {
     const externalUserId = String(from?.id ?? '');
     if (!externalUserId) return;
 
-    // Update externalUserId on profile if known username or ID just appeared
     if (from?.id) {
       await prisma.userMessagingProfile.updateMany({
         where: {
@@ -168,7 +233,6 @@ export async function handleTelegramWebhook(
 
     const firstName = from?.first_name ?? 'Wewe';
 
-    // Check for an open session
     const openSession = await barazaBotService.getOpenSession(barazaGroup.id);
     if (!openSession) {
       await sendTelegramMessage(
@@ -181,13 +245,11 @@ export async function handleTelegramWebhook(
 
     const sessionDate = new Date().toISOString().slice(0, 10);
 
-    // Look up platform profile to get userId
     const profile = await prisma.userMessagingProfile.findFirst({
       where: { platform: 'TELEGRAM', externalUserId },
     });
 
     if (profile) {
-      // Check if already recorded today
       const alreadyRecorded = await prisma.barazaAttendance.findUnique({
         where: {
           userId_barazaGroupId_sessionDate: {
@@ -197,7 +259,6 @@ export async function handleTelegramWebhook(
           },
         },
       });
-
       if (alreadyRecorded) {
         await sendTelegramMessage(
           from!.id,
@@ -217,21 +278,17 @@ export async function handleTelegramWebhook(
     });
 
     logger.info(
-      {
-        operationType: 'TELEGRAM_WEBHOOK',
-        chatId,
-        externalUserId,
-        sessionDate,
-      },
+      { operationType: 'TELEGRAM_WEBHOOK', chatId, externalUserId, sessionDate },
       'Attendance recorded via /present command'
     );
 
-    const confirmationText =
+    await sendTelegramMessage(
+      from!.id,
       `✅ Poa ${firstName}! Umefika, tumekusajili.\n\n` +
-      `Umepata *15 PR* ya leo — baraza ya ${sessionDate}. 🔥\n\n` +
-      `Keep showing up, ndio maana ya Ujamaa. Heshima! 🌿`;
-
-    await sendTelegramMessage(from!.id, confirmationText, chatId);
+        `Umepata *15 PR* ya leo — baraza ya ${sessionDate}. 🔥\n\n` +
+        `Keep showing up, ndio maana ya Ujamaa. Heshima! 🌿`,
+      chatId
+    );
   } catch (err) {
     logger.warn(
       { operationType: 'TELEGRAM_WEBHOOK', error: String(err) },
@@ -246,40 +303,19 @@ export async function handleTelegramWebhook(
 
 async function handleScheduleCommand(
   text: string,
-  from: { id: number; username?: string; first_name?: string } | undefined,
+  from: TelegramFrom | undefined,
   chatId: number,
   barazaGroup: BarazaGroupRow
 ): Promise<void> {
   if (!from?.id) return;
 
-  // Verify sender is a group leader
-  const profile = await prisma.userMessagingProfile.findFirst({
-    where: { platform: 'TELEGRAM', externalUserId: String(from.id) },
-  });
-  if (!profile) {
-    await sendTelegramMessage(
-      from.id,
-      '❌ Hautambuliwi kwenye mfumo — verify akaunti yako kwanza.',
-      chatId
-    );
-    return;
-  }
-
-  const isLeader = await prisma.groupMember.findFirst({
-    where: {
-      userId: profile.userId,
-      groupId: barazaGroup.groupId,
-      role: 'LEADER',
-    },
-  });
-  if (!isLeader) {
-    await sendTelegramMessage(
-      from.id,
-      '❌ Huna ruhusa ya kupanga baraza. Ni LEADER peke yake.',
-      chatId
-    );
-    return;
-  }
+  const userId = await requireTelegramLeader(
+    from,
+    chatId,
+    barazaGroup,
+    '❌ Huna ruhusa ya kupanga baraza. Ni LEADER peke yake.'
+  );
+  if (!userId) return;
 
   // Parse: /schedule 2026-03-29 10:00
   const parts = text.trim().split(/\s+/);
@@ -310,11 +346,7 @@ async function handleScheduleCommand(
     return;
   }
 
-  const session = await barazaBotService.scheduleSession(
-    barazaGroup.id,
-    scheduledAt,
-    profile.userId
-  );
+  const session = await barazaBotService.scheduleSession(barazaGroup.id, scheduledAt, userId);
 
   const formattedDate = scheduledAt.toLocaleDateString('en-KE', {
     weekday: 'long',
@@ -330,16 +362,12 @@ async function handleScheduleCommand(
     timeZone: 'Africa/Nairobi',
   });
 
-  const announcementText =
-    `📢 *Baraza imepangwa!*\n\n` +
-    `📅 ${formattedDate}\n` +
-    `🕐 Saa ${formattedTime}\n\n` +
-    `Andika /present ukifika. Usikose! 🌿`;
+  await sendTelegramMessage(
+    chatId,
+    `📢 *Baraza imepangwa!*\n\n📅 ${formattedDate}\n🕐 Saa ${formattedTime}\n\nAndika /present ukifika. Usikose! 🌿`,
+    chatId
+  );
 
-  // Announce in group
-  await sendTelegramMessage(chatId, announcementText, chatId);
-
-  // Platform + email notifications to all members
   await barazaBotService.notifyGroupMembers(
     barazaGroup.id,
     'Baraza imepangwa!',
@@ -347,12 +375,7 @@ async function handleScheduleCommand(
   );
 
   logger.info(
-    {
-      operationType: 'TELEGRAM_SCHEDULE',
-      chatId,
-      sessionId: session.id,
-      scheduledAt,
-    },
+    { operationType: 'TELEGRAM_SCHEDULE', chatId, sessionId: session.id, scheduledAt },
     'Baraza session scheduled via bot'
   );
 }
@@ -362,33 +385,19 @@ async function handleScheduleCommand(
 // ─────────────────────────────────────────────
 
 async function handleOpenCommand(
-  from: { id: number; username?: string; first_name?: string } | undefined,
+  from: TelegramFrom | undefined,
   chatId: number,
   barazaGroup: BarazaGroupRow
 ): Promise<void> {
   if (!from?.id) return;
 
-  const profile = await prisma.userMessagingProfile.findFirst({
-    where: { platform: 'TELEGRAM', externalUserId: String(from.id) },
-  });
-  const isLeader = profile
-    ? await prisma.groupMember.findFirst({
-        where: {
-          userId: profile.userId,
-          groupId: barazaGroup.groupId,
-          role: 'LEADER',
-        },
-      })
-    : null;
-
-  if (!isLeader) {
-    await sendTelegramMessage(
-      from.id,
-      '❌ Ni LEADER peke yake anaweza kufungua baraza.',
-      chatId
-    );
-    return;
-  }
+  const userId = await requireTelegramLeader(
+    from,
+    chatId,
+    barazaGroup,
+    '❌ Ni LEADER peke yake anaweza kufungua baraza.'
+  );
+  if (!userId) return;
 
   const session = await barazaBotService.openSession(barazaGroup.id);
   if (!session) {
@@ -412,41 +421,23 @@ async function handleOpenCommand(
 // ─────────────────────────────────────────────
 
 async function handleCloseCommand(
-  from: { id: number; username?: string; first_name?: string } | undefined,
+  from: TelegramFrom | undefined,
   chatId: number,
   barazaGroup: BarazaGroupRow
 ): Promise<void> {
   if (!from?.id) return;
 
-  const profile = await prisma.userMessagingProfile.findFirst({
-    where: { platform: 'TELEGRAM', externalUserId: String(from.id) },
-  });
-  const isLeader = profile
-    ? await prisma.groupMember.findFirst({
-        where: {
-          userId: profile.userId,
-          groupId: barazaGroup.groupId,
-          role: 'LEADER',
-        },
-      })
-    : null;
-
-  if (!isLeader) {
-    await sendTelegramMessage(
-      from.id,
-      '❌ Ni LEADER peke yake anaweza kufunga baraza.',
-      chatId
-    );
-    return;
-  }
+  const userId = await requireTelegramLeader(
+    from,
+    chatId,
+    barazaGroup,
+    '❌ Ni LEADER peke yake anaweza kufunga baraza.'
+  );
+  if (!userId) return;
 
   const result = await barazaBotService.closeSession(barazaGroup.id);
   if (!result) {
-    await sendTelegramMessage(
-      from.id,
-      'ℹ️ Hakuna baraza inayoendelea saa hii.',
-      chatId
-    );
+    await sendTelegramMessage(from.id, 'ℹ️ Hakuna baraza inayoendelea saa hii.', chatId);
     return;
   }
 
@@ -474,12 +465,7 @@ export async function handleDiscordWebhook(
     const rawBody = JSON.stringify(req.body);
 
     try {
-      const isValid = verifyDiscordSignature(
-        PUBLIC_KEY,
-        signature,
-        timestamp,
-        rawBody
-      );
+      const isValid = verifyDiscordSignature(PUBLIC_KEY, signature, timestamp, rawBody);
       if (!isValid) {
         res.status(401).json({ error: 'Invalid signature' });
         return;
@@ -517,11 +503,7 @@ function verifyDiscordSignature(
     return crypto.verify(
       null,
       signedData,
-      {
-        key: keyBuffer,
-        format: 'der',
-        type: 'spki',
-      },
+      { key: keyBuffer, format: 'der', type: 'spki' },
       sigBuffer
     );
   } catch {
@@ -536,7 +518,7 @@ function verifyDiscordSignature(
 
 async function handleVerifyCommand(
   text: string,
-  from: { id: number; username?: string; first_name?: string } | undefined,
+  from: TelegramFrom | undefined,
   chatId: number
 ): Promise<void> {
   if (!from?.id) return;
@@ -629,15 +611,6 @@ async function handleVerifyCommand(
 // Baraza group management
 // ─────────────────────────────────────────────
 
-/** Returns groupIds where the user holds LEADER or ADMIN role. */
-async function getManagedGroupIds(userId: string): Promise<string[]> {
-  const memberships = await prisma.groupMember.findMany({
-    where: { userId, role: 'LEADER' },
-    select: { groupId: true },
-  });
-  return memberships.map((m: { groupId: string }) => m.groupId);
-}
-
 export async function registerBarazaGroup(
   req: Request,
   res: Response,
@@ -651,16 +624,11 @@ export async function registerBarazaGroup(
     if (!user.roles.includes(SystemRoles.SUPER_ADMIN)) {
       const managedIds = await getManagedGroupIds(user.userId);
       if (!managedIds.includes(dto.groupId)) {
-        throw ApiError.forbidden(
-          'You do not have admin rights over the selected group'
-        );
+        throw ApiError.forbidden('You do not have admin rights over the selected group');
       }
     }
 
-    const barazaGroup = await barazaBotService.registerBarazaGroup(
-      user.userId,
-      dto
-    );
+    const barazaGroup = await barazaBotService.registerBarazaGroup(user.userId, dto);
     sendSuccess(res, barazaGroup, 'Baraza group registered', 201);
   } catch (err) {
     next(err);
@@ -690,7 +658,6 @@ export async function recordAttendance(
     const barazaGroupId = req.params.id;
     const dto = req.body as MarkAttendanceDto;
 
-    // Verify baraza group exists
     const barazaGroup = await prisma.barazaGroup.findUnique({
       where: { id: barazaGroupId },
     });
@@ -698,7 +665,6 @@ export async function recordAttendance(
       throw ApiError.notFound('Baraza group not found');
     }
 
-    // Inject the baraza group's externalId into the DTO
     const enrichedDto: MarkAttendanceDto = {
       ...dto,
       platform: barazaGroup.platform as any,
@@ -728,9 +694,7 @@ export async function getAllBarazaGroups(
     const groups = await prisma.barazaGroup.findMany({
       where: whereClause,
       orderBy: { createdAt: 'desc' },
-      include: {
-        _count: { select: { attendances: true } },
-      },
+      include: { _count: { select: { attendances: true } } },
     });
     sendSuccess(res, groups);
   } catch (err) {
@@ -764,24 +728,10 @@ export async function deactivateBarazaGroup(
 ): Promise<void> {
   try {
     const user = (req as any).user;
-    const barazaGroupId = req.params.id;
-
-    const existing = await prisma.barazaGroup.findUnique({
-      where: { id: barazaGroupId },
-    });
-    if (!existing) throw ApiError.notFound('Baraza group not found');
-
-    if (!user.roles.includes(SystemRoles.SUPER_ADMIN)) {
-      const managedIds = await getManagedGroupIds(user.userId);
-      if (!managedIds.includes(existing.groupId)) {
-        throw ApiError.forbidden(
-          'You do not have admin rights over this baraza group'
-        );
-      }
-    }
+    await requireHttpBarazaAdmin(user, req.params.id);
 
     const barazaGroup = await prisma.barazaGroup.update({
-      where: { id: barazaGroupId },
+      where: { id: req.params.id },
       data: { isActive: false },
     });
     sendSuccess(res, barazaGroup, 'Baraza group deactivated');
@@ -822,35 +772,16 @@ export async function scheduleSessionHttp(
 ): Promise<void> {
   try {
     const user = (req as any).user;
-    const barazaGroupId = req.params.id;
     const { scheduledAt } = req.body as { scheduledAt: string };
 
     const dt = new Date(scheduledAt);
     if (isNaN(dt.getTime()) || dt <= new Date()) {
-      throw ApiError.badRequest(
-        'scheduledAt must be a valid future ISO datetime'
-      );
+      throw ApiError.badRequest('scheduledAt must be a valid future ISO datetime');
     }
 
-    const barazaGroup = await prisma.barazaGroup.findUnique({
-      where: { id: barazaGroupId },
-    });
-    if (!barazaGroup) throw ApiError.notFound('Baraza group not found');
+    await requireHttpBarazaAdmin(user, req.params.id);
 
-    if (!user.roles.includes(SystemRoles.SUPER_ADMIN)) {
-      const managedIds = await getManagedGroupIds(user.userId);
-      if (!managedIds.includes(barazaGroup.groupId)) {
-        throw ApiError.forbidden(
-          'You do not have admin rights over this baraza group'
-        );
-      }
-    }
-
-    const session = await barazaBotService.scheduleSession(
-      barazaGroupId,
-      dt,
-      user.userId
-    );
+    const session = await barazaBotService.scheduleSession(req.params.id, dt, user.userId);
     sendSuccess(res, session, 'Session scheduled', 201);
   } catch (err) {
     next(err);
@@ -864,45 +795,25 @@ export async function openSessionHttp(
 ): Promise<void> {
   try {
     const user = (req as any).user;
-    const barazaGroupId = req.params.id;
-
-    const barazaGroup = await prisma.barazaGroup.findUnique({
-      where: { id: barazaGroupId },
-    });
-    if (!barazaGroup) throw ApiError.notFound('Baraza group not found');
-
-    if (!user.roles.includes(SystemRoles.SUPER_ADMIN)) {
-      const managedIds = await getManagedGroupIds(user.userId);
-      if (!managedIds.includes(barazaGroup.groupId)) {
-        throw ApiError.forbidden(
-          'You do not have admin rights over this baraza group'
-        );
-      }
-    }
+    await requireHttpBarazaAdmin(user, req.params.id);
 
     const pending = await prisma.barazaSession.findFirst({
-      where: { barazaGroupId, openedAt: null, closedAt: null },
+      where: { barazaGroupId: req.params.id, openedAt: null, closedAt: null },
       orderBy: { scheduledAt: 'asc' },
     });
     if (!pending) {
-      throw ApiError.badRequest(
-        'No scheduled session found — schedule one first'
-      );
+      throw ApiError.badRequest('No scheduled session found — schedule one first');
     }
-    const diffMs = Math.abs(
-      Date.now() - new Date(pending.scheduledAt).getTime()
-    );
+    const diffMs = Math.abs(Date.now() - new Date(pending.scheduledAt).getTime());
     if (diffMs > 4 * 60 * 60 * 1000) {
       throw ApiError.badRequest(
         'Session can only be opened within 4 hours of its scheduled time'
       );
     }
 
-    const session = await barazaBotService.openSession(barazaGroupId);
+    const session = await barazaBotService.openSession(req.params.id);
     if (!session) {
-      throw ApiError.badRequest(
-        'No scheduled session found — schedule one first'
-      );
+      throw ApiError.badRequest('No scheduled session found — schedule one first');
     }
     sendSuccess(res, session, 'Session opened');
   } catch (err) {
@@ -917,23 +828,9 @@ export async function closeSessionHttp(
 ): Promise<void> {
   try {
     const user = (req as any).user;
-    const barazaGroupId = req.params.id;
+    await requireHttpBarazaAdmin(user, req.params.id);
 
-    const barazaGroup = await prisma.barazaGroup.findUnique({
-      where: { id: barazaGroupId },
-    });
-    if (!barazaGroup) throw ApiError.notFound('Baraza group not found');
-
-    if (!user.roles.includes(SystemRoles.SUPER_ADMIN)) {
-      const managedIds = await getManagedGroupIds(user.userId);
-      if (!managedIds.includes(barazaGroup.groupId)) {
-        throw ApiError.forbidden(
-          'You do not have admin rights over this baraza group'
-        );
-      }
-    }
-
-    const result = await barazaBotService.closeSession(barazaGroupId);
+    const result = await barazaBotService.closeSession(req.params.id);
     if (!result) {
       throw ApiError.badRequest('No open session to close');
     }
