@@ -182,6 +182,40 @@ router.get(
 // These must be defined before /:projectId to avoid Express treating 'tasks' as a projectId
 
 router.post(
+  '/tasks',
+  authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
+  validateRequest({
+    schema: z.object({
+      milestoneId: z.string().uuid(),
+      title: z.string().min(3).max(200),
+      description: z.string().max(1000).optional(),
+      skillCategory: z
+        .enum([
+          'GENERAL',
+          'CONSTRUCTION',
+          'MASONRY',
+          'ELECTRICAL',
+          'PLUMBING',
+          'CARPENTRY',
+          'PAINTING',
+          'FARMING',
+          'TRANSPORT',
+          'ADMINISTRATION',
+          'TECHNOLOGY',
+          'HEALTH',
+          'EDUCATION',
+          'FINANCE',
+        ])
+        .optional(),
+      maxAssignees: z.number().int().min(1).max(20).optional(),
+      dueDate: z.string().datetime().optional(),
+    }),
+    target: 'body',
+  }),
+  asyncHandler(ProjectController.createTask)
+);
+
+router.post(
   '/tasks/:taskId/claim',
   validateRequest({
     schema: z.object({ taskId: z.string().min(1) }),
@@ -262,6 +296,49 @@ router.get(
     target: 'params',
   }),
   asyncHandler(ProjectController.getWorkSession)
+);
+
+// ── Project Task Board & Contributions ───────────────────────────────────────
+
+const taskListQuerySchema = z.object({
+  status: z.enum(['TODO', 'IN_PROGRESS', 'DONE', 'BLOCKED']).optional(),
+  skillCategory: z
+    .enum([
+      'GENERAL',
+      'CONSTRUCTION',
+      'MASONRY',
+      'ELECTRICAL',
+      'PLUMBING',
+      'CARPENTRY',
+      'PAINTING',
+      'FARMING',
+      'TRANSPORT',
+      'ADMINISTRATION',
+      'TECHNOLOGY',
+      'HEALTH',
+      'EDUCATION',
+      'FINANCE',
+    ])
+    .optional(),
+});
+
+router.get(
+  '/:projectId/tasks',
+  validateRequest({
+    schema: z.object({ projectId: z.string().uuid() }),
+    target: 'params',
+  }),
+  validateRequest({ schema: taskListQuerySchema, target: 'query' }),
+  asyncHandler(ProjectController.listProjectTasks)
+);
+
+router.get(
+  '/:projectId/contributions',
+  validateRequest({
+    schema: z.object({ projectId: z.string().uuid() }),
+    target: 'params',
+  }),
+  asyncHandler(ProjectController.getMemberContributions)
 );
 
 // ── Project Membership & Contributions ───────────────────────────────────────

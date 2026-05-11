@@ -10,6 +10,8 @@ import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { WorkSessionPanel } from "@/components/projects/work-session-panel"
+import TaskBoard from "@/components/projects/task-board"
+import MemberContributions from "@/components/projects/member-contributions"
 import {
   ArrowLeft,
   Briefcase,
@@ -26,6 +28,7 @@ import {
   ClipboardList,
   UserPlus,
   Coins,
+  ListTodo,
 } from "lucide-react"
 import { formatDate } from "@/lib/utils"
 
@@ -115,14 +118,9 @@ function MilestoneCard({
   const [expanded, setExpanded] = useState(false)
   const [logPanelOpen, setLogPanelOpen] = useState(false)
 
-  // Submit form state
   const [proofUrl, setProofUrl] = useState("")
   const [submitDesc, setSubmitDesc] = useState("")
-
-  // Verify form state
   const [feedback, setFeedback] = useState("")
-
-  // Work log form state
   const [wlWorkType, setWlWorkType] = useState<"MANUAL_LABOR" | "SKILLED_WORK" | "SUPERVISION">("MANUAL_LABOR")
   const [wlDesc, setWlDesc] = useState("")
   const [wlHours, setWlHours] = useState<number>(1)
@@ -190,6 +188,11 @@ function MilestoneCard({
               <p className="text-sm font-semibold text-[#0E0B08] leading-snug">{milestone.title}</p>
               {milestone.description && (
                 <p className="text-xs text-[#0E0B08]/50 mt-0.5 line-clamp-1">{milestone.description}</p>
+              )}
+              {milestone.tasks.length > 0 && (
+                <p className="text-[10px] text-[#0E0B08]/35 mt-1">
+                  {milestone.tasks.filter((t) => t.status === "DONE").length}/{milestone.tasks.length} tasks done
+                </p>
               )}
             </div>
           </div>
@@ -411,6 +414,41 @@ function MilestoneCard({
   )
 }
 
+// ── Tabs ──────────────────────────────────────────────────
+
+type Tab = "milestones" | "tasks" | "team"
+
+function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
+  const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
+    { id: "milestones", label: "Milestones", icon: <PlayCircle className="h-3.5 w-3.5" /> },
+    { id: "tasks",      label: "Tasks",      icon: <ListTodo className="h-3.5 w-3.5" /> },
+    { id: "team",       label: "Team",       icon: <Users className="h-3.5 w-3.5" /> },
+  ]
+
+  return (
+    <div
+      className="flex gap-1 rounded-xl p-1"
+      style={{ background: "rgba(14,11,8,0.05)" }}
+    >
+      {tabs.map((t) => (
+        <button
+          key={t.id}
+          onClick={() => onChange(t.id)}
+          className="flex-1 flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold transition-all"
+          style={
+            active === t.id
+              ? { background: "#fff", color: "#1D4731", boxShadow: "0 1px 3px rgba(0,0,0,0.10)" }
+              : { color: "rgba(14,11,8,0.45)" }
+          }
+        >
+          {t.icon}
+          {t.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 // ── Main page ─────────────────────────────────────────────
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -421,6 +459,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
   const [contributeAmount, setContributeAmount] = useState("")
   const [showContributeForm, setShowContributeForm] = useState(false)
+  const [activeTab, setActiveTab] = useState<Tab>("milestones")
 
   const { data: project, isLoading, error } = useQuery<ProjectDetailDto>({
     queryKey: ["project", id],
@@ -614,73 +653,94 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         </CardContent>
       </Card>
 
-      {/* Milestones */}
-      {project.milestones.length > 0 && (
-        <div>
-          <h2 className="text-xs font-bold uppercase tracking-widest text-[#0E0B08]/40 mb-3">Milestones</h2>
-          <div className="space-y-3">
-            {project.milestones
-              .sort((a, b) => a.orderIndex - b.orderIndex)
-              .map((m) => (
-                <MilestoneCard
-                  key={m.id}
-                  milestone={m}
-                  isMember={isMember}
-                  isLeader={isLeader}
-                  projectId={id}
-                  projectMembers={project.members}
-                />
-              ))}
-          </div>
-        </div>
-      )}
+      {/* Tabs */}
+      <TabBar active={activeTab} onChange={setActiveTab} />
 
-      {project.milestones.length === 0 && (
-        <Card className="border-0 shadow-card">
-          <CardContent className="py-10 text-center">
-            <p className="text-sm text-[#0E0B08]/40">No milestones defined yet.</p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Members */}
-      {project.members.length > 0 && (
-        <Card className="border-0 shadow-card">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-sm">
-              <Users className="h-4 w-4" style={{ color: "#C9922A" }} />
-              Team
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2.5">
-              {project.members.map((m) => (
-                <div
-                  key={m.userId}
-                  className="flex items-center justify-between gap-3 py-2 border-b last:border-0"
-                  style={{ borderColor: "rgba(0,0,0,0.05)" }}
-                >
-                  <div className="flex items-center gap-2.5">
-                    {m.user.avatarUrl ? (
-                      <img src={m.user.avatarUrl} alt="" className="w-8 h-8 rounded-xl object-cover" />
-                    ) : (
-                      <div
-                        className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-bold"
-                        style={{ background: "#1D4731" }}
-                      >
-                        {(m.user.name ?? "?")[0].toUpperCase()}
-                      </div>
-                    )}
-                    <p className="text-sm font-semibold text-[#0E0B08]">{m.user.name ?? "Member"}</p>
-                  </div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#7A6E60" }}>
-                    {m.role.toLowerCase()}
-                  </span>
-                </div>
-              ))}
+      {/* Milestones tab */}
+      {activeTab === "milestones" && (
+        <>
+          {project.milestones.length > 0 ? (
+            <div className="space-y-3">
+              {project.milestones
+                .sort((a, b) => a.orderIndex - b.orderIndex)
+                .map((m) => (
+                  <MilestoneCard
+                    key={m.id}
+                    milestone={m}
+                    isMember={isMember}
+                    isLeader={isLeader}
+                    projectId={id}
+                    projectMembers={project.members}
+                  />
+                ))}
             </div>
-          </CardContent>
-        </Card>
+          ) : (
+            <Card className="border-0 shadow-card">
+              <CardContent className="py-10 text-center">
+                <p className="text-sm text-[#0E0B08]/40">No milestones defined yet.</p>
+              </CardContent>
+            </Card>
+          )}
+        </>
+      )}
+
+      {/* Tasks tab */}
+      {activeTab === "tasks" && (
+        <TaskBoard
+          projectId={id}
+          milestones={project.milestones}
+          isLeader={isLeader}
+        />
+      )}
+
+      {/* Team tab */}
+      {activeTab === "team" && (
+        <div className="space-y-4">
+          <div>
+            <h2 className="text-xs font-bold uppercase tracking-widest text-[#0E0B08]/40 mb-3">
+              Contributions
+            </h2>
+            <MemberContributions projectId={id} />
+          </div>
+
+          {/* Raw members list */}
+          <Card className="border-0 shadow-card">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <Users className="h-4 w-4" style={{ color: "#C9922A" }} />
+                Members ({project.members.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2.5">
+                {project.members.map((m) => (
+                  <div
+                    key={m.userId}
+                    className="flex items-center justify-between gap-3 py-2 border-b last:border-0"
+                    style={{ borderColor: "rgba(0,0,0,0.05)" }}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      {m.user.avatarUrl ? (
+                        <img src={m.user.avatarUrl} alt="" className="w-8 h-8 rounded-xl object-cover" />
+                      ) : (
+                        <div
+                          className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-bold"
+                          style={{ background: "#1D4731" }}
+                        >
+                          {(m.user.name ?? "?")[0].toUpperCase()}
+                        </div>
+                      )}
+                      <p className="text-sm font-semibold text-[#0E0B08]">{m.user.name ?? "Member"}</p>
+                    </div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#7A6E60" }}>
+                      {m.role.toLowerCase()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   )

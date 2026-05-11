@@ -55,6 +55,7 @@ export interface MilestoneResponseDto {
   dueDate: string | null;
   orderIndex: number;
   proposalMilestoneId: string | null;
+  tasks: TaskDto[];
   createdAt: string;
   updatedAt: string;
 }
@@ -154,6 +155,69 @@ export interface ContributionResponseDto {
 }
 
 // ── Task DTOs ─────────────────────────────────────────────────────────────────
+
+export const SKILL_CATEGORIES = [
+  'GENERAL',
+  'CONSTRUCTION',
+  'MASONRY',
+  'ELECTRICAL',
+  'PLUMBING',
+  'CARPENTRY',
+  'PAINTING',
+  'FARMING',
+  'TRANSPORT',
+  'ADMINISTRATION',
+  'TECHNOLOGY',
+  'HEALTH',
+  'EDUCATION',
+  'FINANCE',
+] as const;
+
+export type SkillCategory = (typeof SKILL_CATEGORIES)[number];
+
+export interface CreateTaskDto {
+  milestoneId: string;
+  title: string;
+  description?: string;
+  skillCategory?: SkillCategory;
+  maxAssignees?: number;
+  dueDate?: string;
+}
+
+export interface TaskDto {
+  id: string;
+  projectId: string | null;
+  milestoneId: string;
+  title: string;
+  description: string | null;
+  status: 'TODO' | 'IN_PROGRESS' | 'DONE' | 'BLOCKED';
+  skillCategory: string | null;
+  maxAssignees: number;
+  dueDate: string | null;
+  assignedTo: {
+    id: string;
+    name: string | null;
+    avatarUrl: string | null;
+  } | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TaskListDto {
+  tasks: TaskDto[];
+  total: number;
+}
+
+export interface MemberContributionDto {
+  userId: string;
+  user: { id: string; name: string | null; avatarUrl: string | null };
+  role: string;
+  tasksCompleted: number;
+  tasksInProgress: number;
+  hoursLogged: number;
+  sessionsAttended: number;
+  impactPointsEarned: number;
+}
 
 export interface ClaimTaskResponseDto {
   taskId: string;

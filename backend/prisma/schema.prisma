@@ -2046,6 +2046,8 @@ model Task {
   title         String
   description   String?
   status        TaskStatus     @default(TODO)
+  skillCategory String?
+  maxAssignees  Int            @default(1)
   dueDate       DateTime?
 
   milestone     Milestone      @relation(fields: [milestoneId], references: [id])

@@ -94,6 +94,31 @@ export class ProjectController {
     sendSuccess(res, result, 'Contribution recorded', 201);
   }
 
+  static async createTask(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const result = await projectService.createTask(userId, req.body);
+    sendSuccess(res, result, 'Task created', 201);
+  }
+
+  static async listProjectTasks(req: AuthRequest, res: Response) {
+    const { projectId } = req.params;
+    const { status, skillCategory } = req.query as Record<
+      string,
+      string | undefined
+    >;
+    const result = await projectService.listProjectTasks(projectId, {
+      status,
+      skillCategory,
+    });
+    sendSuccess(res, result);
+  }
+
+  static async getMemberContributions(req: AuthRequest, res: Response) {
+    const { projectId } = req.params;
+    const result = await projectService.getMemberContributions(projectId);
+    sendSuccess(res, result);
+  }
+
   static async claimTask(req: AuthRequest, res: Response) {
     const userId = req.user!.userId;
     const { taskId } = req.params;

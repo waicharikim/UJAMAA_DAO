@@ -33,6 +33,10 @@ import type {
   WorkLogListDto,
   ContributeToProjectDto,
   ContributionResponseDto,
+  CreateTaskDto,
+  TaskDto,
+  TaskListDto,
+  MemberContributionDto,
   ClaimTaskResponseDto,
   CompleteTaskResponseDto,
   CreateWorkSessionDto,
@@ -355,7 +359,19 @@ export class ProjectService {
     const project = await prisma.project.findUnique({
       where: { id: projectId },
       include: {
-        milestones: { orderBy: { orderIndex: 'asc' } },
+        milestones: {
+          orderBy: { orderIndex: 'asc' },
+          include: {
+            tasks: {
+              orderBy: { createdAt: 'asc' },
+              include: {
+                assignedTo: {
+                  select: { id: true, name: true, avatarUrl: true },
+                },
+              },
+            },
+          },
+        },
         members: {
           include: {
             user: { select: { id: true, name: true, avatarUrl: true } },
@@ -383,6 +399,21 @@ export class ProjectService {
       dueDate: m.dueDate?.toISOString() ?? null,
       orderIndex: m.orderIndex,
       proposalMilestoneId: m.proposalMilestoneId,
+      tasks:
+        (m as any).tasks?.map((t: any) => ({
+          id: t.id,
+          projectId: t.projectId,
+          milestoneId: t.milestoneId,
+          title: t.title,
+          description: t.description,
+          status: t.status,
+          skillCategory: t.skillCategory,
+          maxAssignees: t.maxAssignees,
+          dueDate: t.dueDate?.toISOString() ?? null,
+          assignedTo: t.assignedTo,
+          createdAt: t.createdAt.toISOString(),
+          updatedAt: t.updatedAt.toISOString(),
+        })) ?? [],
       createdAt: m.createdAt.toISOString(),
       updatedAt: m.updatedAt.toISOString(),
     }));
@@ -713,6 +744,149 @@ export class ProjectService {
     };
   }
 
+  // ── Task CRUD ─────────────────────────────────────────────────────────────
+
+  async createTask(userId: string, dto: CreateTaskDto): Promise<TaskDto> {
+    const milestone = await prisma.milestone.findUnique({
+      where: { id: dto.milestoneId },
+      select: { id: true, projectId: true },
+    });
+    if (!milestone) throw ApiError.notFound('Milestone');
+
+    const isLeader = await roleService.isProjectLeader(
+      userId,
+      milestone.projectId
+    );
+    if (!isLeader)
+      throw ApiError.forbidden('Only project leaders can create tasks');
+
+    const task = await prisma.task.create({
+      data: {
+        milestoneId: dto.milestoneId,
+        projectId: milestone.projectId,
+        title: dto.title,
+        description: dto.description ?? null,
+        skillCategory: dto.skillCategory ?? null,
+        maxAssignees: dto.maxAssignees ?? 1,
+        dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
+      },
+      include: {
+        assignedTo: { select: { id: true, name: true, avatarUrl: true } },
+      },
+    });
+
+    return {
+      id: task.id,
+      projectId: task.projectId,
+      milestoneId: task.milestoneId,
+      title: task.title,
+      description: task.description,
+      status: task.status as TaskDto['status'],
+      skillCategory: task.skillCategory,
+      maxAssignees: task.maxAssignees,
+      dueDate: task.dueDate?.toISOString() ?? null,
+      assignedTo: task.assignedTo,
+      createdAt: task.createdAt.toISOString(),
+      updatedAt: task.updatedAt.toISOString(),
+    };
+  }
+
+  async listProjectTasks(
+    projectId: string,
+    filters: { status?: string; skillCategory?: string }
+  ): Promise<TaskListDto> {
+    const where: Record<string, unknown> = { projectId };
+    if (filters.status) where['status'] = filters.status;
+    if (filters.skillCategory) where['skillCategory'] = filters.skillCategory;
+
+    const [tasks, total] = await Promise.all([
+      prisma.task.findMany({
+        where,
+        orderBy: [{ status: 'asc' }, { createdAt: 'asc' }],
+        include: {
+          assignedTo: { select: { id: true, name: true, avatarUrl: true } },
+        },
+      }),
+      prisma.task.count({ where }),
+    ]);
+
+    return {
+      tasks: tasks.map((t) => ({
+        id: t.id,
+        projectId: t.projectId,
+        milestoneId: t.milestoneId,
+        title: t.title,
+        description: t.description,
+        status: t.status as TaskDto['status'],
+        skillCategory: t.skillCategory,
+        maxAssignees: t.maxAssignees,
+        dueDate: t.dueDate?.toISOString() ?? null,
+        assignedTo: t.assignedTo,
+        createdAt: t.createdAt.toISOString(),
+        updatedAt: t.updatedAt.toISOString(),
+      })),
+      total,
+    };
+  }
+
+  async getMemberContributions(
+    projectId: string
+  ): Promise<MemberContributionDto[]> {
+    const [members, workLogs, presences] = await Promise.all([
+      prisma.projectMember.findMany({
+        where: { projectId },
+        include: {
+          user: { select: { id: true, name: true, avatarUrl: true } },
+        },
+      }),
+      prisma.physicalWorkLog.findMany({
+        where: { projectId, verifiedAt: { not: null } },
+        select: { userId: true, hours: true, totalIPEarned: true },
+      }),
+      prisma.workPresence.findMany({
+        where: { session: { projectId } },
+        select: { userId: true, ipAwarded: true, awardedAt: true },
+      }),
+    ]);
+
+    const taskCounts = await prisma.task.groupBy({
+      by: ['assignedToId', 'status'],
+      where: {
+        projectId,
+        assignedToId: { not: null },
+        status: { in: ['IN_PROGRESS', 'DONE'] },
+      },
+      _count: { id: true },
+    });
+
+    return members.map((m) => {
+      const userWorkLogs = workLogs.filter((l) => l.userId === m.userId);
+      const userPresences = presences.filter((p) => p.userId === m.userId);
+      const userTasks = taskCounts.filter((t) => t.assignedToId === m.userId);
+
+      const tasksCompleted =
+        userTasks.find((t) => t.status === 'DONE')?._count.id ?? 0;
+      const tasksInProgress =
+        userTasks.find((t) => t.status === 'IN_PROGRESS')?._count.id ?? 0;
+      const hoursLogged = userWorkLogs.reduce((s, l) => s + Number(l.hours), 0);
+      const sessionsAttended = userPresences.length;
+      const impactPointsEarned =
+        userWorkLogs.reduce((s, l) => s + l.totalIPEarned, 0) +
+        userPresences.filter((p) => p.awardedAt).length * 10;
+
+      return {
+        userId: m.userId,
+        user: m.user,
+        role: m.role,
+        tasksCompleted,
+        tasksInProgress,
+        hoursLogged,
+        sessionsAttended,
+        impactPointsEarned,
+      };
+    });
+  }
+
   // ── Task claim + completion ───────────────────────────────────────────────
 
   async claimTask(
@@ -849,7 +1023,11 @@ export class ProjectService {
       });
     } catch (err) {
       logger.warn(
-        { operationType: 'WORK_SESSION', sessionId: session.id, err: String(err) },
+        {
+          operationType: 'WORK_SESSION',
+          sessionId: session.id,
+          err: String(err),
+        },
         'Could not schedule auto-close job — session will require manual close'
       );
     }

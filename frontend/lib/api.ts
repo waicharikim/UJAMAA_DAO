@@ -1095,6 +1095,39 @@ export const governanceApi = {
 // Projects API
 // ─────────────────────────────────────────────────────────
 
+export const SKILL_CATEGORIES = [
+  "GENERAL", "CONSTRUCTION", "MASONRY", "ELECTRICAL", "PLUMBING",
+  "CARPENTRY", "PAINTING", "FARMING", "TRANSPORT", "ADMINISTRATION",
+  "TECHNOLOGY", "HEALTH", "EDUCATION", "FINANCE",
+] as const
+export type SkillCategory = (typeof SKILL_CATEGORIES)[number]
+
+export interface TaskDto {
+  id: string
+  projectId: string | null
+  milestoneId: string
+  title: string
+  description: string | null
+  status: "TODO" | "IN_PROGRESS" | "DONE" | "BLOCKED"
+  skillCategory: string | null
+  maxAssignees: number
+  dueDate: string | null
+  assignedTo: { id: string; name: string | null; avatarUrl: string | null } | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface MemberContributionDto {
+  userId: string
+  user: { id: string; name: string | null; avatarUrl: string | null }
+  role: string
+  tasksCompleted: number
+  tasksInProgress: number
+  hoursLogged: number
+  sessionsAttended: number
+  impactPointsEarned: number
+}
+
 export interface ProjectMilestoneDto {
   id: string
   projectId: string
@@ -1104,6 +1137,7 @@ export interface ProjectMilestoneDto {
   dueDate: string | null
   orderIndex: number
   proposalMilestoneId: string | null
+  tasks: TaskDto[]
   createdAt: string
   updatedAt: string
 }
@@ -1251,6 +1285,32 @@ export const projectApi = {
       method: "POST",
       body: JSON.stringify({ amount }),
     }),
+
+  createTask: (dto: {
+    milestoneId: string
+    title: string
+    description?: string
+    skillCategory?: SkillCategory
+    maxAssignees?: number
+    dueDate?: string
+  }): Promise<TaskDto> =>
+    apiFetch<TaskDto>("/projects/tasks", {
+      method: "POST",
+      body: JSON.stringify(dto),
+    }),
+
+  listProjectTasks: (
+    projectId: string,
+    filters?: { status?: string; skillCategory?: string }
+  ): Promise<{ tasks: TaskDto[]; total: number }> => {
+    const q = new URLSearchParams()
+    if (filters?.status) q.set("status", filters.status)
+    if (filters?.skillCategory) q.set("skillCategory", filters.skillCategory)
+    return apiFetch(`/projects/${projectId}/tasks${q.toString() ? `?${q}` : ""}`)
+  },
+
+  getMemberContributions: (projectId: string): Promise<MemberContributionDto[]> =>
+    apiFetch(`/projects/${projectId}/contributions`),
 
   claimTask: (taskId: string): Promise<unknown> =>
     apiFetch(`/projects/tasks/${taskId}/claim`, { method: "POST" }),
