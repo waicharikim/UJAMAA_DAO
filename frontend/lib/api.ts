@@ -1170,29 +1170,35 @@ export interface ProjectDetailDto extends ProjectListItemDto {
 }
 
 export interface WorkPresenceDto {
+  id: string
+  sessionId: string
   userId: string
-  userName: string | null
-  depth: number
+  user: { id: string; name: string | null; avatarUrl: string | null }
   attestedById: string | null
-  ipAwarded: boolean
+  depth: number
+  ipAwarded: number
   awardedAt: string | null
+  createdAt: string
 }
 
 export interface WorkSessionDto {
-  sessionId: string
+  id: string
   milestoneId: string
   projectId: string
   qrSecret: string
   status: "OPEN" | "APPROVED" | "FLAGGED"
   expiresAt: string
-  createdById: string
+  closedAt: string | null
+  presenceCount: number
   presences: WorkPresenceDto[]
+  createdAt: string
 }
 
 export interface ScanQrResponseDto {
   sessionId: string
   depth: number
-  checkedIn: boolean
+  expiresAt: string
+  attestationsRemaining: number
 }
 
 export interface WorkLogResponseDto {

@@ -132,10 +132,10 @@ export function WorkSessionPanel({ milestoneId, projectId, projectMembers, isLea
   const createMutation = useMutation({
     mutationFn: () => projectApi.createWorkSession({ milestoneId, durationMinutes: duration }),
     onSuccess: (data) => {
-      saveSessionId(data.sessionId)
+      saveSessionId(data.id)
       setShowCreateForm(false)
       toast({ title: "Work session started" })
-      queryClient.invalidateQueries({ queryKey: ["work-session", data.sessionId] })
+      queryClient.invalidateQueries({ queryKey: ["work-session", data.id] })
     },
     onError: (e: any) => toast({ title: "Failed", description: e?.message, variant: "destructive" }),
   })
@@ -171,10 +171,10 @@ export function WorkSessionPanel({ milestoneId, projectId, projectMembers, isLea
     ? `${origin}/projects/scan?secret=${session.qrSecret}`
     : ""
 
-  const myPresence = session?.presences.find((p) => p.userId === user?.id)
-  const myAttestationCount = session?.presences.filter((p) => p.attestedById === user?.id).length ?? 0
+  const myPresence = session?.presences?.find((p) => p.userId === user?.id)
+  const myAttestationCount = session?.presences?.filter((p) => p.attestedById === user?.id).length ?? 0
   const canAttest = session?.status === "OPEN" && !!myPresence && myAttestationCount < 2
-  const presentUserIds = new Set(session?.presences.map((p) => p.userId) ?? [])
+  const presentUserIds = new Set(session?.presences?.map((p) => p.userId) ?? [])
   const attestableMembers = projectMembers.filter(
     (m) => !presentUserIds.has(m.userId) && m.userId !== user?.id
   )
@@ -302,12 +302,12 @@ export function WorkSessionPanel({ milestoneId, projectId, projectMembers, isLea
               </div>
 
               {/* Presence list */}
-              {(session.presences.length > 0 || canAttest) && (
+              {((session.presences?.length ?? 0) > 0 || canAttest) && (
                 <div className="space-y-1.5">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-[#0E0B08]/40">
-                    Present ({session.presences.length})
+                    Present ({(session.presences?.length ?? 0)})
                   </p>
-                  {session.presences.map((p) => (
+                  {session.presences?.map((p) => (
                     <div
                       key={p.userId}
                       className="flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5"
@@ -318,11 +318,11 @@ export function WorkSessionPanel({ milestoneId, projectId, projectMembers, isLea
                           className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0"
                           style={{ background: p.depth === 0 ? "#1D4731" : "#C9922A" }}
                         >
-                          {(p.userName ?? "?")[0]?.toUpperCase()}
+                          {(p.user?.name ?? "?")[0]?.toUpperCase()}
                         </div>
                         <div className="min-w-0">
                           <p className="text-xs font-semibold text-[#0E0B08] truncate">
-                            {p.userName ?? "Member"}
+                            {p.user?.name ?? "Member"}
                           </p>
                           <p
                             className="text-[10px]"
@@ -407,12 +407,12 @@ export function WorkSessionPanel({ milestoneId, projectId, projectMembers, isLea
                 <div>
                   <p className="text-xs font-bold" style={{ color: "#1D4731" }}>Session Approved</p>
                   <p className="text-[11px]" style={{ color: "#1D4731" }}>
-                    {session.presences.length} member{session.presences.length !== 1 ? "s" : ""} earned 10 Impact Points
+                    {(session.presences?.length ?? 0)} member{(session.presences?.length ?? 0) !== 1 ? "s" : ""} earned 10 Impact Points
                   </p>
                 </div>
               </div>
               <div className="space-y-1">
-                {session.presences.map((p) => (
+                {session.presences?.map((p) => (
                   <div
                     key={p.userId}
                     className="flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5"
@@ -423,13 +423,13 @@ export function WorkSessionPanel({ milestoneId, projectId, projectMembers, isLea
                         className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0"
                         style={{ background: p.depth === 0 ? "#1D4731" : "#C9922A" }}
                       >
-                        {(p.userName ?? "?")[0]?.toUpperCase()}
+                        {(p.user?.name ?? "?")[0]?.toUpperCase()}
                       </div>
                       <p className="text-xs font-medium text-[#0E0B08] truncate">
-                        {p.userName ?? "Member"}
+                        {p.user?.name ?? "Member"}
                       </p>
                     </div>
-                    {p.ipAwarded && (
+                    {p.ipAwarded > 0 && (
                       <span className="flex items-center gap-0.5 text-[10px] font-bold" style={{ color: "#C9922A" }}>
                         <Zap className="h-2.5 w-2.5" />
                         +10 IP
@@ -462,9 +462,9 @@ export function WorkSessionPanel({ milestoneId, projectId, projectMembers, isLea
                   </p>
                 </div>
               </div>
-              {session.presences.length > 0 && (
+              {(session.presences?.length ?? 0) > 0 && (
                 <div className="space-y-1">
-                  {session.presences.map((p) => (
+                  {session.presences?.map((p) => (
                     <div
                       key={p.userId}
                       className="flex items-center gap-2 rounded-lg px-2.5 py-1.5"
@@ -474,10 +474,10 @@ export function WorkSessionPanel({ milestoneId, projectId, projectMembers, isLea
                         className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0"
                         style={{ background: "#7A6E60" }}
                       >
-                        {(p.userName ?? "?")[0]?.toUpperCase()}
+                        {(p.user?.name ?? "?")[0]?.toUpperCase()}
                       </div>
                       <p className="text-xs font-medium text-[#0E0B08] truncate">
-                        {p.userName ?? "Member"}
+                        {p.user?.name ?? "Member"}
                       </p>
                     </div>
                   ))}

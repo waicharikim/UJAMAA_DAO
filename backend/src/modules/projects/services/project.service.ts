@@ -1237,6 +1237,7 @@ export class ProjectService {
         sessionId: p.sessionId,
         userId: p.userId,
         user: p.user,
+        attestedById: p.attestedById,
         depth: p.depth,
         ipAwarded: p.ipAwarded,
         awardedAt: p.awardedAt ? p.awardedAt.toISOString() : null,

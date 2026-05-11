@@ -258,6 +258,7 @@ export interface WorkPresenceDto {
   sessionId: string;
   userId: string;
   user: { id: string; name: string | null; avatarUrl: string | null };
+  attestedById: string | null;
   depth: number;
   ipAwarded: number;
   awardedAt: string | null;
