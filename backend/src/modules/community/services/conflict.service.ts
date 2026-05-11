@@ -15,6 +15,8 @@ import { ApiError } from '../../../core/errors/ApiError.js';
 import { logger } from '../../../core/logger/logger.js';
 import { auditService } from '../../audit/services/audit.service.js';
 import { AuditAction } from '../../audit/types.js';
+import { globalImpactPointService } from '../../reputation/service/impactPoint.service.js';
+import { ImpactPointReason } from '../../reputation/types.js';
 
 class ConflictService {
   /**
@@ -65,6 +67,12 @@ class ConflictService {
       conflict.id,
       { respondentId: dto.respondentId }
     );
+
+    await globalImpactPointService
+      .award(complainantId, 5, ImpactPointReason.CONFLICT_FILED, {
+        conflictId: conflict.id,
+      })
+      .catch(() => {});
 
     return conflict;
   }
@@ -141,6 +149,10 @@ class ConflictService {
       caseId,
       { resolution }
     );
+
+    await globalImpactPointService
+      .award(actorId, 15, ImpactPointReason.CONFLICT_RESOLVED, { caseId })
+      .catch(() => {});
 
     return updated;
   }

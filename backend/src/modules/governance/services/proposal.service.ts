@@ -15,8 +15,9 @@ import {
 } from '@prisma/client';
 import { prisma } from '../../../core/database/client.js';
 import { participationRightsService } from '../../economy/services/participationRights.service.js';
-import { ParticipationRightsReason } from '../../economy/types.js';
+import { ParticipationRightsReason, PR_CONFIG } from '../../economy/types.js';
 import { globalImpactPointService } from '../../reputation/service/impactPoint.service.js';
+import { ImpactPointReason } from '../../reputation/types.js';
 import { ApiError } from '../../../core/errors/ApiError.js';
 import { logger } from '../../../core/logger/logger.js';
 import {
@@ -387,14 +388,19 @@ class ProposalService {
 
     if (existing) throw ApiError.conflict('Already voted');
 
-    await participationRightsService.spend(
-      userId,
-      5,
-      ParticipationRightsReason.VOTED,
-      { proposalId: dto.proposalId }
-    );
-
     const weight = await globalImpactPointService.getTotal(userId);
+
+    await participationRightsService
+      .award(userId, PR_CONFIG.VOTE_CAST, ParticipationRightsReason.VOTED, {
+        proposalId: dto.proposalId,
+      })
+      .catch(() => {});
+
+    await globalImpactPointService
+      .award(userId, 5, ImpactPointReason.VOTE_CAST, {
+        proposalId: dto.proposalId,
+      })
+      .catch(() => {});
 
     await prisma.groupMemberVote.create({
       data: {
@@ -488,6 +494,25 @@ class ProposalService {
         .catch(() => {
           /* non-critical */
         });
+    }
+
+    // Award creator IP when proposal passes
+    if (proposal.creatorId && newStatus === ProposalStatus.APPROVED) {
+      await globalImpactPointService
+        .award(proposal.creatorId, 25, ImpactPointReason.PROPOSAL_PASSED, {
+          proposalId,
+          title: proposal.title,
+        })
+        .catch(() => {});
+
+      await participationRightsService
+        .award(
+          proposal.creatorId,
+          PR_CONFIG.PROPOSAL_EXECUTED,
+          ParticipationRightsReason.PROPOSAL_EXECUTED,
+          { proposalId, title: proposal.title }
+        )
+        .catch(() => {});
     }
 
     // Notify the proposal creator of the outcome

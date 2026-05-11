@@ -23,6 +23,8 @@ import { logger } from '../../../core/logger/logger.js';
 import { eventBus } from '../../../core/utils/eventBus.js';
 import { auditService } from '../../audit/services/audit.service.js';
 import { AuditAction } from '../../audit/types.js';
+import { globalImpactPointService } from '../../reputation/service/impactPoint.service.js';
+import { ImpactPointReason } from '../../reputation/types.js';
 import { VerificationLevel } from '../../../core/types/Ujamaadao.types.js';
 import {
   UpdateProfileDto,
@@ -776,6 +778,13 @@ class UserService {
     }
 
     logger.info({ voucherId, targetUserId, wardId }, 'Vouch added');
+
+    await globalImpactPointService
+      .award(voucherId, 10, ImpactPointReason.VOUCHED_FOR_MEMBER, {
+        targetUserId,
+        wardId,
+      })
+      .catch(() => {});
 
     eventBus.publish('user.verification.vouch', {
       targetUserId,

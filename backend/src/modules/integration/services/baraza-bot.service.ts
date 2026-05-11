@@ -16,7 +16,8 @@ import {
   BarazaSessionDto,
   BarazaSessionReminderJobData,
 } from '../types.js';
-import { PR_CONFIG } from '../../economy/types.js';
+import { PR_CONFIG, ParticipationRightsReason } from '../../economy/types.js';
+import { participationRightsService } from '../../economy/services/participationRights.service.js';
 import {
   NotificationType,
   NotificationChannel,
@@ -199,6 +200,18 @@ class BarazaBotService {
           'Failed to upsert attendance record — skipping'
         );
       }
+    }
+
+    // Reward the coordinator who submitted this attendance report
+    if (dto.reportedBy) {
+      await participationRightsService
+        .award(
+          dto.reportedBy,
+          PR_CONFIG.BARAZA_REPORT_SUBMITTED,
+          ParticipationRightsReason.BARAZA_REPORT_SUBMITTED,
+          { barazaGroupId: barazaGroup.id, sessionDate: dto.sessionDate }
+        )
+        .catch(() => {});
     }
 
     return results;

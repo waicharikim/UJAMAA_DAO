@@ -14,6 +14,8 @@
 import { prisma } from '../../../core/database/client.js';
 import { participationRightsService } from '../../economy/services/participationRights.service.js';
 import { ParticipationRightsReason } from '../../economy/types.js';
+import { globalImpactPointService } from '../../reputation/service/impactPoint.service.js';
+import { ImpactPointReason } from '../../reputation/types.js';
 import { VoluntaryGroupType, LocationScope, GroupRole } from '@prisma/client';
 import { ApiError } from '../../../core/errors/ApiError.js';
 import { logger } from '../../../core/logger/logger.js';
@@ -94,6 +96,14 @@ class GroupService {
 
     // Generate and store the Ward Declaration as the genesis document
     await groupService.generateDeclaration(group.id, dto.name, group.createdAt);
+
+    await globalImpactPointService
+      .award(userId, 20, ImpactPointReason.GROUP_CREATED, {
+        groupId: group.id,
+        name: dto.name,
+        type: dto.voluntaryType,
+      })
+      .catch(() => {});
 
     return group;
   }
