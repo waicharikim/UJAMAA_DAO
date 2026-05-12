@@ -36,6 +36,8 @@ import { AuditAction } from '../../audit/types.js';
 import { getGovernanceContract } from '../../../core/blockchain/client.js';
 import { ethers } from 'ethers';
 
+type ProposalWithGroup = Prisma.ProposalGetPayload<{ include: { group: true } }>;
+
 class ProposalService {
   /**
    * Create proposal — group-scoped, PR cost + IP percentile check
@@ -140,165 +142,167 @@ class ProposalService {
     });
     if (!proposal) throw ApiError.notFound('Proposal');
 
+    if (proposal.status === ProposalStatus.DRAFT)
+      return this.handleDraftStage(userId, proposalId, proposal, dto, callerSystemRoles);
+    if (proposal.status === ProposalStatus.PENDING_REVIEW)
+      return this.handlePendingReviewStage(userId, proposalId, proposal, dto, callerSystemRoles);
+
+    throw ApiError.badRequest('Proposal is not in a reviewable state');
+  }
+
+  private async handleDraftStage(
+    userId: string,
+    proposalId: string,
+    proposal: ProposalWithGroup,
+    dto: ReviewProposalDto,
+    callerSystemRoles: string[]
+  ) {
     const group = proposal.group;
     const groupId = proposal.groupId;
+    await this.assertDraftForwardAuth(userId, groupId, group, callerSystemRoles);
 
-    // ── STAGE 1: forward DRAFT ───────────────────────────────────────────────
-    // System groups: location admin (same authority as Stage 2)
-    // Voluntary groups: group LEADER only
-    if (proposal.status === ProposalStatus.DRAFT) {
-      const isSystemGroup = group?.isSystemGroup ?? false;
-      if (isSystemGroup) {
-        if (!group || !canLocationAdminApprove(group, callerSystemRoles))
-          throw ApiError.forbidden(
-            `Requires ${group ? requiredRoleLabel(group) : 'platform administrator'} to forward this proposal`
-          );
-      } else {
-        const membership = groupId
-          ? await prisma.groupMember.findFirst({
-              where: { userId, groupId, active: true },
-              select: { role: true },
-            })
-          : null;
-        if (!membership || membership.role !== 'LEADER')
-          throw ApiError.forbidden(
-            'Only the group leader can forward proposals for review'
-          );
-      }
-
-      if (dto.decision === 'REJECT') {
-        const updated = await prisma.proposal.update({
-          where: { id: proposalId },
-          data: {
-            status: ProposalStatus.REJECTED,
-            reviewedById: userId,
-            reviewNote: dto.note ?? null,
-          },
-        });
-        await auditService.log(
-          userId,
-          AuditAction.PROPOSAL_STATUS_CHANGED,
-          'Proposal',
-          proposalId,
-          { newStatus: ProposalStatus.REJECTED, stage: 1, title: proposal.title }
-        );
-        if (proposal.creatorId) {
-          notificationService.send({
-            userId: proposal.creatorId,
-            type: NotificationType.PROPOSAL_REJECTED,
-            title: 'Proposal rejected',
-            message: `"${proposal.title}" was rejected at stage 1.${dto.note ? ` Note: ${dto.note}` : ''}`,
-            data: { proposalId },
-          }).catch(() => {});
-        }
-        return updated;
-      }
-
-      // Voluntary GROUP-scoped proposals skip admin review entirely
-      const isVoluntary = !!group?.voluntaryType;
-      const isGroupScoped = proposal.proposalScope === ProposalScope.GROUP;
-      if (isVoluntary && isGroupScoped) {
-        const updated = await prisma.proposal.update({
-          where: { id: proposalId },
-          data: { status: ProposalStatus.APPROVED_FOR_VOTING },
-        });
-        await auditService.log(
-          userId,
-          AuditAction.PROPOSAL_STATUS_CHANGED,
-          'Proposal',
-          proposalId,
-          { newStatus: ProposalStatus.APPROVED_FOR_VOTING, stage: 1, title: proposal.title }
-        );
-        if (proposal.creatorId) {
-          notificationService.send({
-            userId: proposal.creatorId,
-            type: NotificationType.PROPOSAL_APPROVED,
-            title: 'Proposal approved for voting',
-            message: `"${proposal.title}" is approved — you can now open voting.`,
-            data: { proposalId },
-          }).catch(() => {});
-        }
-        return updated;
-      }
-
-      // Voluntary COMMUNITY-scoped must have a location set
-      if (
-        isVoluntary &&
-        !group?.wardId &&
-        !group?.constituencyId &&
-        !group?.countyId
-      ) {
-        throw ApiError.badRequest(
-          'This voluntary group has no location affiliation. Associate the group with a ward, constituency, or county before creating community proposals.'
-        );
-      }
-
-      const forwarded = await prisma.proposal.update({
-        where: { id: proposalId },
-        data: { status: ProposalStatus.PENDING_REVIEW },
-      });
-      await auditService.log(
-        userId,
-        AuditAction.PROPOSAL_STATUS_CHANGED,
-        'Proposal',
-        proposalId,
-        { newStatus: ProposalStatus.PENDING_REVIEW, stage: 1, title: proposal.title }
-      );
-      if (proposal.creatorId) {
-        notificationService.send({
-          userId: proposal.creatorId,
-          type: NotificationType.PROPOSAL_SUBMITTED,
-          title: 'Proposal forwarded for review',
-          message: `"${proposal.title}" has been forwarded to the location administrator for review.`,
-          data: { proposalId },
-        }).catch(() => {});
-      }
-      return forwarded;
-    }
-
-    // ── STAGE 2: Location admin approves/rejects PENDING_REVIEW ─────────────
-    if (proposal.status === ProposalStatus.PENDING_REVIEW) {
-      if (!group) throw ApiError.badRequest('Proposal has no associated group');
-      if (!canLocationAdminApprove(group, callerSystemRoles))
-        throw ApiError.forbidden(
-          `Requires ${requiredRoleLabel(group)} to approve this proposal`
-        );
-
-      const newStatus =
-        dto.decision === 'APPROVE'
-          ? ProposalStatus.APPROVED_FOR_VOTING
-          : ProposalStatus.REJECTED;
+    if (dto.decision === 'REJECT') {
       const updated = await prisma.proposal.update({
         where: { id: proposalId },
-        data: {
-          status: newStatus,
-          reviewedById: userId,
-          reviewNote: dto.note ?? null,
-        },
+        data: { status: ProposalStatus.REJECTED, reviewedById: userId, reviewNote: dto.note ?? null },
       });
-      await auditService.log(
-        userId,
-        AuditAction.PROPOSAL_STATUS_CHANGED,
-        'Proposal',
-        proposalId,
-        { newStatus, stage: 2, title: proposal.title }
-      );
+      await auditService.log(userId, AuditAction.PROPOSAL_STATUS_CHANGED, 'Proposal', proposalId,
+        { newStatus: ProposalStatus.REJECTED, stage: 1, title: proposal.title });
       if (proposal.creatorId) {
-        const approved = newStatus === ProposalStatus.APPROVED_FOR_VOTING;
         notificationService.send({
           userId: proposal.creatorId,
-          type: approved ? NotificationType.PROPOSAL_APPROVED : NotificationType.PROPOSAL_REJECTED,
-          title: approved ? 'Proposal approved for voting' : 'Proposal rejected',
-          message: approved
-            ? `"${proposal.title}" has been approved by the administrator — you can now open voting.`
-            : `"${proposal.title}" was rejected by the administrator.${dto.note ? ` Note: ${dto.note}` : ''}`,
+          type: NotificationType.PROPOSAL_REJECTED,
+          title: 'Proposal rejected',
+          message: `"${proposal.title}" was rejected at stage 1.${dto.note ? ` Note: ${dto.note}` : ''}`,
           data: { proposalId },
         }).catch(() => {});
       }
       return updated;
     }
 
-    throw ApiError.badRequest('Proposal is not in a reviewable state');
+    const fastTrack = await this.tryVoluntaryGroupScopeFastTrack(userId, proposalId, proposal, group);
+    if (fastTrack) return fastTrack;
+
+    this.assertVoluntaryLocationAffiliation(group);
+
+    const forwarded = await prisma.proposal.update({
+      where: { id: proposalId },
+      data: { status: ProposalStatus.PENDING_REVIEW },
+    });
+    await auditService.log(userId, AuditAction.PROPOSAL_STATUS_CHANGED, 'Proposal', proposalId,
+      { newStatus: ProposalStatus.PENDING_REVIEW, stage: 1, title: proposal.title });
+    if (proposal.creatorId) {
+      notificationService.send({
+        userId: proposal.creatorId,
+        type: NotificationType.PROPOSAL_SUBMITTED,
+        title: 'Proposal forwarded for review',
+        message: `"${proposal.title}" has been forwarded to the location administrator for review.`,
+        data: { proposalId },
+      }).catch(() => {});
+    }
+    return forwarded;
+  }
+
+  private async assertDraftForwardAuth(
+    userId: string,
+    groupId: string | null,
+    group: ProposalWithGroup['group'],
+    callerSystemRoles: string[]
+  ) {
+    const isSystemGroup = group?.isSystemGroup ?? false;
+    if (isSystemGroup) {
+      if (!group || !canLocationAdminApprove(group, callerSystemRoles))
+        throw ApiError.forbidden(
+          `Requires ${group ? requiredRoleLabel(group) : 'platform administrator'} to forward this proposal`
+        );
+    } else {
+      const membership = groupId
+        ? await prisma.groupMember.findFirst({
+            where: { userId, groupId, active: true },
+            select: { role: true },
+          })
+        : null;
+      if (!membership || membership.role !== 'LEADER')
+        throw ApiError.forbidden('Only the group leader can forward proposals for review');
+    }
+  }
+
+  private async tryVoluntaryGroupScopeFastTrack(
+    userId: string,
+    proposalId: string,
+    proposal: ProposalWithGroup,
+    group: ProposalWithGroup['group']
+  ) {
+    const isVoluntary = !!group?.voluntaryType;
+    const isGroupScoped = proposal.proposalScope === ProposalScope.GROUP;
+    if (!isVoluntary || !isGroupScoped) return null;
+
+    const updated = await prisma.proposal.update({
+      where: { id: proposalId },
+      data: { status: ProposalStatus.APPROVED_FOR_VOTING },
+    });
+    await auditService.log(userId, AuditAction.PROPOSAL_STATUS_CHANGED, 'Proposal', proposalId,
+      { newStatus: ProposalStatus.APPROVED_FOR_VOTING, stage: 1, title: proposal.title });
+    if (proposal.creatorId) {
+      notificationService.send({
+        userId: proposal.creatorId,
+        type: NotificationType.PROPOSAL_APPROVED,
+        title: 'Proposal approved for voting',
+        message: `"${proposal.title}" is approved — you can now open voting.`,
+        data: { proposalId },
+      }).catch(() => {});
+    }
+    return updated;
+  }
+
+  private assertVoluntaryLocationAffiliation(group: ProposalWithGroup['group']) {
+    if (
+      group?.voluntaryType &&
+      !group.wardId &&
+      !group.constituencyId &&
+      !group.countyId
+    ) {
+      throw ApiError.badRequest(
+        'This voluntary group has no location affiliation. Associate the group with a ward, constituency, or county before creating community proposals.'
+      );
+    }
+  }
+
+  private async handlePendingReviewStage(
+    userId: string,
+    proposalId: string,
+    proposal: ProposalWithGroup,
+    dto: ReviewProposalDto,
+    callerSystemRoles: string[]
+  ) {
+    const group = proposal.group;
+    if (!group) throw ApiError.badRequest('Proposal has no associated group');
+    if (!canLocationAdminApprove(group, callerSystemRoles))
+      throw ApiError.forbidden(`Requires ${requiredRoleLabel(group)} to approve this proposal`);
+
+    const newStatus =
+      dto.decision === 'APPROVE'
+        ? ProposalStatus.APPROVED_FOR_VOTING
+        : ProposalStatus.REJECTED;
+    const updated = await prisma.proposal.update({
+      where: { id: proposalId },
+      data: { status: newStatus, reviewedById: userId, reviewNote: dto.note ?? null },
+    });
+    await auditService.log(userId, AuditAction.PROPOSAL_STATUS_CHANGED, 'Proposal', proposalId,
+      { newStatus, stage: 2, title: proposal.title });
+    if (proposal.creatorId) {
+      const approved = newStatus === ProposalStatus.APPROVED_FOR_VOTING;
+      notificationService.send({
+        userId: proposal.creatorId,
+        type: approved ? NotificationType.PROPOSAL_APPROVED : NotificationType.PROPOSAL_REJECTED,
+        title: approved ? 'Proposal approved for voting' : 'Proposal rejected',
+        message: approved
+          ? `"${proposal.title}" has been approved by the administrator — you can now open voting.`
+          : `"${proposal.title}" was rejected by the administrator.${dto.note ? ` Note: ${dto.note}` : ''}`,
+        data: { proposalId },
+      }).catch(() => {});
+    }
+    return updated;
   }
 
   /**
@@ -318,10 +322,36 @@ class ProposalService {
 
     if (!proposal) throw ApiError.notFound('Proposal');
     if (proposal.status !== ProposalStatus.APPROVED_FOR_VOTING)
-      throw ApiError.badRequest(
-        'Proposal must be approved before voting can start'
-      );
+      throw ApiError.badRequest('Proposal must be approved before voting can start');
 
+    await this.assertStartVotingAuth(userId, proposal, callerSystemRoles);
+
+    const isEmergency = proposal.proposalType === ProposalType.EMERGENCY;
+    const groupScope = proposal.group?.locationScope;
+    const days = isEmergency ? 3 : groupScope === 'NATIONAL' ? 21 : 7;
+    const startsAt = new Date();
+    const endsAt = new Date(startsAt.getTime() + days * 24 * 60 * 60 * 1000);
+
+    await prisma.proposal.update({
+      where: { id: proposalId },
+      data: { status: ProposalStatus.VOTING, votingStartsAt: startsAt, votingEndsAt: endsAt },
+    });
+
+    logger.info({ proposalId, days }, 'Voting started');
+
+    await auditService.log(userId, AuditAction.PROPOSAL_STATUS_CHANGED, 'Proposal', proposalId,
+      { newStatus: ProposalStatus.VOTING, title: proposal.title });
+
+    await this.notifyGroupVotingStarted(proposalId, proposal, days);
+
+    return { startsAt, endsAt };
+  }
+
+  private async assertStartVotingAuth(
+    userId: string,
+    proposal: ProposalWithGroup,
+    callerSystemRoles: string[]
+  ) {
     const group = proposal.group;
     const isSystemGroup = group?.isSystemGroup ?? false;
     if (isSystemGroup) {
@@ -339,53 +369,30 @@ class ProposalService {
       if (!membership || membership.role !== 'LEADER')
         throw ApiError.forbidden('Only the group leader can start voting');
     }
+  }
 
-    const isEmergency = proposal.proposalType === ProposalType.EMERGENCY;
-    const groupScope = proposal.group?.locationScope;
-    const days = isEmergency ? 3 : groupScope === 'NATIONAL' ? 21 : 7;
-    const startsAt = new Date();
-    const endsAt = new Date(startsAt.getTime() + days * 24 * 60 * 60 * 1000);
-
-    await prisma.proposal.update({
-      where: { id: proposalId },
-      data: {
-        status: ProposalStatus.VOTING,
-        votingStartsAt: startsAt,
-        votingEndsAt: endsAt,
-      },
+  private async notifyGroupVotingStarted(
+    proposalId: string,
+    proposal: ProposalWithGroup,
+    days: number
+  ) {
+    if (!proposal.groupId) return;
+    const members = await prisma.groupMember.findMany({
+      where: { groupId: proposal.groupId, active: true },
+      select: { userId: true },
+      take: 50,
     });
-
-    logger.info({ proposalId, days }, 'Voting started');
-
-    await auditService.log(
-      userId,
-      AuditAction.PROPOSAL_STATUS_CHANGED,
-      'Proposal',
-      proposalId,
-      { newStatus: ProposalStatus.VOTING, title: proposal.title }
+    await Promise.allSettled(
+      members.map((m) =>
+        notificationService.send({
+          userId: m.userId,
+          type: NotificationType.PROPOSAL_VOTING_STARTED,
+          title: 'Voting open',
+          message: `Voting has started on "${proposal.title}". You have ${days} days to cast your vote.`,
+          data: { proposalId },
+        })
+      )
     );
-
-    // Notify group members that voting is open (up to 50 most recent members)
-    if (proposal.groupId) {
-      const members = await prisma.groupMember.findMany({
-        where: { groupId: proposal.groupId, active: true },
-        select: { userId: true },
-        take: 50,
-      });
-      await Promise.allSettled(
-        members.map((m) =>
-          notificationService.send({
-            userId: m.userId,
-            type: NotificationType.PROPOSAL_VOTING_STARTED,
-            title: 'Voting open',
-            message: `Voting has started on "${proposal.title}". You have ${days} days to cast your vote.`,
-            data: { proposalId },
-          })
-        )
-      );
-    }
-
-    return { startsAt, endsAt };
   }
 
   /**
