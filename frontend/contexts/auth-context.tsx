@@ -188,8 +188,8 @@ interface AuthContextType extends Pick<AuthState, "user" | "token" | "isAuthenti
   updateUser: (userData: Partial<User>) => void
   /** Re-fetch /users/me and remap — use after profile updates that return raw backend data */
   refreshUser: () => Promise<void>
-  /** @deprecated use requestMagicLink instead */
-  login: (walletAddress: string) => Promise<void>
+  /** Sign in with a wallet signature. walletAddress + signature come from personal_sign. */
+  login: (walletAddress: string, signature: string) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -318,14 +318,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  // ── deprecated wallet login shim ──
+  // ── wallet login ──
   const login = useCallback(
-    async (_walletAddress: string) => {
-      toast({
-        title: "Wallet login not available",
-        description: "Please use email magic link to sign in.",
-        variant: "destructive",
-      })
+    async (walletAddress: string, signature: string) => {
+      try {
+        const { sessionToken, user: rawUser } = await authApi.walletLogin(walletAddress, signature)
+        tokenStore.set(sessionToken)
+        setToken(sessionToken)
+        setUser(mapBackendUser(rawUser))
+        toast({ title: "Welcome!", description: "Signed in with wallet." })
+      } catch (err) {
+        const message = err instanceof ApiError ? err.message : "Wallet sign-in failed."
+        toast({ title: "Sign-in failed", description: message, variant: "destructive" })
+        throw err
+      }
     },
     [toast]
   )

@@ -271,6 +271,19 @@ export const authApi = {
     }),
 
   /**
+   * POST /auth/wallet/verify
+   * Sign in using a wallet signature. Returns sessionToken + user (no existing session required).
+   */
+  walletLogin: (walletAddress: string, signature: string) =>
+    apiFetch<{ sessionToken: string; user: any; needsProfileCompletion: boolean }>(
+      "/auth/wallet/verify",
+      {
+        method: "POST",
+        body: JSON.stringify({ walletAddress, signature }),
+      }
+    ),
+
+  /**
    * POST /auth/wallet/link
    * Link a wallet to the authenticated account. Requires auth + signature.
    */
