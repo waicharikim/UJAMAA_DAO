@@ -13,8 +13,8 @@
   "author": "UjamaaDAO Team",
   "license": "MIT",
   "scripts": {
-    "dev": "tsx --import ./src/instrument.ts watch src/index.ts",
-    "dev:worker": "tsx --import ./src/instrument.ts watch src/workers.ts",
+    "dev": "tsx watch --import ./src/instrument.ts src/index.ts",
+    "dev:worker": "tsx watch --import ./src/instrument.ts src/workers.ts",
     "dev:all": "concurrently \"npm run dev\" \"npm run dev:worker\"",
     "build": "tsc",
     "start": "node --import ./dist/instrument.js dist/index.js",

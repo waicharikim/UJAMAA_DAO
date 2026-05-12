@@ -32,4 +32,4 @@ echo "🚀 Applying Prisma migrations..."
 npx prisma migrate deploy
 
 echo "🚀 Starting web server (tsx watch)..."
-exec npx tsx --import ./src/instrument.ts watch src/index.ts
+exec npx tsx watch --import ./src/instrument.ts src/index.ts
