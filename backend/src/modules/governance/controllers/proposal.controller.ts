@@ -131,7 +131,11 @@ export class ProposalController {
   static async castVote(req: AuthRequest, res: Response) {
     const userId = req.user!.userId;
     const dto = req.body;
-    const result = await proposalService.castVote(userId, dto);
+    const result = await proposalService.castVote(
+      userId,
+      dto,
+      req.user!.primaryWardId
+    );
     sendSuccess(res, result, 'Vote cast');
   }
 
@@ -178,11 +182,22 @@ export class ProposalController {
     const userId = req.user!.userId;
     const { proposalId } = req.params;
     const { outcome } = req.body;
-    const result = await proposalService.recordOutcome(
-      userId,
-      proposalId,
-      outcome
-    );
+    const result = await proposalService.recordOutcome(userId, proposalId, outcome);
     sendSuccess(res, result, 'Outcome recorded');
+  }
+
+  static async cancelProposal(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const { proposalId } = req.params;
+    const result = await proposalService.cancelProposal(userId, proposalId);
+    sendSuccess(res, result, 'Proposal cancelled');
+  }
+
+  static async updateProgress(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const { proposalId } = req.params;
+    const { status, note } = req.body;
+    const result = await proposalService.updateProgress(userId, proposalId, { status, note });
+    sendSuccess(res, result, 'Proposal progress updated');
   }
 }

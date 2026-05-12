@@ -1089,6 +1089,16 @@ export const governanceApi = {
       `/governance/${proposalId}/outcome`,
       { method: "PATCH", body: JSON.stringify({ outcome }) }
     ),
+
+  cancelProposal: (proposalId: string) =>
+    apiFetch<unknown>(`/governance/${proposalId}/cancel`, { method: "POST" }),
+
+  updateProgress: (proposalId: string, status: "EXECUTING" | "COMPLETED", note?: string) =>
+    apiFetch<unknown>(`/governance/${proposalId}/progress`, {
+      method: "PATCH",
+      body: JSON.stringify({ status, note }),
+    }),
+
 }
 
 // ─────────────────────────────────────────────────────────

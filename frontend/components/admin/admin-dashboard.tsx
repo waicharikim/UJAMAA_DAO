@@ -8,7 +8,7 @@ import { UserManagement } from "./user-management"
 import { SystemSettings } from "./system-settings"
 import { AuditLogs } from "./audit-logs"
 import { FinancialOverview } from "./financial-overview"
-import { GovernanceReview } from "./governance-review"
+import { GovernanceReview, ProposalReviewRow } from "./governance-review"
 import { LocationTreasury } from "./location-treasury"
 import { Settings, FileText, DollarSign, Shield, AlertTriangle, CheckCircle, Clock, Coins, Vote } from "lucide-react"
 import { adminApi, auditApi, governanceApi, type AdminStatsDto } from "@/lib/api"
@@ -34,12 +34,13 @@ export function AdminDashboard({ stats, isLocationAdmin = false }: Props) {
     enabled: !isLocationAdmin,
   })
 
-  const { data: locationProposals } = useQuery({
-    queryKey: ["admin", "location-pending"],
-    queryFn: () => governanceApi.getProposals({ status: "PENDING_REVIEW", limit: 10 }),
+  const { data: pendingProposalsData } = useQuery({
+    queryKey: ["admin", "needs-action"],
+    queryFn: () => governanceApi.getNeedsAction(),
     staleTime: 30_000,
-    enabled: isLocationAdmin,
   })
+
+  const pendingProposals = pendingProposalsData?.proposals ?? []
 
   const recentActions = (auditResult?.logs ?? []).map((log) => {
     const et = log.entityType?.toUpperCase() ?? ""
@@ -124,26 +125,25 @@ export function AdminDashboard({ stats, isLocationAdmin = false }: Props) {
                   <CardTitle className="flex items-center gap-2">
                     <Vote className="h-5 w-5" />
                     Proposals Awaiting Your Review
+                    {pendingProposals.length > 0 && (
+                      <Badge className="bg-yellow-100 text-yellow-800 ml-1">
+                        {pendingProposals.length} pending
+                      </Badge>
+                    )}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-3">
-                    {(locationProposals?.proposals ?? []).length === 0 ? (
-                      <p className="text-sm text-slate-500 text-center py-4">
-                        No proposals pending review in your area
-                      </p>
-                    ) : (locationProposals?.proposals ?? []).map((p: any) => (
-                      <div key={p.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-50">
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm truncate">{p.title}</div>
-                          <div className="text-xs text-slate-500">
-                            {p.group?.name ?? "—"} · {formatRelativeTime(p.createdAt)}
-                          </div>
-                        </div>
-                        <Badge className="text-yellow-600 bg-yellow-100 ml-2">Pending</Badge>
-                      </div>
-                    ))}
-                  </div>
+                  {pendingProposals.length === 0 ? (
+                    <p className="text-sm text-slate-500 text-center py-4">
+                      No proposals pending review in your area
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {pendingProposals.map((p) => (
+                        <ProposalReviewRow key={p.id} proposal={p} />
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -235,6 +235,27 @@ export function AdminDashboard({ stats, isLocationAdmin = false }: Props) {
                   </CardContent>
                 </Card>
               </div>
+
+              {pendingProposals.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Vote className="h-5 w-5 text-yellow-600" />
+                      Proposals Awaiting Review
+                      <Badge className="bg-yellow-100 text-yellow-800 ml-1">
+                        {pendingProposals.length} pending
+                      </Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {pendingProposals.map((p) => (
+                        <ProposalReviewRow key={p.id} proposal={p} />
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
               {stats && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

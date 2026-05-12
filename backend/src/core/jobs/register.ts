@@ -39,6 +39,11 @@ import {
   TALLY_RESULTS_JOB,
 } from '../../modules/elections/jobs/election.jobs.js';
 
+import {
+  TALLY_PROPOSALS_JOB,
+  EXPIRE_PROPOSAL_REVIEW_JOB,
+} from '../../modules/governance/jobs/proposal.jobs.js';
+
 export async function registerAllJobs(): Promise<void> {
   logger.info(
     { operationType: 'JOB_REGISTER' },
@@ -206,6 +211,38 @@ export async function registerAllJobs(): Promise<void> {
       }
     );
     logger.info({ job: TALLY_RESULTS_JOB }, 'Job registered');
+
+    // ─────────────────────────────────────────────
+    // PROPOSAL VOTE TALLY
+    // Daily 00:30 — tally all VOTING proposals past votingEndsAt
+    // ─────────────────────────────────────────────
+    await governanceQueue.add(
+      TALLY_PROPOSALS_JOB,
+      {},
+      {
+        repeat: { pattern: '30 0 * * *' },
+        jobId: TALLY_PROPOSALS_JOB,
+        removeOnComplete: { age: 3600 * 24 * 7 },
+        removeOnFail: { age: 3600 * 24 * 30 },
+      }
+    );
+    logger.info({ job: TALLY_PROPOSALS_JOB }, 'Job registered');
+
+    // ─────────────────────────────────────────────
+    // PROPOSAL REVIEW EXPIRY
+    // Daily 00:35 — auto-reject PENDING_REVIEW proposals older than 30 days
+    // ─────────────────────────────────────────────
+    await governanceQueue.add(
+      EXPIRE_PROPOSAL_REVIEW_JOB,
+      {},
+      {
+        repeat: { pattern: '35 0 * * *' },
+        jobId: EXPIRE_PROPOSAL_REVIEW_JOB,
+        removeOnComplete: { age: 3600 * 24 * 7 },
+        removeOnFail: { age: 3600 * 24 * 30 },
+      }
+    );
+    logger.info({ job: EXPIRE_PROPOSAL_REVIEW_JOB }, 'Job registered');
 
     logger.info(
       { operationType: 'JOB_REGISTER' },

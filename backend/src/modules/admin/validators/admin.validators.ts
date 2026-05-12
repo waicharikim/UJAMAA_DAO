@@ -100,7 +100,10 @@ export const pendingResidenceChangesQuerySchema =
 export const prAdjustSchema = z.object({
   userId: uuidSchema,
   amount: z.number().int('Amount must be integer'),
-  type: z.enum(['ADD', 'DEDUCT']),
+  type: z.enum(['ADD', 'DEDUCT'], {
+    required_error: 'type is required: must be "ADD" or "DEDUCT"',
+    invalid_type_error: 'type must be "ADD" or "DEDUCT"',
+  }),
   reason: z.string().min(1, 'Reason required').max(500),
 });
 

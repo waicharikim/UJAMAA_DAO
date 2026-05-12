@@ -5,14 +5,7 @@
  * Version: 2.0 — December 2025
  */
 
-export enum ProposalStatus {
-  DRAFT = 'DRAFT',
-  VOTING = 'VOTING',
-  PASSED = 'PASSED',
-  FAILED = 'FAILED',
-  EXECUTING = 'EXECUTING',
-  COMPLETED = 'COMPLETED',
-}
+// ProposalStatus is the Prisma-generated enum — import from @prisma/client, not here.
 
 export enum VoteOption {
   YES = 'YES',

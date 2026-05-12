@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { CheckCircle, XCircle, Clock, Vote, FileText, ChevronDown, ChevronUp } from "lucide-react"
+import { CheckCircle, XCircle, Clock, Vote, FileText, ChevronDown, ChevronUp, Play, Ban, Loader, PackageCheck } from "lucide-react"
 import type { ProposalStatus } from "@/lib/api"
 import { governanceApi, auditApi, type ProposalDto } from "@/lib/api"
 import { formatRelativeTime, formatDate } from "@/lib/utils"
@@ -19,10 +19,11 @@ const STATUS_COLORS: Record<string, string> = {
   PENDING_REVIEW: "bg-yellow-100 text-yellow-800",
   APPROVED_FOR_VOTING: "bg-blue-100 text-blue-800",
   VOTING: "bg-purple-100 text-purple-800",
-  PASSED: "bg-green-100 text-green-700",
-  FAILED: "bg-red-100 text-red-700",
+  APPROVED: "bg-green-100 text-green-700",
   REJECTED: "bg-red-200 text-red-900",
-  IMPLEMENTED: "bg-teal-100 text-teal-800",
+  CANCELLED: "bg-gray-200 text-gray-600",
+  EXECUTING: "bg-amber-100 text-amber-800",
+  COMPLETED: "bg-teal-100 text-teal-800",
 }
 
 function statusLabel(s: string) {
@@ -31,20 +32,46 @@ function statusLabel(s: string) {
 
 // ── Review row ────────────────────────────────────────────────────────────────
 
-function ProposalReviewRow({ proposal }: { proposal: ProposalDto }) {
+export function ProposalReviewRow({ proposal }: { proposal: ProposalDto }) {
   const [expanded, setExpanded] = useState(false)
   const [note, setNote] = useState("")
+  const [progressNote, setProgressNote] = useState("")
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const qc = useQueryClient()
 
-  const { mutate: review, isPending } = useMutation({
+  function invalidateAll() {
+    qc.invalidateQueries({ queryKey: ["admin", "proposals"] })
+    qc.invalidateQueries({ queryKey: ["admin", "needs-action"] })
+    qc.invalidateQueries({ queryKey: ["admin", "audit-governance"] })
+  }
+
+  const { mutate: review, isPending: isReviewing } = useMutation({
     mutationFn: (decision: "APPROVE" | "REJECT") =>
       governanceApi.reviewProposal(proposal.id, decision, note || undefined),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["admin", "proposals"] })
-      setNote("")
-      setExpanded(false)
-    },
+    onSuccess: () => { invalidateAll(); setNote(""); setErrorMsg(null); setExpanded(false) },
+    onError: (err: unknown) => setErrorMsg(err instanceof Error ? err.message : "Action failed"),
   })
+
+  const { mutate: startVote, isPending: isStartingVote } = useMutation({
+    mutationFn: () => governanceApi.startVoting(proposal.id),
+    onSuccess: () => { invalidateAll(); setErrorMsg(null); setExpanded(false) },
+    onError: (err: unknown) => setErrorMsg(err instanceof Error ? err.message : "Action failed"),
+  })
+
+  const { mutate: cancel, isPending: isCancelling } = useMutation({
+    mutationFn: () => governanceApi.cancelProposal(proposal.id),
+    onSuccess: () => { invalidateAll(); setErrorMsg(null); setExpanded(false) },
+    onError: (err: unknown) => setErrorMsg(err instanceof Error ? err.message : "Action failed"),
+  })
+
+  const { mutate: progress, isPending: isProgressing } = useMutation({
+    mutationFn: (status: "EXECUTING" | "COMPLETED") =>
+      governanceApi.updateProgress(proposal.id, status, progressNote || undefined),
+    onSuccess: () => { invalidateAll(); setProgressNote(""); setErrorMsg(null); setExpanded(false) },
+    onError: (err: unknown) => setErrorMsg(err instanceof Error ? err.message : "Action failed"),
+  })
+
+  const anyPending = isReviewing || isStartingVote || isCancelling || isProgressing
 
   return (
     <div className="border rounded-lg overflow-hidden">
@@ -57,6 +84,21 @@ function ProposalReviewRow({ proposal }: { proposal: ProposalDto }) {
           <div className="font-semibold text-sm">{proposal.title}</div>
           <div className="text-xs text-slate-500 mt-0.5">
             {proposal.creator?.name ?? "Unknown"} · {proposal.group?.name ?? "—"} · {formatRelativeTime(proposal.createdAt)}
+          </div>
+          <div className="flex gap-2 mt-1 flex-wrap">
+            <span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
+              {proposal.proposalScope === "COMMUNITY" ? "Community-wide" : "Group"} scope
+            </span>
+            {proposal.group?.locationScope && (
+              <span className="text-xs px-1.5 py-0.5 rounded bg-blue-50 text-blue-700">
+                {proposal.group.locationScope.charAt(0) + proposal.group.locationScope.slice(1).toLowerCase()} level
+              </span>
+            )}
+            {proposal.group?.voluntaryType && (
+              <span className="text-xs px-1.5 py-0.5 rounded bg-purple-50 text-purple-700">
+                Voluntary
+              </span>
+            )}
           </div>
           {proposal.budget && (
             <div className="text-xs text-amber-700 mt-0.5">
@@ -77,8 +119,14 @@ function ProposalReviewRow({ proposal }: { proposal: ProposalDto }) {
         <div className="border-t p-4 bg-slate-50 space-y-4">
           <p className="text-sm text-slate-700 whitespace-pre-line">{proposal.description}</p>
 
-          {proposal.status === "PENDING_REVIEW" && (
+          {/* ── Stage 1 / Stage 2 review actions ── */}
+          {(proposal.status === "PENDING_REVIEW" || proposal.status === "DRAFT") && (
             <div className="space-y-3">
+              {proposal.status === "DRAFT" && (
+                <p className="text-xs text-slate-500 bg-slate-100 rounded p-2">
+                  Forwarding moves this into the admin review queue. Rejecting closes it immediately.
+                </p>
+              )}
               <Textarea
                 placeholder="Review note (optional)…"
                 value={note}
@@ -86,26 +134,71 @@ function ProposalReviewRow({ proposal }: { proposal: ProposalDto }) {
                 rows={2}
                 className="text-sm"
               />
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  className="bg-green-600 hover:bg-green-700 text-white"
-                  disabled={isPending}
-                  onClick={() => review("APPROVE")}
-                >
+              <div className="flex gap-2 flex-wrap">
+                <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white"
+                  disabled={anyPending} onClick={() => review("APPROVE")}>
                   <CheckCircle className="h-4 w-4 mr-1" />
-                  Approve
+                  {proposal.status === "DRAFT" ? "Forward for Review" : "Approve"}
                 </Button>
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  disabled={isPending}
-                  onClick={() => review("REJECT")}
-                >
+                <Button size="sm" variant="destructive" disabled={anyPending} onClick={() => review("REJECT")}>
                   <XCircle className="h-4 w-4 mr-1" />
                   Reject
                 </Button>
+                {proposal.status === "DRAFT" && (
+                  <Button size="sm" variant="outline" disabled={anyPending} onClick={() => cancel()}>
+                    <Ban className="h-4 w-4 mr-1" />
+                    Cancel
+                  </Button>
+                )}
               </div>
+            </div>
+          )}
+
+          {/* ── Start voting ── */}
+          {proposal.status === "APPROVED_FOR_VOTING" && (
+            <div className="space-y-2">
+              <p className="text-xs text-blue-700 bg-blue-50 rounded p-2">
+                This proposal is approved. Open the voting period to let members cast their votes.
+              </p>
+              <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white"
+                disabled={anyPending} onClick={() => startVote()}>
+                <Play className="h-4 w-4 mr-1" />
+                Open Voting
+              </Button>
+            </div>
+          )}
+
+          {/* ── Progress tracking ── */}
+          {(proposal.status === "APPROVED" || proposal.status === "EXECUTING") && (
+            <div className="space-y-3">
+              <p className="text-xs text-slate-500 bg-slate-100 rounded p-2">
+                {proposal.status === "APPROVED"
+                  ? "The proposal passed. Mark it as executing once implementation begins."
+                  : "Mark this proposal as completed once all work is done."}
+              </p>
+              <Textarea
+                placeholder="Progress note (optional)…"
+                value={progressNote}
+                onChange={(e) => setProgressNote(e.target.value)}
+                rows={2}
+                className="text-sm"
+              />
+              <Button
+                size="sm"
+                className={proposal.status === "APPROVED" ? "bg-amber-600 hover:bg-amber-700 text-white" : "bg-teal-600 hover:bg-teal-700 text-white"}
+                disabled={anyPending}
+                onClick={() => progress(proposal.status === "APPROVED" ? "EXECUTING" : "COMPLETED")}
+              >
+                {proposal.status === "APPROVED"
+                  ? <><Loader className="h-4 w-4 mr-1" />Mark as Executing</>
+                  : <><PackageCheck className="h-4 w-4 mr-1" />Mark as Completed</>}
+              </Button>
+            </div>
+          )}
+
+          {errorMsg && (
+            <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2">
+              {errorMsg}
             </div>
           )}
 
@@ -176,9 +269,11 @@ export function GovernanceReview() {
                 <SelectItem value="PENDING_REVIEW">Pending Review</SelectItem>
                 <SelectItem value="APPROVED_FOR_VOTING">Approved for Voting</SelectItem>
                 <SelectItem value="VOTING">Voting Open</SelectItem>
-                <SelectItem value="PASSED">Passed</SelectItem>
-                <SelectItem value="FAILED">Failed</SelectItem>
+                <SelectItem value="APPROVED">Approved</SelectItem>
+                <SelectItem value="EXECUTING">Executing</SelectItem>
+                <SelectItem value="COMPLETED">Completed</SelectItem>
                 <SelectItem value="REJECTED">Rejected</SelectItem>
+                <SelectItem value="CANCELLED">Cancelled</SelectItem>
                 <SelectItem value="DRAFT">Draft</SelectItem>
               </SelectContent>
             </Select>

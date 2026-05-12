@@ -76,6 +76,13 @@ import {
   processTallyResults,
 } from './modules/elections/jobs/election.jobs.js';
 
+import {
+  TALLY_PROPOSALS_JOB,
+  EXPIRE_PROPOSAL_REVIEW_JOB,
+  processTallyProposals,
+  processExpireProposalReview,
+} from './modules/governance/jobs/proposal.jobs.js';
+
 // ─────────────────────────────────────────────
 // Graceful shutdown & error handling
 // ─────────────────────────────────────────────
@@ -298,6 +305,20 @@ const governanceWorker = createWorker('governance', async (job) => {
         schedule: { type: 'crontab', value: '25 0 * * *' },
         checkinMargin: 5,
         maxRuntime: 15,
+        timezone: 'Africa/Nairobi',
+      });
+    } else if (job.name === TALLY_PROPOSALS_JOB) {
+      await Sentry.withMonitor(TALLY_PROPOSALS_JOB, () => processTallyProposals(), {
+        schedule: { type: 'crontab', value: '30 0 * * *' },
+        checkinMargin: 5,
+        maxRuntime: 15,
+        timezone: 'Africa/Nairobi',
+      });
+    } else if (job.name === EXPIRE_PROPOSAL_REVIEW_JOB) {
+      await Sentry.withMonitor(EXPIRE_PROPOSAL_REVIEW_JOB, () => processExpireProposalReview(), {
+        schedule: { type: 'crontab', value: '35 0 * * *' },
+        checkinMargin: 5,
+        maxRuntime: 10,
         timezone: 'Africa/Nairobi',
       });
     } else {

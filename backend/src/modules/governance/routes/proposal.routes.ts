@@ -100,4 +100,21 @@ router.patch(
   asyncHandler(ProposalController.recordOutcome)
 );
 
+router.post(
+  '/:proposalId/cancel',
+  asyncHandler(ProposalController.cancelProposal)
+);
+
+router.patch(
+  '/:proposalId/progress',
+  validateRequest({
+    schema: z.object({
+      status: z.enum(['EXECUTING', 'COMPLETED']),
+      note: z.string().max(2000).optional(),
+    }),
+    target: 'body',
+  }),
+  asyncHandler(ProposalController.updateProgress)
+);
+
 export default router;

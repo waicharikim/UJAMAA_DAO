@@ -178,12 +178,17 @@ class ProposalService {
           AuditAction.PROPOSAL_STATUS_CHANGED,
           'Proposal',
           proposalId,
-          {
-            newStatus: ProposalStatus.REJECTED,
-            stage: 1,
-            title: proposal.title,
-          }
+          { newStatus: ProposalStatus.REJECTED, stage: 1, title: proposal.title }
         );
+        if (proposal.creatorId) {
+          notificationService.send({
+            userId: proposal.creatorId,
+            type: NotificationType.PROPOSAL_REJECTED,
+            title: 'Proposal rejected',
+            message: `"${proposal.title}" was rejected at stage 1.${dto.note ? ` Note: ${dto.note}` : ''}`,
+            data: { proposalId },
+          }).catch(() => {});
+        }
         return updated;
       }
 
@@ -200,12 +205,17 @@ class ProposalService {
           AuditAction.PROPOSAL_STATUS_CHANGED,
           'Proposal',
           proposalId,
-          {
-            newStatus: ProposalStatus.APPROVED_FOR_VOTING,
-            stage: 1,
-            title: proposal.title,
-          }
+          { newStatus: ProposalStatus.APPROVED_FOR_VOTING, stage: 1, title: proposal.title }
         );
+        if (proposal.creatorId) {
+          notificationService.send({
+            userId: proposal.creatorId,
+            type: NotificationType.PROPOSAL_APPROVED,
+            title: 'Proposal approved for voting',
+            message: `"${proposal.title}" is approved — you can now open voting.`,
+            data: { proposalId },
+          }).catch(() => {});
+        }
         return updated;
       }
 
@@ -230,12 +240,17 @@ class ProposalService {
         AuditAction.PROPOSAL_STATUS_CHANGED,
         'Proposal',
         proposalId,
-        {
-          newStatus: ProposalStatus.PENDING_REVIEW,
-          stage: 1,
-          title: proposal.title,
-        }
+        { newStatus: ProposalStatus.PENDING_REVIEW, stage: 1, title: proposal.title }
       );
+      if (proposal.creatorId) {
+        notificationService.send({
+          userId: proposal.creatorId,
+          type: NotificationType.PROPOSAL_SUBMITTED,
+          title: 'Proposal forwarded for review',
+          message: `"${proposal.title}" has been forwarded to the location administrator for review.`,
+          data: { proposalId },
+        }).catch(() => {});
+      }
       return forwarded;
     }
 
@@ -266,6 +281,18 @@ class ProposalService {
         proposalId,
         { newStatus, stage: 2, title: proposal.title }
       );
+      if (proposal.creatorId) {
+        const approved = newStatus === ProposalStatus.APPROVED_FOR_VOTING;
+        notificationService.send({
+          userId: proposal.creatorId,
+          type: approved ? NotificationType.PROPOSAL_APPROVED : NotificationType.PROPOSAL_REJECTED,
+          title: approved ? 'Proposal approved for voting' : 'Proposal rejected',
+          message: approved
+            ? `"${proposal.title}" has been approved by the administrator — you can now open voting.`
+            : `"${proposal.title}" was rejected by the administrator.${dto.note ? ` Note: ${dto.note}` : ''}`,
+          data: { proposalId },
+        }).catch(() => {});
+      }
       return updated;
     }
 
@@ -361,20 +388,55 @@ class ProposalService {
 
   /**
    * Cast vote — 5 PR + IP weight
+   * COMMUNITY-scoped proposals: geographic eligibility check instead of group membership.
+   * Abstain (null vote) counts toward quorum but not YES/NO tally.
    */
-  async castVote(userId: string, dto: CastVoteDto) {
+  async castVote(
+    userId: string,
+    dto: CastVoteDto,
+    userPrimaryWardId?: string
+  ) {
     const proposal = await prisma.proposal.findUnique({
       where: { id: dto.proposalId },
-      include: { group: { include: { members: { where: { userId } } } } },
+      include: {
+        group: {
+          include: { members: { where: { userId, active: true } } },
+        },
+      },
     });
 
     if (!proposal) throw ApiError.notFound('Proposal');
     if (proposal.status !== ProposalStatus.VOTING)
       throw ApiError.badRequest('Voting not active');
-    if (!proposal.group || !proposal.group.members.length)
-      throw ApiError.forbidden('Not a member');
 
     const groupId = proposal.groupId!;
+    const isCommunityScope = proposal.proposalScope === ProposalScope.COMMUNITY;
+
+    if (isCommunityScope) {
+      // Community proposals: voter must be in the geographic area
+      if (!userPrimaryWardId)
+        throw ApiError.forbidden('You must have a primary ward set to vote on community proposals');
+
+      const group = proposal.group;
+      if (group?.wardId) {
+        if (userPrimaryWardId !== group.wardId)
+          throw ApiError.forbidden('You must be a ward resident to vote on this proposal');
+      } else if (group?.constituencyId || group?.countyId) {
+        const userWard = await prisma.ward.findUnique({
+          where: { id: userPrimaryWardId },
+          select: { constituencyId: true, countyId: true },
+        });
+        if (group.constituencyId && userWard?.constituencyId !== group.constituencyId)
+          throw ApiError.forbidden('You must be a constituency resident to vote on this proposal');
+        if (group.countyId && userWard?.countyId !== group.countyId)
+          throw ApiError.forbidden('You must be a county resident to vote on this proposal');
+      }
+      // NATIONAL scope: any user can vote
+    } else {
+      // GROUP scope: must be a group member
+      if (!proposal.group || !proposal.group.members.length)
+        throw ApiError.forbidden('Not a member of this group');
+    }
 
     const existing = await prisma.groupMemberVote.findUnique({
       where: {
@@ -402,12 +464,18 @@ class ProposalService {
       })
       .catch(() => {});
 
+    // null = ABSTAIN, true = YES, false = NO
+    const voteValue =
+      dto.option === VoteOption.YES ? true
+      : dto.option === VoteOption.NO ? false
+      : null;
+
     await prisma.groupMemberVote.create({
       data: {
         groupId,
         memberId: userId,
         proposalId: dto.proposalId,
-        vote: dto.option === VoteOption.YES,
+        vote: voteValue,
         voteWeight: weight,
       },
     });
@@ -450,18 +518,21 @@ class ProposalService {
     if (proposal.status !== ProposalStatus.VOTING) return;
 
     const totalEligible = await prisma.groupMember.count({
-      where: { groupId: proposal.groupId ?? undefined },
+      where: { groupId: proposal.groupId ?? undefined, active: true },
     });
-    const totalVoteWeight = proposal.votes.reduce(
-      (sum, v) => sum + v.voteWeight,
-      0
-    );
-    const yesWeight = proposal.votes
+
+    const voterCount = proposal.votes.length;
+    // Abstain (vote === null) counts toward quorum but not YES/NO tally
+    const decidingVotes = proposal.votes.filter((v) => v.vote !== null);
+    const yesWeight = decidingVotes
       .filter((v) => v.vote === true)
       .reduce((sum, v) => sum + v.voteWeight, 0);
+    const decidingWeight = decidingVotes.reduce((sum, v) => sum + v.voteWeight, 0);
 
-    const quorum = totalVoteWeight / totalEligible >= 0.4;
-    const approved = totalVoteWeight > 0 && yesWeight / totalVoteWeight >= 0.5;
+    // Quorum: at least 40% of eligible members must have voted (including abstains)
+    const quorum = totalEligible > 0 && voterCount / totalEligible >= 0.4;
+    // Approval: majority of non-abstain weighted votes must be YES
+    const approved = decidingWeight > 0 && yesWeight / decidingWeight >= 0.5;
 
     const newStatus =
       quorum && approved ? ProposalStatus.APPROVED : ProposalStatus.REJECTED;
@@ -735,6 +806,100 @@ class ProposalService {
       data: { outcome, outcomeRecordedAt: new Date() },
       select: { id: true, outcome: true, outcomeRecordedAt: true },
     });
+  }
+
+  /**
+   * Cancel a proposal — only the creator, only while DRAFT or PENDING_REVIEW.
+   */
+  async cancelProposal(userId: string, proposalId: string) {
+    const proposal = await prisma.proposal.findUnique({
+      where: { id: proposalId },
+      select: { creatorId: true, status: true, title: true },
+    });
+    if (!proposal) throw ApiError.notFound('Proposal');
+    if (proposal.creatorId !== userId)
+      throw ApiError.forbidden('Only the proposal creator can cancel it');
+    if (!['DRAFT', 'PENDING_REVIEW'].includes(proposal.status as string))
+      throw ApiError.badRequest(
+        'Proposals can only be cancelled while in Draft or Pending Review'
+      );
+
+    const updated = await prisma.proposal.update({
+      where: { id: proposalId },
+      data: { status: ProposalStatus.CANCELLED },
+    });
+    await auditService.log(
+      userId,
+      AuditAction.PROPOSAL_STATUS_CHANGED,
+      'Proposal',
+      proposalId,
+      { newStatus: ProposalStatus.CANCELLED, title: proposal.title }
+    );
+    return updated;
+  }
+
+  /**
+   * Advance an approved proposal through EXECUTING → COMPLETED.
+   * Only the creator or group leader can call this.
+   */
+  async updateProgress(
+    userId: string,
+    proposalId: string,
+    dto: { status: 'EXECUTING' | 'COMPLETED'; note?: string }
+  ) {
+    const proposal = await prisma.proposal.findUnique({
+      where: { id: proposalId },
+      select: { creatorId: true, status: true, groupId: true, title: true },
+    });
+    if (!proposal) throw ApiError.notFound('Proposal');
+
+    const validTransitions: Record<string, string[]> = {
+      APPROVED: ['EXECUTING'],
+      EXECUTING: ['COMPLETED'],
+    };
+    if (!validTransitions[proposal.status as string]?.includes(dto.status))
+      throw ApiError.badRequest(
+        `Cannot transition from ${proposal.status} to ${dto.status}`
+      );
+
+    const isCreator = proposal.creatorId === userId;
+    const isLeader = proposal.groupId
+      ? !!(await prisma.groupMember.findFirst({
+          where: { userId, groupId: proposal.groupId, role: 'LEADER', active: true },
+        }))
+      : false;
+    if (!isCreator && !isLeader)
+      throw ApiError.forbidden(
+        'Only the proposal creator or group leader can update progress'
+      );
+
+    const newStatus = dto.status as ProposalStatus;
+    const updated = await prisma.proposal.update({
+      where: { id: proposalId },
+      data: {
+        status: newStatus,
+        ...(dto.note ? { outcome: dto.note } : {}),
+      },
+    });
+    await auditService.log(
+      userId,
+      AuditAction.PROPOSAL_STATUS_CHANGED,
+      'Proposal',
+      proposalId,
+      { newStatus, title: proposal.title }
+    );
+    if (proposal.creatorId) {
+      notificationService.send({
+        userId: proposal.creatorId,
+        type: NotificationType.PROPOSAL_APPROVED,
+        title: newStatus === 'EXECUTING' ? 'Proposal execution started' : 'Proposal completed',
+        message: newStatus === 'EXECUTING'
+          ? `"${proposal.title}" has been marked as in progress.`
+          : `"${proposal.title}" has been marked as completed.`,
+        data: { proposalId },
+      }).catch(() => {});
+    }
+    return updated;
   }
 }
 
