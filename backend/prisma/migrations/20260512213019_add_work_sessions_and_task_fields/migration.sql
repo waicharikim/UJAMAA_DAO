@@ -1,5 +1,18 @@
+/*
+  Warnings:
+
+  - Made the column `vote` on table `GroupMemberVote` required. This step will fail if there are existing NULL values in that column.
+
+*/
 -- CreateEnum
 CREATE TYPE "WorkSessionStatus" AS ENUM ('OPEN', 'APPROVED', 'FLAGGED');
+
+-- AlterTable
+ALTER TABLE "GroupMemberVote" ALTER COLUMN "vote" SET NOT NULL;
+
+-- AlterTable
+ALTER TABLE "Task" ADD COLUMN     "maxAssignees" INTEGER NOT NULL DEFAULT 1,
+ADD COLUMN     "skillCategory" TEXT;
 
 -- CreateTable
 CREATE TABLE "WorkSession" (
@@ -10,8 +23,8 @@ CREATE TABLE "WorkSession" (
     "qrSecret" TEXT NOT NULL,
     "expiresAt" TIMESTAMP(3) NOT NULL,
     "status" "WorkSessionStatus" NOT NULL DEFAULT 'OPEN',
-    "closeJobId" TEXT,
     "closedAt" TIMESTAMP(3),
+    "closeJobId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -42,9 +55,6 @@ CREATE INDEX "WorkSession_milestoneId_idx" ON "WorkSession"("milestoneId");
 CREATE INDEX "WorkSession_projectId_idx" ON "WorkSession"("projectId");
 
 -- CreateIndex
-CREATE INDEX "WorkSession_qrSecret_idx" ON "WorkSession"("qrSecret");
-
--- CreateIndex
 CREATE INDEX "WorkSession_status_idx" ON "WorkSession"("status");
 
 -- CreateIndex
@@ -54,13 +64,10 @@ CREATE INDEX "WorkPresence_sessionId_idx" ON "WorkPresence"("sessionId");
 CREATE INDEX "WorkPresence_userId_idx" ON "WorkPresence"("userId");
 
 -- CreateIndex
-CREATE INDEX "WorkPresence_attestedById_idx" ON "WorkPresence"("attestedById");
-
--- CreateIndex
 CREATE UNIQUE INDEX "WorkPresence_sessionId_userId_key" ON "WorkPresence"("sessionId", "userId");
 
 -- AddForeignKey
-ALTER TABLE "WorkSession" ADD CONSTRAINT "WorkSession_milestoneId_fkey" FOREIGN KEY ("milestoneId") REFERENCES "Milestone"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "WorkSession" ADD CONSTRAINT "WorkSession_milestoneId_fkey" FOREIGN KEY ("milestoneId") REFERENCES "Milestone"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "WorkSession" ADD CONSTRAINT "WorkSession_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE CASCADE ON UPDATE CASCADE;

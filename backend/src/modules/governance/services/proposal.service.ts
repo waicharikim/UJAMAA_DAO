@@ -474,7 +474,7 @@ class ProposalService {
       .catch(() => {});
 
     // null = ABSTAIN, true = YES, false = NO
-    const voteValue =
+    const voteValue: boolean | null =
       dto.option === VoteOption.YES ? true
       : dto.option === VoteOption.NO ? false
       : null;

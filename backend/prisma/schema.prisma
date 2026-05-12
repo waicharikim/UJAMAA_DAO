@@ -261,6 +261,9 @@ model User {
   assignedVerifications     MilestoneVerifier[]    @relation("MilestoneVerifier_AssignedBy")
   submittedMilestones       Milestone[]            @relation("MilestoneSubmitter")
   verifiedMilestones        Milestone[]            @relation("MilestoneVerifier_VerifiedBy")
+  createdWorkSessions       WorkSession[]          @relation("WorkSessionCreator")
+  workPresences             WorkPresence[]         @relation("WorkPresenceUser")
+  attestedPresences         WorkPresence[]         @relation("WorkPresenceAttestor")
 
   // ---- Economy module ----
   duesPayments              DuesPayment[]
@@ -1783,7 +1786,7 @@ model GroupMemberVote {
  groupId    String   @db.Uuid
  memberId   String   @db.Uuid
  proposalId String   @db.Uuid
- vote       Boolean
+ vote       Boolean?
  voteWeight Int      @default(1)
  comment    String?
  createdAt  DateTime @default(now())
@@ -1937,6 +1940,11 @@ enum TaskStatus {
   BLOCKED
 }
 
+enum WorkSessionStatus {
+  OPEN
+  APPROVED
+  FLAGGED
+}
 
 model Project {
   id           String        @id @default(uuid()) @db.Uuid
@@ -1962,6 +1970,7 @@ model Project {
   verifiers          MilestoneVerifier[]
   walletTransactions WalletTransaction[] @relation("ProjectTransactions")
   workLogs           PhysicalWorkLog[]
+  workSessions       WorkSession[]
   comments           Comment[]           @relation("ProjectComments") // NEW
 
   createdAt DateTime @default(now())
@@ -2005,10 +2014,11 @@ model Milestone {
   submittedByUser   User?               @relation("MilestoneSubmitter", fields: [submittedById], references: [id])
   verifiedByUser    User?               @relation("MilestoneVerifier_VerifiedBy", fields: [verifiedById], references: [id])
 
-  tasks     Task[]
-  verifiers MilestoneVerifier[]
-  workLogs  PhysicalWorkLog[]
-  comments  Comment[]           @relation("MilestoneComments") // NEW
+  tasks        Task[]
+  verifiers    MilestoneVerifier[]
+  workLogs     PhysicalWorkLog[]
+  workSessions WorkSession[]
+  comments     Comment[]           @relation("MilestoneComments") // NEW
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2041,6 +2051,8 @@ model Task {
   title         String
   description   String?
   status        TaskStatus     @default(TODO)
+  skillCategory String?
+  maxAssignees  Int            @default(1)
   dueDate       DateTime?
 
   milestone     Milestone      @relation(fields: [milestoneId], references: [id])
@@ -2077,6 +2089,49 @@ model MilestoneVerifier {
   @@index([status])
 }
 
+model WorkSession {
+  id          String            @id @default(uuid()) @db.Uuid
+  milestoneId String            @db.Uuid
+  projectId   String            @db.Uuid
+  createdById String            @db.Uuid
+  qrSecret    String            @unique
+  expiresAt   DateTime
+  status      WorkSessionStatus @default(OPEN)
+  closedAt    DateTime?
+  closeJobId  String?
+
+  milestone   Milestone         @relation(fields: [milestoneId], references: [id])
+  project     Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy   User              @relation("WorkSessionCreator", fields: [createdById], references: [id])
+  presences   WorkPresence[]
+
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([milestoneId])
+  @@index([projectId])
+  @@index([status])
+}
+
+model WorkPresence {
+  id          String       @id @default(uuid()) @db.Uuid
+  sessionId   String       @db.Uuid
+  userId      String       @db.Uuid
+  attestedById String?     @db.Uuid
+  depth       Int          @default(0)
+  ipAwarded   Int          @default(0)
+  awardedAt   DateTime?
+
+  session     WorkSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user        User         @relation("WorkPresenceUser", fields: [userId], references: [id])
+  attestedBy  User?        @relation("WorkPresenceAttestor", fields: [attestedById], references: [id])
+
+  createdAt   DateTime     @default(now())
+
+  @@unique([sessionId, userId])
+  @@index([sessionId])
+  @@index([userId])
+}
 
 
 // ============================================================================
