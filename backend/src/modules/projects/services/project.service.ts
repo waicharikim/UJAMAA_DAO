@@ -117,31 +117,7 @@ export class ProjectService {
       { proposalId: dto.proposalId, title: project.title }
     );
 
-    // Debit group treasury if proposal had a funding amount committed
-    if (
-      proposal.groupFundingAmount &&
-      Number(proposal.groupFundingAmount) > 0 &&
-      proposal.groupId
-    ) {
-      try {
-        await treasuryService.withdraw(
-          proposal.groupId,
-          {
-            amount: Number(proposal.groupFundingAmount),
-            description: `Project funding: ${proposal.title}`,
-            projectId: project.id,
-            referenceType: 'PROJECT_FUNDING',
-          },
-          userId
-        );
-      } catch (err) {
-        logger.warn(
-          { groupId: proposal.groupId, projectId: project.id, err },
-          '[PROJECT] Treasury debit failed — project still created'
-        );
-      }
-    }
-
+    await this.tryDebitGroupTreasury(proposal, project.id, userId);
     return project;
   }
 
@@ -260,29 +236,10 @@ export class ProjectService {
       }
     );
 
-    if (dto.approved && milestone.submittedById) {
-      await participationRightsService
-        .award(
-          milestone.submittedById,
-          DEFAULT_REWARDS.PR,
-          ParticipationRightsReason.MILESTONE_VERIFIED,
-          { projectId: milestone.projectId, milestoneId: dto.milestoneId }
-        )
-        .catch((err) =>
-          logger.warn({ err }, 'PR award failed after milestone verify')
-        );
-
-      await globalImpactPointService
-        .award(
-          milestone.submittedById,
-          DEFAULT_REWARDS.IP,
-          ImpactPointReason.MILESTONE_ACHIEVED,
-          { projectId: milestone.projectId, milestoneId: dto.milestoneId }
-        )
-        .catch((err) =>
-          logger.warn({ err }, 'IP award failed after milestone verify')
-        );
-    }
+    if (dto.approved && milestone.submittedById)
+      await this.awardMilestoneVerificationRewards(
+        milestone.submittedById, milestone.projectId, dto.milestoneId
+      );
 
     return { status: newStatus };
   }
@@ -391,40 +348,8 @@ export class ProjectService {
       (m) => m.status === MilestoneStatus.VERIFIED
     ).length;
 
-    const milestones: MilestoneResponseDto[] = project.milestones.map((m) => ({
-      id: m.id,
-      projectId: m.projectId,
-      title: m.title,
-      description: m.description,
-      status: m.status as MilestoneStatus,
-      dueDate: m.dueDate?.toISOString() ?? null,
-      orderIndex: m.orderIndex,
-      proposalMilestoneId: m.proposalMilestoneId,
-      tasks:
-        (m as any).tasks?.map((t: any) => ({
-          id: t.id,
-          projectId: t.projectId,
-          milestoneId: t.milestoneId,
-          title: t.title,
-          description: t.description,
-          status: t.status,
-          skillCategory: t.skillCategory,
-          maxAssignees: t.maxAssignees,
-          dueDate: t.dueDate?.toISOString() ?? null,
-          assignedTo: t.assignedTo,
-          createdAt: t.createdAt.toISOString(),
-          updatedAt: t.updatedAt.toISOString(),
-        })) ?? [],
-      createdAt: m.createdAt.toISOString(),
-      updatedAt: m.updatedAt.toISOString(),
-    }));
-
-    const members: ProjectMemberResponseDto[] = project.members.map((m) => ({
-      userId: m.userId,
-      role: m.role,
-      joinedAt: m.joinedAt.toISOString(),
-      user: m.user,
-    }));
+    const milestones = this.mapMilestones(project.milestones);
+    const members = this.mapProjectMembers(project.members);
 
     const base: ProjectDto = {
       id: project.id,
@@ -630,15 +555,7 @@ export class ProjectService {
         },
       });
 
-      await globalImpactPointService
-        .award(userId, 5, ImpactPointReason.PROJECT_JOINED, { projectId })
-        .catch(() => {});
-
-      await auditService
-        .log(userId, AuditAction.PROJECT_CREATED, 'Project', projectId, {
-          action: 'MEMBER_JOINED',
-        })
-        .catch(() => {});
+      await this.awardProjectJoinRewards(userId, projectId);
 
       return {
         projectId: member.projectId,
@@ -732,25 +649,7 @@ export class ProjectService {
       })
       .catch(() => {});
 
-    // On-chain UT burn — mirrors the fiatBackedUt deduction from user's balance
-    if (process.env.NODE_ENV !== 'test') {
-      const contributor = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { walletAddress: true },
-      });
-      if (contributor?.walletAddress) {
-        const utContract = getUtContract();
-        if (utContract) {
-          try {
-            const amountWei = BigInt(dto.amount) * BigInt(10 ** 18);
-            await utContract.burn(contributor.walletAddress, amountWei);
-            logger.info({ userId, projectId, amount: dto.amount }, '[UT] On-chain burn succeeded (contribution)');
-          } catch (err) {
-            logger.warn({ userId, err }, '[UT] On-chain burn failed — off-chain record intact');
-          }
-        }
-      }
-    }
+    await this.burnUtOnChain(userId, projectId, dto.amount);
 
     logger.info(
       { userId, projectId, amount: dto.amount },
@@ -934,13 +833,7 @@ export class ProjectService {
         'Milestone must be in progress before claiming tasks'
       );
 
-    if (task.projectId) {
-      const isMember = await prisma.projectMember.findUnique({
-        where: { projectId_userId: { projectId: task.projectId, userId } },
-      });
-      if (!isMember)
-        throw ApiError.forbidden('Join the project before claiming tasks');
-    }
+    await this.assertProjectMember(userId, task.projectId);
 
     await prisma.task.update({
       where: { id: taskId },
@@ -1071,10 +964,7 @@ export class ProjectService {
       include: { _count: { select: { presences: true } } },
     });
     if (!session) throw ApiError.notFound('Work session');
-    if (session.status !== 'OPEN')
-      throw ApiError.badRequest('This work session is no longer open');
-    if (new Date() > session.expiresAt)
-      throw ApiError.badRequest('This QR code has expired');
+    this.assertSessionOpen(session);
 
     try {
       const presence = await prisma.workPresence.create({
@@ -1107,37 +997,9 @@ export class ProjectService {
       where: { id: sessionId },
     });
     if (!session) throw ApiError.notFound('Work session');
-    if (session.status !== 'OPEN')
-      throw ApiError.badRequest('This work session is no longer open');
-    if (new Date() > session.expiresAt)
-      throw ApiError.badRequest('This QR code has expired');
-
-    // Attestor must have their own presence in the session
-    const attestorPresence = await prisma.workPresence.findUnique({
-      where: { sessionId_userId: { sessionId, userId: attestorId } },
-    });
-    if (!attestorPresence)
-      throw ApiError.forbidden(
-        'You must be checked in to this session before attesting others'
-      );
-
-    // Max 2 attestations out per person
-    const attestationsUsed = await prisma.workPresence.count({
-      where: { sessionId, attestedById: attestorId },
-    });
-    if (attestationsUsed >= 2)
-      throw ApiError.badRequest(
-        'You have already used both of your attestation slots'
-      );
-
-    // Target user must exist
-    const target = await prisma.user.findUnique({
-      where: { id: targetUserId },
-      select: { id: true },
-    });
-    if (!target) throw ApiError.notFound('Target user');
-    if (targetUserId === attestorId)
-      throw ApiError.badRequest('You cannot attest yourself');
+    this.assertSessionOpen(session);
+    const { attestationsUsed, attestorDepth } = await this.assertCanAttest(attestorId, sessionId);
+    await this.assertValidAttestTarget(targetUserId, attestorId);
 
     try {
       const presence = await prisma.workPresence.create({
@@ -1145,7 +1007,7 @@ export class ProjectService {
           sessionId,
           userId: targetUserId,
           attestedById: attestorId,
-          depth: attestorPresence.depth + 1,
+          depth: attestorDepth + 1,
         },
       });
 
@@ -1157,9 +1019,7 @@ export class ProjectService {
       };
     } catch (err: any) {
       if (err?.code === 'P2002')
-        throw ApiError.conflict(
-          'This person is already checked in to this session'
-        );
+        throw ApiError.conflict('This person is already checked in to this session');
       throw err;
     }
   }
@@ -1265,6 +1125,145 @@ export class ProjectService {
         createdAt: p.createdAt.toISOString(),
       })),
     };
+  }
+
+  private async tryDebitGroupTreasury(
+    proposal: { groupFundingAmount: unknown; groupId: string | null; title: string },
+    projectId: string,
+    userId: string
+  ) {
+    if (!proposal.groupFundingAmount || Number(proposal.groupFundingAmount) <= 0 || !proposal.groupId) return;
+    try {
+      await treasuryService.withdraw(
+        proposal.groupId,
+        {
+          amount: Number(proposal.groupFundingAmount),
+          description: `Project funding: ${proposal.title}`,
+          projectId,
+          referenceType: 'PROJECT_FUNDING',
+        },
+        userId
+      );
+    } catch (err) {
+      logger.warn({ groupId: proposal.groupId, projectId, err }, '[PROJECT] Treasury debit failed — project still created');
+    }
+  }
+
+  private async awardMilestoneVerificationRewards(
+    submittedById: string,
+    projectId: string,
+    milestoneId: string
+  ) {
+    await participationRightsService
+      .award(submittedById, DEFAULT_REWARDS.PR, ParticipationRightsReason.MILESTONE_VERIFIED, { projectId, milestoneId })
+      .catch((err) => logger.warn({ err }, 'PR award failed after milestone verify'));
+    await globalImpactPointService
+      .award(submittedById, DEFAULT_REWARDS.IP, ImpactPointReason.MILESTONE_ACHIEVED, { projectId, milestoneId })
+      .catch((err) => logger.warn({ err }, 'IP award failed after milestone verify'));
+  }
+
+  private mapMilestones(milestones: any[]): MilestoneResponseDto[] {
+    return milestones.map((m) => ({
+      id: m.id,
+      projectId: m.projectId,
+      title: m.title,
+      description: m.description,
+      status: m.status as MilestoneStatus,
+      dueDate: m.dueDate?.toISOString() ?? null,
+      orderIndex: m.orderIndex,
+      proposalMilestoneId: m.proposalMilestoneId,
+      tasks: (m as any).tasks?.map((t: any) => ({
+        id: t.id,
+        projectId: t.projectId,
+        milestoneId: t.milestoneId,
+        title: t.title,
+        description: t.description,
+        status: t.status,
+        skillCategory: t.skillCategory,
+        maxAssignees: t.maxAssignees,
+        dueDate: t.dueDate?.toISOString() ?? null,
+        assignedTo: t.assignedTo,
+        createdAt: t.createdAt.toISOString(),
+        updatedAt: t.updatedAt.toISOString(),
+      })) ?? [],
+      createdAt: m.createdAt.toISOString(),
+      updatedAt: m.updatedAt.toISOString(),
+    }));
+  }
+
+  private mapProjectMembers(members: any[]): ProjectMemberResponseDto[] {
+    return members.map((m) => ({
+      userId: m.userId,
+      role: m.role,
+      joinedAt: m.joinedAt.toISOString(),
+      user: m.user,
+    }));
+  }
+
+  private async awardProjectJoinRewards(userId: string, projectId: string) {
+    await globalImpactPointService
+      .award(userId, 5, ImpactPointReason.PROJECT_JOINED, { projectId })
+      .catch(() => {});
+    await auditService
+      .log(userId, AuditAction.PROJECT_CREATED, 'Project', projectId, { action: 'MEMBER_JOINED' })
+      .catch(() => {});
+  }
+
+  private async burnUtOnChain(userId: string, projectId: string, amount: number) {
+    if (process.env.NODE_ENV === 'test') return;
+    const contributor = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { walletAddress: true },
+    });
+    if (!contributor?.walletAddress) return;
+    const utContract = getUtContract();
+    if (!utContract) return;
+    try {
+      const amountWei = BigInt(amount) * BigInt(10 ** 18);
+      await utContract.burn(contributor.walletAddress, amountWei);
+      logger.info({ userId, projectId, amount }, '[UT] On-chain burn succeeded (contribution)');
+    } catch (err) {
+      logger.warn({ userId, err }, '[UT] On-chain burn failed — off-chain record intact');
+    }
+  }
+
+  private async assertProjectMember(userId: string, projectId: string | null) {
+    if (!projectId) return;
+    const isMember = await prisma.projectMember.findUnique({
+      where: { projectId_userId: { projectId, userId } },
+    });
+    if (!isMember) throw ApiError.forbidden('Join the project before claiming tasks');
+  }
+
+  private assertSessionOpen(session: { status: string; expiresAt: Date }) {
+    if (session.status !== 'OPEN')
+      throw ApiError.badRequest('This work session is no longer open');
+    if (new Date() > session.expiresAt)
+      throw ApiError.badRequest('This QR code has expired');
+  }
+
+  private async assertCanAttest(attestorId: string, sessionId: string) {
+    const attestorPresence = await prisma.workPresence.findUnique({
+      where: { sessionId_userId: { sessionId, userId: attestorId } },
+    });
+    if (!attestorPresence)
+      throw ApiError.forbidden('You must be checked in to this session before attesting others');
+    const attestationsUsed = await prisma.workPresence.count({
+      where: { sessionId, attestedById: attestorId },
+    });
+    if (attestationsUsed >= 2)
+      throw ApiError.badRequest('You have already used both of your attestation slots');
+    return { attestationsUsed, attestorDepth: attestorPresence.depth };
+  }
+
+  private async assertValidAttestTarget(targetUserId: string, attestorId: string) {
+    const target = await prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: { id: true },
+    });
+    if (!target) throw ApiError.notFound('Target user');
+    if (targetUserId === attestorId)
+      throw ApiError.badRequest('You cannot attest yourself');
   }
 
   private mapWorkSession(s: any, presenceCount: number): WorkSessionDto {
