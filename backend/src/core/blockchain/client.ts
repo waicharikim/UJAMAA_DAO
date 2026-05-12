@@ -28,8 +28,8 @@ let utAbi: any[] | null = null;
 function loadAbis(): void {
   if (prAbi && utAbi) return;
   try {
-    const prArtifact = require('../../../../../contracts/out/PrToken.sol/PrToken.json');
-    const utArtifact = require('../../../../../contracts/out/UtToken.sol/UtToken.json');
+    const prArtifact = require('./abis/PrToken.json');
+    const utArtifact = require('./abis/UtToken.json');
     prAbi = prArtifact.abi;
     utAbi = utArtifact.abi;
   } catch (err) {
