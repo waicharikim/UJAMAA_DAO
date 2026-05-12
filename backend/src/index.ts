@@ -81,148 +81,112 @@ function assertStartupRequirements(): void {
   }
 }
 
+function checkEmailConfig(): void {
+  verifyEmailConfig()
+    .then((isConfigured) => {
+      if (isConfigured) {
+        logger.info({ operationType: 'STARTUP' }, 'Email service configured');
+      } else {
+        logger.warn(
+          { operationType: 'STARTUP' },
+          'Email service NOT configured — magic links will not work'
+        );
+      }
+    })
+    .catch((err) => {
+      logger.warn(
+        { operationType: 'STARTUP', error: err.message },
+        'Email config check failed (non-critical)'
+      );
+    });
+}
+
+async function closeRedisConnections(): Promise<void> {
+  const { shutdownRateLimiter } = await import(
+    './core/middleware/rateLimiter.js'
+  );
+  await shutdownRateLimiter();
+
+  const { tokenBlacklistService } = await import(
+    './core/services/token-blacklist.service.js'
+  );
+  await tokenBlacklistService.shutdown();
+
+  const { redisConnection } = await import('./core/queue/index.js');
+  await redisConnection.quit();
+
+  logger.info({ operationType: 'SHUTDOWN' }, 'Redis connections closed');
+}
+
+async function gracefulShutdown(
+  signal: string,
+  server: ReturnType<typeof app.listen>
+): Promise<void> {
+  logger.info(
+    { operationType: 'SHUTDOWN', signal },
+    `${signal} received — initiating graceful shutdown`
+  );
+
+  const forceExitTimeout = setTimeout(() => {
+    logger.error({ operationType: 'SHUTDOWN' }, 'Shutdown timeout — forcing exit');
+    process.exit(1);
+  }, 15000).unref();
+
+  server.close(() => {
+    logger.info({ operationType: 'SHUTDOWN' }, 'HTTP server closed');
+  });
+
+  try {
+    await closeRedisConnections();
+  } catch (err) {
+    logger.warn(
+      { operationType: 'SHUTDOWN', error: String(err) },
+      'Error closing Redis (may not be configured)'
+    );
+  }
+
+  try {
+    await prisma.$disconnect();
+    logger.info({ operationType: 'SHUTDOWN' }, 'Database disconnected');
+  } catch (err) {
+    logger.error(
+      { operationType: 'SHUTDOWN', error: String(err) },
+      'Error disconnecting Prisma'
+    );
+  }
+
+  clearTimeout(forceExitTimeout);
+  logger.info({ operationType: 'SHUTDOWN' }, 'Graceful shutdown complete');
+  process.exit(0);
+}
+
 async function startServer() {
   try {
-    // ==========================================================================
-    // 0. STARTUP ASSERTIONS — fail fast before touching any service
-    // ==========================================================================
-
     assertStartupRequirements();
-
-    // ==========================================================================
-    // 1. WAIT FOR ALL ASYNC SERVICES TO BE READY
-    //    (Redis, event listeners, token blacklist, etc.)
-    // ==========================================================================
 
     logger.info({ operationType: 'STARTUP' }, 'Waiting for async services...');
     await servicesReady;
     logger.info({ operationType: 'STARTUP' }, 'All async services ready');
 
-    // ==========================================================================
-    // 2. VERIFY DATABASE CONNECTION (with retry)
-    // ==========================================================================
-
     logger.info({ operationType: 'STARTUP' }, 'Connecting to database...');
-    await connectDatabase(); // ← Now with retry logic
+    await connectDatabase();
 
-    // ==========================================================================
-    // 3. VERIFY EMAIL CONFIG (non-blocking)
-    // ==========================================================================
-
-    verifyEmailConfig()
-      .then((isConfigured) => {
-        if (isConfigured) {
-          logger.info({ operationType: 'STARTUP' }, 'Email service configured');
-        } else {
-          logger.warn(
-            { operationType: 'STARTUP' },
-            'Email service NOT configured — magic links will not work'
-          );
-        }
-      })
-      .catch((err) => {
-        logger.warn(
-          { operationType: 'STARTUP', error: err.message },
-          'Email config check failed (non-critical)'
-        );
-      });
-
-    // ==========================================================================
-    // 4. START HTTP SERVER
-    // ==========================================================================
+    checkEmailConfig();
 
     const server = app.listen(PORT, () => {
       logger.info(
         {
           operationType: 'SERVER',
-          metadata: {
-            port: PORT,
-            environment: NODE_ENV,
-            nodeVersion: process.version,
-            pid: process.pid, // ← Added for debugging
-          },
+          metadata: { port: PORT, environment: NODE_ENV, nodeVersion: process.version, pid: process.pid },
         },
         `🚀 UjamaaDAO REST API running on http://localhost:${PORT}`
       );
-
-      logger.info(
-        { operationType: 'SERVER' },
-        `📚 API Documentation: http://localhost:${PORT}/api/v1/docs`
-      );
-
-      // Signal readiness for process managers (PM2, systemd)
-      if (process.send) {
-        process.send('ready');
-      }
+      logger.info({ operationType: 'SERVER' }, `📚 API Documentation: http://localhost:${PORT}/api/v1/docs`);
+      if (process.send) process.send('ready');
     });
 
-    // ==========================================================================
-    // 5. GRACEFUL SHUTDOWN LOGIC
-    // ==========================================================================
-
-    const gracefulShutdown = async (signal: string) => {
-      logger.info(
-        { operationType: 'SHUTDOWN', signal },
-        `${signal} received — initiating graceful shutdown`
-      );
-
-      // Force exit after 15 seconds if shutdown hangs
-      const forceExitTimeout = setTimeout(() => {
-        logger.error(
-          { operationType: 'SHUTDOWN' },
-          'Shutdown timeout — forcing exit'
-        );
-        process.exit(1);
-      }, 15000).unref();
-
-      // Stop accepting new connections
-      server.close(() => {
-        logger.info({ operationType: 'SHUTDOWN' }, 'HTTP server closed');
-      });
-
-      // Close Redis connections (rate limiter, token blacklist, BullMQ)
-      try {
-        const { shutdownRateLimiter } = await import(
-          './core/middleware/rateLimiter.js'
-        );
-        await shutdownRateLimiter();
-
-        const { tokenBlacklistService } = await import(
-          './core/services/token-blacklist.service.js'
-        );
-        await tokenBlacklistService.shutdown();
-
-        // Close BullMQ ioredis connection (queue/index.ts)
-        const { redisConnection } = await import('./core/queue/index.js');
-        await redisConnection.quit();
-
-        logger.info({ operationType: 'SHUTDOWN' }, 'Redis connections closed');
-      } catch (err) {
-        logger.warn(
-          { operationType: 'SHUTDOWN', error: String(err) },
-          'Error closing Redis (may not be configured)'
-        );
-      }
-
-      // Disconnect Prisma
-      try {
-        await prisma.$disconnect();
-        logger.info({ operationType: 'SHUTDOWN' }, 'Database disconnected');
-      } catch (err) {
-        logger.error(
-          { operationType: 'SHUTDOWN', error: String(err) },
-          'Error disconnecting Prisma'
-        );
-      }
-
-      clearTimeout(forceExitTimeout);
-      logger.info({ operationType: 'SHUTDOWN' }, 'Graceful shutdown complete');
-      process.exit(0);
-    };
-
-    // Register shutdown handlers
-    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM', server));
+    process.on('SIGINT', () => gracefulShutdown('SIGINT', server));
   } catch (error) {
     logger.error(
       {
