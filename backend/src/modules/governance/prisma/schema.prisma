@@ -157,7 +157,7 @@ model GroupMemberVote {
  groupId    String   @db.Uuid
  memberId   String   @db.Uuid
  proposalId String   @db.Uuid
- vote       Boolean
+ vote       Boolean?
  voteWeight Int      @default(1)
  comment    String?
  createdAt  DateTime @default(now())

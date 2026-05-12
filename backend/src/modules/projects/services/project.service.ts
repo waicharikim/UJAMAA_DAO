@@ -461,66 +461,9 @@ export class ProjectService {
       );
     }
 
-    const now = new Date();
-
-    if (dto.approved) {
-      const totalIPEarned = workLog.baseIP;
-
-      const updated = await prisma.physicalWorkLog.update({
-        where: { id: dto.workLogId },
-        data: { verifiedAt: now, totalIPEarned },
-        include: {
-          user: { select: { id: true, name: true, avatarUrl: true } },
-        },
-      });
-
-      // Award IP to the worker
-      await globalImpactPointService.award(
-        workLog.userId,
-        totalIPEarned,
-        ImpactPointReason.PHYSICAL_WORK_VERIFIED
-      );
-
-      await auditService.log(
-        verifierId,
-        AuditAction.WORK_VERIFIED,
-        'PhysicalWorkLog',
-        dto.workLogId,
-        { approved: true, totalIPEarned, workerId: workLog.userId }
-      );
-
-      logger.info(
-        { verifierId, workLogId: dto.workLogId, approved: true },
-        'Work verified'
-      );
-      return this.mapWorkLog(updated);
-    } else {
-      // Rejection — record via WorkVerification, don't award IP
-      await prisma.workVerification.create({
-        data: {
-          workLogId: dto.workLogId,
-          verifierId,
-          method: 'SUPERVISOR',
-          status: 'REJECTED',
-          notes: dto.feedback,
-          verifiedAt: now,
-        },
-      });
-
-      await auditService.log(
-        verifierId,
-        AuditAction.WORK_VERIFIED,
-        'PhysicalWorkLog',
-        dto.workLogId,
-        { approved: false, feedback: dto.feedback, workerId: workLog.userId }
-      );
-
-      logger.info(
-        { verifierId, workLogId: dto.workLogId, approved: false },
-        'Work rejected'
-      );
-      return this.mapWorkLog({ ...workLog, verifiedAt: null });
-    }
+    if (dto.approved)
+      return this.approveWorkLog(workLog, verifierId, dto.workLogId);
+    return this.rejectWorkLog(workLog, verifierId, dto.workLogId, dto.feedback);
   }
 
   async listWorkLogs(milestoneId: string): Promise<WorkLogListDto> {
@@ -587,12 +530,7 @@ export class ProjectService {
       select: { id: true, title: true, status: true, ownerGroupId: true },
     });
     if (!project) throw ApiError.notFound('Project');
-    if (project.status !== 'ACTIVE' && project.status !== 'PLANNING')
-      throw ApiError.badRequest('Project is not accepting contributions');
-    if (!project.ownerGroupId)
-      throw ApiError.badRequest(
-        'Only group-owned projects accept UT contributions'
-      );
+    this.assertProjectAcceptsContributions(project);
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -604,64 +542,19 @@ export class ProjectService {
         `Insufficient UT balance. You have ${user.fiatBackedUtBalance} UT.`
       );
 
-    const [updatedUser, tx] = await prisma.$transaction(async (t) => {
-      const updated = await t.user.update({
-        where: { id: userId },
-        data: { fiatBackedUtBalance: { decrement: dto.amount } },
-        select: { fiatBackedUtBalance: true },
-      });
-
-      const treasury = await treasuryService.getOrCreateTreasury(
-        project.ownerGroupId!
-      );
-
-      const walletTx = await t.walletTransaction.create({
-        data: {
-          treasuryId: treasury.id,
-          amount: dto.amount,
-          transactionType: 'CREDIT',
-          description: `Contribution to project: ${project.title}`,
-          referenceType: 'PROJECT_CONTRIBUTION',
-          projectId,
-          initiatedById: userId,
-        },
-      });
-
-      await t.groupTreasury.update({
-        where: { id: treasury.id },
-        data: { balance: { increment: dto.amount } },
-      });
-
-      return [updated, walletTx];
-    });
-
-    await participationRightsService
-      .award(userId, 10, ParticipationRightsReason.PROJECT_CONTRIBUTED, {
-        projectId,
-        amount: dto.amount,
-      })
-      .catch(() => {});
-
-    await globalImpactPointService
-      .award(userId, 10, ImpactPointReason.PROJECT_CONTRIBUTED, {
-        projectId,
-        amount: dto.amount,
-      })
-      .catch(() => {});
-
-    await this.burnUtOnChain(userId, projectId, dto.amount);
-
-    logger.info(
-      { userId, projectId, amount: dto.amount },
-      'Project contribution recorded'
+    const { newBalance, transactionId } = await this.creditProjectTreasury(
+      userId,
+      project,
+      dto.amount,
+      projectId
     );
 
-    return {
-      projectId,
-      amount: dto.amount,
-      newBalance: updatedUser.fiatBackedUtBalance,
-      transactionId: tx.id,
-    };
+    await this.awardContributionRewards(userId, projectId, dto.amount);
+    await this.burnUtOnChain(userId, projectId, dto.amount);
+
+    logger.info({ userId, projectId, amount: dto.amount }, 'Project contribution recorded');
+
+    return { projectId, amount: dto.amount, newBalance, transactionId };
   }
 
   // ── Task CRUD ─────────────────────────────────────────────────────────────
@@ -925,26 +818,7 @@ export class ProjectService {
       },
     });
 
-    try {
-      const job = await projectQueue.add(
-        ProjectJobName.WORK_SESSION_CLOSE,
-        { sessionId: session.id },
-        { delay: durationMs, jobId: `ws-close-${session.id}` }
-      );
-      await prisma.workSession.update({
-        where: { id: session.id },
-        data: { closeJobId: job.id ?? null },
-      });
-    } catch (err) {
-      logger.warn(
-        {
-          operationType: 'WORK_SESSION',
-          sessionId: session.id,
-          err: String(err),
-        },
-        'Could not schedule auto-close job — session will require manual close'
-      );
-    }
+    await this.scheduleSessionAutoClose(session.id, durationMs);
 
     logger.info(
       {
@@ -1050,46 +924,13 @@ export class ProjectService {
     });
 
     if (newStatus === 'APPROVED') {
-      const IP_PER_PRESENCE = 10;
-      const now = new Date();
-
-      await Promise.all(
-        session.presences.map((p) =>
-          Promise.all([
-            prisma.workPresence
-              .update({
-                where: { id: p.id },
-                data: { ipAwarded: IP_PER_PRESENCE, awardedAt: now },
-              })
-              .catch(() => {}),
-            globalImpactPointService
-              .award(
-                p.userId,
-                IP_PER_PRESENCE,
-                ImpactPointReason.PHYSICAL_WORK_VERIFIED,
-                {
-                  sessionId,
-                  depth: p.depth,
-                }
-              )
-              .catch(() => {}),
-          ])
-        )
-      );
-
+      await this.awardAllPresences(session.presences, sessionId);
       logger.info(
-        {
-          operationType: 'WORK_SESSION',
-          sessionId,
-          presenceCount: session.presences.length,
-        },
+        { operationType: 'WORK_SESSION', sessionId, presenceCount: session.presences.length },
         'Work session approved — IP awarded to all members'
       );
     } else {
-      logger.warn(
-        { operationType: 'WORK_SESSION', sessionId },
-        'Work session flagged — no direct scans found'
-      );
+      logger.warn({ operationType: 'WORK_SESSION', sessionId }, 'Work session flagged — no direct scans found');
     }
 
     return this.mapWorkSession(updated, session.presences.length);
@@ -1207,6 +1048,138 @@ export class ProjectService {
     await auditService
       .log(userId, AuditAction.PROJECT_CREATED, 'Project', projectId, { action: 'MEMBER_JOINED' })
       .catch(() => {});
+  }
+
+  private assertProjectAcceptsContributions(
+    project: { status: string; ownerGroupId: string | null }
+  ): void {
+    if (project.status !== 'ACTIVE' && project.status !== 'PLANNING')
+      throw ApiError.badRequest('Project is not accepting contributions');
+    if (!project.ownerGroupId)
+      throw ApiError.badRequest('Only group-owned projects accept UT contributions');
+  }
+
+  private async creditProjectTreasury(
+    userId: string,
+    project: { id: string; title: string; ownerGroupId: string | null },
+    amount: number,
+    projectId: string
+  ): Promise<{ newBalance: number; transactionId: string }> {
+    return prisma.$transaction(async (t) => {
+      const updated = await t.user.update({
+        where: { id: userId },
+        data: { fiatBackedUtBalance: { decrement: amount } },
+        select: { fiatBackedUtBalance: true },
+      });
+
+      const treasury = await treasuryService.getOrCreateTreasury(project.ownerGroupId!);
+
+      const walletTx = await t.walletTransaction.create({
+        data: {
+          treasuryId: treasury.id,
+          amount,
+          transactionType: 'CREDIT',
+          description: `Contribution to project: ${project.title}`,
+          referenceType: 'PROJECT_CONTRIBUTION',
+          projectId,
+          initiatedById: userId,
+        },
+      });
+
+      await t.groupTreasury.update({
+        where: { id: treasury.id },
+        data: { balance: { increment: amount } },
+      });
+
+      return { newBalance: updated.fiatBackedUtBalance, transactionId: walletTx.id };
+    });
+  }
+
+  private async awardContributionRewards(
+    userId: string,
+    projectId: string,
+    amount: number
+  ): Promise<void> {
+    await participationRightsService
+      .award(userId, 10, ParticipationRightsReason.PROJECT_CONTRIBUTED, { projectId, amount })
+      .catch(() => {});
+    await globalImpactPointService
+      .award(userId, 10, ImpactPointReason.PROJECT_CONTRIBUTED, { projectId, amount })
+      .catch(() => {});
+  }
+
+  private async approveWorkLog(
+    workLog: { id: string; baseIP: number; userId: string },
+    verifierId: string,
+    workLogId: string
+  ): Promise<WorkLogResponseDto> {
+    const totalIPEarned = workLog.baseIP;
+    const updated = await prisma.physicalWorkLog.update({
+      where: { id: workLogId },
+      data: { verifiedAt: new Date(), totalIPEarned },
+      include: { user: { select: { id: true, name: true, avatarUrl: true } } },
+    });
+    await globalImpactPointService.award(workLog.userId, totalIPEarned, ImpactPointReason.PHYSICAL_WORK_VERIFIED);
+    await auditService.log(verifierId, AuditAction.WORK_VERIFIED, 'PhysicalWorkLog', workLogId, {
+      approved: true, totalIPEarned, workerId: workLog.userId,
+    });
+    logger.info({ verifierId, workLogId, approved: true }, 'Work verified');
+    return this.mapWorkLog(updated);
+  }
+
+  private async rejectWorkLog(
+    workLog: { id: string; userId: string; verifiedAt: Date | null },
+    verifierId: string,
+    workLogId: string,
+    feedback: string | undefined
+  ): Promise<WorkLogResponseDto> {
+    await prisma.workVerification.create({
+      data: { workLogId, verifierId, method: 'SUPERVISOR', status: 'REJECTED', notes: feedback, verifiedAt: new Date() },
+    });
+    await auditService.log(verifierId, AuditAction.WORK_VERIFIED, 'PhysicalWorkLog', workLogId, {
+      approved: false, feedback, workerId: workLog.userId,
+    });
+    logger.info({ verifierId, workLogId, approved: false }, 'Work rejected');
+    return this.mapWorkLog({ ...workLog, verifiedAt: null });
+  }
+
+  private async scheduleSessionAutoClose(sessionId: string, durationMs: number): Promise<void> {
+    try {
+      const job = await projectQueue.add(
+        ProjectJobName.WORK_SESSION_CLOSE,
+        { sessionId },
+        { delay: durationMs, jobId: `ws-close-${sessionId}` }
+      );
+      await prisma.workSession.update({
+        where: { id: sessionId },
+        data: { closeJobId: job.id ?? null },
+      });
+    } catch (err) {
+      logger.warn(
+        { operationType: 'WORK_SESSION', sessionId, err: String(err) },
+        'Could not schedule auto-close job — session will require manual close'
+      );
+    }
+  }
+
+  private async awardAllPresences(
+    presences: Array<{ id: string; userId: string; depth: number }>,
+    sessionId: string
+  ): Promise<void> {
+    const IP_PER_PRESENCE = 10;
+    const now = new Date();
+    await Promise.all(
+      presences.map((p) =>
+        Promise.all([
+          prisma.workPresence
+            .update({ where: { id: p.id }, data: { ipAwarded: IP_PER_PRESENCE, awardedAt: now } })
+            .catch(() => {}),
+          globalImpactPointService
+            .award(p.userId, IP_PER_PRESENCE, ImpactPointReason.PHYSICAL_WORK_VERIFIED, { sessionId, depth: p.depth })
+            .catch(() => {}),
+        ])
+      )
+    );
   }
 
   private async burnUtOnChain(userId: string, projectId: string, amount: number) {

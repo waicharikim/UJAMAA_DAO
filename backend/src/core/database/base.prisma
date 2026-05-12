@@ -261,6 +261,9 @@ model User {
   assignedVerifications     MilestoneVerifier[]    @relation("MilestoneVerifier_AssignedBy")
   submittedMilestones       Milestone[]            @relation("MilestoneSubmitter")
   verifiedMilestones        Milestone[]            @relation("MilestoneVerifier_VerifiedBy")
+  createdWorkSessions       WorkSession[]          @relation("WorkSessionCreator")
+  workPresences             WorkPresence[]         @relation("WorkPresenceUser")
+  attestedPresences         WorkPresence[]         @relation("WorkPresenceAttestor")
 
   // ---- Economy module ----
   duesPayments              DuesPayment[]

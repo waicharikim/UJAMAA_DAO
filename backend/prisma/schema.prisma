@@ -1946,6 +1946,7 @@ enum WorkSessionStatus {
   FLAGGED
 }
 
+
 model Project {
   id           String        @id @default(uuid()) @db.Uuid
   title        String
@@ -2114,24 +2115,25 @@ model WorkSession {
 }
 
 model WorkPresence {
-  id          String       @id @default(uuid()) @db.Uuid
-  sessionId   String       @db.Uuid
-  userId      String       @db.Uuid
-  attestedById String?     @db.Uuid
-  depth       Int          @default(0)
-  ipAwarded   Int          @default(0)
-  awardedAt   DateTime?
+  id           String       @id @default(uuid()) @db.Uuid
+  sessionId    String       @db.Uuid
+  userId       String       @db.Uuid
+  attestedById String?      @db.Uuid
+  depth        Int          @default(0)
+  ipAwarded    Int          @default(0)
+  awardedAt    DateTime?
 
-  session     WorkSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  user        User         @relation("WorkPresenceUser", fields: [userId], references: [id])
-  attestedBy  User?        @relation("WorkPresenceAttestor", fields: [attestedById], references: [id])
+  session      WorkSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user         User         @relation("WorkPresenceUser", fields: [userId], references: [id])
+  attestedBy   User?        @relation("WorkPresenceAttestor", fields: [attestedById], references: [id])
 
-  createdAt   DateTime     @default(now())
+  createdAt    DateTime     @default(now())
 
   @@unique([sessionId, userId])
   @@index([sessionId])
   @@index([userId])
 }
+
 
 
 // ============================================================================
