@@ -2272,3 +2272,33 @@ Treasury module — scaffold to full implementation (group treasury, contributio
 
 **Token usage:**
 Claude Sonnet 4.6 — session 62
+
+---
+
+## [2026-05-13] — Schema source fix, Sentry ESM, Redis noeviction, CodeScene complexity reduction
+
+**What was built:**
+- **Module schema source fix**: `WorkSession`, `WorkPresence`, `WorkSessionStatus` enum added to `src/modules/projects/prisma/schema.prisma`; `skillCategory String?` + `maxAssignees Int @default(1)` added to `Task`; `User` back-relations (`createdWorkSessions`, `workPresences`, `attestedPresences`) added to `src/core/database/base.prisma`. `GroupMemberVote.vote Boolean?` made nullable in `src/modules/governance/prisma/schema.prisma`. Two Prisma migrations applied: `add_work_sessions_and_task_fields` + `make_vote_nullable`. TypeScript: 32 pre-existing errors → 0.
+- **Sentry ESM instrumentation fix**: changed startup to `tsx watch --import ./src/instrument.ts src/index.ts` in `start-web.sh`, `start-worker.sh`, and `package.json`. Removed redundant `import './instrument.js'` from `index.ts`. The `--import` flag ensures Sentry's OTEL hooks are active before the Express module graph resolves.
+- **Redis eviction policy**: changed `allkeys-lru` → `noeviction` in `docker/docker-compose.yml`. Applied live via `CONFIG SET` without container restart. BullMQ requires `noeviction` to prevent silent job drops under memory pressure.
+- **`src/index.ts` refactor**: extracted `checkEmailConfig()`, `closeRedisConnections()`, `gracefulShutdown(signal, server)` as top-level functions. `startServer` cc: 14 → ~4. `production node start` command updated to `node --import ./dist/instrument.js dist/index.js`.
+- **`project.service.ts` cc reductions**: extracted `assertProjectAcceptsContributions`, `creditProjectTreasury`, `awardContributionRewards` (from `contributeToProject`); `approveWorkLog`, `rejectWorkLog` (from `verifyWork`); `scheduleSessionAutoClose` (from `createWorkSession`); `awardAllPresences` (from `closeWorkSession`).
+- **CodeScene reports processed**: `index.ts` (health 9.61 → advisory only), `project.service.ts` (health 5.22, critical degradation — partially addressed).
+
+**Decisions made:**
+- **Never edit `prisma/schema.prisma` directly** — it is the merged output of `mergeSchema.ts` and is overwritten on every container start via `npm run db:merge`. All schema additions must go into `src/modules/[name]/prisma/schema.prisma` (module-level) or `src/core/database/base.prisma` (User back-relations and cross-cutting types). After editing, run `docker exec ujamaa_web npm run db:generate` (= merge + generate, not bare `prisma generate`). See ADR-038.
+- **`tsx watch` subcommand must precede `--import` flag** — `tsx --import ./src/instrument.ts watch script.ts` incorrectly resolves `watch` as the script path; correct order is `tsx watch --import ./src/instrument.ts script.ts`.
+- **`noeviction` is correct for this Redis instance** — the cluster serves BullMQ queues + rate limit counters; counters are small relative to queue payload; `allkeys-lru` can silently evict queued jobs under memory pressure with no error surfaced to the producer.
+
+**What's still broken or incomplete:**
+- `project.service.ts` still has `contributeToProject` (cc≈23), `attestPresence` (cc=20), `joinProject` (cc=13), `scanQr` (cc=12), `claimTask` (cc=12) above threshold — additional extraction rounds needed
+- Primitive Obsession (68% primitive args) and File Size (1082 lines) not addressed — requires structural split into sub-services
+- Governance tests for `cancelProposal`, `updateProgress`, tally/expiry cron processors not written (count stays at 81)
+- Africa's Talking SMS credentials not configured for production
+- Base Sepolia deploy pending (minter wallet not funded)
+
+**Next milestone:**
+Write governance tests for the session-61 features (`cancelProposal`, `updateProgress`, `openVoting`, `tallyResults`, `expireProposalReview` cron processors) to bring governance test count above 100.
+
+**Token usage:**
+Claude Sonnet 4.6 — session 63
