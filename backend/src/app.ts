@@ -74,6 +74,7 @@ import treasuryRoutes from './modules/treasury/routes/treasury.routes.js';
 import paymentRoutes from './modules/payments/routes/payment.routes.js';
 import electionRoutes from './modules/elections/routes/election.routes.js';
 import platformConfigRoutes from './modules/admin/routes/platform-config.routes.js';
+import blockchainAdminRoutes from './modules/admin/routes/blockchain.routes.js';
 
 // Bull Board dashboard
 import { ExpressAdapter } from '@bull-board/express';
@@ -277,6 +278,7 @@ app.get('/api/v1/docs', (_req, res) => {
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/admin', adminRoutes);
+app.use('/api/v1/admin/blockchain', blockchainAdminRoutes);
 app.use('/api/v1/economy', economyRoutes);
 app.use('/api/v1/community', communityRoutes);
 app.use('/api/v1/conflicts', conflictRoutes);

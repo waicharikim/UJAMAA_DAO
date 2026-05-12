@@ -23,6 +23,10 @@ import { participationRightsService } from '../../economy/services/participation
 import { ParticipationRightsReason, PR_CONFIG } from '../../economy/types.js';
 import { eventBus } from '../../../core/utils/eventBus.js';
 import { VerificationLevel } from '../../../core/types/Ujamaadao.types.js';
+import {
+  getPrContract,
+  getUtContract,
+} from '../../../core/blockchain/client.js';
 import { userService } from '../../user/services/user.service.js';
 import {
   WalletAuthResult,
@@ -578,10 +582,54 @@ class WalletService {
       walletAddress: normalizedAddress,
     });
 
+    // Catch-up on-chain mint: bring on-chain balance in line with off-chain records
+    await this._reconcileOnChainBalances(userId, normalizedAddress);
+
     // Check if all four flags now met → promote to FULL_VERIFIED
     await userService.checkFullVerification(userId);
 
     return user;
+  }
+
+  private async _reconcileOnChainBalances(
+    userId: string,
+    walletAddress: string
+  ): Promise<void> {
+    if (process.env.NODE_ENV === 'test') return;
+    try {
+      const balances = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { participationRights: true, fiatBackedUtBalance: true },
+      });
+      if (!balances) return;
+
+      const prContract = getPrContract();
+      if (prContract && balances.participationRights > 0) {
+        const prWei =
+          BigInt(Math.round(balances.participationRights)) * BigInt(10 ** 18);
+        await prContract.mint(walletAddress, prWei);
+        logger.info(
+          { userId, pr: balances.participationRights },
+          '[BLOCKCHAIN] Catch-up PR mint on wallet link'
+        );
+      }
+
+      const utContract = getUtContract();
+      if (utContract && balances.fiatBackedUtBalance > 0) {
+        const utWei =
+          BigInt(Math.round(balances.fiatBackedUtBalance)) * BigInt(10 ** 18);
+        await utContract.mint(walletAddress, utWei);
+        logger.info(
+          { userId, ut: balances.fiatBackedUtBalance },
+          '[BLOCKCHAIN] Catch-up UT mint on wallet link'
+        );
+      }
+    } catch (err) {
+      logger.warn(
+        { userId, err },
+        '[BLOCKCHAIN] Catch-up mint failed — off-chain record intact'
+      );
+    }
   }
 
   /**
