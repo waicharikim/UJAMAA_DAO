@@ -42,6 +42,821 @@ if (
 }
 
 console.log(`🌱 Starting core seeding in ${process.env.NODE_ENV} mode...\n`);
+
+// ============================================================================
+// LOCAL TYPES
+// ============================================================================
+
+interface WardFull {
+  id: string;
+  name: string;
+  constituencyId: string;
+  countyId: string | null;
+  constituency: {
+    id: string;
+    name: string;
+    countyId: string;
+    county: { id: string; name: string; code: number };
+  };
+}
+
+type TestUser = {
+  email: string;
+  name: string;
+  phoneNumber: string;
+  role?: string;
+  verificationLevel?: string;
+};
+
+// ============================================================================
+// MODULE-LEVEL DATA CONSTANTS
+// ============================================================================
+
+const SYSTEM_CONFIG_ENTRIES = [
+  // Voting thresholds
+  {
+    key: 'voting.quorum.community',
+    value: 0.4,
+    category: 'GOVERNANCE',
+    dataType: 'NUMBER',
+    description: 'Community initiative quorum',
+    isPublic: true,
+  },
+  {
+    key: 'voting.approval.community',
+    value: 0.5,
+    category: 'GOVERNANCE',
+    dataType: 'NUMBER',
+    description: 'Community initiative approval threshold',
+    isPublic: true,
+  },
+  {
+    key: 'voting.period.community',
+    value: 7,
+    category: 'GOVERNANCE',
+    dataType: 'NUMBER',
+    description: 'Community initiative voting period (days)',
+    isPublic: true,
+  },
+
+  {
+    key: 'voting.quorum.major',
+    value: 0.5,
+    category: 'GOVERNANCE',
+    dataType: 'NUMBER',
+    description: 'Major project quorum',
+    isPublic: true,
+  },
+  {
+    key: 'voting.approval.major',
+    value: 0.6,
+    category: 'GOVERNANCE',
+    dataType: 'NUMBER',
+    description: 'Major project approval threshold',
+    isPublic: true,
+  },
+  {
+    key: 'voting.period.major',
+    value: 14,
+    category: 'GOVERNANCE',
+    dataType: 'NUMBER',
+    description: 'Major project voting period (days)',
+    isPublic: true,
+  },
+
+  {
+    key: 'voting.quorum.strategic',
+    value: 0.6,
+    category: 'GOVERNANCE',
+    dataType: 'NUMBER',
+    description: 'Strategic decision quorum',
+    isPublic: true,
+  },
+  {
+    key: 'voting.approval.strategic',
+    value: 0.66,
+    category: 'GOVERNANCE',
+    dataType: 'NUMBER',
+    description: 'Strategic decision approval threshold',
+    isPublic: true,
+  },
+  {
+    key: 'voting.period.strategic',
+    value: 21,
+    category: 'GOVERNANCE',
+    dataType: 'NUMBER',
+    description: 'Strategic decision voting period (days)',
+    isPublic: true,
+  },
+
+  {
+    key: 'voting.quorum.emergency',
+    value: 0.3,
+    category: 'GOVERNANCE',
+    dataType: 'NUMBER',
+    description: 'Emergency proposal quorum',
+    isPublic: true,
+  },
+  {
+    key: 'voting.approval.emergency',
+    value: 0.6,
+    category: 'GOVERNANCE',
+    dataType: 'NUMBER',
+    description: 'Emergency proposal approval threshold',
+    isPublic: true,
+  },
+  {
+    key: 'voting.period.emergency',
+    value: 3,
+    category: 'GOVERNANCE',
+    dataType: 'NUMBER',
+    description: 'Emergency proposal voting period (days)',
+    isPublic: true,
+  },
+
+  // Dues
+  {
+    key: 'dues.tier.ordinary',
+    value: 60,
+    category: 'ECONOMY',
+    dataType: 'NUMBER',
+    description: 'Ordinary monthly dues (KES)',
+    isPublic: true,
+  },
+  {
+    key: 'dues.tier.supporter',
+    value: 200,
+    category: 'ECONOMY',
+    dataType: 'NUMBER',
+    description: 'Supporter monthly dues (KES)',
+    isPublic: true,
+  },
+  {
+    key: 'dues.tier.sponsor',
+    value: 1000,
+    category: 'ECONOMY',
+    dataType: 'NUMBER',
+    description: 'Sponsor monthly dues (KES)',
+    isPublic: true,
+  },
+  {
+    key: 'dues.grace_period',
+    value: 30,
+    category: 'ECONOMY',
+    dataType: 'NUMBER',
+    description: 'Dues grace period (days)',
+    isPublic: true,
+  },
+
+  // Impact Points
+  {
+    key: 'ip.decay.monthly_rate',
+    value: 0.1,
+    category: 'REPUTATION',
+    dataType: 'NUMBER',
+    description: 'Monthly IP decay rate',
+    isPublic: true,
+  },
+  {
+    key: 'ip.decay.active_user_rate',
+    value: 0.05,
+    category: 'REPUTATION',
+    dataType: 'NUMBER',
+    description: 'Active user reduced decay rate',
+    isPublic: true,
+  },
+  {
+    key: 'ip.grace_period_months',
+    value: 3,
+    category: 'REPUTATION',
+    dataType: 'NUMBER',
+    description: 'No decay for first N months',
+    isPublic: true,
+  },
+
+  // Participation Rights
+  {
+    key: 'pr.monthly_regen',
+    value: 25,
+    category: 'REPUTATION',
+    dataType: 'NUMBER',
+    description: 'Base monthly PR regeneration',
+    isPublic: true,
+  },
+  {
+    key: 'pr.max_balance',
+    value: 500,
+    category: 'REPUTATION',
+    dataType: 'NUMBER',
+    description: 'Maximum PR balance',
+    isPublic: true,
+  },
+  {
+    key: 'pr.low_warning',
+    value: 20,
+    category: 'REPUTATION',
+    dataType: 'NUMBER',
+    description: 'Low PR warning threshold',
+    isPublic: true,
+  },
+
+  // PR from dues
+  {
+    key: 'pr.dues.ordinary',
+    value: 100,
+    category: 'ECONOMY',
+    dataType: 'NUMBER',
+    description: 'PR from ordinary dues',
+    isPublic: true,
+  },
+  {
+    key: 'pr.dues.supporter',
+    value: 200,
+    category: 'ECONOMY',
+    dataType: 'NUMBER',
+    description: 'PR from supporter dues',
+    isPublic: true,
+  },
+  {
+    key: 'pr.dues.sponsor',
+    value: 500,
+    category: 'ECONOMY',
+    dataType: 'NUMBER',
+    description: 'PR from sponsor dues',
+    isPublic: true,
+  },
+
+  // PR costs
+  {
+    key: 'pr.cost.vote',
+    value: 5,
+    category: 'GOVERNANCE',
+    dataType: 'NUMBER',
+    description: 'PR cost to vote',
+    isPublic: true,
+  },
+  {
+    key: 'pr.cost.proposal.ward',
+    value: 50,
+    category: 'GOVERNANCE',
+    dataType: 'NUMBER',
+    description: 'PR cost for ward proposal',
+    isPublic: true,
+  },
+  {
+    key: 'pr.cost.proposal.constituency',
+    value: 100,
+    category: 'GOVERNANCE',
+    dataType: 'NUMBER',
+    description: 'PR cost for constituency proposal',
+    isPublic: true,
+  },
+  {
+    key: 'pr.cost.proposal.county',
+    value: 150,
+    category: 'GOVERNANCE',
+    dataType: 'NUMBER',
+    description: 'PR cost for county proposal',
+    isPublic: true,
+  },
+  {
+    key: 'pr.cost.proposal.national',
+    value: 200,
+    category: 'GOVERNANCE',
+    dataType: 'NUMBER',
+    description: 'PR cost for national proposal',
+    isPublic: true,
+  },
+  {
+    key: 'pr.cost.group_create',
+    value: 100,
+    category: 'COMMUNITY',
+    dataType: 'NUMBER',
+    description: 'PR cost to create group',
+    isPublic: true,
+  },
+
+  // Onboarding rewards
+  {
+    key: 'onboarding.email_verified.ip',
+    value: 50,
+    category: 'REPUTATION',
+    dataType: 'NUMBER',
+    description: 'IP reward for email verification',
+    isPublic: true,
+  },
+  {
+    key: 'onboarding.email_verified.pr',
+    value: 25,
+    category: 'REPUTATION',
+    dataType: 'NUMBER',
+    description: 'PR reward for email verification',
+    isPublic: true,
+  },
+  {
+    key: 'onboarding.profile_complete.ip',
+    value: 25,
+    category: 'REPUTATION',
+    dataType: 'NUMBER',
+    description: 'IP reward for profile completion',
+    isPublic: true,
+  },
+  {
+    key: 'onboarding.wallet_connected.ip',
+    value: 200,
+    category: 'REPUTATION',
+    dataType: 'NUMBER',
+    description: 'IP reward for wallet connection',
+    isPublic: true,
+  },
+  {
+    key: 'onboarding.wallet_connected.pr',
+    value: 100,
+    category: 'REPUTATION',
+    dataType: 'NUMBER',
+    description: 'PR reward for wallet connection',
+    isPublic: true,
+  },
+  {
+    key: 'onboarding.phone_verified.ip',
+    value: 100,
+    category: 'REPUTATION',
+    dataType: 'NUMBER',
+    description: 'IP reward for phone verification',
+    isPublic: true,
+  },
+  {
+    key: 'onboarding.phone_verified.pr',
+    value: 25,
+    category: 'REPUTATION',
+    dataType: 'NUMBER',
+    description: 'PR reward for phone verification',
+    isPublic: true,
+  },
+];
+
+const BUILT_IN_ROLES_DATA = [
+  {
+    name: 'system:super_admin',
+    description: 'Full platform access',
+  },
+  {
+    name: 'system:auditor',
+    description: 'Read-only audit access',
+  },
+  {
+    name: 'system:support',
+    description: 'User support and moderation',
+  },
+  {
+    name: 'system:compliance_officer',
+    description: 'User verification and platform rule enforcement',
+  },
+  {
+    name: 'system:county_coordinator',
+    description:
+      'County-level elected observer and coordinator (one per county, 47 total)',
+  },
+  {
+    name: 'system:blockchain_admin',
+    description:
+      'Manages smart contracts — deploy, upgrade governor contracts, emergency pauses. Technical only, no governance override.',
+  },
+  {
+    name: 'system:contract_deployer',
+    description: 'Can deploy new smart contracts to the blockchain',
+  },
+  {
+    name: 'system:multisig_signer',
+    description:
+      'Signs critical on-chain transactions, required for treasury operations',
+  },
+
+  {
+    name: 'location:ward_admin',
+    description: 'Ward administrator',
+  },
+  {
+    name: 'location:constituency_admin',
+    description: 'Constituency administrator',
+  },
+  {
+    name: 'location:county_admin',
+    description: 'County administrator',
+  },
+
+  {
+    name: 'group:leader',
+    description: 'Group leader',
+  },
+  {
+    name: 'group:treasurer',
+    description: 'Group treasurer',
+  },
+  {
+    name: 'group:admin',
+    description: 'Group administrator',
+  },
+  {
+    name: 'group:auditor',
+    description: 'Group auditor',
+  },
+
+  {
+    name: 'project:manager',
+    description: 'Project manager',
+  },
+  {
+    name: 'project:verifier',
+    description: 'Milestone verifier',
+  },
+];
+
+const ONBOARDING_TUTORIALS_DATA = [
+  {
+    key: 'platform_intro',
+    title: 'Welcome to UjamaaDAO',
+    description:
+      'Learn what UjamaaDAO is, how Participation Rights (PR) work, and what you can do on the platform.',
+    category: 'BASICS',
+    order: 1,
+    ipReward: 25,
+    prReward: 10,
+    estimatedMinutes: 3,
+    requiredFor: null,
+    isOptional: false,
+    content: {
+      steps: [
+        {
+          title: 'What is UjamaaDAO?',
+          body: 'UjamaaDAO is a community-owned platform for Kenyan citizens to collaborate, govern, and grow together — ward by ward. Every member earns Participation Rights (PR) for showing up and contributing.',
+        },
+        {
+          title: 'Participation Rights (PR)',
+          body: 'PR is your non-transferable civic currency. You earn PR by attending barazas, voting on proposals, completing your profile, and contributing to your community. It cannot be bought or sold.',
+        },
+        {
+          title: 'Your verification journey',
+          body: 'Start by verifying your phone number, then get vouched for by 3 ward members to unlock governance. Each step unlocks more of the platform.',
+        },
+      ],
+    },
+  },
+  {
+    key: 'verify_phone',
+    title: 'Verify your phone number',
+    description:
+      'Add and verify your Kenyan phone number to unlock economy features and prove you are a real person.',
+    category: 'VERIFICATION',
+    order: 2,
+    ipReward: 30,
+    prReward: 15,
+    estimatedMinutes: 2,
+    requiredFor: null,
+    isOptional: false,
+    content: {
+      steps: [
+        {
+          title: 'Why verify your phone?',
+          body: 'Your phone number ties your UjamaaDAO account to a real Kenyan identity. It unlocks economy features, baraza attendance recording, and is required for community verification.',
+        },
+        {
+          title: 'How to verify',
+          body: 'Go to your Profile page and click "Verify Phone". You can receive your code via SMS, WhatsApp, or Telegram — whichever you prefer.',
+        },
+      ],
+    },
+  },
+  {
+    key: 'connect_wallet',
+    title: 'Connect your Web3 wallet',
+    description:
+      'Link a wallet to receive Utility Tokens (UT) and participate in on-chain governance.',
+    category: 'VERIFICATION',
+    order: 3,
+    ipReward: 30,
+    prReward: 15,
+    estimatedMinutes: 3,
+    requiredFor: null,
+    isOptional: true,
+    content: {
+      steps: [
+        {
+          title: 'What is a wallet for?',
+          body: 'Your Web3 wallet is where Utility Tokens (UT) land when you earn them. UT represents long-term commitment to the community and is used in on-chain governance.',
+        },
+        {
+          title: 'How to connect',
+          body: 'Click the wallet icon in your Profile. We support MetaMask and WalletConnect. Your wallet address is stored on-chain — never your private key.',
+        },
+      ],
+    },
+  },
+  {
+    key: 'community_verification',
+    title: 'Get community verified',
+    description:
+      'Have 3 verified ward members vouch for you to unlock proposals, voting, and full platform access.',
+    category: 'VERIFICATION',
+    order: 4,
+    ipReward: 50,
+    prReward: 25,
+    estimatedMinutes: 5,
+    requiredFor: null,
+    isOptional: false,
+    content: {
+      steps: [
+        {
+          title: 'What is community verification?',
+          body: 'Community verification means 3 real people in your ward can confirm you are who you say you are. This is how UjamaaDAO stays human — no bots, no fake accounts.',
+        },
+        {
+          title: 'Who can vouch for you?',
+          body: 'Any COMMUNITY_VERIFIED member in your ward can vouch for you. If you do not know anyone yet, you can pay the platform fee as an alternative path.',
+        },
+        {
+          title: 'What does it unlock?',
+          body: 'Community verification gives you access to governance (proposals and voting), the economy module, baraza attendance PR, and your full ward dashboard.',
+        },
+      ],
+    },
+  },
+  {
+    key: 'governance_basics',
+    title: 'How governance works',
+    description:
+      'Learn how to read proposals, cast votes, and understand what quorum means for your ward.',
+    category: 'GOVERNANCE',
+    order: 5,
+    ipReward: 50,
+    prReward: 25,
+    estimatedMinutes: 8,
+    requiredFor: 'VOTING',
+    isOptional: false,
+    content: {
+      steps: [
+        {
+          title: 'Proposals',
+          body: 'Any COMMUNITY_VERIFIED member can raise a proposal — a request for the community to decide something. Proposals go through a draft → review → voting → results lifecycle.',
+        },
+        {
+          title: 'Voting with PR',
+          body: 'Your PR balance is your voting power. More PR = more weight. PR is earned by showing up, not by buying. This keeps governance fair and participation-based.',
+        },
+        {
+          title: 'Quorum',
+          body: "A proposal only passes if enough members vote. Quorum rules are set per ward. Check the governance page for your ward's current thresholds.",
+        },
+      ],
+    },
+  },
+  {
+    key: 'attend_baraza',
+    title: 'Attend your first baraza',
+    description:
+      'Join your ward baraza group on Telegram and type /present to log attendance and earn PR.',
+    category: 'COMMUNITY',
+    order: 6,
+    ipReward: 40,
+    prReward: 20,
+    estimatedMinutes: 3,
+    requiredFor: null,
+    isOptional: false,
+    content: {
+      steps: [
+        {
+          title: 'What is a baraza?',
+          body: "A baraza is your ward's regular community meeting — held on Telegram. When you attend, you type /present and earn 15 PR automatically. Your ward leader opens and closes each session.",
+        },
+        {
+          title: 'How to join',
+          body: 'Find your baraza group link on your dashboard under "My Barazas". Join the Telegram group and introduce yourself. When the next session opens, type /present to be counted.',
+        },
+      ],
+    },
+  },
+  {
+    key: 'explore_marketplace',
+    title: 'Explore the marketplace',
+    description:
+      'Browse skills and goods offered by community members in your ward and beyond.',
+    category: 'MARKETPLACE',
+    order: 7,
+    ipReward: 20,
+    prReward: 10,
+    estimatedMinutes: 3,
+    requiredFor: null,
+    isOptional: true,
+    content: {
+      steps: [
+        {
+          title: 'Community-first marketplace',
+          body: 'The UjamaaDAO marketplace is for discovering what community members offer — skills, goods, services. All transactions stay within the community.',
+        },
+        {
+          title: 'Discovery only',
+          body: 'The marketplace is a discovery platform. Payments happen directly between members via M-Pesa. Browse freely — no account needed to view listings.',
+        },
+      ],
+    },
+  },
+];
+
+const EDUCATION_MODULES_DATA = [
+  {
+    title: 'What is UjamaaDAO?',
+    description:
+      'An introduction to UjamaaDAO — what it is, why it was built, and how it empowers Kenyan ward communities through collective governance and economic cooperation.',
+    content: `# What is UjamaaDAO?
+
+UjamaaDAO is a community-owned digital platform designed to strengthen local governance and economic cooperation at the ward level in Kenya.
+
+## The name
+
+"Ujamaa" is a Swahili word meaning *familyhood* or *cooperative economics*. It reflects the founding belief that communities grow strongest when members invest in one another.
+
+"DAO" stands for *Decentralised Autonomous Organisation* — a structure where decisions are made collectively by members, with rules encoded transparently on a blockchain rather than sitting with a single authority.
+
+## Why it was built
+
+Kenya's 1,450 wards are the smallest unit of government, yet most civic participation tools are designed for national or county use. UjamaaDAO fills this gap by giving each ward its own governed community: a space to propose projects, vote on spending, organise local markets, and track collective progress.
+
+## The four pillars
+
+1. **Identity & Verification** — Members verify their ward residency through community vouching (3 neighbours confirm you live there) or a one-time KES 100 payment. This makes the system Sybil-resistant and locally accountable.
+
+2. **Participation Rights (PR)** — A non-transferable score that measures your right to participate. You earn PR by paying dues, completing education, attending barazas, and contributing to projects. You spend PR to vote and create proposals.
+
+3. **Impact Points (IP)** — A reputation score for your contributions. IP decays slowly over time to reward sustained engagement over one-off actions.
+
+4. **Governance** — Any verified member can propose a project or community initiative. Proposals go through a transparent voting window; passing proposals become funded projects with trackable milestones.
+
+## What you can do on UjamaaDAO
+
+- **Learn** — Complete education modules (like this one) to earn IP and deepen your civic knowledge.
+- **Govern** — Create or vote on proposals for your ward.
+- **Contribute** — Join project teams, complete milestones, and earn rewards.
+- **Trade** — List skills and goods in the ward marketplace (discovery only — no platform payments).
+- **Connect** — Join your ward's Telegram/WhatsApp baraza and have your attendance recorded on-chain.
+
+## The blockchain layer
+
+PR and Utility Tokens (UT) are minted on Base (an Ethereum Layer 2). This means your participation record is publicly verifiable and can never be altered by any single actor — including the platform team.
+
+## Getting started
+
+1. Verify your email → complete your profile → verify your phone.
+2. Get community-verified by three ward neighbours.
+3. Start participating: vote, learn, propose, contribute.
+
+Every action you take here strengthens your ward. Welcome to UjamaaDAO.`,
+    duration: 15,
+    difficulty: 'BEGINNER' as const,
+    category: 'civic',
+    completionIP: 25,
+    verified: true,
+    expertApproved: true,
+  },
+  {
+    title: 'Understanding Participation Rights (PR)',
+    description:
+      'Learn how Participation Rights work, how to earn them, how they are spent, and why they are non-transferable.',
+    content: `# Understanding Participation Rights (PR)
+
+Participation Rights (PR) are your democratic currency on UjamaaDAO. Unlike money, they cannot be bought, sold, or given away — they must be *earned* through genuine community participation.
+
+## What PR measures
+
+PR is a measure of your *right to participate* at any given moment. A high PR balance signals that you have been actively engaged with your community recently. A low balance means you may need to re-engage before you can take certain actions.
+
+## Earning PR
+
+| Action | PR earned |
+|--------|-----------|
+| Email verification | +25 |
+| Phone verification | +25 |
+| Monthly dues (ordinary, KES 60) | +100 |
+| Monthly dues (supporter, KES 200) | +200 |
+| Monthly dues (sponsor, KES 1,000) | +500 |
+| Completing an education module | varies |
+| Attending a baraza | +10 |
+| Wallet connection | +100 |
+
+## Spending PR
+
+| Action | PR cost |
+|--------|---------|
+| Casting a vote | 5 |
+| Ward proposal | 50 |
+| Constituency proposal | 100 |
+| County proposal | 150 |
+| National proposal | 200 |
+| Creating a community group | 100 |
+
+## PR regeneration
+
+Your PR balance regenerates by **25 PR per month** automatically, as long as your account is active. This means even members who are temporarily inactive don't lose their ability to re-engage.
+
+## Maximum balance
+
+The maximum PR balance is **500**. There is no benefit to accumulating PR beyond this cap — the system is designed to reward consistent participation, not hoarding.
+
+## Why PR is non-transferable
+
+PR cannot be transferred between users. This design choice is intentional:
+
+- It prevents wealthy members from buying influence.
+- It ensures every vote represents genuine community engagement.
+- It makes the governance system resistant to capture by outside interests.
+
+PR is recorded on the Base blockchain, meaning your participation history is transparent and tamper-proof.
+
+## Low PR warning
+
+When your balance falls below **20 PR**, you will see a warning in your dashboard. This is your signal to re-engage: attend a baraza, pay dues, or complete an education module.`,
+    duration: 10,
+    difficulty: 'BEGINNER' as const,
+    category: 'governance',
+    completionIP: 20,
+    verified: true,
+    expertApproved: true,
+  },
+  {
+    title: 'How Governance Works',
+    description:
+      'A step-by-step guide to proposals, voting thresholds, quorums, and how ward decisions become funded projects.',
+    content: `# How Governance Works
+
+UjamaaDAO's governance system allows any community-verified member to propose ideas and have them decided by collective vote. Here is how the process works from start to finish.
+
+## Step 1 — Create a proposal
+
+Any verified member with sufficient PR can create a proposal. The cost depends on the scope:
+
+- **Ward** (affects your ward only) — 50 PR
+- **Constituency** — 100 PR
+- **County** — 150 PR
+- **National** — 200 PR
+
+A proposal includes a title, description, and optionally a requested funding amount in KES. Proposals can also include milestones — measurable checkpoints for how the project will be delivered.
+
+## Step 2 — The voting window opens
+
+After creation, a proposal enters a *voting window*. The length depends on the proposal type:
+
+| Type | Voting period |
+|------|--------------|
+| Community initiative | 7 days |
+| Major project | 14 days |
+| Strategic decision | 21 days |
+| Emergency | 3 days |
+
+During this window, eligible members can vote YES, NO, or ABSTAIN. Each vote costs **5 PR**.
+
+## Step 3 — Quorum and approval thresholds
+
+For a proposal to pass, two conditions must be met:
+
+1. **Quorum** — A minimum percentage of eligible voters must have voted.
+2. **Approval threshold** — A minimum percentage of votes must be YES.
+
+| Proposal type | Quorum required | Approval required |
+|--------------|-----------------|-------------------|
+| Community | 40% | 50% |
+| Major | 50% | 60% |
+| Strategic | 60% | 66% |
+| Emergency | 30% | 60% |
+
+## Step 4 — Execution
+
+If a proposal passes, it becomes an approved project. A project manager can then:
+
+1. Break the work into milestones.
+2. Assign team members.
+3. Submit milestone completions with proof (photos, receipts, links).
+4. Have milestones verified by designated verifiers.
+
+Verified milestones trigger IP and PR awards to the contributors.
+
+## Transparency
+
+All votes, proposal texts, and results are stored immutably. No administrator can delete a proposal or alter vote counts after the window closes.
+
+## Tips for a strong proposal
+
+- Be specific: what exactly will be built or changed?
+- Include a realistic budget with line items.
+- Break large work into 3–5 milestones.
+- Link your proposal to a baraza discussion so the community has context before voting.`,
+    duration: 12,
+    difficulty: 'BEGINNER' as const,
+    category: 'governance',
+    completionIP: 30,
+    verified: true,
+    expertApproved: true,
+  },
+];
+
 // ============================================================================
 // 1. SYSTEM CONFIGURATION
 // ============================================================================
@@ -49,331 +864,8 @@ console.log(`🌱 Starting core seeding in ${process.env.NODE_ENV} mode...\n`);
 async function seedSystemConfiguration() {
   console.log('Seeding system configuration...');
 
-  const configs = [
-    // Voting thresholds
-    {
-      key: 'voting.quorum.community',
-      value: 0.4,
-      category: 'GOVERNANCE',
-      dataType: 'NUMBER',
-      description: 'Community initiative quorum',
-      isPublic: true,
-    },
-    {
-      key: 'voting.approval.community',
-      value: 0.5,
-      category: 'GOVERNANCE',
-      dataType: 'NUMBER',
-      description: 'Community initiative approval threshold',
-      isPublic: true,
-    },
-    {
-      key: 'voting.period.community',
-      value: 7,
-      category: 'GOVERNANCE',
-      dataType: 'NUMBER',
-      description: 'Community initiative voting period (days)',
-      isPublic: true,
-    },
-
-    {
-      key: 'voting.quorum.major',
-      value: 0.5,
-      category: 'GOVERNANCE',
-      dataType: 'NUMBER',
-      description: 'Major project quorum',
-      isPublic: true,
-    },
-    {
-      key: 'voting.approval.major',
-      value: 0.6,
-      category: 'GOVERNANCE',
-      dataType: 'NUMBER',
-      description: 'Major project approval threshold',
-      isPublic: true,
-    },
-    {
-      key: 'voting.period.major',
-      value: 14,
-      category: 'GOVERNANCE',
-      dataType: 'NUMBER',
-      description: 'Major project voting period (days)',
-      isPublic: true,
-    },
-
-    {
-      key: 'voting.quorum.strategic',
-      value: 0.6,
-      category: 'GOVERNANCE',
-      dataType: 'NUMBER',
-      description: 'Strategic decision quorum',
-      isPublic: true,
-    },
-    {
-      key: 'voting.approval.strategic',
-      value: 0.66,
-      category: 'GOVERNANCE',
-      dataType: 'NUMBER',
-      description: 'Strategic decision approval threshold',
-      isPublic: true,
-    },
-    {
-      key: 'voting.period.strategic',
-      value: 21,
-      category: 'GOVERNANCE',
-      dataType: 'NUMBER',
-      description: 'Strategic decision voting period (days)',
-      isPublic: true,
-    },
-
-    {
-      key: 'voting.quorum.emergency',
-      value: 0.3,
-      category: 'GOVERNANCE',
-      dataType: 'NUMBER',
-      description: 'Emergency proposal quorum',
-      isPublic: true,
-    },
-    {
-      key: 'voting.approval.emergency',
-      value: 0.6,
-      category: 'GOVERNANCE',
-      dataType: 'NUMBER',
-      description: 'Emergency proposal approval threshold',
-      isPublic: true,
-    },
-    {
-      key: 'voting.period.emergency',
-      value: 3,
-      category: 'GOVERNANCE',
-      dataType: 'NUMBER',
-      description: 'Emergency proposal voting period (days)',
-      isPublic: true,
-    },
-
-    // Dues
-    {
-      key: 'dues.tier.ordinary',
-      value: 60,
-      category: 'ECONOMY',
-      dataType: 'NUMBER',
-      description: 'Ordinary monthly dues (KES)',
-      isPublic: true,
-    },
-    {
-      key: 'dues.tier.supporter',
-      value: 200,
-      category: 'ECONOMY',
-      dataType: 'NUMBER',
-      description: 'Supporter monthly dues (KES)',
-      isPublic: true,
-    },
-    {
-      key: 'dues.tier.sponsor',
-      value: 1000,
-      category: 'ECONOMY',
-      dataType: 'NUMBER',
-      description: 'Sponsor monthly dues (KES)',
-      isPublic: true,
-    },
-    {
-      key: 'dues.grace_period',
-      value: 30,
-      category: 'ECONOMY',
-      dataType: 'NUMBER',
-      description: 'Dues grace period (days)',
-      isPublic: true,
-    },
-
-    // Impact Points
-    {
-      key: 'ip.decay.monthly_rate',
-      value: 0.1,
-      category: 'REPUTATION',
-      dataType: 'NUMBER',
-      description: 'Monthly IP decay rate',
-      isPublic: true,
-    },
-    {
-      key: 'ip.decay.active_user_rate',
-      value: 0.05,
-      category: 'REPUTATION',
-      dataType: 'NUMBER',
-      description: 'Active user reduced decay rate',
-      isPublic: true,
-    },
-    {
-      key: 'ip.grace_period_months',
-      value: 3,
-      category: 'REPUTATION',
-      dataType: 'NUMBER',
-      description: 'No decay for first N months',
-      isPublic: true,
-    },
-
-    // Participation Rights
-    {
-      key: 'pr.monthly_regen',
-      value: 25,
-      category: 'REPUTATION',
-      dataType: 'NUMBER',
-      description: 'Base monthly PR regeneration',
-      isPublic: true,
-    },
-    {
-      key: 'pr.max_balance',
-      value: 500,
-      category: 'REPUTATION',
-      dataType: 'NUMBER',
-      description: 'Maximum PR balance',
-      isPublic: true,
-    },
-    {
-      key: 'pr.low_warning',
-      value: 20,
-      category: 'REPUTATION',
-      dataType: 'NUMBER',
-      description: 'Low PR warning threshold',
-      isPublic: true,
-    },
-
-    // PR from dues
-    {
-      key: 'pr.dues.ordinary',
-      value: 100,
-      category: 'ECONOMY',
-      dataType: 'NUMBER',
-      description: 'PR from ordinary dues',
-      isPublic: true,
-    },
-    {
-      key: 'pr.dues.supporter',
-      value: 200,
-      category: 'ECONOMY',
-      dataType: 'NUMBER',
-      description: 'PR from supporter dues',
-      isPublic: true,
-    },
-    {
-      key: 'pr.dues.sponsor',
-      value: 500,
-      category: 'ECONOMY',
-      dataType: 'NUMBER',
-      description: 'PR from sponsor dues',
-      isPublic: true,
-    },
-
-    // PR costs
-    {
-      key: 'pr.cost.vote',
-      value: 5,
-      category: 'GOVERNANCE',
-      dataType: 'NUMBER',
-      description: 'PR cost to vote',
-      isPublic: true,
-    },
-    {
-      key: 'pr.cost.proposal.ward',
-      value: 50,
-      category: 'GOVERNANCE',
-      dataType: 'NUMBER',
-      description: 'PR cost for ward proposal',
-      isPublic: true,
-    },
-    {
-      key: 'pr.cost.proposal.constituency',
-      value: 100,
-      category: 'GOVERNANCE',
-      dataType: 'NUMBER',
-      description: 'PR cost for constituency proposal',
-      isPublic: true,
-    },
-    {
-      key: 'pr.cost.proposal.county',
-      value: 150,
-      category: 'GOVERNANCE',
-      dataType: 'NUMBER',
-      description: 'PR cost for county proposal',
-      isPublic: true,
-    },
-    {
-      key: 'pr.cost.proposal.national',
-      value: 200,
-      category: 'GOVERNANCE',
-      dataType: 'NUMBER',
-      description: 'PR cost for national proposal',
-      isPublic: true,
-    },
-    {
-      key: 'pr.cost.group_create',
-      value: 100,
-      category: 'COMMUNITY',
-      dataType: 'NUMBER',
-      description: 'PR cost to create group',
-      isPublic: true,
-    },
-
-    // Onboarding rewards
-    {
-      key: 'onboarding.email_verified.ip',
-      value: 50,
-      category: 'REPUTATION',
-      dataType: 'NUMBER',
-      description: 'IP reward for email verification',
-      isPublic: true,
-    },
-    {
-      key: 'onboarding.email_verified.pr',
-      value: 25,
-      category: 'REPUTATION',
-      dataType: 'NUMBER',
-      description: 'PR reward for email verification',
-      isPublic: true,
-    },
-    {
-      key: 'onboarding.profile_complete.ip',
-      value: 25,
-      category: 'REPUTATION',
-      dataType: 'NUMBER',
-      description: 'IP reward for profile completion',
-      isPublic: true,
-    },
-    {
-      key: 'onboarding.wallet_connected.ip',
-      value: 200,
-      category: 'REPUTATION',
-      dataType: 'NUMBER',
-      description: 'IP reward for wallet connection',
-      isPublic: true,
-    },
-    {
-      key: 'onboarding.wallet_connected.pr',
-      value: 100,
-      category: 'REPUTATION',
-      dataType: 'NUMBER',
-      description: 'PR reward for wallet connection',
-      isPublic: true,
-    },
-    {
-      key: 'onboarding.phone_verified.ip',
-      value: 100,
-      category: 'REPUTATION',
-      dataType: 'NUMBER',
-      description: 'IP reward for phone verification',
-      isPublic: true,
-    },
-    {
-      key: 'onboarding.phone_verified.pr',
-      value: 25,
-      category: 'REPUTATION',
-      dataType: 'NUMBER',
-      description: 'PR reward for phone verification',
-      isPublic: true,
-    },
-  ];
-
   let created = 0;
-  for (const config of configs) {
+  for (const config of SYSTEM_CONFIG_ENTRIES) {
     const result = await prisma.systemConfiguration.upsert({
       where: { key: config.key },
       update: {
@@ -452,6 +944,58 @@ async function seedIndustriesAndGoods() {
 // 3. GEOGRAPHY — Full Kenya
 // ============================================================================
 
+function buildGeographyRecords(data: typeof countiesData) {
+  const countyCreates: { id: string; code: number; name: string }[] = [];
+  const constituencyCreates: {
+    id: string;
+    name: string;
+    countyId: string;
+  }[] = [];
+  const wardCreates: {
+    id: string;
+    name: string;
+    constituencyId: string;
+    countyId: string;
+    code: null;
+  }[] = [];
+  let counties = 0,
+    constituencies = 0,
+    wards = 0;
+
+  for (const county of data) {
+    if (!county.code || !county.name) {
+      console.warn(`Skipping invalid county:`, county);
+      continue;
+    }
+
+    const countyId = uuidv4();
+    countyCreates.push({ id: countyId, code: county.code, name: county.name });
+    counties++;
+
+    for (const cons of county.constituencies ?? []) {
+      if (!cons.name) continue;
+
+      const consId = uuidv4();
+      constituencyCreates.push({ id: consId, name: cons.name, countyId });
+      constituencies++;
+
+      const uniqueWards = [...new Set(cons.wards ?? [])].filter(Boolean);
+      for (const wardName of uniqueWards) {
+        wardCreates.push({
+          id: uuidv4(),
+          name: wardName,
+          constituencyId: consId,
+          countyId,
+          code: null,
+        });
+        wards++;
+      }
+    }
+  }
+
+  return { countyCreates, constituencyCreates, wardCreates, counts: { counties, constituencies, wards } };
+}
+
 async function seedGeography() {
   console.log('Seeding Kenyan geography...');
 
@@ -462,62 +1006,18 @@ async function seedGeography() {
     prisma.county.deleteMany(),
   ]);
 
-  let counties = 0,
-    constituencies = 0,
-    wards = 0;
+  const { countyCreates, constituencyCreates, wardCreates, counts } =
+    buildGeographyRecords(countiesData);
 
-  const countyCreates = [];
-  const constituencyCreates = [];
-  const wardCreates = [];
-
-  for (const county of countiesData) {
-    if (!county.code || !county.name) {
-      console.warn(`Skipping invalid county:`, county);
-      continue;
-    }
-
-    const countyId = uuidv4();
-    countyCreates.push({
-      id: countyId,
-      code: county.code,
-      name: county.name,
-    });
-    counties++;
-
-    for (const cons of county.constituencies ?? []) {
-      if (!cons.name) continue;
-
-      const consId = uuidv4();
-      constituencyCreates.push({
-        id: consId,
-        name: cons.name,
-        countyId,
-      });
-      constituencies++;
-
-      const uniqueWards = [...new Set(cons.wards ?? [])].filter(Boolean);
-      for (const wardName of uniqueWards) {
-        wardCreates.push({
-          id: uuidv4(),
-          name: wardName,
-          constituencyId: consId,
-          countyId,
-          code: null, // or generate if you have codes
-        });
-        wards++;
-      }
-    }
-  }
-
-  // Bulk create everything
   await prisma.county.createMany({ data: countyCreates });
   await prisma.constituency.createMany({ data: constituencyCreates });
   await prisma.ward.createMany({ data: wardCreates });
 
   console.log(
-    `Created ${counties} counties, ${constituencies} constituencies, ${wards} wards`
+    `Created ${counts.counties} counties, ${counts.constituencies} constituencies, ${counts.wards} wards`
   );
 }
+
 // ============================================================================
 // 4. SYSTEM GROUPS
 // ============================================================================
@@ -545,6 +1045,8 @@ async function seedSystemGroups() {
     prisma.constituency.findMany(),
     prisma.ward.findMany(),
   ]);
+
+  void national; // used only for the upsert side-effect
 
   const groupData = [
     ...counties.map((c) => ({
@@ -605,118 +1107,7 @@ async function seedSystemGroups() {
 async function seedRoles() {
   console.log('Seeding built-in roles...');
 
-  const roles = [
-    {
-      name: 'system:super_admin',
-      namespace: 'system',
-      description: 'Full platform access',
-      builtin: true,
-    },
-    {
-      name: 'system:auditor',
-      namespace: 'system',
-      description: 'Read-only audit access',
-      builtin: true,
-    },
-    {
-      name: 'system:support',
-      namespace: 'system',
-      description: 'User support and moderation',
-      builtin: true,
-    },
-    {
-      name: 'system:compliance_officer',
-      namespace: 'system',
-      description: 'User verification and platform rule enforcement',
-      builtin: true,
-    },
-    {
-      name: 'system:county_coordinator',
-      namespace: 'system',
-      description:
-        'County-level elected observer and coordinator (one per county, 47 total)',
-      builtin: true,
-    },
-    {
-      name: 'system:blockchain_admin',
-      namespace: 'system',
-      description:
-        'Manages smart contracts — deploy, upgrade governor contracts, emergency pauses. Technical only, no governance override.',
-      builtin: true,
-    },
-    {
-      name: 'system:contract_deployer',
-      namespace: 'system',
-      description: 'Can deploy new smart contracts to the blockchain',
-      builtin: true,
-    },
-    {
-      name: 'system:multisig_signer',
-      namespace: 'system',
-      description:
-        'Signs critical on-chain transactions, required for treasury operations',
-      builtin: true,
-    },
-
-    {
-      name: 'location:ward_admin',
-      namespace: 'location',
-      description: 'Ward administrator',
-      builtin: true,
-    },
-    {
-      name: 'location:constituency_admin',
-      namespace: 'location',
-      description: 'Constituency administrator',
-      builtin: true,
-    },
-    {
-      name: 'location:county_admin',
-      namespace: 'location',
-      description: 'County administrator',
-      builtin: true,
-    },
-
-    {
-      name: 'group:leader',
-      namespace: 'group',
-      description: 'Group leader',
-      builtin: true,
-    },
-    {
-      name: 'group:treasurer',
-      namespace: 'group',
-      description: 'Group treasurer',
-      builtin: true,
-    },
-    {
-      name: 'group:admin',
-      namespace: 'group',
-      description: 'Group administrator',
-      builtin: true,
-    },
-    {
-      name: 'group:auditor',
-      namespace: 'group',
-      description: 'Group auditor',
-      builtin: true,
-    },
-
-    {
-      name: 'project:manager',
-      namespace: 'project',
-      description: 'Project manager',
-      builtin: true,
-    },
-    {
-      name: 'project:verifier',
-      namespace: 'project',
-      description: 'Milestone verifier',
-      builtin: true,
-    },
-  ];
-
-  for (const role of roles) {
+  for (const role of BUILT_IN_ROLES_DATA) {
     await prisma.role.upsert({
       where: { name: role.name },
       update: {},
@@ -728,7 +1119,7 @@ async function seedRoles() {
     });
   }
 
-  console.log(`   Created/ensured ${roles.length} built-in roles`);
+  console.log(`   Created/ensured ${BUILT_IN_ROLES_DATA.length} built-in roles`);
 }
 
 // ============================================================================
@@ -738,197 +1129,7 @@ async function seedRoles() {
 async function seedOnboardingTutorials() {
   console.log('Seeding onboarding tutorials...');
 
-  const tutorials = [
-    {
-      key: 'platform_intro',
-      title: 'Welcome to UjamaaDAO',
-      description:
-        'Learn what UjamaaDAO is, how Participation Rights (PR) work, and what you can do on the platform.',
-      category: 'BASICS',
-      order: 1,
-      ipReward: 25,
-      prReward: 10,
-      estimatedMinutes: 3,
-      requiredFor: null,
-      isOptional: false,
-      content: {
-        steps: [
-          {
-            title: 'What is UjamaaDAO?',
-            body: 'UjamaaDAO is a community-owned platform for Kenyan citizens to collaborate, govern, and grow together — ward by ward. Every member earns Participation Rights (PR) for showing up and contributing.',
-          },
-          {
-            title: 'Participation Rights (PR)',
-            body: 'PR is your non-transferable civic currency. You earn PR by attending barazas, voting on proposals, completing your profile, and contributing to your community. It cannot be bought or sold.',
-          },
-          {
-            title: 'Your verification journey',
-            body: 'Start by verifying your phone number, then get vouched for by 3 ward members to unlock governance. Each step unlocks more of the platform.',
-          },
-        ],
-      },
-    },
-    {
-      key: 'verify_phone',
-      title: 'Verify your phone number',
-      description:
-        'Add and verify your Kenyan phone number to unlock economy features and prove you are a real person.',
-      category: 'VERIFICATION',
-      order: 2,
-      ipReward: 30,
-      prReward: 15,
-      estimatedMinutes: 2,
-      requiredFor: null,
-      isOptional: false,
-      content: {
-        steps: [
-          {
-            title: 'Why verify your phone?',
-            body: 'Your phone number ties your UjamaaDAO account to a real Kenyan identity. It unlocks economy features, baraza attendance recording, and is required for community verification.',
-          },
-          {
-            title: 'How to verify',
-            body: 'Go to your Profile page and click "Verify Phone". You can receive your code via SMS, WhatsApp, or Telegram — whichever you prefer.',
-          },
-        ],
-      },
-    },
-    {
-      key: 'connect_wallet',
-      title: 'Connect your Web3 wallet',
-      description:
-        'Link a wallet to receive Utility Tokens (UT) and participate in on-chain governance.',
-      category: 'VERIFICATION',
-      order: 3,
-      ipReward: 30,
-      prReward: 15,
-      estimatedMinutes: 3,
-      requiredFor: null,
-      isOptional: true,
-      content: {
-        steps: [
-          {
-            title: 'What is a wallet for?',
-            body: 'Your Web3 wallet is where Utility Tokens (UT) land when you earn them. UT represents long-term commitment to the community and is used in on-chain governance.',
-          },
-          {
-            title: 'How to connect',
-            body: 'Click the wallet icon in your Profile. We support MetaMask and WalletConnect. Your wallet address is stored on-chain — never your private key.',
-          },
-        ],
-      },
-    },
-    {
-      key: 'community_verification',
-      title: 'Get community verified',
-      description:
-        'Have 3 verified ward members vouch for you to unlock proposals, voting, and full platform access.',
-      category: 'VERIFICATION',
-      order: 4,
-      ipReward: 50,
-      prReward: 25,
-      estimatedMinutes: 5,
-      requiredFor: null,
-      isOptional: false,
-      content: {
-        steps: [
-          {
-            title: 'What is community verification?',
-            body: 'Community verification means 3 real people in your ward can confirm you are who you say you are. This is how UjamaaDAO stays human — no bots, no fake accounts.',
-          },
-          {
-            title: 'Who can vouch for you?',
-            body: 'Any COMMUNITY_VERIFIED member in your ward can vouch for you. If you do not know anyone yet, you can pay the platform fee as an alternative path.',
-          },
-          {
-            title: 'What does it unlock?',
-            body: 'Community verification gives you access to governance (proposals and voting), the economy module, baraza attendance PR, and your full ward dashboard.',
-          },
-        ],
-      },
-    },
-    {
-      key: 'governance_basics',
-      title: 'How governance works',
-      description:
-        'Learn how to read proposals, cast votes, and understand what quorum means for your ward.',
-      category: 'GOVERNANCE',
-      order: 5,
-      ipReward: 50,
-      prReward: 25,
-      estimatedMinutes: 8,
-      requiredFor: 'VOTING',
-      isOptional: false,
-      content: {
-        steps: [
-          {
-            title: 'Proposals',
-            body: 'Any COMMUNITY_VERIFIED member can raise a proposal — a request for the community to decide something. Proposals go through a draft → review → voting → results lifecycle.',
-          },
-          {
-            title: 'Voting with PR',
-            body: 'Your PR balance is your voting power. More PR = more weight. PR is earned by showing up, not by buying. This keeps governance fair and participation-based.',
-          },
-          {
-            title: 'Quorum',
-            body: "A proposal only passes if enough members vote. Quorum rules are set per ward. Check the governance page for your ward's current thresholds.",
-          },
-        ],
-      },
-    },
-    {
-      key: 'attend_baraza',
-      title: 'Attend your first baraza',
-      description:
-        'Join your ward baraza group on Telegram and type /present to log attendance and earn PR.',
-      category: 'COMMUNITY',
-      order: 6,
-      ipReward: 40,
-      prReward: 20,
-      estimatedMinutes: 3,
-      requiredFor: null,
-      isOptional: false,
-      content: {
-        steps: [
-          {
-            title: 'What is a baraza?',
-            body: "A baraza is your ward's regular community meeting — held on Telegram. When you attend, you type /present and earn 15 PR automatically. Your ward leader opens and closes each session.",
-          },
-          {
-            title: 'How to join',
-            body: 'Find your baraza group link on your dashboard under "My Barazas". Join the Telegram group and introduce yourself. When the next session opens, type /present to be counted.',
-          },
-        ],
-      },
-    },
-    {
-      key: 'explore_marketplace',
-      title: 'Explore the marketplace',
-      description:
-        'Browse skills and goods offered by community members in your ward and beyond.',
-      category: 'MARKETPLACE',
-      order: 7,
-      ipReward: 20,
-      prReward: 10,
-      estimatedMinutes: 3,
-      requiredFor: null,
-      isOptional: true,
-      content: {
-        steps: [
-          {
-            title: 'Community-first marketplace',
-            body: 'The UjamaaDAO marketplace is for discovering what community members offer — skills, goods, services. All transactions stay within the community.',
-          },
-          {
-            title: 'Discovery only',
-            body: 'The marketplace is a discovery platform. Payments happen directly between members via M-Pesa. Browse freely — no account needed to view listings.',
-          },
-        ],
-      },
-    },
-  ];
-
-  for (const tutorial of tutorials) {
+  for (const tutorial of ONBOARDING_TUTORIALS_DATA) {
     const { content, ...rest } = tutorial;
     await prisma.onboardingTutorial.upsert({
       where: { key: tutorial.key },
@@ -942,12 +1143,51 @@ async function seedOnboardingTutorials() {
     });
   }
 
-  console.log(`   Created/ensured ${tutorials.length} tutorials`);
+  console.log(`   Created/ensured ${ONBOARDING_TUTORIALS_DATA.length} tutorials`);
 }
 
 // ============================================================================
 // 7. TEST ADMIN USER (dev/test only)
 // ============================================================================
+
+async function assignAdminRoles(adminUserId: string) {
+  const superRole = await prisma.role.findUnique({
+    where: { name: 'system:super_admin' },
+  });
+  if (superRole) {
+    await prisma.userRole.upsert({
+      where: {
+        userId_roleId: { userId: adminUserId, roleId: superRole.id },
+      },
+      update: {},
+      create: {
+        id: uuidv4(),
+        userId: adminUserId,
+        roleId: superRole.id,
+        active: true,
+      },
+    });
+  }
+
+  // Also give admin ward_admin role for dev testing of the proposal review chain
+  const wardAdminRole = await prisma.role.findUnique({
+    where: { name: 'location:ward_admin' },
+  });
+  if (wardAdminRole) {
+    await prisma.userRole.upsert({
+      where: {
+        userId_roleId: { userId: adminUserId, roleId: wardAdminRole.id },
+      },
+      update: { active: true },
+      create: {
+        id: uuidv4(),
+        userId: adminUserId,
+        roleId: wardAdminRole.id,
+        active: true,
+      },
+    });
+  }
+}
 
 async function seedTestAdmin() {
   if (process.env.NODE_ENV === 'production') {
@@ -997,42 +1237,7 @@ async function seedTestAdmin() {
     },
   });
 
-  const superRole = await prisma.role.findUnique({
-    where: { name: 'system:super_admin' },
-  });
-  if (superRole) {
-    await prisma.userRole.upsert({
-      where: {
-        userId_roleId: { userId: adminUser.id, roleId: superRole.id },
-      },
-      update: {},
-      create: {
-        id: uuidv4(),
-        userId: adminUser.id,
-        roleId: superRole.id,
-        active: true,
-      },
-    });
-  }
-
-  // Also give admin ward_admin role for dev testing of the proposal review chain
-  const wardAdminRole = await prisma.role.findUnique({
-    where: { name: 'location:ward_admin' },
-  });
-  if (wardAdminRole) {
-    await prisma.userRole.upsert({
-      where: {
-        userId_roleId: { userId: adminUser.id, roleId: wardAdminRole.id },
-      },
-      update: { active: true },
-      create: {
-        id: uuidv4(),
-        userId: adminUser.id,
-        roleId: wardAdminRole.id,
-        active: true,
-      },
-    });
-  }
+  await assignAdminRoles(adminUser.id);
 
   console.log(
     `   Created admin@ujamaa.test with super admin + ward admin roles`
@@ -1040,146 +1245,13 @@ async function seedTestAdmin() {
 }
 
 // ============================================================================
-// 8b. TEST USERS — Role coverage + governance test data (dev/test only)
+// 8b. TEST USERS — helpers (dev/test only)
 // ============================================================================
 
-async function seedTestUsers() {
-  if (process.env.NODE_ENV === 'production') {
-    console.log('   Skipping test users in production');
-    return;
-  }
-
-  console.log(
-    '   Seeding test users (role coverage + governance test data)...'
-  );
-
-  const firstWard = await prisma.ward.findFirst({
-    include: { constituency: { include: { county: true } } },
-  });
-  if (!firstWard) {
-    console.warn('   No ward found — skipping test users');
-    return;
-  }
-
-  // Second ward in the SAME constituency (cross-ward vouch testing)
-  const secondWard = await prisma.ward.findFirst({
-    where: {
-      constituencyId: firstWard.constituencyId,
-      id: { not: firstWard.id },
-    },
-    include: { constituency: { include: { county: true } } },
-  });
-
-  // Ward in a DIFFERENT constituency but SAME county
-  const diffConstituencyWard = await prisma.ward.findFirst({
-    where: {
-      constituency: {
-        countyId: firstWard.constituency.countyId,
-        id: { not: firstWard.constituencyId },
-      },
-    },
-    include: { constituency: { include: { county: true } } },
-  });
-
-  // Ward in a DIFFERENT county
-  const diffCountyWard = await prisma.ward.findFirst({
-    where: {
-      constituency: {
-        countyId: { not: firstWard.constituency.countyId },
-      },
-    },
-    include: { constituency: { include: { county: true } } },
-  });
-
-  // Main ward users: reside in firstWard, originate from secondWard (cross-ward within same constituency)
-  // Geographic spread users: reside in their respective ward, originate from firstWard
-  const mainSecondaryWardId = secondWard?.id ?? firstWard.id;
-
-  const COMMON_FIELDS = {
-    emailVerified: true,
-    phoneVerified: true,
-    communityVerified: true,
-    verificationLevel: 'COMMUNITY_VERIFIED' as const,
-    participationRights: 500,
-    globalImpactPoints: 200,
-    primaryWardId: firstWard.id,
-    secondaryWardId: mainSecondaryWardId,
-  };
-
-  type TestUser = {
-    email: string;
-    name: string;
-    phoneNumber: string;
-    role?: string;
-    verificationLevel?: string;
-  };
-  const testUsers: TestUser[] = [
-    {
-      email: 'compliance@ujamaa.test',
-      name: 'Compliance Officer',
-      phoneNumber: '+254700000001',
-      role: 'system:compliance_officer',
-      verificationLevel: 'FULL_VERIFIED',
-    },
-    {
-      email: 'auditor@ujamaa.test',
-      name: 'System Auditor',
-      phoneNumber: '+254700000005',
-      role: 'system:auditor',
-      verificationLevel: 'FULL_VERIFIED',
-    },
-    {
-      email: 'coordinator@ujamaa.test',
-      name: 'County Coordinator',
-      phoneNumber: '+254700000006',
-      role: 'system:county_coordinator',
-      verificationLevel: 'FULL_VERIFIED',
-    },
-    {
-      email: 'support@ujamaa.test',
-      name: 'Support Staff',
-      phoneNumber: '+254700000007',
-      role: 'system:support',
-      verificationLevel: 'FULL_VERIFIED',
-    },
-    {
-      email: 'ward.admin@ujamaa.test',
-      name: 'Ward Administrator',
-      phoneNumber: '+254700000002',
-      role: 'location:ward_admin',
-      verificationLevel: 'FULL_VERIFIED',
-    },
-    {
-      email: 'constituency.admin@ujamaa.test',
-      name: 'Constituency Administrator',
-      phoneNumber: '+254700000003',
-      role: 'location:constituency_admin',
-      verificationLevel: 'FULL_VERIFIED',
-    },
-    {
-      email: 'county.admin@ujamaa.test',
-      name: 'County Administrator',
-      phoneNumber: '+254700000004',
-      role: 'location:county_admin',
-      verificationLevel: 'FULL_VERIFIED',
-    },
-    {
-      email: 'waichari@ujamaa.test',
-      name: 'James Waichari',
-      phoneNumber: '+254700000010',
-    },
-    {
-      email: 'akinyi@ujamaa.test',
-      name: 'Grace Akinyi',
-      phoneNumber: '+254700000011',
-    },
-    {
-      email: 'otieno@ujamaa.test',
-      name: 'Kevin Otieno',
-      phoneNumber: '+254700000012',
-    },
-  ];
-
+async function seedSpecialCaseUsers(
+  firstWard: { id: string },
+  mainSecondaryWardId: string
+) {
   // PHONE_VERIFIED user — for testing verification flow UX
   await prisma.user.upsert({
     where: { email: 'phone-only@ujamaa.test' },
@@ -1252,9 +1324,15 @@ async function seedTestUsers() {
       globalImpactPoints: 500,
     },
   });
+}
 
-  // ── Geographic spread users ──────────────────────────────────────────────
-
+async function seedGeographicSpreadUsers(
+  firstWard: { id: string },
+  secondWard: WardFull | null,
+  diffConstituencyWard: WardFull | null,
+  diffCountyWard: WardFull | null,
+  mainSecondaryWardId: string
+) {
   // Second ward, same constituency — for cross-ward vouch restriction testing
   if (secondWard) {
     await prisma.user.upsert({
@@ -1336,6 +1414,91 @@ async function seedTestUsers() {
     );
   }
 
+  void mainSecondaryWardId; // passed for symmetry; geographic users use firstWard as secondary
+}
+
+async function seedRoleCoverageUsers(
+  firstWard: { id: string },
+  mainSecondaryWardId: string
+): Promise<Record<string, string>> {
+  const COMMON_FIELDS = {
+    emailVerified: true,
+    phoneVerified: true,
+    communityVerified: true,
+    verificationLevel: 'COMMUNITY_VERIFIED' as const,
+    participationRights: 500,
+    globalImpactPoints: 200,
+    primaryWardId: firstWard.id,
+    secondaryWardId: mainSecondaryWardId,
+  };
+
+  const testUsers: TestUser[] = [
+    {
+      email: 'compliance@ujamaa.test',
+      name: 'Compliance Officer',
+      phoneNumber: '+254700000001',
+      role: 'system:compliance_officer',
+      verificationLevel: 'FULL_VERIFIED',
+    },
+    {
+      email: 'auditor@ujamaa.test',
+      name: 'System Auditor',
+      phoneNumber: '+254700000005',
+      role: 'system:auditor',
+      verificationLevel: 'FULL_VERIFIED',
+    },
+    {
+      email: 'coordinator@ujamaa.test',
+      name: 'County Coordinator',
+      phoneNumber: '+254700000006',
+      role: 'system:county_coordinator',
+      verificationLevel: 'FULL_VERIFIED',
+    },
+    {
+      email: 'support@ujamaa.test',
+      name: 'Support Staff',
+      phoneNumber: '+254700000007',
+      role: 'system:support',
+      verificationLevel: 'FULL_VERIFIED',
+    },
+    {
+      email: 'ward.admin@ujamaa.test',
+      name: 'Ward Administrator',
+      phoneNumber: '+254700000002',
+      role: 'location:ward_admin',
+      verificationLevel: 'FULL_VERIFIED',
+    },
+    {
+      email: 'constituency.admin@ujamaa.test',
+      name: 'Constituency Administrator',
+      phoneNumber: '+254700000003',
+      role: 'location:constituency_admin',
+      verificationLevel: 'FULL_VERIFIED',
+    },
+    {
+      email: 'county.admin@ujamaa.test',
+      name: 'County Administrator',
+      phoneNumber: '+254700000004',
+      role: 'location:county_admin',
+      verificationLevel: 'FULL_VERIFIED',
+    },
+    {
+      email: 'waichari@ujamaa.test',
+      name: 'James Waichari',
+      phoneNumber: '+254700000010',
+    },
+    {
+      email: 'akinyi@ujamaa.test',
+      name: 'Grace Akinyi',
+      phoneNumber: '+254700000011',
+    },
+    {
+      email: 'otieno@ujamaa.test',
+      name: 'Kevin Otieno',
+      phoneNumber: '+254700000012',
+    },
+  ];
+
   const createdUsers: Record<string, string> = {};
 
   for (const u of testUsers) {
@@ -1380,7 +1543,13 @@ async function seedTestUsers() {
     }
   }
 
-  // Seed voluntary group: Kayole Borehole Committee
+  return createdUsers;
+}
+
+async function seedBoreholeGroupAndMembers(
+  firstWard: { id: string },
+  createdUsers: Record<string, string>
+) {
   const boreholeGroup = await prisma.group
     .upsert({
       where: {
@@ -1424,7 +1593,6 @@ async function seedTestUsers() {
       });
     });
 
-  // Add test users to borehole group
   const groupMembers = [
     { email: 'waichari@ujamaa.test', role: 'LEADER' },
     { email: 'akinyi@ujamaa.test', role: 'MEMBER' },
@@ -1456,137 +1624,129 @@ async function seedTestUsers() {
     data: { memberCount },
   });
 
-  // Seed test proposals
-  const waichariId = createdUsers['waichari@ujamaa.test'];
-  if (waichariId) {
-    // DRAFT proposal
-    const existing1 = await prisma.proposal.findFirst({
-      where: { title: 'New Community Borehole', creatorId: waichariId },
-    });
-    if (!existing1) {
-      const p1 = await prisma.proposal.create({
-        data: {
-          id: uuidv4(),
-          groupId: boreholeGroup.id,
-          creatorId: waichariId,
-          title: 'New Community Borehole',
-          description:
-            'Proposal to drill a new borehole in Kayole Ward to address water scarcity affecting 5,000 residents.',
-          status: 'DRAFT',
-          proposalType: 'COMMUNITY_INITIATIVE',
-          proposalScope: 'COMMUNITY',
-          budget: 350000,
-        },
-      });
-      await auditService.log(
-        waichariId,
-        AuditAction.PROPOSAL_CREATED,
-        'Proposal',
-        p1.id,
-        {
-          groupId: boreholeGroup.id,
-          title: p1.title,
-          scope: 'COMMUNITY',
-        }
-      );
-    }
+  return boreholeGroup;
+}
 
-    // PENDING_REVIEW proposal
-    const existing2 = await prisma.proposal.findFirst({
-      where: { title: 'Road Maintenance Request', creatorId: waichariId },
+async function seedTestProposals(
+  boreholeGroup: { id: string },
+  waichariId: string
+) {
+  // DRAFT proposal
+  const existing1 = await prisma.proposal.findFirst({
+    where: { title: 'New Community Borehole', creatorId: waichariId },
+  });
+  if (!existing1) {
+    const p1 = await prisma.proposal.create({
+      data: {
+        id: uuidv4(),
+        groupId: boreholeGroup.id,
+        creatorId: waichariId,
+        title: 'New Community Borehole',
+        description:
+          'Proposal to drill a new borehole in Kayole Ward to address water scarcity affecting 5,000 residents.',
+        status: 'DRAFT',
+        proposalType: 'COMMUNITY_INITIATIVE',
+        proposalScope: 'COMMUNITY',
+        budget: 350000,
+      },
     });
-    if (!existing2) {
-      const p2 = await prisma.proposal.create({
-        data: {
-          id: uuidv4(),
-          groupId: boreholeGroup.id,
-          creatorId: waichariId,
-          title: 'Road Maintenance Request',
-          description:
-            'Request for maintenance of the main access road connecting Kayole to Embakasi Road.',
-          status: 'PENDING_REVIEW',
-          proposalType: 'COMMUNITY_INITIATIVE',
-          proposalScope: 'COMMUNITY',
-          budget: 150000,
-        },
-      });
-      await auditService.log(
-        waichariId,
-        AuditAction.PROPOSAL_CREATED,
-        'Proposal',
-        p2.id,
-        {
-          groupId: boreholeGroup.id,
-          title: p2.title,
-          scope: 'COMMUNITY',
-        }
-      );
-      await auditService.log(
-        waichariId,
-        AuditAction.PROPOSAL_STATUS_CHANGED,
-        'Proposal',
-        p2.id,
-        {
-          newStatus: 'PENDING_REVIEW',
-          stage: 1,
-        }
-      );
-    }
-
-    // APPROVED_FOR_VOTING proposal
-    const existing3 = await prisma.proposal.findFirst({
-      where: { title: 'Youth Skills Programme', creatorId: waichariId },
-    });
-    if (!existing3) {
-      const p3 = await prisma.proposal.create({
-        data: {
-          id: uuidv4(),
-          groupId: boreholeGroup.id,
-          creatorId: waichariId,
-          title: 'Youth Skills Programme',
-          description:
-            'Six-month vocational skills programme for unemployed youth aged 18–35 in Kayole Ward.',
-          status: 'APPROVED_FOR_VOTING',
-          proposalType: 'COMMUNITY_INITIATIVE',
-          proposalScope: 'COMMUNITY',
-          budget: 200000,
-        },
-      });
-      await auditService.log(
-        waichariId,
-        AuditAction.PROPOSAL_CREATED,
-        'Proposal',
-        p3.id,
-        {
-          groupId: boreholeGroup.id,
-          title: p3.title,
-          scope: 'COMMUNITY',
-        }
-      );
-      await auditService.log(
-        waichariId,
-        AuditAction.PROPOSAL_STATUS_CHANGED,
-        'Proposal',
-        p3.id,
-        {
-          newStatus: 'APPROVED_FOR_VOTING',
-          stage: 1,
-        }
-      );
-    }
+    await auditService.log(
+      waichariId,
+      AuditAction.PROPOSAL_CREATED,
+      'Proposal',
+      p1.id,
+      { groupId: boreholeGroup.id, title: p1.title, scope: 'COMMUNITY' }
+    );
   }
 
-  // ── Auto-enroll all test users into their system groups ───────────────────
+  // PENDING_REVIEW proposal
+  const existing2 = await prisma.proposal.findFirst({
+    where: { title: 'Road Maintenance Request', creatorId: waichariId },
+  });
+  if (!existing2) {
+    const p2 = await prisma.proposal.create({
+      data: {
+        id: uuidv4(),
+        groupId: boreholeGroup.id,
+        creatorId: waichariId,
+        title: 'Road Maintenance Request',
+        description:
+          'Request for maintenance of the main access road connecting Kayole to Embakasi Road.',
+        status: 'PENDING_REVIEW',
+        proposalType: 'COMMUNITY_INITIATIVE',
+        proposalScope: 'COMMUNITY',
+        budget: 150000,
+      },
+    });
+    await auditService.log(
+      waichariId,
+      AuditAction.PROPOSAL_CREATED,
+      'Proposal',
+      p2.id,
+      { groupId: boreholeGroup.id, title: p2.title, scope: 'COMMUNITY' }
+    );
+    await auditService.log(
+      waichariId,
+      AuditAction.PROPOSAL_STATUS_CHANGED,
+      'Proposal',
+      p2.id,
+      { newStatus: 'PENDING_REVIEW', stage: 1 }
+    );
+  }
+
+  // APPROVED_FOR_VOTING proposal
+  const existing3 = await prisma.proposal.findFirst({
+    where: { title: 'Youth Skills Programme', creatorId: waichariId },
+  });
+  if (!existing3) {
+    const p3 = await prisma.proposal.create({
+      data: {
+        id: uuidv4(),
+        groupId: boreholeGroup.id,
+        creatorId: waichariId,
+        title: 'Youth Skills Programme',
+        description:
+          'Six-month vocational skills programme for unemployed youth aged 18–35 in Kayole Ward.',
+        status: 'APPROVED_FOR_VOTING',
+        proposalType: 'COMMUNITY_INITIATIVE',
+        proposalScope: 'COMMUNITY',
+        budget: 200000,
+      },
+    });
+    await auditService.log(
+      waichariId,
+      AuditAction.PROPOSAL_CREATED,
+      'Proposal',
+      p3.id,
+      { groupId: boreholeGroup.id, title: p3.title, scope: 'COMMUNITY' }
+    );
+    await auditService.log(
+      waichariId,
+      AuditAction.PROPOSAL_STATUS_CHANGED,
+      'Proposal',
+      p3.id,
+      { newStatus: 'APPROVED_FOR_VOTING', stage: 1 }
+    );
+  }
+}
+
+async function enrollAllUsersIntoSystemGroups(
+  firstWard: { id: string },
+  mainSecondaryWardId: string,
+  secondWard: { id: string } | null,
+  diffConstituencyWard: { id: string } | null,
+  diffCountyWard: { id: string } | null,
+  createdUsers: Record<string, string>
+) {
   console.log('   Enrolling test users into system groups...');
 
-  // Collect every (userId, primaryWardId, secondaryWardId) across all test users
   const allUsersForEnrollment: {
     userId: string;
     primary: string;
     secondary: string;
   }[] = [];
 
-  // Users from the main loop — reside in firstWard, origin in mainSecondaryWardId
+  // Users from the main role-coverage loop
   for (const [, userId] of Object.entries(createdUsers)) {
     allUsersForEnrollment.push({
       userId,
@@ -1640,6 +1800,7 @@ async function seedTestUsers() {
         ]
       : []),
   ];
+
   for (const { email, primary, secondary } of extraEmails) {
     const u = await prisma.user.findUnique({
       where: { email },
@@ -1670,7 +1831,6 @@ async function seedTestUsers() {
         secondary
       );
       enrolled++;
-      // Log a feed-visible GROUP_JOINED event for this enrollment
       await auditService.log(
         userId,
         AuditAction.GROUP_JOINED,
@@ -1683,10 +1843,84 @@ async function seedTestUsers() {
     }
   }
 
-  console.log(
-    `   Created ${testUsers.length} test users, 1 voluntary group, 3 test proposals`
-  );
   console.log(`   Enrolled ${enrolled} users into system groups`);
+}
+
+// ============================================================================
+// 8b. TEST USERS — orchestrator (dev/test only)
+// ============================================================================
+
+async function seedTestUsers() {
+  if (process.env.NODE_ENV === 'production') {
+    console.log('   Skipping test users in production');
+    return;
+  }
+
+  console.log(
+    '   Seeding test users (role coverage + governance test data)...'
+  );
+
+  const firstWard = await prisma.ward.findFirst({
+    include: { constituency: { include: { county: true } } },
+  });
+  if (!firstWard) {
+    console.warn('   No ward found — skipping test users');
+    return;
+  }
+
+  const secondWard = await prisma.ward.findFirst({
+    where: {
+      constituencyId: firstWard.constituencyId,
+      id: { not: firstWard.id },
+    },
+    include: { constituency: { include: { county: true } } },
+  });
+
+  const diffConstituencyWard = await prisma.ward.findFirst({
+    where: {
+      constituency: {
+        countyId: firstWard.constituency.countyId,
+        id: { not: firstWard.constituencyId },
+      },
+    },
+    include: { constituency: { include: { county: true } } },
+  });
+
+  const diffCountyWard = await prisma.ward.findFirst({
+    where: {
+      constituency: {
+        countyId: { not: firstWard.constituency.countyId },
+      },
+    },
+    include: { constituency: { include: { county: true } } },
+  });
+
+  const mainSecondaryWardId = secondWard?.id ?? firstWard.id;
+
+  await seedSpecialCaseUsers(firstWard, mainSecondaryWardId);
+  await seedGeographicSpreadUsers(
+    firstWard,
+    secondWard,
+    diffConstituencyWard,
+    diffCountyWard,
+    mainSecondaryWardId
+  );
+  const createdUsers = await seedRoleCoverageUsers(firstWard, mainSecondaryWardId);
+  const boreholeGroup = await seedBoreholeGroupAndMembers(firstWard, createdUsers);
+  const waichariId = createdUsers['waichari@ujamaa.test'];
+  if (waichariId) await seedTestProposals(boreholeGroup, waichariId);
+  await enrollAllUsersIntoSystemGroups(
+    firstWard,
+    mainSecondaryWardId,
+    secondWard,
+    diffConstituencyWard,
+    diffCountyWard,
+    createdUsers
+  );
+
+  console.log(
+    `   Created ${Object.keys(createdUsers).length} test users, 1 voluntary group, 3 test proposals`
+  );
 }
 
 // ============================================================================
@@ -1709,202 +1943,7 @@ async function seedEducationModules() {
     return;
   }
 
-  const modules = [
-    {
-      title: 'What is UjamaaDAO?',
-      description:
-        'An introduction to UjamaaDAO — what it is, why it was built, and how it empowers Kenyan ward communities through collective governance and economic cooperation.',
-      content: `# What is UjamaaDAO?
-
-UjamaaDAO is a community-owned digital platform designed to strengthen local governance and economic cooperation at the ward level in Kenya.
-
-## The name
-
-"Ujamaa" is a Swahili word meaning *familyhood* or *cooperative economics*. It reflects the founding belief that communities grow strongest when members invest in one another.
-
-"DAO" stands for *Decentralised Autonomous Organisation* — a structure where decisions are made collectively by members, with rules encoded transparently on a blockchain rather than sitting with a single authority.
-
-## Why it was built
-
-Kenya's 1,450 wards are the smallest unit of government, yet most civic participation tools are designed for national or county use. UjamaaDAO fills this gap by giving each ward its own governed community: a space to propose projects, vote on spending, organise local markets, and track collective progress.
-
-## The four pillars
-
-1. **Identity & Verification** — Members verify their ward residency through community vouching (3 neighbours confirm you live there) or a one-time KES 100 payment. This makes the system Sybil-resistant and locally accountable.
-
-2. **Participation Rights (PR)** — A non-transferable score that measures your right to participate. You earn PR by paying dues, completing education, attending barazas, and contributing to projects. You spend PR to vote and create proposals.
-
-3. **Impact Points (IP)** — A reputation score for your contributions. IP decays slowly over time to reward sustained engagement over one-off actions.
-
-4. **Governance** — Any verified member can propose a project or community initiative. Proposals go through a transparent voting window; passing proposals become funded projects with trackable milestones.
-
-## What you can do on UjamaaDAO
-
-- **Learn** — Complete education modules (like this one) to earn IP and deepen your civic knowledge.
-- **Govern** — Create or vote on proposals for your ward.
-- **Contribute** — Join project teams, complete milestones, and earn rewards.
-- **Trade** — List skills and goods in the ward marketplace (discovery only — no platform payments).
-- **Connect** — Join your ward's Telegram/WhatsApp baraza and have your attendance recorded on-chain.
-
-## The blockchain layer
-
-PR and Utility Tokens (UT) are minted on Base (an Ethereum Layer 2). This means your participation record is publicly verifiable and can never be altered by any single actor — including the platform team.
-
-## Getting started
-
-1. Verify your email → complete your profile → verify your phone.
-2. Get community-verified by three ward neighbours.
-3. Start participating: vote, learn, propose, contribute.
-
-Every action you take here strengthens your ward. Welcome to UjamaaDAO.`,
-      duration: 15,
-      difficulty: 'BEGINNER' as const,
-      category: 'civic',
-      completionIP: 25,
-      verified: true,
-      expertApproved: true,
-    },
-    {
-      title: 'Understanding Participation Rights (PR)',
-      description:
-        'Learn how Participation Rights work, how to earn them, how they are spent, and why they are non-transferable.',
-      content: `# Understanding Participation Rights (PR)
-
-Participation Rights (PR) are your democratic currency on UjamaaDAO. Unlike money, they cannot be bought, sold, or given away — they must be *earned* through genuine community participation.
-
-## What PR measures
-
-PR is a measure of your *right to participate* at any given moment. A high PR balance signals that you have been actively engaged with your community recently. A low balance means you may need to re-engage before you can take certain actions.
-
-## Earning PR
-
-| Action | PR earned |
-|--------|-----------|
-| Email verification | +25 |
-| Phone verification | +25 |
-| Monthly dues (ordinary, KES 60) | +100 |
-| Monthly dues (supporter, KES 200) | +200 |
-| Monthly dues (sponsor, KES 1,000) | +500 |
-| Completing an education module | varies |
-| Attending a baraza | +10 |
-| Wallet connection | +100 |
-
-## Spending PR
-
-| Action | PR cost |
-|--------|---------|
-| Casting a vote | 5 |
-| Ward proposal | 50 |
-| Constituency proposal | 100 |
-| County proposal | 150 |
-| National proposal | 200 |
-| Creating a community group | 100 |
-
-## PR regeneration
-
-Your PR balance regenerates by **25 PR per month** automatically, as long as your account is active. This means even members who are temporarily inactive don't lose their ability to re-engage.
-
-## Maximum balance
-
-The maximum PR balance is **500**. There is no benefit to accumulating PR beyond this cap — the system is designed to reward consistent participation, not hoarding.
-
-## Why PR is non-transferable
-
-PR cannot be transferred between users. This design choice is intentional:
-
-- It prevents wealthy members from buying influence.
-- It ensures every vote represents genuine community engagement.
-- It makes the governance system resistant to capture by outside interests.
-
-PR is recorded on the Base blockchain, meaning your participation history is transparent and tamper-proof.
-
-## Low PR warning
-
-When your balance falls below **20 PR**, you will see a warning in your dashboard. This is your signal to re-engage: attend a baraza, pay dues, or complete an education module.`,
-      duration: 10,
-      difficulty: 'BEGINNER' as const,
-      category: 'governance',
-      completionIP: 20,
-      verified: true,
-      expertApproved: true,
-    },
-    {
-      title: 'How Governance Works',
-      description:
-        'A step-by-step guide to proposals, voting thresholds, quorums, and how ward decisions become funded projects.',
-      content: `# How Governance Works
-
-UjamaaDAO's governance system allows any community-verified member to propose ideas and have them decided by collective vote. Here is how the process works from start to finish.
-
-## Step 1 — Create a proposal
-
-Any verified member with sufficient PR can create a proposal. The cost depends on the scope:
-
-- **Ward** (affects your ward only) — 50 PR
-- **Constituency** — 100 PR
-- **County** — 150 PR
-- **National** — 200 PR
-
-A proposal includes a title, description, and optionally a requested funding amount in KES. Proposals can also include milestones — measurable checkpoints for how the project will be delivered.
-
-## Step 2 — The voting window opens
-
-After creation, a proposal enters a *voting window*. The length depends on the proposal type:
-
-| Type | Voting period |
-|------|--------------|
-| Community initiative | 7 days |
-| Major project | 14 days |
-| Strategic decision | 21 days |
-| Emergency | 3 days |
-
-During this window, eligible members can vote YES, NO, or ABSTAIN. Each vote costs **5 PR**.
-
-## Step 3 — Quorum and approval thresholds
-
-For a proposal to pass, two conditions must be met:
-
-1. **Quorum** — A minimum percentage of eligible voters must have voted.
-2. **Approval threshold** — A minimum percentage of votes must be YES.
-
-| Proposal type | Quorum required | Approval required |
-|--------------|-----------------|-------------------|
-| Community | 40% | 50% |
-| Major | 50% | 60% |
-| Strategic | 60% | 66% |
-| Emergency | 30% | 60% |
-
-## Step 4 — Execution
-
-If a proposal passes, it becomes an approved project. A project manager can then:
-
-1. Break the work into milestones.
-2. Assign team members.
-3. Submit milestone completions with proof (photos, receipts, links).
-4. Have milestones verified by designated verifiers.
-
-Verified milestones trigger IP and PR awards to the contributors.
-
-## Transparency
-
-All votes, proposal texts, and results are stored immutably. No administrator can delete a proposal or alter vote counts after the window closes.
-
-## Tips for a strong proposal
-
-- Be specific: what exactly will be built or changed?
-- Include a realistic budget with line items.
-- Break large work into 3–5 milestones.
-- Link your proposal to a baraza discussion so the community has context before voting.`,
-      duration: 12,
-      difficulty: 'BEGINNER' as const,
-      category: 'governance',
-      completionIP: 30,
-      verified: true,
-      expertApproved: true,
-    },
-  ];
-
-  for (const mod of modules) {
+  for (const mod of EDUCATION_MODULES_DATA) {
     const existing = await prisma.educationalModule.findFirst({
       where: { title: mod.title, creatorId: admin.id },
       select: { id: true },
@@ -1939,10 +1978,9 @@ All votes, proposal texts, and results are stored immutably. No administrator ca
     }
   }
 
-  console.log(`   Created/ensured ${modules.length} education modules`);
+  console.log(`   Created/ensured ${EDUCATION_MODULES_DATA.length} education modules`);
 }
 
-// ============================================================================
 // ============================================================================
 // PLATFORM CONFIG SEED
 // ============================================================================
