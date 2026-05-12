@@ -110,4 +110,55 @@ contract GovernanceVotingTest is Test {
         emit GovernanceVoting.VoteCast(PROPOSAL_A, voter1, 0, 100, block.timestamp);
         voting.recordVote(PROPOSAL_A, voter1, 0, 100);
     }
+
+    // ── recordResult tests ───────────────────────────────────────────────────
+
+    function test_RecordApprovedResult() public {
+        vm.prank(recorder);
+        voting.recordResult(PROPOSAL_A, 1);
+
+        GovernanceVoting.ProposalResult memory r = voting.getResult(PROPOSAL_A);
+        assertEq(r.outcome, 1);
+        assertGt(r.timestamp, 0);
+    }
+
+    function test_RecordRejectedResult() public {
+        vm.prank(recorder);
+        voting.recordResult(PROPOSAL_A, 2);
+
+        GovernanceVoting.ProposalResult memory r = voting.getResult(PROPOSAL_A);
+        assertEq(r.outcome, 2);
+    }
+
+    function test_RevertOnDuplicateResult() public {
+        vm.prank(recorder);
+        voting.recordResult(PROPOSAL_A, 1);
+
+        vm.prank(recorder);
+        vm.expectRevert("Result already recorded");
+        voting.recordResult(PROPOSAL_A, 2);
+    }
+
+    function test_RevertOnInvalidOutcome() public {
+        vm.prank(recorder);
+        vm.expectRevert("Invalid outcome");
+        voting.recordResult(PROPOSAL_A, 0);
+
+        vm.prank(recorder);
+        vm.expectRevert("Invalid outcome");
+        voting.recordResult(PROPOSAL_A, 3);
+    }
+
+    function test_ResultUnauthorized() public {
+        vm.prank(voter1);
+        vm.expectRevert();
+        voting.recordResult(PROPOSAL_A, 1);
+    }
+
+    function test_EmitsProposalResultRecordedEvent() public {
+        vm.prank(recorder);
+        vm.expectEmit(true, false, false, true);
+        emit GovernanceVoting.ProposalResultRecorded(PROPOSAL_A, 1, block.timestamp);
+        voting.recordResult(PROPOSAL_A, 1);
+    }
 }

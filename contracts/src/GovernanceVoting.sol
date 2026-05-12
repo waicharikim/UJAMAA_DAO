@@ -24,17 +24,32 @@ contract GovernanceVoting is AccessControl {
         uint256 timestamp;
     }
 
+    // 0 = pending, 1 = APPROVED, 2 = REJECTED
+    struct ProposalResult {
+        uint8   outcome;   // 1=APPROVED 2=REJECTED (0 = not yet tallied)
+        uint256 timestamp;
+    }
+
     // proposalId (bytes32 of UUID) => voter => VoteRecord
     mapping(bytes32 => mapping(address => VoteRecord)) public votes;
 
     // proposalId => list of voters (for enumeration)
     mapping(bytes32 => address[]) public voters;
 
+    // proposalId => tally result
+    mapping(bytes32 => ProposalResult) public results;
+
     event VoteCast(
         bytes32 indexed proposalId,
         address indexed voter,
         uint8           option,
         uint256         weight,
+        uint256         timestamp
+    );
+
+    event ProposalResultRecorded(
+        bytes32 indexed proposalId,
+        uint8           outcome,
         uint256         timestamp
     );
 
@@ -72,6 +87,33 @@ contract GovernanceVoting is AccessControl {
         voters[proposalId].push(voter);
 
         emit VoteCast(proposalId, voter, option, weight, block.timestamp);
+    }
+
+    /**
+     * @notice Record the final tally result for a proposal.
+     * @param proposalId  UUID packed as bytes32.
+     * @param outcome     1=APPROVED, 2=REJECTED.
+     */
+    function recordResult(
+        bytes32 proposalId,
+        uint8   outcome
+    ) external onlyRole(RECORDER_ROLE) {
+        require(outcome == 1 || outcome == 2, "Invalid outcome");
+        require(results[proposalId].timestamp == 0, "Result already recorded");
+
+        results[proposalId] = ProposalResult({
+            outcome:   outcome,
+            timestamp: block.timestamp
+        });
+
+        emit ProposalResultRecorded(proposalId, outcome, block.timestamp);
+    }
+
+    /**
+     * @notice Get the tally result for a proposal.
+     */
+    function getResult(bytes32 proposalId) external view returns (ProposalResult memory) {
+        return results[proposalId];
     }
 
     /**

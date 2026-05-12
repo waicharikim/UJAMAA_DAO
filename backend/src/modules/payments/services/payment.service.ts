@@ -14,6 +14,7 @@ import { ApiError } from '../../../core/errors/ApiError.js';
 import { logger } from '../../../core/logger/logger.js';
 import { duesService } from '../../economy/services/dues.service.js';
 import { treasuryService } from '../../treasury/services/treasury.service.js';
+import { getUtContract } from '../../../core/blockchain/client.js';
 import {
   InitiatePaymentDto,
   PaymentPurpose,
@@ -339,6 +340,25 @@ class PaymentService {
           { amount, description: `Payment ${txRef}` },
           userId
         );
+        // On-chain UT mint — payer receives fiatBackedUt for their M-Pesa deposit
+        if (process.env.NODE_ENV !== 'test') {
+          const payer = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { walletAddress: true },
+          });
+          if (payer?.walletAddress) {
+            const utContract = getUtContract();
+            if (utContract) {
+              try {
+                const amountWei = BigInt(Math.round(amount)) * BigInt(10 ** 18);
+                await utContract.mint(payer.walletAddress, amountWei);
+                logger.info({ userId, amount }, '[UT] On-chain mint succeeded (treasury deposit)');
+              } catch (err) {
+                logger.warn({ userId, err }, '[UT] On-chain mint failed — off-chain record intact');
+              }
+            }
+          }
+        }
         break;
       }
       default:

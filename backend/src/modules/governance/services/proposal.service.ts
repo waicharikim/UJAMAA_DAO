@@ -618,6 +618,21 @@ class ProposalService {
         .catch(() => {});
     }
 
+    // On-chain result anchor
+    if (process.env.NODE_ENV !== 'test') {
+      const govContract = getGovernanceContract();
+      if (govContract) {
+        try {
+          const proposalBytes32 = ethers.keccak256(ethers.toUtf8Bytes(proposalId));
+          const onChainOutcome = newStatus === ProposalStatus.APPROVED ? 1 : 2;
+          await govContract.recordResult(proposalBytes32, onChainOutcome);
+          logger.info({ proposalId, newStatus }, '[GOV] On-chain result recorded');
+        } catch (err) {
+          logger.warn({ proposalId, err }, '[GOV] On-chain result failed — DB record intact');
+        }
+      }
+    }
+
     // Notify the proposal creator of the outcome
     if (proposal.creatorId) {
       const isPassed = newStatus === ProposalStatus.APPROVED;

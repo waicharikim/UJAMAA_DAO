@@ -46,6 +46,7 @@ import type {
   AttestResponseDto,
 } from '../types.js';
 import { ProjectStatus, MilestoneStatus, ProjectJobName } from '../types.js';
+import { getUtContract } from '../../../core/blockchain/client.js';
 
 const DEFAULT_REWARDS = { IP: 50, PR: 25 };
 
@@ -730,6 +731,26 @@ export class ProjectService {
         amount: dto.amount,
       })
       .catch(() => {});
+
+    // On-chain UT burn — mirrors the fiatBackedUt deduction from user's balance
+    if (process.env.NODE_ENV !== 'test') {
+      const contributor = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { walletAddress: true },
+      });
+      if (contributor?.walletAddress) {
+        const utContract = getUtContract();
+        if (utContract) {
+          try {
+            const amountWei = BigInt(dto.amount) * BigInt(10 ** 18);
+            await utContract.burn(contributor.walletAddress, amountWei);
+            logger.info({ userId, projectId, amount: dto.amount }, '[UT] On-chain burn succeeded (contribution)');
+          } catch (err) {
+            logger.warn({ userId, err }, '[UT] On-chain burn failed — off-chain record intact');
+          }
+        }
+      }
+    }
 
     logger.info(
       { userId, projectId, amount: dto.amount },
