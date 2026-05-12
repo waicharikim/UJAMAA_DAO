@@ -68,6 +68,14 @@ type TestUser = {
   verificationLevel?: string;
 };
 
+interface WardRefs {
+  firstWard: WardFull;
+  secondWard: WardFull | null;
+  diffConstituencyWard: WardFull | null;
+  diffCountyWard: WardFull | null;
+  mainSecondaryWardId: string;
+}
+
 // ============================================================================
 // MODULE-LEVEL DATA CONSTANTS
 // ============================================================================
@@ -857,6 +865,19 @@ All votes, proposal texts, and results are stored immutably. No administrator ca
   },
 ];
 
+const ROLE_COVERAGE_USERS_DATA: TestUser[] = [
+  { email: 'compliance@ujamaa.test',       name: 'Compliance Officer',          phoneNumber: '+254700000001', role: 'system:compliance_officer',  verificationLevel: 'FULL_VERIFIED' },
+  { email: 'auditor@ujamaa.test',           name: 'System Auditor',              phoneNumber: '+254700000005', role: 'system:auditor',              verificationLevel: 'FULL_VERIFIED' },
+  { email: 'coordinator@ujamaa.test',       name: 'County Coordinator',          phoneNumber: '+254700000006', role: 'system:county_coordinator',   verificationLevel: 'FULL_VERIFIED' },
+  { email: 'support@ujamaa.test',           name: 'Support Staff',               phoneNumber: '+254700000007', role: 'system:support',              verificationLevel: 'FULL_VERIFIED' },
+  { email: 'ward.admin@ujamaa.test',        name: 'Ward Administrator',          phoneNumber: '+254700000002', role: 'location:ward_admin',         verificationLevel: 'FULL_VERIFIED' },
+  { email: 'constituency.admin@ujamaa.test',name: 'Constituency Administrator',  phoneNumber: '+254700000003', role: 'location:constituency_admin', verificationLevel: 'FULL_VERIFIED' },
+  { email: 'county.admin@ujamaa.test',      name: 'County Administrator',        phoneNumber: '+254700000004', role: 'location:county_admin',       verificationLevel: 'FULL_VERIFIED' },
+  { email: 'waichari@ujamaa.test',          name: 'James Waichari',              phoneNumber: '+254700000010' },
+  { email: 'akinyi@ujamaa.test',            name: 'Grace Akinyi',               phoneNumber: '+254700000011' },
+  { email: 'otieno@ujamaa.test',            name: 'Kevin Otieno',               phoneNumber: '+254700000012' },
+];
+
 // ============================================================================
 // 1. SYSTEM CONFIGURATION
 // ============================================================================
@@ -1326,95 +1347,68 @@ async function seedSpecialCaseUsers(
   });
 }
 
-async function seedGeographicSpreadUsers(
-  firstWard: { id: string },
-  secondWard: WardFull | null,
-  diffConstituencyWard: WardFull | null,
-  diffCountyWard: WardFull | null,
-  mainSecondaryWardId: string
-) {
-  // Second ward, same constituency — for cross-ward vouch restriction testing
+async function upsertGeoSpreadUser(params: {
+  email: string;
+  name: string;
+  phoneNumber: string;
+  primaryWardId: string;
+  secondaryWardId: string;
+}) {
+  await prisma.user.upsert({
+    where: { email: params.email },
+    update: { primaryWardId: params.primaryWardId, secondaryWardId: params.secondaryWardId },
+    create: {
+      id: uuidv4(),
+      email: params.email,
+      name: params.name,
+      phoneNumber: params.phoneNumber,
+      primaryWardId: params.primaryWardId,
+      secondaryWardId: params.secondaryWardId,
+      verificationLevel: 'COMMUNITY_VERIFIED',
+      emailVerified: true,
+      phoneVerified: true,
+      communityVerified: true,
+      participationRights: 300,
+      globalImpactPoints: 100,
+    },
+  });
+}
+
+async function seedGeographicSpreadUsers(refs: WardRefs) {
+  const { firstWard, secondWard, diffConstituencyWard, diffCountyWard } = refs;
+
   if (secondWard) {
-    await prisma.user.upsert({
-      where: { email: 'ward2.member@ujamaa.test' },
-      update: { primaryWardId: secondWard.id, secondaryWardId: firstWard.id },
-      create: {
-        id: uuidv4(),
-        email: 'ward2.member@ujamaa.test',
-        name: `${secondWard.name} Member`,
-        phoneNumber: '+254700000030',
-        primaryWardId: secondWard.id,
-        secondaryWardId: firstWard.id,
-        verificationLevel: 'COMMUNITY_VERIFIED',
-        emailVerified: true,
-        phoneVerified: true,
-        communityVerified: true,
-        participationRights: 300,
-        globalImpactPoints: 100,
-      },
+    await upsertGeoSpreadUser({
+      email: 'ward2.member@ujamaa.test',
+      name: `${secondWard.name} Member`,
+      phoneNumber: '+254700000030',
+      primaryWardId: secondWard.id,
+      secondaryWardId: firstWard.id,
     });
-    console.log(
-      `   → ward2.member placed in ward: ${secondWard.name} (${secondWard.constituency.name})`
-    );
+    console.log(`   → ward2.member placed in ward: ${secondWard.name} (${secondWard.constituency.name})`);
   }
 
-  // Different constituency, same county
   if (diffConstituencyWard) {
-    await prisma.user.upsert({
-      where: { email: 'const.member@ujamaa.test' },
-      update: {
-        primaryWardId: diffConstituencyWard.id,
-        secondaryWardId: firstWard.id,
-      },
-      create: {
-        id: uuidv4(),
-        email: 'const.member@ujamaa.test',
-        name: `${diffConstituencyWard.constituency.name} Member`,
-        phoneNumber: '+254700000031',
-        primaryWardId: diffConstituencyWard.id,
-        secondaryWardId: firstWard.id,
-        verificationLevel: 'COMMUNITY_VERIFIED',
-        emailVerified: true,
-        phoneVerified: true,
-        communityVerified: true,
-        participationRights: 300,
-        globalImpactPoints: 100,
-      },
+    await upsertGeoSpreadUser({
+      email: 'const.member@ujamaa.test',
+      name: `${diffConstituencyWard.constituency.name} Member`,
+      phoneNumber: '+254700000031',
+      primaryWardId: diffConstituencyWard.id,
+      secondaryWardId: firstWard.id,
     });
-    console.log(
-      `   → const.member placed in constituency: ${diffConstituencyWard.constituency.name} (${diffConstituencyWard.constituency.county.name})`
-    );
+    console.log(`   → const.member placed in constituency: ${diffConstituencyWard.constituency.name} (${diffConstituencyWard.constituency.county.name})`);
   }
 
-  // Different county entirely
   if (diffCountyWard) {
-    await prisma.user.upsert({
-      where: { email: 'county.member@ujamaa.test' },
-      update: {
-        primaryWardId: diffCountyWard.id,
-        secondaryWardId: firstWard.id,
-      },
-      create: {
-        id: uuidv4(),
-        email: 'county.member@ujamaa.test',
-        name: `${diffCountyWard.constituency.county.name} Member`,
-        phoneNumber: '+254700000032',
-        primaryWardId: diffCountyWard.id,
-        secondaryWardId: firstWard.id,
-        verificationLevel: 'COMMUNITY_VERIFIED',
-        emailVerified: true,
-        phoneVerified: true,
-        communityVerified: true,
-        participationRights: 300,
-        globalImpactPoints: 100,
-      },
+    await upsertGeoSpreadUser({
+      email: 'county.member@ujamaa.test',
+      name: `${diffCountyWard.constituency.county.name} Member`,
+      phoneNumber: '+254700000032',
+      primaryWardId: diffCountyWard.id,
+      secondaryWardId: firstWard.id,
     });
-    console.log(
-      `   → county.member placed in county: ${diffCountyWard.constituency.county.name}`
-    );
+    console.log(`   → county.member placed in county: ${diffCountyWard.constituency.county.name}`);
   }
-
-  void mainSecondaryWardId; // passed for symmetry; geographic users use firstWard as secondary
 }
 
 async function seedRoleCoverageUsers(
@@ -1432,72 +1426,7 @@ async function seedRoleCoverageUsers(
     secondaryWardId: mainSecondaryWardId,
   };
 
-  const testUsers: TestUser[] = [
-    {
-      email: 'compliance@ujamaa.test',
-      name: 'Compliance Officer',
-      phoneNumber: '+254700000001',
-      role: 'system:compliance_officer',
-      verificationLevel: 'FULL_VERIFIED',
-    },
-    {
-      email: 'auditor@ujamaa.test',
-      name: 'System Auditor',
-      phoneNumber: '+254700000005',
-      role: 'system:auditor',
-      verificationLevel: 'FULL_VERIFIED',
-    },
-    {
-      email: 'coordinator@ujamaa.test',
-      name: 'County Coordinator',
-      phoneNumber: '+254700000006',
-      role: 'system:county_coordinator',
-      verificationLevel: 'FULL_VERIFIED',
-    },
-    {
-      email: 'support@ujamaa.test',
-      name: 'Support Staff',
-      phoneNumber: '+254700000007',
-      role: 'system:support',
-      verificationLevel: 'FULL_VERIFIED',
-    },
-    {
-      email: 'ward.admin@ujamaa.test',
-      name: 'Ward Administrator',
-      phoneNumber: '+254700000002',
-      role: 'location:ward_admin',
-      verificationLevel: 'FULL_VERIFIED',
-    },
-    {
-      email: 'constituency.admin@ujamaa.test',
-      name: 'Constituency Administrator',
-      phoneNumber: '+254700000003',
-      role: 'location:constituency_admin',
-      verificationLevel: 'FULL_VERIFIED',
-    },
-    {
-      email: 'county.admin@ujamaa.test',
-      name: 'County Administrator',
-      phoneNumber: '+254700000004',
-      role: 'location:county_admin',
-      verificationLevel: 'FULL_VERIFIED',
-    },
-    {
-      email: 'waichari@ujamaa.test',
-      name: 'James Waichari',
-      phoneNumber: '+254700000010',
-    },
-    {
-      email: 'akinyi@ujamaa.test',
-      name: 'Grace Akinyi',
-      phoneNumber: '+254700000011',
-    },
-    {
-      email: 'otieno@ujamaa.test',
-      name: 'Kevin Otieno',
-      phoneNumber: '+254700000012',
-    },
-  ];
+  const testUsers = ROLE_COVERAGE_USERS_DATA;
 
   const createdUsers: Record<string, string> = {};
 
@@ -1627,217 +1556,104 @@ async function seedBoreholeGroupAndMembers(
   return boreholeGroup;
 }
 
+async function createSeedProposalIfAbsent(
+  groupId: string,
+  creatorId: string,
+  data: { title: string; description: string; status: string; budget: number },
+  extraAuditStatuses: string[] = []
+) {
+  const existing = await prisma.proposal.findFirst({
+    where: { title: data.title, creatorId },
+  });
+  if (existing) return;
+  const p = await prisma.proposal.create({
+    data: {
+      id: uuidv4(),
+      groupId,
+      creatorId,
+      title: data.title,
+      description: data.description,
+      status: data.status as any,
+      proposalType: 'COMMUNITY_INITIATIVE',
+      proposalScope: 'COMMUNITY',
+      budget: data.budget,
+    },
+  });
+  await auditService.log(creatorId, AuditAction.PROPOSAL_CREATED, 'Proposal', p.id,
+    { groupId, title: p.title, scope: 'COMMUNITY' });
+  for (const newStatus of extraAuditStatuses) {
+    await auditService.log(creatorId, AuditAction.PROPOSAL_STATUS_CHANGED, 'Proposal', p.id,
+      { newStatus, stage: 1 });
+  }
+}
+
 async function seedTestProposals(
   boreholeGroup: { id: string },
   waichariId: string
 ) {
-  // DRAFT proposal
-  const existing1 = await prisma.proposal.findFirst({
-    where: { title: 'New Community Borehole', creatorId: waichariId },
+  await createSeedProposalIfAbsent(boreholeGroup.id, waichariId, {
+    title: 'New Community Borehole',
+    description: 'Proposal to drill a new borehole in Kayole Ward to address water scarcity affecting 5,000 residents.',
+    status: 'DRAFT',
+    budget: 350000,
   });
-  if (!existing1) {
-    const p1 = await prisma.proposal.create({
-      data: {
-        id: uuidv4(),
-        groupId: boreholeGroup.id,
-        creatorId: waichariId,
-        title: 'New Community Borehole',
-        description:
-          'Proposal to drill a new borehole in Kayole Ward to address water scarcity affecting 5,000 residents.',
-        status: 'DRAFT',
-        proposalType: 'COMMUNITY_INITIATIVE',
-        proposalScope: 'COMMUNITY',
-        budget: 350000,
-      },
-    });
-    await auditService.log(
-      waichariId,
-      AuditAction.PROPOSAL_CREATED,
-      'Proposal',
-      p1.id,
-      { groupId: boreholeGroup.id, title: p1.title, scope: 'COMMUNITY' }
-    );
-  }
+  await createSeedProposalIfAbsent(boreholeGroup.id, waichariId, {
+    title: 'Road Maintenance Request',
+    description: 'Request for maintenance of the main access road connecting Kayole to Embakasi Road.',
+    status: 'PENDING_REVIEW',
+    budget: 150000,
+  }, ['PENDING_REVIEW']);
+  await createSeedProposalIfAbsent(boreholeGroup.id, waichariId, {
+    title: 'Youth Skills Programme',
+    description: 'Six-month vocational skills programme for unemployed youth aged 18–35 in Kayole Ward.',
+    status: 'APPROVED_FOR_VOTING',
+    budget: 200000,
+  }, ['APPROVED_FOR_VOTING']);
+}
 
-  // PENDING_REVIEW proposal
-  const existing2 = await prisma.proposal.findFirst({
-    where: { title: 'Road Maintenance Request', creatorId: waichariId },
-  });
-  if (!existing2) {
-    const p2 = await prisma.proposal.create({
-      data: {
-        id: uuidv4(),
-        groupId: boreholeGroup.id,
-        creatorId: waichariId,
-        title: 'Road Maintenance Request',
-        description:
-          'Request for maintenance of the main access road connecting Kayole to Embakasi Road.',
-        status: 'PENDING_REVIEW',
-        proposalType: 'COMMUNITY_INITIATIVE',
-        proposalScope: 'COMMUNITY',
-        budget: 150000,
-      },
-    });
-    await auditService.log(
-      waichariId,
-      AuditAction.PROPOSAL_CREATED,
-      'Proposal',
-      p2.id,
-      { groupId: boreholeGroup.id, title: p2.title, scope: 'COMMUNITY' }
-    );
-    await auditService.log(
-      waichariId,
-      AuditAction.PROPOSAL_STATUS_CHANGED,
-      'Proposal',
-      p2.id,
-      { newStatus: 'PENDING_REVIEW', stage: 1 }
-    );
-  }
-
-  // APPROVED_FOR_VOTING proposal
-  const existing3 = await prisma.proposal.findFirst({
-    where: { title: 'Youth Skills Programme', creatorId: waichariId },
-  });
-  if (!existing3) {
-    const p3 = await prisma.proposal.create({
-      data: {
-        id: uuidv4(),
-        groupId: boreholeGroup.id,
-        creatorId: waichariId,
-        title: 'Youth Skills Programme',
-        description:
-          'Six-month vocational skills programme for unemployed youth aged 18–35 in Kayole Ward.',
-        status: 'APPROVED_FOR_VOTING',
-        proposalType: 'COMMUNITY_INITIATIVE',
-        proposalScope: 'COMMUNITY',
-        budget: 200000,
-      },
-    });
-    await auditService.log(
-      waichariId,
-      AuditAction.PROPOSAL_CREATED,
-      'Proposal',
-      p3.id,
-      { groupId: boreholeGroup.id, title: p3.title, scope: 'COMMUNITY' }
-    );
-    await auditService.log(
-      waichariId,
-      AuditAction.PROPOSAL_STATUS_CHANGED,
-      'Proposal',
-      p3.id,
-      { newStatus: 'APPROVED_FOR_VOTING', stage: 1 }
-    );
-  }
+function buildExtraEmailEnrollments(refs: WardRefs) {
+  const { firstWard, secondWard, diffConstituencyWard, diffCountyWard, mainSecondaryWardId } = refs;
+  return [
+    { email: 'phone-only@ujamaa.test',  primary: firstWard.id, secondary: mainSecondaryWardId },
+    { email: 'email-only@ujamaa.test',  primary: firstWard.id, secondary: mainSecondaryWardId },
+    { email: 'full-member@ujamaa.test', primary: firstWard.id, secondary: mainSecondaryWardId },
+    ...(secondWard          ? [{ email: 'ward2.member@ujamaa.test', primary: secondWard.id,          secondary: firstWard.id }] : []),
+    ...(diffConstituencyWard? [{ email: 'const.member@ujamaa.test', primary: diffConstituencyWard.id, secondary: firstWard.id }] : []),
+    ...(diffCountyWard      ? [{ email: 'county.member@ujamaa.test',primary: diffCountyWard.id,       secondary: firstWard.id }] : []),
+  ];
 }
 
 async function enrollAllUsersIntoSystemGroups(
-  firstWard: { id: string },
-  mainSecondaryWardId: string,
-  secondWard: { id: string } | null,
-  diffConstituencyWard: { id: string } | null,
-  diffCountyWard: { id: string } | null,
+  refs: WardRefs,
   createdUsers: Record<string, string>
 ) {
   console.log('   Enrolling test users into system groups...');
 
-  const allUsersForEnrollment: {
-    userId: string;
-    primary: string;
-    secondary: string;
-  }[] = [];
+  const allUsersForEnrollment: { userId: string; primary: string; secondary: string }[] = [];
 
-  // Users from the main role-coverage loop
   for (const [, userId] of Object.entries(createdUsers)) {
-    allUsersForEnrollment.push({
-      userId,
-      primary: firstWard.id,
-      secondary: mainSecondaryWardId,
-    });
+    allUsersForEnrollment.push({ userId, primary: refs.firstWard.id, secondary: refs.mainSecondaryWardId });
   }
 
-  // Separately upserted users with their actual primary/secondary ward assignments
-  const extraEmails: { email: string; primary: string; secondary: string }[] = [
-    {
-      email: 'phone-only@ujamaa.test',
-      primary: firstWard.id,
-      secondary: mainSecondaryWardId,
-    },
-    {
-      email: 'email-only@ujamaa.test',
-      primary: firstWard.id,
-      secondary: mainSecondaryWardId,
-    },
-    {
-      email: 'full-member@ujamaa.test',
-      primary: firstWard.id,
-      secondary: mainSecondaryWardId,
-    },
-    ...(secondWard
-      ? [
-          {
-            email: 'ward2.member@ujamaa.test',
-            primary: secondWard.id,
-            secondary: firstWard.id,
-          },
-        ]
-      : []),
-    ...(diffConstituencyWard
-      ? [
-          {
-            email: 'const.member@ujamaa.test',
-            primary: diffConstituencyWard.id,
-            secondary: firstWard.id,
-          },
-        ]
-      : []),
-    ...(diffCountyWard
-      ? [
-          {
-            email: 'county.member@ujamaa.test',
-            primary: diffCountyWard.id,
-            secondary: firstWard.id,
-          },
-        ]
-      : []),
-  ];
-
-  for (const { email, primary, secondary } of extraEmails) {
-    const u = await prisma.user.findUnique({
-      where: { email },
-      select: { id: true },
-    });
+  for (const { email, primary, secondary } of buildExtraEmailEnrollments(refs)) {
+    const u = await prisma.user.findUnique({ where: { email }, select: { id: true } });
     if (u) allUsersForEnrollment.push({ userId: u.id, primary, secondary });
   }
 
-  // Admin user
   const adminUser = await prisma.user.findUnique({
     where: { email: 'admin@ujamaa.test' },
     select: { id: true },
   });
   if (adminUser) {
-    allUsersForEnrollment.push({
-      userId: adminUser.id,
-      primary: firstWard.id,
-      secondary: mainSecondaryWardId,
-    });
+    allUsersForEnrollment.push({ userId: adminUser.id, primary: refs.firstWard.id, secondary: refs.mainSecondaryWardId });
   }
 
   let enrolled = 0;
   for (const { userId, primary, secondary } of allUsersForEnrollment) {
     try {
-      await groupMembershipService.enrollInSystemGroups(
-        userId,
-        primary,
-        secondary
-      );
+      await groupMembershipService.enrollInSystemGroups(userId, primary, secondary);
       enrolled++;
-      await auditService.log(
-        userId,
-        AuditAction.GROUP_JOINED,
-        'Group',
-        primary,
-        {}
-      );
+      await auditService.log(userId, AuditAction.GROUP_JOINED, 'Group', primary, {});
     } catch {
       // already enrolled — safe to ignore
     }
@@ -1897,26 +1713,14 @@ async function seedTestUsers() {
 
   const mainSecondaryWardId = secondWard?.id ?? firstWard.id;
 
+  const refs: WardRefs = { firstWard, secondWard, diffConstituencyWard, diffCountyWard, mainSecondaryWardId };
   await seedSpecialCaseUsers(firstWard, mainSecondaryWardId);
-  await seedGeographicSpreadUsers(
-    firstWard,
-    secondWard,
-    diffConstituencyWard,
-    diffCountyWard,
-    mainSecondaryWardId
-  );
+  await seedGeographicSpreadUsers(refs);
   const createdUsers = await seedRoleCoverageUsers(firstWard, mainSecondaryWardId);
   const boreholeGroup = await seedBoreholeGroupAndMembers(firstWard, createdUsers);
   const waichariId = createdUsers['waichari@ujamaa.test'];
   if (waichariId) await seedTestProposals(boreholeGroup, waichariId);
-  await enrollAllUsersIntoSystemGroups(
-    firstWard,
-    mainSecondaryWardId,
-    secondWard,
-    diffConstituencyWard,
-    diffCountyWard,
-    createdUsers
-  );
+  await enrollAllUsersIntoSystemGroups(refs, createdUsers);
 
   console.log(
     `   Created ${Object.keys(createdUsers).length} test users, 1 voluntary group, 3 test proposals`
