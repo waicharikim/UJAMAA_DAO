@@ -33,6 +33,8 @@ import { notificationService } from '../../notifications/services/notification.s
 import { NotificationType } from '../../notifications/types.js';
 import { auditService } from '../../audit/services/audit.service.js';
 import { AuditAction } from '../../audit/types.js';
+import { getGovernanceContract } from '../../../core/blockchain/client.js';
+import { ethers } from 'ethers';
 
 class ProposalService {
   /**
@@ -501,6 +503,36 @@ class ProposalService {
       dto.proposalId,
       { option: dto.option, weight }
     );
+
+    // On-chain vote anchor — records vote immutably for auditability
+    if (process.env.NODE_ENV !== 'test') {
+      const voter = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { walletAddress: true },
+      });
+      if (voter?.walletAddress) {
+        const govContract = getGovernanceContract();
+        if (govContract) {
+          try {
+            // Pack UUID string as bytes32 (left-padded keccak of the string)
+            const proposalBytes32 = ethers.keccak256(ethers.toUtf8Bytes(dto.proposalId));
+            const onChainOption =
+              dto.option === VoteOption.YES ? 0
+              : dto.option === VoteOption.NO ? 1
+              : 2; // ABSTAIN
+            await govContract.recordVote(
+              proposalBytes32,
+              voter.walletAddress,
+              onChainOption,
+              BigInt(weight)
+            );
+            logger.info({ userId, proposalId: dto.proposalId }, '[GOV] On-chain vote recorded');
+          } catch (err) {
+            logger.warn({ userId, err }, '[GOV] On-chain vote failed — off-chain record intact');
+          }
+        }
+      }
+    }
 
     return { weight };
   }

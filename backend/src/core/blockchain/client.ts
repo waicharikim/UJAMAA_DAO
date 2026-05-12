@@ -21,17 +21,16 @@ import { logger } from '../logger/logger.js';
 const require = createRequire(import.meta.url);
 
 // ── ABI loading ─────────────────────────────────────────────────────────────
-// Compiled by `forge build` — committed under contracts/out/
 let prAbi: any[] | null = null;
 let utAbi: any[] | null = null;
+let govAbi: any[] | null = null;
 
 function loadAbis(): void {
-  if (prAbi && utAbi) return;
+  if (prAbi && utAbi && govAbi) return;
   try {
-    const prArtifact = require('./abis/PrToken.json');
-    const utArtifact = require('./abis/UtToken.json');
-    prAbi = prArtifact.abi;
-    utAbi = utArtifact.abi;
+    prAbi  = require('./abis/PrToken.json').abi;
+    utAbi  = require('./abis/UtToken.json').abi;
+    govAbi = require('./abis/GovernanceVoting.json').abi;
   } catch (err) {
     logger.warn(
       { err },
@@ -112,6 +111,27 @@ export function getUtContract(): ethers.Contract | null {
     return new ethers.Contract(utAddress, utAbi, connection.signer);
   } catch (err) {
     logger.warn({ err }, '[Blockchain] Failed to instantiate UtToken contract');
+    return null;
+  }
+}
+
+/**
+ * Returns a connected GovernanceVoting contract instance, or null if not configured.
+ */
+export function getGovernanceContract(): ethers.Contract | null {
+  loadAbis();
+  if (!govAbi) return null;
+
+  const govAddress = process.env.GOVERNANCE_VOTING_ADDRESS;
+  if (!govAddress) return null;
+
+  const connection = getSignerAndProvider();
+  if (!connection) return null;
+
+  try {
+    return new ethers.Contract(govAddress, govAbi, connection.signer);
+  } catch (err) {
+    logger.warn({ err }, '[Blockchain] Failed to instantiate GovernanceVoting contract');
     return null;
   }
 }

@@ -28,6 +28,7 @@ import { ApiError } from '../../../core/errors/ApiError.js';
 import { logger } from '../../../core/logger/logger.js';
 import { auditService } from '../../audit/services/audit.service.js';
 import { AuditAction } from '../../audit/types.js';
+import { getUtContract } from '../../../core/blockchain/client.js';
 
 class DuesService {
   /**
@@ -97,7 +98,7 @@ class DuesService {
       { tier, amountKes, period, mpesaReceipt }
     );
 
-    // Allocate dues to ward group treasury (non-critical — catch any error so payment is unaffected)
+    // Allocate dues to ward group treasury (non-critical)
     await treasuryService
       .allocateDues(payment.id, userId)
       .catch((err) =>
@@ -106,6 +107,26 @@ class DuesService {
           '[DUES] Treasury allocation failed — payment still recorded'
         )
       );
+
+    // On-chain UT mint — 1 UT per 1 KES paid (fiatBackedUt only)
+    if (process.env.NODE_ENV !== 'test') {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { walletAddress: true },
+      });
+      if (user?.walletAddress) {
+        const utContract = getUtContract();
+        if (utContract) {
+          try {
+            const amountWei = BigInt(amountKes) * BigInt(10 ** 18);
+            await utContract.mint(user.walletAddress, amountWei);
+            logger.info({ userId, amountKes }, '[UT] On-chain mint succeeded (dues)');
+          } catch (err) {
+            logger.warn({ userId, err }, '[UT] On-chain mint failed — off-chain record intact');
+          }
+        }
+      }
+    }
 
     return payment;
   }

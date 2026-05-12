@@ -18,6 +18,7 @@
 import { prisma } from '../../../core/database/client.js';
 import { ApiError } from '../../../core/errors/ApiError.js';
 import { logger } from '../../../core/logger/logger.js';
+import { getUtContract } from '../../../core/blockchain/client.js';
 import { auditService } from '../../audit/services/audit.service.js';
 import { AuditAction } from '../../audit/types.js';
 
@@ -106,6 +107,26 @@ export class UtWithdrawalService {
       { userId, amountKes, withdrawalId: withdrawal.id },
       '[UT] Withdrawal requested — payout pending'
     );
+
+    // On-chain UT burn — mirrors DB fiatBackedUt deduction
+    if (process.env.NODE_ENV !== 'test') {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { walletAddress: true },
+      });
+      if (user?.walletAddress) {
+        const utContract = getUtContract();
+        if (utContract) {
+          try {
+            const amountWei = BigInt(amountKes) * BigInt(10 ** 18);
+            await utContract.burn(user.walletAddress, amountWei);
+            logger.info({ userId, amountKes }, '[UT] On-chain burn succeeded (withdrawal)');
+          } catch (err) {
+            logger.warn({ userId, err }, '[UT] On-chain burn failed — off-chain record intact');
+          }
+        }
+      }
+    }
 
     // TODO: Trigger M-Pesa B2C payout via Buni when credentials are available
 

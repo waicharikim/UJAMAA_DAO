@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import "forge-std/Script.sol";
 import "../src/PrToken.sol";
 import "../src/UtToken.sol";
+import "../src/GovernanceVoting.sol";
 
 /**
  * @title Deploy — UjamaaDAO Token Deploy Script
@@ -33,11 +34,13 @@ contract Deploy is Script {
 
         PrToken prToken = new PrToken(minter);
         UtToken utToken = new UtToken(minter);
+        GovernanceVoting governance = new GovernanceVoting(minter);
 
         vm.stopBroadcast();
 
-        console.log("PrToken deployed at:", address(prToken));
-        console.log("UtToken deployed at:", address(utToken));
-        console.log("Admin/minter/burner:", minter);
+        console.log("PrToken deployed at:         ", address(prToken));
+        console.log("UtToken deployed at:         ", address(utToken));
+        console.log("GovernanceVoting deployed at:", address(governance));
+        console.log("Admin/minter/recorder:       ", minter);
     }
 }
