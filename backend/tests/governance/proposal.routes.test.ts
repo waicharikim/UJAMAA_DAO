@@ -504,7 +504,7 @@ describe('POST /governance/vote — NO and ABSTAIN options', () => {
     expect(voteRow!.vote).toBe(false);
   });
 
-  it('returns 200 and records an ABSTAIN vote (stored as vote=false)', async () => {
+  it('returns 200 and records an ABSTAIN vote (stored as null)', async () => {
     const { token, proposal } = await setupVoter('route-abstain');
 
     const res = await request(app)
@@ -519,7 +519,8 @@ describe('POST /governance/vote — NO and ABSTAIN options', () => {
       where: { proposalId: proposal.id },
     });
     expect(voteRow).not.toBeNull();
-    expect(voteRow!.vote).toBe(false);
+    // ABSTAIN is stored as null (true=YES, false=NO, null=ABSTAIN)
+    expect(voteRow!.vote).toBeNull();
   });
 
   it('returns 400 when proposalId is missing', async () => {

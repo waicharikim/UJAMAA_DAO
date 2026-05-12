@@ -23,7 +23,7 @@ import {
 // PR cost for a WARD-scoped group
 const WARD_PR_COST = 50;
 // PR cost to cast a vote
-const VOTE_PR_COST = 5;
+const VOTE_PR_REWARD = 10; // voting earns PR (PR_CONFIG.VOTE_CAST)
 
 beforeEach(async () => {
   // DB truncated by testSetup.ts — nothing extra needed
@@ -202,7 +202,7 @@ describe('startVoting()', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('castVote()', () => {
-  it('records a YES vote, spends 5 PR, and returns vote weight', async () => {
+  it('records a YES vote, earns 10 PR reward, and returns vote weight', async () => {
     const creator = await createGovernanceUser('cv-creator@example.com');
     const voter = await createGovernanceUser('cv-voter@example.com');
     const group = await seedGovernanceGroup(creator.id);
@@ -238,7 +238,7 @@ describe('castVote()', () => {
       where: { id: voter.id },
       select: { participationRights: true },
     });
-    expect(updated!.participationRights).toBe(50 - VOTE_PR_COST);
+    expect(updated!.participationRights).toBe(50 + VOTE_PR_REWARD);
   });
 
   it('records a NO vote correctly', async () => {
@@ -588,7 +588,7 @@ describe('listProposals()', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('castVote() — additional', () => {
-  it('ABSTAIN is stored as vote=false (same as NO)', async () => {
+  it('ABSTAIN is stored as null (true=YES, false=NO, null=ABSTAIN)', async () => {
     const creator = await createGovernanceUser('abstain-creator@example.com');
     const voter = await createGovernanceUser('abstain-voter@example.com');
     const group = await seedGovernanceGroup(creator.id);
@@ -602,7 +602,7 @@ describe('castVote() — additional', () => {
       where: { proposalId: proposal.id, memberId: voter.id },
     });
     expect(voteRow).not.toBeNull();
-    expect(voteRow!.vote).toBe(false); // ABSTAIN stored as false (non-yes)
+    expect(voteRow!.vote).toBeNull();
   });
 
   it('sets castFirstVote=true on OnboardingProgress after first vote', async () => {

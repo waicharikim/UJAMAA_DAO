@@ -139,7 +139,8 @@ export async function seedProposal(
   creatorId: string,
   groupId: string,
   status: ProposalStatus = ProposalStatus.DRAFT,
-  title = 'Test Governance Proposal for Unit Testing'
+  title = 'Test Governance Proposal for Unit Testing',
+  proposalScope: 'COMMUNITY' | 'GROUP' = 'GROUP'
 ) {
   const isVoting = status === ProposalStatus.VOTING;
 
@@ -151,6 +152,7 @@ export async function seedProposal(
       description:
         'A detailed description of the test proposal used exclusively for governance testing purposes.',
       proposalType: ProposalType.COMMUNITY_INITIATIVE,
+      proposalScope,
       status,
       votingStartsAt: isVoting ? new Date() : undefined,
       votingEndsAt: isVoting
