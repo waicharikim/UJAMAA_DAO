@@ -3,7 +3,7 @@
 export const dynamic = "force-dynamic"
 
 import type React from "react"
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import { Inter, Cormorant_Garamond } from "next/font/google"
 import "../styles/globals.css"
 import { Providers } from "@/components/providers"
@@ -25,11 +25,14 @@ const cormorant = Cormorant_Garamond({
   adjustFontFallback: true,
 })
 
+export const viewport: Viewport = {
+  themeColor: "#1D4731",
+}
+
 export const metadata: Metadata = {
   title: "UjamaaDAO — Ward Sovereignty Platform",
   description: "Cooperative governance, community projects, and economic sovereignty for Kenyan wards.",
   manifest: "/manifest.json",
-  themeColor: "#1D4731",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
