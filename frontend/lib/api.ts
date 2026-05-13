@@ -152,6 +152,18 @@ export class ApiError extends Error {
   }
 }
 
+function buildQs(params?: Record<string, string | number | boolean | undefined | null>): string {
+  if (!params) return ""
+  const q = new URLSearchParams()
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== "" && v !== "all" && v !== 0) {
+      q.set(k, String(v))
+    }
+  }
+  const qs = q.toString()
+  return qs ? `?${qs}` : ""
+}
+
 // ─────────────────────────────────────────────────────────
 // Auth endpoints
 // ─────────────────────────────────────────────────────────
@@ -921,17 +933,8 @@ export const communityApi = {
     search?: string
     limit?: number
     offset?: number
-  }): Promise<{ groups: GroupDiscoveryDto[]; total: number }> => {
-    const q = new URLSearchParams()
-    if (params?.isSystem !== undefined) q.set("isSystem", String(params.isSystem))
-    if (params?.voluntaryType) q.set("voluntaryType", params.voluntaryType)
-    if (params?.systemType) q.set("systemType", params.systemType)
-    if (params?.search) q.set("search", params.search)
-    if (params?.limit) q.set("limit", String(params.limit))
-    if (params?.offset) q.set("offset", String(params.offset))
-    const qs = q.toString()
-    return apiFetch<{ groups: GroupDiscoveryDto[]; total: number }>(`/community${qs ? `?${qs}` : ""}`)
-  },
+  }): Promise<{ groups: GroupDiscoveryDto[]; total: number }> =>
+    apiFetch<{ groups: GroupDiscoveryDto[]; total: number }>(`/community${buildQs(params)}`),
 
   getGroupDetail: (groupId: string): Promise<GroupDetailDto> =>
     apiFetch<GroupDetailDto>(`/community/${groupId}`),
@@ -1069,15 +1072,8 @@ export const governanceApi = {
     status?: ProposalStatus
     limit?: number
     offset?: number
-  }): Promise<{ proposals: ProposalDto[]; total: number; limit: number; offset: number }> => {
-    const q = new URLSearchParams()
-    if (params?.groupId) q.set("groupId", params.groupId)
-    if (params?.scope) q.set("scope", params.scope)
-    if (params?.status) q.set("status", params.status)
-    if (params?.limit) q.set("limit", String(params.limit))
-    if (params?.offset) q.set("offset", String(params.offset))
-    return apiFetch(`/governance${q.toString() ? `?${q}` : ""}`)
-  },
+  }): Promise<{ proposals: ProposalDto[]; total: number; limit: number; offset: number }> =>
+    apiFetch(`/governance${buildQs(params)}`),
 
   getProposal: (proposalId: string): Promise<ProposalDto> =>
     apiFetch<ProposalDto>(`/governance/${proposalId}`),
@@ -1247,15 +1243,8 @@ export const projectApi = {
     status?: string
     limit?: number
     offset?: number
-  }): Promise<{ projects: ProjectListItemDto[]; total: number; limit: number; offset: number }> => {
-    const q = new URLSearchParams()
-    if (params?.ownerGroupId) q.set("ownerGroupId", params.ownerGroupId)
-    if (params?.ownerUserId) q.set("ownerUserId", params.ownerUserId)
-    if (params?.status) q.set("status", params.status)
-    if (params?.limit) q.set("limit", String(params.limit))
-    if (params?.offset) q.set("offset", String(params.offset))
-    return apiFetch(`/projects${q.toString() ? `?${q}` : ""}`)
-  },
+  }): Promise<{ projects: ProjectListItemDto[]; total: number; limit: number; offset: number }> =>
+    apiFetch(`/projects${buildQs(params)}`),
 
   getProject: (id: string): Promise<ProjectDetailDto> =>
     apiFetch<ProjectDetailDto>(`/projects/${id}`),
@@ -1438,14 +1427,8 @@ export const educationApi = {
     difficulty?: string
     limit?: number
     offset?: number
-  }): Promise<{ modules: EducationModuleDto[]; total: number; limit: number; offset: number }> => {
-    const q = new URLSearchParams()
-    if (params?.category) q.set("category", params.category)
-    if (params?.difficulty) q.set("difficulty", params.difficulty)
-    if (params?.limit) q.set("limit", String(params.limit))
-    if (params?.offset) q.set("offset", String(params.offset))
-    return apiFetch(`/education${q.toString() ? `?${q}` : ""}`)
-  },
+  }): Promise<{ modules: EducationModuleDto[]; total: number; limit: number; offset: number }> =>
+    apiFetch(`/education${buildQs(params)}`),
 
   getModule: (moduleId: string): Promise<EducationModuleDetailDto> =>
     apiFetch<EducationModuleDetailDto>(`/education/${moduleId}`),
@@ -1689,16 +1672,8 @@ export const adminApi = {
   getStats: () =>
     apiFetch<AdminStatsDto>("/admin/stats"),
 
-  getUsers: (params?: { search?: string; status?: string; verificationLevel?: string; limit?: number; offset?: number }) => {
-    const q = new URLSearchParams()
-    if (params?.search) q.set("search", params.search)
-    if (params?.status && params.status !== "all") q.set("status", params.status)
-    if (params?.verificationLevel && params.verificationLevel !== "all") q.set("verificationLevel", params.verificationLevel)
-    if (params?.limit) q.set("limit", String(params.limit))
-    if (params?.offset) q.set("offset", String(params.offset))
-    const qs = q.toString()
-    return apiFetch<{ users: AdminUserDto[]; total: number; limit: number; offset: number }>(`/admin/users${qs ? `?${qs}` : ""}`)
-  },
+  getUsers: (params?: { search?: string; status?: string; verificationLevel?: string; limit?: number; offset?: number }) =>
+    apiFetch<{ users: AdminUserDto[]; total: number; limit: number; offset: number }>(`/admin/users${buildQs(params)}`),
 
   getConfig: () =>
     apiFetch<AdminConfigItemDto[]>("/admin/config"),
@@ -1781,15 +1756,8 @@ export interface MarketplacePaginatedDto {
 }
 
 export const marketplaceApi = {
-  searchListings: (params?: { type?: "OFFER" | "REQUEST"; wardId?: string; limit?: number; page?: number }) => {
-    const q = new URLSearchParams()
-    if (params?.type) q.set("type", params.type)
-    if (params?.wardId) q.set("wardId", params.wardId)
-    if (params?.limit) q.set("limit", String(params.limit))
-    if (params?.page) q.set("page", String(params.page))
-    const qs = q.toString()
-    return apiFetch<MarketplacePaginatedDto>(`/marketplace/search${qs ? `?${qs}` : ""}`)
-  },
+  searchListings: (params?: { type?: "OFFER" | "REQUEST"; wardId?: string; limit?: number; page?: number }) =>
+    apiFetch<MarketplacePaginatedDto>(`/marketplace/search${buildQs(params)}`),
 
   getListing: (listingId: string) =>
     apiFetch<MarketplaceListingDto>(`/marketplace/${listingId}`),
@@ -1834,16 +1802,8 @@ export interface EmergencyAlertDto {
 }
 
 export const emergencyApi = {
-  listAlerts: (params?: { wardId?: string; type?: string; status?: string; limit?: number; page?: number }) => {
-    const q = new URLSearchParams()
-    if (params?.wardId) q.set("wardId", params.wardId)
-    if (params?.type) q.set("type", params.type)
-    if (params?.status) q.set("status", params.status)
-    if (params?.limit) q.set("limit", String(params.limit))
-    if (params?.page) q.set("page", String(params.page))
-    const qs = q.toString()
-    return apiFetch<{ alerts: EmergencyAlertDto[]; pagination: { page: number; limit: number; total: number; totalPages: number } }>(`/emergency${qs ? `?${qs}` : ""}`)
-  },
+  listAlerts: (params?: { wardId?: string; type?: string; status?: string; limit?: number; page?: number }) =>
+    apiFetch<{ alerts: EmergencyAlertDto[]; pagination: { page: number; limit: number; total: number; totalPages: number } }>(`/emergency${buildQs(params)}`),
 
   getAlert: (alertId: string) =>
     apiFetch<EmergencyAlertDto>(`/emergency/${alertId}`),
@@ -2013,20 +1973,11 @@ export const treasuryApi = {
     referenceType?:   string
     fromDate?:        string
     toDate?:          string
-  }) => {
-    const q = new URLSearchParams()
-    if (params?.page)            q.set("page",            String(params.page))
-    if (params?.limit)           q.set("limit",           String(params.limit))
-    if (params?.transactionType) q.set("transactionType", params.transactionType)
-    if (params?.referenceType)   q.set("referenceType",   params.referenceType)
-    if (params?.fromDate)        q.set("fromDate",        params.fromDate)
-    if (params?.toDate)          q.set("toDate",          params.toDate)
-    const qs = q.toString()
-    return apiFetch<{
+  }) =>
+    apiFetch<{
       transactions: WalletTransactionDto[]
       pagination: { page: number; limit: number; total: number; totalPages: number }
-    }>(`/treasury/${groupId}/transactions${qs ? `?${qs}` : ""}`)
-  },
+    }>(`/treasury/${groupId}/transactions${buildQs(params)}`),
 }
 
 // ─────────────────────────────────────────────────────────
@@ -2068,17 +2019,8 @@ export const paymentApi = {
 }
 
 export const auditApi = {
-  search: (params?: { page?: number; limit?: number; userId?: string; action?: string; fromDate?: string; toDate?: string }) => {
-    const q = new URLSearchParams()
-    if (params?.page) q.set("page", String(params.page))
-    if (params?.limit) q.set("limit", String(params.limit))
-    if (params?.userId) q.set("userId", params.userId)
-    if (params?.action) q.set("action", params.action)
-    if (params?.fromDate) q.set("fromDate", params.fromDate)
-    if (params?.toDate) q.set("toDate", params.toDate)
-    const qs = q.toString()
-    return apiFetch<{ logs: AuditLogDto[]; pagination: { page: number; limit: number; total: number; totalPages: number } }>(`/audit/search${qs ? `?${qs}` : ""}`)
-  },
+  search: (params?: { page?: number; limit?: number; userId?: string; action?: string; fromDate?: string; toDate?: string }) =>
+    apiFetch<{ logs: AuditLogDto[]; pagination: { page: number; limit: number; total: number; totalPages: number } }>(`/audit/search${buildQs(params)}`),
 }
 
 // ─── Feed ─────────────────────────────────────────────────────────────────────
@@ -2154,15 +2096,7 @@ export const electionsApi = {
     page?: number
     limit?: number
   }): Promise<{ elections: ElectionSummaryDto[]; total: number }> => {
-    const q = new URLSearchParams()
-    if (params?.groupId) q.set("groupId", params.groupId)
-    if (params?.countyId) q.set("countyId", params.countyId)
-    if (params?.scope) q.set("scope", params.scope)
-    if (params?.status) q.set("status", params.status)
-    if (params?.page) q.set("page", String(params.page))
-    if (params?.limit) q.set("limit", String(params.limit))
-    const qs = q.toString()
-    const res = await apiFetch<{ total: number; items: ElectionSummaryDto[] }>(`/elections${qs ? `?${qs}` : ""}`)
+    const res = await apiFetch<{ total: number; items: ElectionSummaryDto[] }>(`/elections${buildQs(params)}`)
     return { elections: res.items ?? [], total: res.total ?? 0 }
   },
 
@@ -2250,16 +2184,7 @@ export const leaderboardApi = {
     limit: number
     metric: string
     scope: string
-  }> => {
-    const q = new URLSearchParams()
-    if (params?.metric) q.set("metric", params.metric)
-    if (params?.scope) q.set("scope", params.scope)
-    if (params?.scopeId) q.set("scopeId", params.scopeId)
-    if (params?.page) q.set("page", String(params.page))
-    if (params?.limit) q.set("limit", String(params.limit))
-    const qs = q.toString()
-    return apiFetch(`/reputation/leaderboard${qs ? `?${qs}` : ""}`)
-  },
+  }> => apiFetch(`/reputation/leaderboard${buildQs(params)}`),
 }
 
 // ─────────────────────────────────────────────────────────

@@ -38,6 +38,14 @@ import { ethers } from 'ethers';
 
 type ProposalWithGroup = Prisma.ProposalGetPayload<{ include: { group: true } }>;
 
+interface ReviewContext {
+  userId: string;
+  proposalId: string;
+  proposal: ProposalWithGroup;
+  dto: ReviewProposalDto;
+  callerSystemRoles: string[];
+}
+
 class ProposalService {
   /**
    * Create proposal — group-scoped, PR cost + IP percentile check
@@ -143,20 +151,14 @@ class ProposalService {
     if (!proposal) throw ApiError.notFound('Proposal');
 
     if (proposal.status === ProposalStatus.DRAFT)
-      return this.handleDraftStage(userId, proposalId, proposal, dto, callerSystemRoles);
+      return this.handleDraftStage({ userId, proposalId, proposal, dto, callerSystemRoles });
     if (proposal.status === ProposalStatus.PENDING_REVIEW)
-      return this.handlePendingReviewStage(userId, proposalId, proposal, dto, callerSystemRoles);
+      return this.handlePendingReviewStage({ userId, proposalId, proposal, dto, callerSystemRoles });
 
     throw ApiError.badRequest('Proposal is not in a reviewable state');
   }
 
-  private async handleDraftStage(
-    userId: string,
-    proposalId: string,
-    proposal: ProposalWithGroup,
-    dto: ReviewProposalDto,
-    callerSystemRoles: string[]
-  ) {
+  private async handleDraftStage({ userId, proposalId, proposal, dto, callerSystemRoles }: ReviewContext) {
     const group = proposal.group;
     const groupId = proposal.groupId;
     await this.assertDraftForwardAuth(userId, groupId, group, callerSystemRoles);
@@ -209,22 +211,21 @@ class ProposalService {
     group: ProposalWithGroup['group'],
     callerSystemRoles: string[]
   ) {
-    const isSystemGroup = group?.isSystemGroup ?? false;
-    if (isSystemGroup) {
-      if (!group || !canLocationAdminApprove(group, callerSystemRoles))
+    if (group?.isSystemGroup) {
+      if (!canLocationAdminApprove(group, callerSystemRoles))
         throw ApiError.forbidden(
-          `Requires ${group ? requiredRoleLabel(group) : 'platform administrator'} to forward this proposal`
+          `Requires ${requiredRoleLabel(group)} to forward this proposal`
         );
-    } else {
-      const membership = groupId
-        ? await prisma.groupMember.findFirst({
-            where: { userId, groupId, active: true },
-            select: { role: true },
-          })
-        : null;
-      if (!membership || membership.role !== 'LEADER')
-        throw ApiError.forbidden('Only the group leader can forward proposals for review');
+      return;
     }
+    const membership = groupId
+      ? await prisma.groupMember.findFirst({
+          where: { userId, groupId, active: true },
+          select: { role: true },
+        })
+      : null;
+    if (!membership || membership.role !== 'LEADER')
+      throw ApiError.forbidden('Only the group leader can forward proposals for review');
   }
 
   private async tryVoluntaryGroupScopeFastTrack(
@@ -268,13 +269,7 @@ class ProposalService {
     }
   }
 
-  private async handlePendingReviewStage(
-    userId: string,
-    proposalId: string,
-    proposal: ProposalWithGroup,
-    dto: ReviewProposalDto,
-    callerSystemRoles: string[]
-  ) {
+  private async handlePendingReviewStage({ userId, proposalId, proposal, dto, callerSystemRoles }: ReviewContext) {
     const group = proposal.group;
     if (!group) throw ApiError.badRequest('Proposal has no associated group');
     if (!canLocationAdminApprove(group, callerSystemRoles))
@@ -353,22 +348,21 @@ class ProposalService {
     callerSystemRoles: string[]
   ) {
     const group = proposal.group;
-    const isSystemGroup = group?.isSystemGroup ?? false;
-    if (isSystemGroup) {
-      if (!group || !canLocationAdminApprove(group, callerSystemRoles))
+    if (group?.isSystemGroup) {
+      if (!canLocationAdminApprove(group, callerSystemRoles))
         throw ApiError.forbidden(
-          `Requires ${group ? requiredRoleLabel(group) : 'platform administrator'} to start voting`
+          `Requires ${requiredRoleLabel(group)} to start voting`
         );
-    } else {
-      const membership = proposal.groupId
-        ? await prisma.groupMember.findFirst({
-            where: { userId, groupId: proposal.groupId, active: true },
-            select: { role: true },
-          })
-        : null;
-      if (!membership || membership.role !== 'LEADER')
-        throw ApiError.forbidden('Only the group leader can start voting');
+      return;
     }
+    const membership = proposal.groupId
+      ? await prisma.groupMember.findFirst({
+          where: { userId, groupId: proposal.groupId, active: true },
+          select: { role: true },
+        })
+      : null;
+    if (!membership || membership.role !== 'LEADER')
+      throw ApiError.forbidden('Only the group leader can start voting');
   }
 
   private async notifyGroupVotingStarted(
@@ -419,33 +413,8 @@ class ProposalService {
       throw ApiError.badRequest('Voting not active');
 
     const groupId = proposal.groupId!;
-    const isCommunityScope = proposal.proposalScope === ProposalScope.COMMUNITY;
 
-    if (isCommunityScope) {
-      // Community proposals: voter must be in the geographic area
-      if (!userPrimaryWardId)
-        throw ApiError.forbidden('You must have a primary ward set to vote on community proposals');
-
-      const group = proposal.group;
-      if (group?.wardId) {
-        if (userPrimaryWardId !== group.wardId)
-          throw ApiError.forbidden('You must be a ward resident to vote on this proposal');
-      } else if (group?.constituencyId || group?.countyId) {
-        const userWard = await prisma.ward.findUnique({
-          where: { id: userPrimaryWardId },
-          select: { constituencyId: true, countyId: true },
-        });
-        if (group.constituencyId && userWard?.constituencyId !== group.constituencyId)
-          throw ApiError.forbidden('You must be a constituency resident to vote on this proposal');
-        if (group.countyId && userWard?.countyId !== group.countyId)
-          throw ApiError.forbidden('You must be a county resident to vote on this proposal');
-      }
-      // NATIONAL scope: any user can vote
-    } else {
-      // GROUP scope: must be a group member
-      if (!proposal.group || !proposal.group.members.length)
-        throw ApiError.forbidden('Not a member of this group');
-    }
+    await this.assertVoteEligibility(proposal, userPrimaryWardId);
 
     const existing = await prisma.groupMemberVote.findUnique({
       where: {
@@ -511,35 +480,7 @@ class ProposalService {
       { option: dto.option, weight }
     );
 
-    // On-chain vote anchor — records vote immutably for auditability
-    if (process.env.NODE_ENV !== 'test') {
-      const voter = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { walletAddress: true },
-      });
-      if (voter?.walletAddress) {
-        const govContract = getGovernanceContract();
-        if (govContract) {
-          try {
-            // Pack UUID string as bytes32 (left-padded keccak of the string)
-            const proposalBytes32 = ethers.keccak256(ethers.toUtf8Bytes(dto.proposalId));
-            const onChainOption =
-              dto.option === VoteOption.YES ? 0
-              : dto.option === VoteOption.NO ? 1
-              : 2; // ABSTAIN
-            await govContract.recordVote(
-              proposalBytes32,
-              voter.walletAddress,
-              onChainOption,
-              BigInt(weight)
-            );
-            logger.info({ userId, proposalId: dto.proposalId }, '[GOV] On-chain vote recorded');
-          } catch (err) {
-            logger.warn({ userId, err }, '[GOV] On-chain vote failed — off-chain record intact');
-          }
-        }
-      }
-    }
+    await this.anchorVoteOnChain(userId, dto.proposalId, dto.option, weight);
 
     return { weight };
   }
@@ -606,59 +547,13 @@ class ProposalService {
         });
     }
 
-    // Award creator IP when proposal passes
-    if (proposal.creatorId && newStatus === ProposalStatus.APPROVED) {
-      await globalImpactPointService
-        .award(proposal.creatorId, 25, ImpactPointReason.PROPOSAL_PASSED, {
-          proposalId,
-          title: proposal.title,
-        })
-        .catch(() => {});
+    if (proposal.creatorId && newStatus === ProposalStatus.APPROVED)
+      await this.awardTallyCreatorRewards(proposal.creatorId, proposalId, proposal.title);
 
-      await participationRightsService
-        .award(
-          proposal.creatorId,
-          PR_CONFIG.PROPOSAL_EXECUTED,
-          ParticipationRightsReason.PROPOSAL_EXECUTED,
-          { proposalId, title: proposal.title }
-        )
-        .catch(() => {});
-    }
+    await this.anchorResultOnChain(proposalId, newStatus);
 
-    // On-chain result anchor
-    if (process.env.NODE_ENV !== 'test') {
-      const govContract = getGovernanceContract();
-      if (govContract) {
-        try {
-          const proposalBytes32 = ethers.keccak256(ethers.toUtf8Bytes(proposalId));
-          const onChainOutcome = newStatus === ProposalStatus.APPROVED ? 1 : 2;
-          await govContract.recordResult(proposalBytes32, onChainOutcome);
-          logger.info({ proposalId, newStatus }, '[GOV] On-chain result recorded');
-        } catch (err) {
-          logger.warn({ proposalId, err }, '[GOV] On-chain result failed — DB record intact');
-        }
-      }
-    }
-
-    // Notify the proposal creator of the outcome
-    if (proposal.creatorId) {
-      const isPassed = newStatus === ProposalStatus.APPROVED;
-      notificationService
-        .send({
-          userId: proposal.creatorId,
-          type: isPassed
-            ? NotificationType.PROPOSAL_PASSED
-            : NotificationType.PROPOSAL_VOTE_CAST,
-          title: isPassed ? 'Proposal approved' : 'Proposal rejected',
-          message: isPassed
-            ? `"${proposal.title}" has passed the vote and is now approved.`
-            : `"${proposal.title}" did not pass the vote. ${!quorum ? 'Quorum was not reached.' : 'The vote was not in favour.'}`,
-          data: { proposalId, newStatus },
-        })
-        .catch(() => {
-          /* non-critical */
-        });
-    }
+    if (proposal.creatorId)
+      this.notifyTallyOutcome(proposal.creatorId, proposalId, proposal.title, newStatus, quorum);
 
     return { newStatus, quorum, approved };
   }
@@ -838,22 +733,7 @@ class ProposalService {
         'Outcome can only be recorded for passed proposals'
       );
 
-    // Check caller is creator or group leader
-    const isCreator = proposal.creatorId === userId;
-    const isLeader = proposal.groupId
-      ? !!(await prisma.groupMember.findFirst({
-          where: {
-            userId,
-            groupId: proposal.groupId,
-            role: 'LEADER',
-            active: true,
-          },
-        }))
-      : false;
-    if (!isCreator && !isLeader)
-      throw ApiError.forbidden(
-        'Only the proposal creator or group leader can record outcomes'
-      );
+    await this.assertCreatorOrLeaderAuth(userId, proposal, 'record outcomes');
 
     return prisma.proposal.update({
       where: { id: proposalId },
@@ -916,16 +796,7 @@ class ProposalService {
         `Cannot transition from ${proposal.status} to ${dto.status}`
       );
 
-    const isCreator = proposal.creatorId === userId;
-    const isLeader = proposal.groupId
-      ? !!(await prisma.groupMember.findFirst({
-          where: { userId, groupId: proposal.groupId, role: 'LEADER', active: true },
-        }))
-      : false;
-    if (!isCreator && !isLeader)
-      throw ApiError.forbidden(
-        'Only the proposal creator or group leader can update progress'
-      );
+    await this.assertCreatorOrLeaderAuth(userId, proposal, 'update progress');
 
     const newStatus = dto.status as ProposalStatus;
     const updated = await prisma.proposal.update({
@@ -942,7 +813,7 @@ class ProposalService {
       proposalId,
       { newStatus, title: proposal.title }
     );
-    if (proposal.creatorId) {
+    if (proposal.creatorId)
       notificationService.send({
         userId: proposal.creatorId,
         type: NotificationType.PROPOSAL_APPROVED,
@@ -952,8 +823,132 @@ class ProposalService {
           : `"${proposal.title}" has been marked as completed.`,
         data: { proposalId },
       }).catch(() => {});
-    }
     return updated;
+  }
+
+  private async assertVoteEligibility(
+    proposal: {
+      proposalScope: ProposalScope;
+      group: {
+        wardId: string | null;
+        constituencyId: string | null;
+        countyId: string | null;
+        members: unknown[];
+      } | null;
+    },
+    userPrimaryWardId?: string
+  ): Promise<void> {
+    if (proposal.proposalScope !== ProposalScope.COMMUNITY) {
+      if (!proposal.group || !proposal.group.members.length)
+        throw ApiError.forbidden('Not a member of this group');
+      return;
+    }
+    if (!userPrimaryWardId)
+      throw ApiError.forbidden('You must have a primary ward set to vote on community proposals');
+    const group = proposal.group;
+    if (group?.wardId) {
+      if (userPrimaryWardId !== group.wardId)
+        throw ApiError.forbidden('You must be a ward resident to vote on this proposal');
+      return;
+    }
+    if (group?.constituencyId || group?.countyId) {
+      const userWard = await prisma.ward.findUnique({
+        where: { id: userPrimaryWardId },
+        select: { constituencyId: true, countyId: true },
+      });
+      if (group.constituencyId && userWard?.constituencyId !== group.constituencyId)
+        throw ApiError.forbidden('You must be a constituency resident to vote on this proposal');
+      if (group.countyId && userWard?.countyId !== group.countyId)
+        throw ApiError.forbidden('You must be a county resident to vote on this proposal');
+    }
+    // NATIONAL scope: any user can vote
+  }
+
+  private async anchorVoteOnChain(
+    userId: string,
+    proposalId: string,
+    option: VoteOption,
+    weight: number
+  ): Promise<void> {
+    if (process.env.NODE_ENV === 'test') return;
+    const voter = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { walletAddress: true },
+    });
+    if (!voter?.walletAddress) return;
+    const govContract = getGovernanceContract();
+    if (!govContract) return;
+    try {
+      const proposalBytes32 = ethers.keccak256(ethers.toUtf8Bytes(proposalId));
+      const onChainOption = option === VoteOption.YES ? 0 : option === VoteOption.NO ? 1 : 2;
+      await govContract.recordVote(proposalBytes32, voter.walletAddress, onChainOption, BigInt(weight));
+      logger.info({ userId, proposalId }, '[GOV] On-chain vote recorded');
+    } catch (err) {
+      logger.warn({ userId, err }, '[GOV] On-chain vote failed — off-chain record intact');
+    }
+  }
+
+  private async awardTallyCreatorRewards(
+    creatorId: string,
+    proposalId: string,
+    title: string
+  ): Promise<void> {
+    await globalImpactPointService
+      .award(creatorId, 25, ImpactPointReason.PROPOSAL_PASSED, { proposalId, title })
+      .catch(() => {});
+    await participationRightsService
+      .award(creatorId, PR_CONFIG.PROPOSAL_EXECUTED, ParticipationRightsReason.PROPOSAL_EXECUTED, { proposalId, title })
+      .catch(() => {});
+  }
+
+  private async anchorResultOnChain(proposalId: string, newStatus: ProposalStatus): Promise<void> {
+    if (process.env.NODE_ENV === 'test') return;
+    const govContract = getGovernanceContract();
+    if (!govContract) return;
+    try {
+      const proposalBytes32 = ethers.keccak256(ethers.toUtf8Bytes(proposalId));
+      const onChainOutcome = newStatus === ProposalStatus.APPROVED ? 1 : 2;
+      await govContract.recordResult(proposalBytes32, onChainOutcome);
+      logger.info({ proposalId, newStatus }, '[GOV] On-chain result recorded');
+    } catch (err) {
+      logger.warn({ proposalId, err }, '[GOV] On-chain result failed — DB record intact');
+    }
+  }
+
+  private notifyTallyOutcome(
+    creatorId: string,
+    proposalId: string,
+    title: string,
+    newStatus: ProposalStatus,
+    quorum: boolean
+  ): void {
+    const isPassed = newStatus === ProposalStatus.APPROVED;
+    notificationService
+      .send({
+        userId: creatorId,
+        type: isPassed ? NotificationType.PROPOSAL_PASSED : NotificationType.PROPOSAL_VOTE_CAST,
+        title: isPassed ? 'Proposal approved' : 'Proposal rejected',
+        message: isPassed
+          ? `"${title}" has passed the vote and is now approved.`
+          : `"${title}" did not pass the vote. ${!quorum ? 'Quorum was not reached.' : 'The vote was not in favour.'}`,
+        data: { proposalId, newStatus },
+      })
+      .catch(() => {});
+  }
+
+  private async assertCreatorOrLeaderAuth(
+    userId: string,
+    proposal: { creatorId: string | null; groupId: string | null },
+    action: string
+  ): Promise<void> {
+    if (proposal.creatorId === userId) return;
+    const isLeader = proposal.groupId
+      ? !!(await prisma.groupMember.findFirst({
+          where: { userId, groupId: proposal.groupId, role: 'LEADER', active: true },
+        }))
+      : false;
+    if (!isLeader)
+      throw ApiError.forbidden(`Only the proposal creator or group leader can ${action}`);
   }
 }
 
