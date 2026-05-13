@@ -2302,3 +2302,29 @@ Write governance tests for the session-61 features (`cancelProposal`, `updatePro
 
 **Token usage:**
 Claude Sonnet 4.6 — session 63
+
+---
+
+## [2026-05-13] — CodeScene complexity reductions: api.ts buildQs + proposal.service.ts major extractions
+
+**What was built:**
+- **`frontend/lib/api.ts` refactor (CodeScene6, health 6.41)**: Added `buildQs()` helper that filters `undefined`, `null`, `""`, `"all"`, and `0` while preserving `false` (needed for `isSystem=false`). Collapsed 11 `URLSearchParams` if-block functions to 1-line arrow returns: `listElections`, `getTransactions` (×2), `getUsers`, `getGroups`, `getProposals`, `getProjects`, `getModules`, `searchListings`, `listAlerts`, `getLeaderboard`, `search`. All cc=14 and cc=12 Complex Method violations resolved.
+- **`proposal.service.ts` refactor (CodeScene7, health 5.59, trending down)**: Extracted `assertVoteEligibility` (geographic + group membership check; `castVote` cc 41→~12), `anchorVoteOnChain` (on-chain recording), `awardTallyCreatorRewards` + `anchorResultOnChain` + `notifyTallyOutcome` (from `tallyVotes` cc 23→~8), `assertCreatorOrLeaderAuth` (deduplicates creator/leader auth in `recordOutcome` + `updateProgress`). Introduced `ReviewContext` interface to collapse `handleDraftStage`/`handlePendingReviewStage` from 5 args to 1 (fixes Excess Function Arguments advisory). Flattened bumpy roads in `assertStartVotingAuth` + `assertDraftForwardAuth` (nested if/else → early-return pattern).
+- **Governance tests confirmed green**: 106/106 passing (4 files) after all refactors — no regressions from the structural changes.
+- TypeScript: 0 errors. Committed `6d4066d`, pushed to `develop`.
+
+**Decisions made:**
+- **`buildQs` skips `"all"` automatically** — the admin user list uses `status: "all"` as a UI sentinel for "no filter"; `buildQs` treats it the same as no value, so the API call is clean without the caller needing to guard against it.
+- **`false` is preserved by `buildQs`** — `isSystem: false` must reach the backend as `"false"` (voluntary groups filter). The helper skips `0` (numeric "not set") and `false` is intentionally kept.
+
+**What's still broken or incomplete:**
+- `proposal.service.ts` still has `createProposal` (cc=11), `recordOutcome` (cc=9), `updateMemory` (cc=9) at or near threshold — minor, advisory only
+- `project.service.ts` Primitive Obsession (68% primitive args) and File Size (1082 lines) not yet addressed — requires structural sub-service split
+- Africa's Talking SMS credentials not configured for production
+- Base Sepolia deploy pending (minter wallet not funded)
+
+**Next milestone:**
+Read the next CodeScene HTML report and apply complexity reductions; then write governance or projects module tests to increase coverage above 110.
+
+**Token usage:**
+Claude Sonnet 4.6 — session 64
