@@ -2355,3 +2355,35 @@ Base Sepolia deploy (fund minter wallet → `forge script Deploy.s.sol --rpc-url
 
 **Token usage:**
 Claude Sonnet 4.6 — session 65
+
+---
+
+## [2026-05-18] — Session 66: Multi-level dues allocation across geographic hierarchy
+
+**What was built:**
+- **Geographic dues split** (`treasury.service.ts`): `allocateDues()` rewritten from "100% to ward" → fan-out across Ward (70%) / Constituency (15%) / County (10%) / National (5%). Each active level gets its own `DuesAllocation` record + `WalletTransaction (CREDIT, referenceType=DUES)` + treasury balance increment in a single atomic transaction.
+- **`getAllocationSplit()` private method**: reads split percentages from `PlatformConfig` key `dues_allocation_split` (JSON). Falls back to `DEFAULT_SPLIT = { WARD: 70, CONSTITUENCY: 15, COUNTY: 10, NATIONAL: 5 }`. Runtime-reconfigurable by SUPER_ADMIN via `POST /api/v1/admin/platform-config` — no redeploy needed.
+- **`dues_allocation_split` seeded** in `seed.ts` with default 70/15/10/5 JSON value and `category: 'treasury'`.
+- **`AllocationSplit` interface** added to `treasury/types.ts`.
+- **Hard error on missing system group**: if a level has percentage > 0 but no matching system group exists, throws `ApiError.systemError` with a clear message (`re-run seed to fix`). Levels with percentage = 0 are intentionally skipped.
+- **Tests updated** (treasury: 40 green total): service test "credits ward group treasury" expanded to seed all 4 system groups and verify 42/9/6/3 KES split; "skips gracefully when ward group does not exist" → "throws when non-zero-percentage system group missing". Routes test: 4 new `allocateDues` cases (full 70/15/10/5 split via DuesAllocation counts, custom 60/40/0/0 config, no-primaryWardId early exit, missing payment early exit).
+- **Docs updated**: `docs/treasury.md` dues section rewritten with split table; `docs/features.md` dues allocation bullet updated.
+
+**Decisions made:**
+- **Missing system group throws, not silently skips** — system groups for every Ward/Constituency/County/National level are seeded at launch from `seed.ts` which walks all Kenyan geography. Absence means a seed was skipped or data was deleted — a bug that must surface loudly rather than silently drop money. (See ADR-039.)
+- **`percentage = 0` levels ARE silently skipped** — zero percent is intentional config (admin chose not to allocate there); it is not a data error.
+- **Split assertions use `DuesAllocation` records, not treasury balances** — treasury balances accumulate across tests (shared DB, upserted groups); per-payment `DuesAllocation` records are always fresh and unambiguous.
+- **Sequential upserts in test helpers** — parallel `Promise.all` upserts on the same table deadlocked in the test DB; running them sequentially in the helper function eliminates the race condition.
+
+**What's still broken or incomplete:**
+- `GroupTreasury.sol` on-chain mirroring not built — blocked on funded minter wallet + Base Sepolia deploy
+- Africa's Talking SMS credentials not configured for production
+- WebAuthn endpoints have no test coverage
+- Admin + audit modules: partial, no tests
+- UT cash-out (B2C M-Pesa payout) not implemented — designed in ADR-004, BullMQ job not written
+
+**Next milestone:**
+Base Sepolia deploy (fund minter wallet → `forge script Deploy.s.sol --rpc-url base_sepolia --broadcast` → set `PR_TOKEN_ADDRESS`/`UT_TOKEN_ADDRESS`) OR UT cash-out BullMQ job implementation.
+
+**Token usage:**
+Claude Sonnet 4.6 — session 66

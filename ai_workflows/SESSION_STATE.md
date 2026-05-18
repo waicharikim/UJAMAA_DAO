@@ -6,14 +6,14 @@
 
 ---
 
-**Last updated:** 2026-05-18 (session 65 — treasury disbursement + my-groups summary + docs)
+**Last updated:** 2026-05-18 (session 66 — multi-level dues allocation across geographic hierarchy)
 **Branch:** `develop`
 **Last commits:**
+- `272052d` feat(treasury): multi-level dues allocation across geographic hierarchy
 - `fb16348` feat(treasury): proposal disbursement + my-groups summary endpoint
 - `6d4066d` refactor: reduce cyclomatic complexity in api.ts and proposal.service.ts
 - `25b6537` docs: log session 63 — schema source fix, Sentry ESM, Redis noeviction, CodeScene refactors
 - `a8ea578` refactor(projects): reduce complexity in project.service.ts + fix module schemas
-- `f9a3e29` refactor(index): extract helpers to reduce startServer cyclomatic complexity
 
 ---
 
@@ -24,26 +24,28 @@
 | Backend API | ✅ healthy | http://localhost:4000/health |
 | Frontend | ✅ running (Turbopack) | http://localhost:3000 |
 | MailHog | ✅ auto-started by `make dev` | http://localhost:8025 |
-| Tests (core modules) | ✅ 1013 total green | auth (104) + user (35) + economy (34) + community (147) + governance (111) + projects (127) + marketplace (35) + emergency (30) + onboarding (22) + reputation (23) + education (42) + notifications (43) + verification (36) + elections (63) + treasury (36) |
+| Tests (core modules) | ✅ 1017 total green | auth (104) + user (35) + economy (34) + community (147) + governance (111) + projects (127) + marketplace (35) + emergency (30) + onboarding (22) + reputation (23) + education (42) + notifications (43) + verification (36) + elections (63) + treasury (40) |
 | Sentry backend | ✅ wired | instrument.ts + setupExpressErrorHandler; DSN in docker/.env |
 | Sentry frontend | ✅ instrumentation loads | instrumentation.ts + sentry.*.config.ts files; NEXT_PUBLIC_SENTRY_DSN needs value |
 | Telegram webhook | ⚠️ needs `make dev` restart | `docker/.env` has bot token but container not restarted yet |
 
 ---
 
-## What was done this session (session 65)
+## What was done this session (session 66)
 
-**Treasury module: proposal disbursement + my-groups summary:**
+**Treasury module: multi-level dues allocation across geographic hierarchy:**
 
-1. **Proposal → Treasury disbursement** (`proposal.service.ts`): `updateProgress` now pre-validates treasury balance before transitioning to EXECUTING. If `groupFundingAmount > 0`, checks treasury exists and has sufficient balance (throws 400 if not), then debits via `treasuryService.withdraw()` with `referenceType: 'PROPOSAL'`. Proposal status is never advanced unless the money is there.
+1. **`allocateDues()` rewrite** (`treasury.service.ts`): fans out dues payment across Ward (70%) / Constituency (15%) / County (10%) / National (5%). Each active level gets a `DuesAllocation` record + `WalletTransaction (CREDIT, referenceType=DUES)` + treasury balance increment in one atomic transaction.
 
-2. **`GET /treasury/my-groups`** (`treasury.service.ts` + handlers + routes): `getMyGroupsSummary(userId)` returns balance, groupName, isSystem, systemType, tokenBalance, updatedAt for all groups the user belongs to that have a treasury. Route added before `/:groupId` to avoid shadowing.
+2. **`getAllocationSplit()` private method**: reads from `PlatformConfig` key `dues_allocation_split` (JSON), falls back to `DEFAULT_SPLIT`. Admin can change split at runtime via `POST /api/v1/admin/platform-config` — no redeploy needed.
 
-3. **Frontend** (`frontend/lib/api.ts`): `treasuryApi.getMyGroups()` method + `MyGroupTreasuryDto` interface.
+3. **Hard error on missing system group**: if a level has percentage > 0 but no matching system group, throws `ApiError.systemError`. System groups are seeded at launch; absence is a data integrity bug.
 
-4. **Tests**: +5 disbursement cases in `proposal.lifecycle.test.ts` (governance now 111 total), +4 my-groups route cases in `treasury.routes.test.ts` (treasury now 36 total).
+4. **`dues_allocation_split` seeded** in `seed.ts` with default values. `AllocationSplit` interface added to `treasury/types.ts`.
 
-5. **Docs**: treasury status updated from scaffold → tested; SESSION_STATE.md + PROGRESS_LOG.md updated.
+5. **Tests**: 4 new `allocateDues` cases in routes test; service test updated to seed all 4 system groups and verify correct split. Treasury: 36 → **40** tests. Total: 1013 → **1017**.
+
+6. **Docs + ADR**: `docs/treasury.md` dues section rewritten; `docs/features.md` updated; ADR-039 written.
 
 ## What was done this session (session 62)
 
