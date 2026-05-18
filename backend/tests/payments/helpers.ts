@@ -55,6 +55,27 @@ export async function seedPaymentRecord(userId: string, overrides: Partial<{
   });
 }
 
+/** Seed a UtWithdrawal record directly */
+export async function seedWithdrawal(
+  userId: string,
+  overrides: Partial<{
+    amountKes: number;
+    mpesaPhone: string;
+    status: string;
+    completedAt: Date | null;
+  }> = {}
+) {
+  return prisma.utWithdrawal.create({
+    data: {
+      userId,
+      amountKes: overrides.amountKes ?? 200,
+      mpesaPhone: overrides.mpesaPhone ?? '+254712345678',
+      status: overrides.status ?? 'PENDING',
+      completedAt: overrides.completedAt ?? null,
+    },
+  });
+}
+
 /** Generate a valid JWT for payment tests */
 export function makePaymentToken(userId: string, extra: Partial<JwtPayload> = {}): string {
   return signJwtToken(

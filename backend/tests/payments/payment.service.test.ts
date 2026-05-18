@@ -9,7 +9,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { prisma } from '../../src/core/database/client.js';
 import { paymentService } from '../../src/modules/payments/services/payment.service.js';
-import { seedLocation, createPaymentTestUser, seedPaymentRecord } from './helpers.js';
+import {
+  seedLocation,
+  createPaymentTestUser,
+  seedPaymentRecord,
+  seedWithdrawal,
+} from './helpers.js';
 
 describe('PaymentService', () => {
   let userId: string;
@@ -297,6 +302,28 @@ describe('PaymentService', () => {
       ).rejects.toMatchObject({ statusCode: 403 });
     });
 
+    it('reflects FAILED status after an unsuccessful webhook', async () => {
+      const checkoutRequestId = `CRI-STATUS-FAIL-${Date.now()}`;
+      const record = await seedPaymentRecord(userId, {
+        txRef: `UJ-STATUS-FAIL-${Date.now()}`,
+        flwRef: checkoutRequestId,
+      });
+
+      await paymentService.handleBuniWebhook({
+        Body: {
+          stkCallback: {
+            MerchantRequestID: 'MR-STATUS-002',
+            CheckoutRequestID: checkoutRequestId,
+            ResultCode: 1032,
+            ResultDesc: 'Request cancelled by user.',
+          },
+        },
+      });
+
+      const status = await paymentService.getPaymentStatus(record.txRef, userId);
+      expect(status.status).toBe('FAILED');
+    });
+
     it('reflects COMPLETED status after a successful webhook', async () => {
       const checkoutRequestId = `CRI-STATUS-DONE-${Date.now()}`;
       const record = await seedPaymentRecord(userId, {
@@ -327,6 +354,74 @@ describe('PaymentService', () => {
       const status = await paymentService.getPaymentStatus(record.txRef, userId);
       expect(status.status).toBe('COMPLETED');
       expect(status.completedAt).not.toBeNull();
+    });
+  });
+
+  // ─────────────────────────────────────────────
+  // handleBuniB2cWebhook
+  // ─────────────────────────────────────────────
+
+  describe('handleBuniB2cWebhook', () => {
+    const b2cPayload = (
+      resultCode: number,
+      withdrawalId: string | null,
+      desc = 'desc'
+    ) => ({
+      Result: {
+        ResultType: 0,
+        ResultCode: resultCode,
+        ResultDesc: desc,
+        OriginatorConversationID: `OCI-${Date.now()}`,
+        ConversationID: `CI-${Date.now()}`,
+        TransactionID: `TXN-${Date.now()}`,
+        ...(withdrawalId !== null
+          ? { ReferenceData: { ReferenceItem: { Key: 'Occasion', Value: withdrawalId } } }
+          : {}),
+      },
+    });
+
+    it('returns success=true and correct withdrawalId on ResultCode 0', async () => {
+      const withdrawal = await seedWithdrawal(userId);
+
+      const result = await paymentService.handleBuniB2cWebhook(b2cPayload(0, withdrawal.id));
+
+      expect(result.success).toBe(true);
+      expect(result.withdrawalId).toBe(withdrawal.id);
+    });
+
+    it('returns success=false and withdrawalId on non-zero ResultCode', async () => {
+      const withdrawal = await seedWithdrawal(userId);
+
+      const result = await paymentService.handleBuniB2cWebhook(
+        b2cPayload(2001, withdrawal.id, 'The initiator information is invalid.')
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.withdrawalId).toBe(withdrawal.id);
+      expect(result.desc).toBe('The initiator information is invalid.');
+    });
+
+    it('returns withdrawalId=null when ReferenceData is absent', async () => {
+      const result = await paymentService.handleBuniB2cWebhook(b2cPayload(0, null));
+
+      expect(result.withdrawalId).toBeNull();
+      expect(result.success).toBe(true);
+    });
+
+    it('returns withdrawalId=null when ReferenceItem Key is not Occasion', async () => {
+      const result = await paymentService.handleBuniB2cWebhook({
+        Result: {
+          ResultType: 0,
+          ResultCode: 0,
+          ResultDesc: 'Success',
+          OriginatorConversationID: 'OCI-KEY',
+          ConversationID: 'CI-KEY',
+          TransactionID: 'TXN-KEY',
+          ReferenceData: { ReferenceItem: { Key: 'QueueTimeoutURL', Value: 'https://example.com' } },
+        },
+      });
+
+      expect(result.withdrawalId).toBeNull();
     });
   });
 });

@@ -179,6 +179,34 @@ describe('UT Withdrawal endpoints', () => {
       expect(updated!.earnedUtBalance).toBe(300); // untouched
     });
 
+    it('should return 400 when daily limit (50,000 KES) would be exceeded', async () => {
+      const user = await createEconomyTestUser('dailylimit@test.com');
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { fiatBackedUtBalance: 60000 },
+      });
+      const token = makeEconomyToken(user.id);
+
+      // Seed a large existing PENDING withdrawal today (49,900 KES)
+      await prisma.utWithdrawal.create({
+        data: {
+          userId: user.id,
+          amountKes: 49900,
+          mpesaPhone: '+254712345678',
+          status: 'PENDING',
+        },
+      });
+
+      // 200 KES would push total to 50,100 — over the 50,000 KES daily limit
+      const res = await request(app)
+        .post(`${BASE}/ut/withdraw`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ amountKes: 200, mpesaPhone: '+254712345678' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toMatch(/daily withdrawal limit/i);
+    });
+
     it('should return 400 for missing amountKes', async () => {
       const user = await createEconomyTestUser('missingamt@test.com');
       const token = makeEconomyToken(user.id);

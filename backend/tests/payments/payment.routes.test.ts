@@ -43,6 +43,7 @@ import {
   createPaymentTestUser,
   makePaymentToken,
   seedPaymentRecord,
+  seedWithdrawal,
 } from './helpers.js';
 
 const BASE = '/api/v1/payments';
@@ -287,6 +288,110 @@ describe('Payment Routes', () => {
         });
 
       expect(res.status).toBe(200);
+    });
+  });
+
+  // ─────────────────────────────────────────────
+  // POST /webhook/buni-b2c
+  // ─────────────────────────────────────────────
+
+  describe('POST /webhook/buni-b2c', () => {
+    const b2cBody = (resultCode: number, withdrawalId: string | null) => ({
+      Result: {
+        ResultType: 0,
+        ResultCode: resultCode,
+        ResultDesc: resultCode === 0 ? 'Success' : 'Failed',
+        OriginatorConversationID: `OCI-${Date.now()}`,
+        ConversationID: `CI-${Date.now()}`,
+        TransactionID: `TXN-${Date.now()}`,
+        ...(withdrawalId !== null
+          ? { ReferenceData: { ReferenceItem: { Key: 'Occasion', Value: withdrawalId } } }
+          : {}),
+      },
+    });
+
+    it('returns 400 when Result is missing', async () => {
+      const res = await request(app)
+        .post(`${BASE}/webhook/buni-b2c`)
+        .send({ event: 'b2c_result' });
+      expect(res.status).toBe(400);
+    });
+
+    it('returns 400 when required Result fields are missing', async () => {
+      const res = await request(app)
+        .post(`${BASE}/webhook/buni-b2c`)
+        .send({ Result: { ResultCode: 0 } });
+      expect(res.status).toBe(400);
+    });
+
+    it('does not require auth (no token → 200 for valid body)', async () => {
+      const withdrawal = await seedWithdrawal(userId);
+      const res = await request(app)
+        .post(`${BASE}/webhook/buni-b2c`)
+        .send(b2cBody(0, withdrawal.id));
+      expect(res.status).toBe(200);
+    });
+
+    it('marks UtWithdrawal COMPLETED on ResultCode 0 and does not restore balance', async () => {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { fiatBackedUtBalance: 800 },
+      });
+      const withdrawal = await seedWithdrawal(userId, { amountKes: 200 });
+
+      const res = await request(app)
+        .post(`${BASE}/webhook/buni-b2c`)
+        .send(b2cBody(0, withdrawal.id));
+
+      expect(res.status).toBe(200);
+      expect(res.body.ResultCode).toBe(0);
+
+      const updated = await prisma.utWithdrawal.findUnique({ where: { id: withdrawal.id } });
+      expect(updated!.status).toBe('COMPLETED');
+      expect(updated!.completedAt).not.toBeNull();
+
+      // Balance was already deducted before withdrawal; it should NOT be restored on success
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      expect(user!.fiatBackedUtBalance).toBe(800);
+    });
+
+    it('marks UtWithdrawal FAILED and restores fiatBackedUtBalance on non-zero ResultCode', async () => {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { fiatBackedUtBalance: 800 },
+      });
+      const withdrawal = await seedWithdrawal(userId, { amountKes: 200 });
+
+      const res = await request(app)
+        .post(`${BASE}/webhook/buni-b2c`)
+        .send(b2cBody(2001, withdrawal.id));
+
+      expect(res.status).toBe(200);
+
+      const updated = await prisma.utWithdrawal.findUnique({ where: { id: withdrawal.id } });
+      expect(updated!.status).toBe('FAILED');
+
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      expect(user!.fiatBackedUtBalance).toBe(1000); // 800 + 200 refunded
+    });
+
+    it('returns 200 gracefully when ReferenceData is absent (no withdrawalId)', async () => {
+      const res = await request(app)
+        .post(`${BASE}/webhook/buni-b2c`)
+        .send(b2cBody(0, null));
+      expect(res.status).toBe(200);
+      expect(res.body.ResultCode).toBe(0);
+    });
+
+    it('is idempotent — calling twice on COMPLETED withdrawal stays COMPLETED', async () => {
+      const withdrawal = await seedWithdrawal(userId, { status: 'COMPLETED', completedAt: new Date() });
+
+      await request(app)
+        .post(`${BASE}/webhook/buni-b2c`)
+        .send(b2cBody(0, withdrawal.id));
+
+      const updated = await prisma.utWithdrawal.findUnique({ where: { id: withdrawal.id } });
+      expect(updated!.status).toBe('COMPLETED');
     });
   });
 
