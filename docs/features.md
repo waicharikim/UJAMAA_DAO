@@ -220,16 +220,22 @@
 
 ## 11. Treasury
 
-### Major Features
+### Major Features (implemented)
 
-- Group treasury ledger (balance + `WalletTransaction` audit trail per group)
-- Dues allocation: 100% of dues payment auto-credited to user's primary ward system group treasury
-- Manual deposit / withdraw (SUPER_ADMIN, with balance guard on withdrawals)
+- Group treasury ledger (`GroupTreasury` per group, `WalletTransaction` audit trail — credit/debit with referenceType)
+- Dues allocation: 100% of dues payment auto-credited to user's primary ward system group treasury (`DUES` referenceType)
+- Proposal disbursement: transitioning a proposal to EXECUTING with `groupFundingAmount > 0` pre-validates and debits the group treasury (`PROPOSAL` referenceType)
+- Project contributions: `contributeToProject` credits the project's group treasury (`PROJECT` referenceType)
+- M-Pesa `TREASURY_DEPOSIT` payment: Buni callback credits the target group treasury and mints on-chain UT for the payer
+- Manual deposit / withdraw (SUPER_ADMIN only, with balance guard on withdrawals)
 - Transaction history with filters (type, referenceType, date range, pagination)
-- M-Pesa STK Push integration (planned — Daraja sandbox)
-- Platform-wide treasury for grants and operations (planned)
-- UT as transparent on-chain layer; KES via M-Pesa for real-world spend
-- Withdrawal path: fiat-backed UT only (not earned UT) — see ADR-026
+- My-groups summary: `GET /treasury/my-groups` returns balance + metadata for all groups the user belongs to that have a treasury
+
+### Planned
+
+- On-chain treasury mirroring (`GroupTreasury.sol`) — blocked on minter wallet funding + Base Sepolia deploy
+- Platform-wide treasury for grants and operations
+- UT cash-out: fiat-backed UT only, 1% fee, daily/weekly limits, BullMQ B2C job — see ADR-004
 
 ---
 
@@ -247,26 +253,26 @@
 
 ## Summary Table – Feature Maturity (May 2026)
 
-**Total: 749 green tests across 13 tested modules**
+**Total: 1013 green tests across 15 tested modules**
 
 | Area | Backend Status | Frontend Status | Notes / Next Work |
 |---|---|---|---|
 | Identity & Verification | tested (104 auth + 36 verification = 140 tests) | functional | WebAuthn/passkeys live; SMS AT credentials → real |
 | Profile & Personal Data | tested (35 tests) | functional | Avatar upload pending |
 | Participation Rights (PR) | tested (34 tests) | functional | On-chain mint wired; Base Sepolia deploy pending |
-| Community / Wards / Groups | tested (82 tests) | functional | Baraza integration live; conflict protocol live |
-| Governance / Voting | tested (58 tests) | functional | 2-stage location review chain; proposal memory layer live |
-| Projects & Milestones | tested (41 tests) | functional | Milestone submission + verification live |
+| Community / Wards / Groups | tested (147 tests) | functional | Baraza integration live; conflict protocol live |
+| Governance / Voting | tested (111 tests) | functional | Proposal disbursement wired; 2-stage review + memory layer live |
+| Projects & Milestones | tested (127 tests) | functional | QR witness-chain work sessions; task board; contribution flows |
 | Marketplace | tested (35 tests) | functional | Discovery-only per Rule 1 |
 | Education | tested (42 tests) | functional | Module completion, react-markdown prose rendering |
 | Onboarding | tested (22 tests) | functional | Auto-completion via AUTO_CONDITIONS map |
 | Notifications | tested (43 tests) | functional | Dues-reminder job + governance hooks live |
 | Emergency | tested (30 tests) | functional | Alert lifecycle (ACTIVE→IN_PROGRESS→RESOLVED) live |
 | Reputation / Impact Points | tested (23 tests) | functional | Ward-level impact tracking, leaderboard live |
+| Elections | tested (63 tests) | functional | Full backend lifecycle; frontend list + detail pages |
+| Treasury | tested (36 tests) | functional | Proposal disbursement live; my-groups summary; GroupTreasury.sol pending |
 | Payments (M-Pesa) | partial (no tests) | functional | Buni STK push end-to-end verified; unit tests pending |
 | Admin Tools | partial (no tests) | functional | stats/users/config endpoints live; Baraza management tab |
 | Audit / Feed | partial (no tests) | functional | 6+ audit events active; feed cursor-paginated stream |
-| Elections | partial (no tests) | functional | Full backend lifecycle; frontend list + detail pages |
 | Integration (Baraza) | partial (no tests) | functional | Telegram/Discord/WhatsApp; attendance + invite jobs |
-| Treasury | scaffold | stub page | Schema only; M-Pesa flows + on-chain layer planned |
 | Platform / Cross-cutting | complete | complete | EN/SW i18n live; PWA installable |

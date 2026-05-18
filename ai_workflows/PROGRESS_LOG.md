@@ -2328,3 +2328,30 @@ Read the next CodeScene HTML report and apply complexity reductions; then write 
 
 **Token usage:**
 Claude Sonnet 4.6 — session 64
+
+---
+
+## [2026-05-18] — Session 65: Treasury disbursement + my-groups summary
+
+**What was built:**
+- **Proposal → Treasury disbursement** (`proposal.service.ts`): `updateProgress` now pre-validates treasury balance before transitioning to EXECUTING. If `groupFundingAmount > 0`, checks treasury exists and has sufficient balance (throws 400 if not), then debits the group treasury with `referenceType: 'PROPOSAL'`. Proposal status is never advanced without the money.
+- **`GET /treasury/my-groups`** (`treasury.service.ts` + handlers + routes): new `getMyGroupsSummary(userId)` service method; returns balance, groupName, isSystem, systemType, tokenBalance, updatedAt for all groups the user belongs to that have a treasury.
+- **Frontend** (`frontend/lib/api.ts`): `treasuryApi.getMyGroups()` + `MyGroupTreasuryDto` interface.
+- **Tests**: +5 disbursement cases in `proposal.lifecycle.test.ts` (governance: 106 → 111), +4 my-groups route cases in `treasury.routes.test.ts` (treasury: 32 → 36). Total: 963 → 1013 green.
+
+**Decisions made:**
+- Pre-validate treasury balance BEFORE updating proposal status — prevents EXECUTING state with no money behind it. A proposal with `groupFundingAmount` can only move to EXECUTING if the treasury can cover it.
+- `GET /treasury/my-groups` returns only groups where a treasury already exists (no auto-create) — avoids creating empty treasuries on read.
+- Treasury status upgraded from `scaffold` → `tested` in all docs.
+
+**What's still broken or incomplete:**
+- `GroupTreasury.sol` not written — on-chain treasury mirroring blocked on funded minter wallet + Base Sepolia deploy
+- Africa's Talking SMS credentials not configured
+- WebAuthn endpoints have no test coverage
+- Admin + audit modules: partial, no tests
+
+**Next milestone:**
+Base Sepolia deploy (fund minter wallet → `forge script Deploy.s.sol --rpc-url base_sepolia --broadcast` → set token addresses) OR WebAuthn test coverage.
+
+**Token usage:**
+Claude Sonnet 4.6 — session 65

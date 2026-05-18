@@ -6,14 +6,14 @@
 
 ---
 
-**Last updated:** 2026-05-12 (session 62 — blockchain role wiring, wallet login, Privy container fix)
+**Last updated:** 2026-05-18 (session 65 — treasury disbursement + my-groups summary + docs)
 **Branch:** `develop`
 **Last commits:**
-- `52eac4e` fix(frontend): move themeColor to viewport export
-- `2ba2a03` fix(frontend): pass NEXT_PUBLIC_PRIVY_APP_ID into Docker container
-- `026a905` feat(auth): wallet sign-in via /auth/wallet/verify
-- `62fc1cc` feat(blockchain): wire role-gated admin API + wallet-link catch-up mint
-- `0ddbce8` feat(blockchain): close 4 remaining on-chain gaps
+- `fb16348` feat(treasury): proposal disbursement + my-groups summary endpoint
+- `6d4066d` refactor: reduce cyclomatic complexity in api.ts and proposal.service.ts
+- `25b6537` docs: log session 63 — schema source fix, Sentry ESM, Redis noeviction, CodeScene refactors
+- `a8ea578` refactor(projects): reduce complexity in project.service.ts + fix module schemas
+- `f9a3e29` refactor(index): extract helpers to reduce startServer cyclomatic complexity
 
 ---
 
@@ -24,12 +24,26 @@
 | Backend API | ✅ healthy | http://localhost:4000/health |
 | Frontend | ✅ running (Turbopack) | http://localhost:3000 |
 | MailHog | ✅ auto-started by `make dev` | http://localhost:8025 |
-| Tests (core modules) | ✅ 942 total green | auth (104) + user (35) + economy (34) + community (82) + governance (58) + projects (106) + marketplace (35) + emergency (30) + onboarding (22) + reputation (23) + education (42) + notifications (43) + verification (36) + elections (63) |
+| Tests (core modules) | ✅ 1013 total green | auth (104) + user (35) + economy (34) + community (147) + governance (111) + projects (127) + marketplace (35) + emergency (30) + onboarding (22) + reputation (23) + education (42) + notifications (43) + verification (36) + elections (63) + treasury (36) |
 | Sentry backend | ✅ wired | instrument.ts + setupExpressErrorHandler; DSN in docker/.env |
 | Sentry frontend | ✅ instrumentation loads | instrumentation.ts + sentry.*.config.ts files; NEXT_PUBLIC_SENTRY_DSN needs value |
 | Telegram webhook | ⚠️ needs `make dev` restart | `docker/.env` has bot token but container not restarted yet |
 
 ---
+
+## What was done this session (session 65)
+
+**Treasury module: proposal disbursement + my-groups summary:**
+
+1. **Proposal → Treasury disbursement** (`proposal.service.ts`): `updateProgress` now pre-validates treasury balance before transitioning to EXECUTING. If `groupFundingAmount > 0`, checks treasury exists and has sufficient balance (throws 400 if not), then debits via `treasuryService.withdraw()` with `referenceType: 'PROPOSAL'`. Proposal status is never advanced unless the money is there.
+
+2. **`GET /treasury/my-groups`** (`treasury.service.ts` + handlers + routes): `getMyGroupsSummary(userId)` returns balance, groupName, isSystem, systemType, tokenBalance, updatedAt for all groups the user belongs to that have a treasury. Route added before `/:groupId` to avoid shadowing.
+
+3. **Frontend** (`frontend/lib/api.ts`): `treasuryApi.getMyGroups()` method + `MyGroupTreasuryDto` interface.
+
+4. **Tests**: +5 disbursement cases in `proposal.lifecycle.test.ts` (governance now 111 total), +4 my-groups route cases in `treasury.routes.test.ts` (treasury now 36 total).
+
+5. **Docs**: treasury status updated from scaffold → tested; SESSION_STATE.md + PROGRESS_LOG.md updated.
 
 ## What was done this session (session 62)
 
@@ -204,20 +218,20 @@ _(See PROGRESS_LOG.md for full detail)_
 
 | Status | Modules |
 |---|---|
-| **tested** | auth (104), user (35), economy (34), community (82+65=147), governance (58+23=81), projects (127), marketplace (35), emergency (30), onboarding (22), reputation (23), education (42), notifications (43), verification (36), elections (63) — **963 total** |
+| **tested** | auth (104), user (35), economy (34), community (147), governance (111), projects (127), marketplace (35), emergency (30), onboarding (22), reputation (23), education (42), notifications (43), verification (36), elections (63), treasury (36) — **1013 total** |
 | **partial** | admin, audit, integration |
-| **scaffold** | treasury |
+| **scaffold** | — |
 | **contracts written** | PrToken.sol, UtToken.sol (13 Foundry tests green; Base Sepolia deploy pending) |
 
 ---
 
 ## Next tasks (priority order)
 
-1. **Treasury module** — scaffold → full implementation (group treasury, contribution flows, GroupTreasury.sol)
+1. **GroupTreasury.sol** — smart contract for on-chain treasury transparency; blocked on minter wallet funding + Base Sepolia deploy
 2. **Africa's Talking SMS** — configure real AT credentials for production phone verification
 3. **Real domain** — purchase domain → point at server → update `BASE_URL` + register Buni production callback + Telegram webhook (replaces ephemeral tunnel)
-4. **Tests for session 61 features** — `cancelProposal`, `updateProgress`, tally/expiry cron processors
-5. **WebAuthn test coverage** — no tests exist for the 6 passkey endpoints
+4. **WebAuthn test coverage** — no tests exist for the 6 passkey endpoints
+5. **Admin + audit test coverage** — both modules are partial with no tests
 
 ---
 

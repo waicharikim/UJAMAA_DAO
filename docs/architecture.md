@@ -70,7 +70,7 @@ All routes are mounted at `/api/v1/` in `backend/src/app.ts`.
 | reputation | `/api/v1/reputation` | tested | 23 |
 | education | `/api/v1/education` | tested | 42 |
 | integration | `/api/v1/integration` | partial | — |
-| treasury | `/api/v1/treasury` | scaffold | — |
+| treasury | `/api/v1/treasury` | tested | 36 |
 | payments | `/api/v1/payments` | partial | — |
 | admin | `/api/v1/admin` | partial | — |
 | platform-config | `/api/v1/platform-config` | partial | — |

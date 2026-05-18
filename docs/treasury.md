@@ -1,161 +1,270 @@
-# UjamaaDAO – Treasury Design
+# UjamaaDAO – Treasury
 
-**Version:** 1.0
-**Last updated:** March 2026
-**Scope:** Treasury structure, M-Pesa deposit/withdrawal flows, ward/group treasury mechanics.
+**Last updated:** May 2026 (session 65)
+**Scope:** Group treasury ledger, M-Pesa deposit flows, UT cash-out design, on-chain mirroring roadmap.
 
 > **Rule 2 reminder**: All real money flows through M-Pesa to platform-controlled accounts. Never P2P. No exceptions.
 
 ---
 
-## 1. Treasury Types
+## 1. What Is Built (May 2026)
 
-| Treasury | Primary Assets | Secondary Assets | Purpose |
-|---|---|---|---|
-| **Platform-wide treasury** (central DAO) | Fiat-backed UT + KES | PR (governance votes only) | Platform operations, grants, partnerships, salaries |
-| **Ward / Group treasuries** (local funds) | Fiat-backed UT + KES | Small PR (group voting) | Local events, supplies, small grants, project funding |
-| **User wallet** (individual balance) | Fiat-backed UT + Earned UT | PR, IP | Personal use, dues payment, marketplace |
-
-**Key principle:**
-- **UT** = the transparent, auditable layer → used for anything needing immutability, public visibility, or cross-community pooling.
-- **KES via M-Pesa** = the real-world bridge → used for anything involving paying real people, buying physical goods, or paying taxes/fees.
+| Layer | Status |
+|---|---|
+| Group treasury ledger (balance + WalletTransaction audit trail) | ✅ live |
+| Dues → treasury allocation (100% → primary ward system group) | ✅ live |
+| Proposal disbursement (EXECUTING transition debits group treasury) | ✅ live |
+| Project contribution → treasury credit | ✅ live |
+| M-Pesa `TREASURY_DEPOSIT` → treasury credit + on-chain UT mint | ✅ live |
+| Manual deposit / withdraw (SUPER_ADMIN only) | ✅ live |
+| My-groups treasury summary (`GET /treasury/my-groups`) | ✅ live |
+| Frontend treasury page (ward treasury + transaction history) | ✅ live |
+| `GroupTreasury.sol` on-chain mirroring | ❌ pending (minter wallet not funded) |
 
 ---
 
-## 2. How M-Pesa Deposits Work
+## 2. API Reference
 
-Users have two ways to bring money into the system:
+All routes require a valid `Authorization: Bearer <token>` header.
 
-| Method | Flow | What the user receives |
+### `GET /api/v1/treasury/my-groups`
+
+Returns balance summary for all groups the authenticated user belongs to that have a treasury.
+
+**Auth:** Any authenticated user.
+
+**Response `200`:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "groupId": "uuid",
+      "groupName": "Kibera Ward Community",
+      "isSystem": true,
+      "systemType": "WARD",
+      "balance": 125000,
+      "tokenBalance": 0,
+      "updatedAt": "2026-05-18T10:00:00.000Z"
+    }
+  ]
+}
+```
+
+Groups without a treasury are omitted. Returns `[]` if none exist.
+
+---
+
+### `GET /api/v1/treasury/:groupId`
+
+Returns the full treasury record for a single group.
+
+**Auth:** Any authenticated user.
+
+**Response `200`:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "groupId": "uuid",
+    "groupName": "Kibera Ward Community",
+    "balance": 125000,
+    "tokenBalance": 0,
+    "createdAt": "2026-03-01T00:00:00.000Z",
+    "updatedAt": "2026-05-18T10:00:00.000Z"
+  }
+}
+```
+
+**Errors:** `404` if no treasury exists for this group.
+
+---
+
+### `GET /api/v1/treasury/:groupId/transactions`
+
+Paginated ledger of all wallet transactions for a group treasury.
+
+**Auth:** Any authenticated user.
+
+**Query params:**
+
+| Param | Type | Description |
 |---|---|---|
-| **M-Pesa → Fiat UT deposit** | User sends KES via M-Pesa to platform till number | Equivalent fiat-backed UT (1 UT = 1 KES) credited to their fiat pool |
-| **M-Pesa → Direct project contribution** | User sends M-Pesa to project-specific till or QR code | Proof of contribution + optional small earned UT bonus |
+| `page` | number | Default `1` |
+| `limit` | number | Default `20` |
+| `transactionType` | `CREDIT` \| `DEBIT` | Filter by direction |
+| `referenceType` | string | `DUES`, `PROJECT`, `PROPOSAL`, `ESCROW`, `MANUAL` |
+| `fromDate` | ISO string | Start of date range |
+| `toDate` | ISO string | End of date range |
 
-### Most Common Flow (Recommended Default)
+**Response `200`:**
+```json
+{
+  "success": true,
+  "data": {
+    "transactions": [
+      {
+        "id": "uuid",
+        "treasuryId": "uuid",
+        "amount": 5000,
+        "currency": "KES",
+        "transactionType": "CREDIT",
+        "description": "Dues payment — ORDINARY tier (2026-05)",
+        "referenceType": "DUES",
+        "proposalId": null,
+        "projectId": null,
+        "initiatedById": "uuid",
+        "metadata": { "duesPaymentId": "uuid", "tier": "ORDINARY", "period": "2026-05" },
+        "createdAt": "2026-05-18T10:00:00.000Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 42,
+      "totalPages": 3
+    }
+  }
+}
+```
 
-1. User opens "Contribute to Ward Project" (e.g., borehole, youth training).
-2. Screen shows:
-   - **Primary (big green button):** "Contribute with M-Pesa" → enter amount → STK push sent to phone
-   - **Secondary (small link, only if user has fiat UT):** "Use Utility Tokens (you have X UT)"
-3. M-Pesa callback received → fiat-backed UT deducted from user's pool → contribution recorded.
-4. Project progress bar updates → user receives confirmation + IP award.
+**Errors:** `404` if no treasury exists for this group.
 
 ---
 
-## 3. Treasury Structure
+### `POST /api/v1/treasury/:groupId/deposit`
 
-```
-Platform Till (M-Pesa)
-        │
-        ├── Dues payments ──────────────► Ward treasury (KES)
-        │                                      │
-        ├── Project contributions ─────────────┤
-        │                                      ▼
-        └── Grants/partnerships ────► Platform treasury (KES)
-                                            │
-                                            ▼
-                               Disbursed via governance vote
-                               (PR-weighted proposal + tally)
+Manually credit a group treasury. Creates a `WalletTransaction` (type `CREDIT`) and increments balance atomically.
+
+**Auth:** `SUPER_ADMIN` only.
+
+**Body:**
+```json
+{
+  "amount": 10000,
+  "description": "Ward grant from county government",
+  "referenceType": "MANUAL",
+  "proposalId": null,
+  "projectId": null
+}
 ```
 
-**On-chain layer (future):**
-- Ward treasury balances mirrored on-chain for transparency
-- Disbursements require on-chain governance vote
-- Treasury smart contract on Base L2
+| Field | Required | Notes |
+|---|---|---|
+| `amount` | ✅ | Positive number, KES |
+| `description` | — | Max 500 chars |
+| `referenceType` | — | `PROPOSAL` \| `PROJECT` \| `DUES` \| `ESCROW` \| `MANUAL` (default `MANUAL`) |
+| `proposalId` | — | Links transaction to a proposal |
+| `projectId` | — | Links transaction to a project |
+
+**Response `200`:** The created `WalletTransaction` record.
+
+**Errors:** `400` invalid body · `403` not SUPER_ADMIN · `404` group not found.
 
 ---
 
-## 4. UT Cash-Out Design (Fiat-Backed UT Only)
+### `POST /api/v1/treasury/:groupId/withdraw`
 
-> **Critical distinction**: Only UT that was converted from fiat (M-Pesa deposits) can be cashed out.
-> UT earned through platform activity (education, referrals, contributions) has **no cash-out path**. Ever. (ADR-004)
+Manually debit a group treasury. Throws if balance is insufficient.
 
-### User Flow
+**Auth:** `SUPER_ADMIN` only.
 
-**Wallet / Profile screen:**
-```
-UT Balance
-  Fiat-backed: 3,450 UT  ≈ KSh 3,450
-  Earned:        850 UT  (platform perks only)
+**Body:** Same shape as deposit.
 
-  [Cash Out to M-Pesa]  ← only draws from fiat-backed pool
-```
+**Response `200`:** The created `WalletTransaction` record.
 
-**Cash-out screen:**
-```
-Amount: [3,450 UT] (max) or enter custom
-Quick: [500]  [1,000]  [2,000]  [All]
+**Errors:** `400` insufficient balance or invalid body · `403` not SUPER_ADMIN · `404` treasury not found.
 
-M-Pesa number: 07XX XXX XXX  (pre-filled, editable)
+---
 
-Withdrawal fee: 1%  (KSh 34.50)
-You receive: KSh 3,415.50
+## 3. How Money Enters a Group Treasury
 
-[Withdraw to M-Pesa]
-```
+### Dues payment (automatic)
 
-**Confirmation:**
-- "Withdrawal requested — expect funds in 5–30 minutes"
-- Appears in transaction history: "Withdrew 3,450 UT → KSh 3,415.50"
+1. User pays dues via M-Pesa STK push (`POST /payments/initiate`).
+2. Buni callback fires (`POST /payments/webhook/buni`) → `dues.service.recordPayment()`.
+3. `dues.service.ts` calls `treasuryService.allocateDues()` after the transaction.
+4. `allocateDues()` finds the user's primary ward system group → creates a `DuesAllocation` record + `WalletTransaction (CREDIT, referenceType=DUES)` + increments treasury balance. Phase 1: 100% goes to the ward group. Future: configurable split (ward/constituency/county).
 
-### Backend Flow
+### Project contribution (automatic)
 
-1. User requests withdrawal of X UT from fiat-backed pool
-2. Backend validates:
-   - Fiat-backed pool balance ≥ X
-   - Phone number is verified and matches profile
-   - Daily limit not exceeded (e.g., max KSh 50,000/day)
-   - Weekly limit not exceeded (configurable)
-3. Deduct X from `user.fiatBackedUtBalance`
-4. Queue BullMQ job: `process-mpesa-payout`
-   - Calls M-Pesa Daraja B2C API (Business to Customer)
-   - Sends KES (X minus fee) to user's verified phone
-5. **On success:** record transaction, send push/email confirmation
-6. **On failure:** refund `user.fiatBackedUtBalance`, notify user and admin, flag for manual review
+1. User calls `POST /projects/:projectId/contribute` with `fiatBackedUt` amount.
+2. `project.service.contributeToProject()` debits the user's fiat UT balance, creates a `WalletTransaction (CREDIT, referenceType=PROJECT)`, and increments the project's group treasury.
 
-### Safety Design
+### M-Pesa direct deposit (automatic)
+
+1. User initiates `POST /payments/initiate` with `purpose: TREASURY_DEPOSIT` and `metadata.groupId`.
+2. Buni callback → `payment.service.ts` case `TREASURY_DEPOSIT` → `treasuryService.deposit()`.
+3. On-chain: if user has a wallet address and UT contract is configured, mints `fiatBackedUt` to their address (1 UT = 1 KES).
+
+### Manual deposit (admin-triggered)
+
+`POST /treasury/:groupId/deposit` (SUPER_ADMIN). Used for grants, off-platform transfers, corrections.
+
+---
+
+## 4. How Money Leaves a Group Treasury
+
+### Proposal execution (automatic on EXECUTING transition)
+
+1. A proposal with `groupFundingAmount > 0` is voted through to `APPROVED`.
+2. A group leader or proposal creator calls `PATCH /governance/:proposalId/progress` with `{ status: "EXECUTING" }`.
+3. `proposalService.updateProgress()` **pre-validates** the treasury before updating the proposal status:
+   - If no treasury exists → `400 Group treasury does not exist`
+   - If balance < `groupFundingAmount` → `400 Insufficient treasury balance for proposal disbursement`
+4. On success: proposal moves to `EXECUTING`, treasury debited with `referenceType=PROPOSAL` and `proposalId` set on the transaction.
+5. The proposal never enters `EXECUTING` state without the money leaving the treasury.
+
+### Manual withdrawal (admin-triggered)
+
+`POST /treasury/:groupId/withdraw` (SUPER_ADMIN). Used for paying contractors, off-platform transfers.
+
+---
+
+## 5. Treasury Types
+
+| Treasury | Primary Assets | Purpose |
+|---|---|---|
+| Platform-wide treasury | Fiat-backed UT + KES | Platform operations, grants, partnerships |
+| Ward / Group treasuries | Fiat-backed UT + KES | Local events, supplies, project funding |
+| User wallet | Fiat-backed UT + Earned UT | Personal dues, marketplace, governance |
+
+---
+
+## 6. UT Cash-Out Design (Fiat-Backed UT Only)
+
+> **ADR-004**: Only UT converted from fiat (M-Pesa deposits) can be cashed out.
+> Earned UT has **no cash-out path, ever**.
+
+The user's `fiatBackedUtBalance` and `earnedUtBalance` are always stored separately — they must never be merged.
+
+**Planned flow (not yet implemented):**
+
+1. User requests withdrawal of X UT from fiat-backed pool.
+2. Backend validates: balance ≥ X, verified phone, daily/weekly limits.
+3. Deducts X from `fiatBackedUtBalance`.
+4. Enqueues BullMQ job `process-mpesa-payout` → calls M-Pesa Daraja B2C API.
+5. On success: transaction record + push/email confirmation.
+6. On failure: refund `fiatBackedUtBalance`, notify user and admin, dead-letter queue.
 
 | Control | Why |
 |---|---|
-| Verified phone number required | Prevents sending funds to wrong number |
-| Daily/weekly withdrawal limits | Reduces fraud blast radius |
-| Separate fiat-backed pool in DB | Can never accidentally cash out earned UT |
-| BullMQ job with retry + dead-letter | Failed payouts are recoverable, not silently lost |
-| Fee disclosure on every screen | Regulatory transparency |
-| Audit trail for every movement | Compliance + debugging |
+| Verified phone required | Prevents sending funds to wrong number |
+| Daily/weekly limits | Reduces fraud blast radius |
+| Separate fiat-backed pool | Can never accidentally cash out earned UT |
+| BullMQ job with retry + dead-letter | Failed payouts are recoverable |
+| Fee disclosure | Regulatory transparency |
 
 ---
 
-## 5. Real-Life Project Funding Flow Examples
+## 7. On-Chain Roadmap
 
-### Example: Borehole Drilling (KSh 200,000 target)
+The treasury page says "All transactions are recorded on-chain for transparency." This is aspirational until `GroupTreasury.sol` is deployed.
 
-1. Ward creates proposal: "Drill community borehole — KSh 200,000"
-2. Proposal passes governance vote (PR-weighted)
-3. Project page opens with funding target and M-Pesa till
-4. Members contribute via M-Pesa or fiat-backed UT
-5. Once target hit: project moves to ACTIVE, milestones unlocked
-6. Funds disbursed to contractor via platform-controlled account (M-Pesa B2B)
-7. Milestones reported with photo evidence → approved by ward members
-8. On completion: contributor IP awards issued, project marked COMPLETED
+**Planned:**
+- `GroupTreasury.sol` on Base L2 — mirrors off-chain balance, gate-checked for disbursements
+- Ward treasury balances queryable on-chain
+- Disbursements require both off-chain governance approval (PR-weighted vote) and on-chain transaction
 
-### Example: Monthly Dues Payment
-
-1. User opens "Commitment Dues — KSh 500 due 28 Feb"
-2. Options:
-   - **M-Pesa** (big button) → STK push
-   - **Utility Tokens** (small link, only if fiat-backed balance ≥ 500)
-3. On payment: +10 PR award, dues status cleared, no penalty this month
-
----
-
-## 6. Summary – Final Design
-
-| Flow | Asset used | Cash-out possible? |
-|---|---|---|
-| M-Pesa → platform | KES → fiat-backed UT | Yes (1:1 minus fee) |
-| Education completion | Earned UT | No |
-| Referral bonus | Earned UT | No |
-| Project contribution reward | Earned UT or IP | No |
-| Ward dues payment (UT) | Either pool (fiat first) | N/A |
-| Treasury disbursement | KES via M-Pesa B2B | Platform-controlled |
+**Blocked on:** Funded minter wallet → `forge script Deploy.s.sol --rpc-url base_sepolia --broadcast` → set `PR_TOKEN_ADDRESS`/`UT_TOKEN_ADDRESS` env vars.
