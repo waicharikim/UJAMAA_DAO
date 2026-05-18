@@ -31,3 +31,30 @@ export const buniCallbackSchema = z.object({
 export const txRefParamSchema = z.object({
   txRef: z.string().min(1),
 });
+
+// Buni / Safaricom B2C result callback
+export const buniB2cCallbackSchema = z.object({
+  Result: z.object({
+    ResultType: z.number(),
+    ResultCode: z.number(),
+    ResultDesc: z.string(),
+    OriginatorConversationID: z.string(),
+    ConversationID: z.string(),
+    TransactionID: z.string(),
+    ResultParameters: z
+      .object({
+        ResultParameter: z.array(
+          z.object({
+            Key: z.string(),
+            Value: z.union([z.string(), z.number()]),
+          })
+        ),
+      })
+      .optional(),
+    ReferenceData: z
+      .object({
+        ReferenceItem: z.object({ Key: z.string(), Value: z.string() }),
+      })
+      .optional(),
+  }),
+});

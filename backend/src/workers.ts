@@ -83,6 +83,13 @@ import {
   processExpireProposalReview,
 } from './modules/governance/jobs/proposal.jobs.js';
 
+import {
+  MPESA_PAYOUT_JOB,
+  processMpesaPayout,
+  MpesaPayoutJobData,
+} from './modules/economy/jobs/ut-payout.jobs.js';
+import { utWithdrawalService } from './modules/economy/services/utWithdrawal.service.js';
+
 // ─────────────────────────────────────────────
 // Graceful shutdown & error handling
 // ─────────────────────────────────────────────
@@ -174,6 +181,8 @@ const economyWorker = createWorker('economy', async (job) => {
           timezone: 'Africa/Nairobi',
         }
       );
+    } else if (name === MPESA_PAYOUT_JOB) {
+      await processMpesaPayout(job.data as MpesaPayoutJobData);
     } else {
       logger.warn(
         { jobName: name, queue: 'economy' },
@@ -448,6 +457,19 @@ const failedJobHandler = async (job: any, err: Error) => {
     job.failedReason === 'exhausted' ||
     job.attemptsMade >= job.opts.attempts
   ) {
+    // Refund the user if a payout job permanently fails
+    if (job.name === MPESA_PAYOUT_JOB) {
+      const { withdrawalId } = job.data as MpesaPayoutJobData;
+      try {
+        await utWithdrawalService.refundPayout(withdrawalId, err.message);
+      } catch (refundErr) {
+        logger.error(
+          { withdrawalId, error: String(refundErr) },
+          '[PAYOUT] CRITICAL: refund after job failure itself failed — manual intervention required'
+        );
+      }
+    }
+
     logger.critical(
       {
         operationType: 'JOB_FAILED_FINAL',

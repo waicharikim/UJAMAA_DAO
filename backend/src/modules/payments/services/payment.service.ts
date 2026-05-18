@@ -21,6 +21,7 @@ import {
   BuniCallbackPayload,
   BuniStkPushResponse,
   BuniTokenResponse,
+  BuniB2cResponse,
   DuesPurposeMeta,
   TreasuryPurposeMeta,
 } from '../types.js';
@@ -34,6 +35,12 @@ const BUNI_BASE_URL =
   process.env.BUNI_BASE_URL || 'https://uat.buni.kcbgroup.com';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:4000';
+
+// B2C-specific — only needed for outbound payouts
+const BUNI_B2C_SHORTCODE = process.env.BUNI_B2C_SHORTCODE || '';
+const BUNI_B2C_INITIATOR_NAME = process.env.BUNI_B2C_INITIATOR_NAME || '';
+const BUNI_B2C_SECURITY_CREDENTIAL =
+  process.env.BUNI_B2C_SECURITY_CREDENTIAL || '';
 
 // ─── Buni OAuth2 token cache (in-memory, single instance) ────────────────────
 
@@ -382,6 +389,127 @@ class PaymentService {
     if (!record) throw ApiError.notFound('PaymentRecord', txRef);
     if (record.userId !== userId) throw ApiError.forbidden('Access denied');
     return record;
+  }
+
+  // ─── B2C payout (outbound M-Pesa) ─────────────────────────────────────────
+
+  /**
+   * Initiate an outbound M-Pesa B2C payout via Buni.
+   * Called by the process-mpesa-payout BullMQ job.
+   * Throws if B2C credentials are not configured or Buni rejects.
+   * Status is confirmed asynchronously via POST /payments/webhook/buni-b2c.
+   */
+  async initiateB2CPayout(opts: {
+    withdrawalId: string;
+    amountKes: number;
+    mpesaPhone: string;
+  }): Promise<void> {
+    if (process.env.NODE_ENV === 'test') {
+      logger.debug(
+        { withdrawalId: opts.withdrawalId },
+        '[BUNI B2C] Test mode — stubbed'
+      );
+      return;
+    }
+
+    if (
+      !BUNI_B2C_SHORTCODE ||
+      !BUNI_B2C_INITIATOR_NAME ||
+      !BUNI_B2C_SECURITY_CREDENTIAL
+    ) {
+      throw new Error(
+        '[BUNI B2C] B2C credentials not configured (BUNI_B2C_SHORTCODE / BUNI_B2C_INITIATOR_NAME / BUNI_B2C_SECURITY_CREDENTIAL)'
+      );
+    }
+
+    const phone = opts.mpesaPhone.replace(/^\+/, '');
+    const resultUrl = `${BASE_URL}/api/v1/payments/webhook/buni-b2c`;
+
+    const token = await getBuniToken();
+
+    const body = {
+      InitiatorName: BUNI_B2C_INITIATOR_NAME,
+      SecurityCredential: BUNI_B2C_SECURITY_CREDENTIAL,
+      CommandID: 'BusinessPayment',
+      Amount: String(opts.amountKes),
+      PartyA: BUNI_B2C_SHORTCODE,
+      PartyB: phone,
+      Remarks: `UT Cashout`,
+      QueueTimeOutURL: resultUrl,
+      ResultURL: resultUrl,
+      Occasion: opts.withdrawalId,
+    };
+
+    const res = await fetch(`${BUNI_BASE_URL}/mm/api/b2c/v1/paymentrequest`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    const data = (await res.json()) as BuniB2cResponse;
+
+    if (!res.ok || data.ResponseCode !== '0') {
+      logger.error(
+        {
+          withdrawalId: opts.withdrawalId,
+          responseCode: data.ResponseCode,
+          desc: data.ResponseDescription,
+        },
+        '[BUNI B2C] Payout request rejected'
+      );
+      throw new Error(
+        `[BUNI B2C] Request failed (${data.ResponseCode}): ${data.ResponseDescription}`
+      );
+    }
+
+    logger.info(
+      {
+        withdrawalId: opts.withdrawalId,
+        conversationId: data.ConversationID,
+        amountKes: opts.amountKes,
+      },
+      '[BUNI B2C] Payout request accepted'
+    );
+  }
+
+  /**
+   * Handle the Safaricom B2C result callback delivered by Buni.
+   * Confirms success or failure of an outbound payout.
+   * Returns the withdrawalId so the caller can update UtWithdrawal status.
+   */
+  async handleBuniB2cWebhook(payload: {
+    Result: {
+      ResultCode: number;
+      ResultDesc: string;
+      ConversationID: string;
+      TransactionID?: string;
+      ReferenceData?: { ReferenceItem: { Key: string; Value: string } };
+    };
+  }): Promise<{ withdrawalId: string | null; success: boolean; desc: string }> {
+    const { ResultCode, ResultDesc, ReferenceData } = payload.Result;
+
+    // withdrawalId was stored in Occasion (surfaced in ReferenceData by Safaricom)
+    const withdrawalId =
+      ReferenceData?.ReferenceItem?.Key === 'Occasion'
+        ? ReferenceData.ReferenceItem.Value
+        : null;
+
+    const success = ResultCode === 0;
+
+    logger.info(
+      {
+        withdrawalId,
+        resultCode: ResultCode,
+        resultDesc: ResultDesc,
+        transactionId: payload.Result.TransactionID,
+      },
+      success ? '[BUNI B2C] Payout confirmed' : '[BUNI B2C] Payout failed'
+    );
+
+    return { withdrawalId, success, desc: ResultDesc };
   }
 }
 

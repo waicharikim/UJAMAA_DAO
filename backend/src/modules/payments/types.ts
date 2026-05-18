@@ -85,3 +85,46 @@ export interface BuniTokenResponse {
   token_type: string;
   scope: string;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BUNI B2C (outbound M-Pesa payouts)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface BuniB2cRequestBody {
+  InitiatorName: string;
+  SecurityCredential: string;
+  CommandID: 'BusinessPayment' | 'SalaryPayment' | 'PromotionPayment';
+  Amount: string;
+  PartyA: string; // shortcode
+  PartyB: string; // recipient phone (no +)
+  Remarks: string;
+  QueueTimeOutURL: string;
+  ResultURL: string;
+  Occasion: string; // withdrawalId for correlation
+}
+
+export interface BuniB2cResponse {
+  ConversationID: string;
+  OriginatorConversationID: string;
+  ResponseCode: string; // "0" = accepted
+  ResponseDescription: string;
+}
+
+/** Safaricom B2C result callback delivered to ResultURL */
+export interface BuniB2cCallbackPayload {
+  Result: {
+    ResultType: number;
+    ResultCode: number; // 0 = success
+    ResultDesc: string;
+    OriginatorConversationID: string;
+    ConversationID: string;
+    TransactionID: string;
+    ResultParameters?: {
+      ResultParameter: Array<{ Key: string; Value: string | number }>;
+    };
+    /** withdrawalId stored in Occasion at request time */
+    ReferenceData?: {
+      ReferenceItem: { Key: string; Value: string };
+    };
+  };
+}

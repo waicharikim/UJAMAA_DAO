@@ -21,9 +21,15 @@ import { logger } from '../../../core/logger/logger.js';
 import { getUtContract } from '../../../core/blockchain/client.js';
 import { auditService } from '../../audit/services/audit.service.js';
 import { AuditAction } from '../../audit/types.js';
+import { economyQueue } from '../../../core/queue/index.js';
+import {
+  MPESA_PAYOUT_JOB,
+  MpesaPayoutJobData,
+} from '../jobs/ut-payout.jobs.js';
 
-const MIN_WITHDRAWAL = 10; // minimum 10 KES / 10 UT
-const MAX_WITHDRAWAL = 10000; // cap per request
+const MIN_WITHDRAWAL = 10;
+const MAX_WITHDRAWAL = 10_000;
+const DAILY_LIMIT_KES = 50_000;
 
 export interface WithdrawUtDto {
   amountKes: number; // 1 UT = 1 KES
@@ -50,6 +56,25 @@ export class UtWithdrawalService {
     if (amountKes > MAX_WITHDRAWAL) {
       throw new ApiError(
         `Maximum withdrawal per request is ${MAX_WITHDRAWAL} KES`,
+        400
+      );
+    }
+
+    // Daily limit check — sum of completed + pending withdrawals today
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const todayWithdrawals = await prisma.utWithdrawal.aggregate({
+      where: {
+        userId,
+        status: { in: ['PENDING', 'COMPLETED'] },
+        createdAt: { gte: startOfDay },
+      },
+      _sum: { amountKes: true },
+    });
+    const todayTotal = (todayWithdrawals._sum.amountKes ?? 0) + amountKes;
+    if (todayTotal > DAILY_LIMIT_KES) {
+      throw new ApiError(
+        `Daily withdrawal limit is ${DAILY_LIMIT_KES} KES. Already withdrawn today: ${todayTotal - amountKes} KES`,
         400
       );
     }
@@ -134,7 +159,21 @@ export class UtWithdrawalService {
       }
     }
 
-    // TODO: Trigger M-Pesa B2C payout via Buni when credentials are available
+    // Enqueue B2C payout job — idempotent via jobId = withdrawalId; skipped in test
+    if (process.env.NODE_ENV !== 'test') {
+      const jobData: MpesaPayoutJobData = {
+        withdrawalId: withdrawal.id,
+        amountKes,
+        mpesaPhone,
+      };
+      await economyQueue.add(MPESA_PAYOUT_JOB, jobData, {
+        jobId: withdrawal.id,
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 30_000 },
+        removeOnComplete: { age: 3600 * 24 * 7 },
+        removeOnFail: { age: 3600 * 24 * 30 },
+      });
+    }
 
     return {
       transactionRef: withdrawal.id,
@@ -142,6 +181,85 @@ export class UtWithdrawalService {
       newFiatBalance,
       status: 'PENDING_PAYOUT',
     };
+  }
+
+  async completePayout(withdrawalId: string): Promise<void> {
+    const withdrawal = await prisma.utWithdrawal.findUnique({
+      where: { id: withdrawalId },
+    });
+    if (!withdrawal) {
+      logger.warn(
+        { withdrawalId },
+        '[UT] completePayout: withdrawal not found'
+      );
+      return;
+    }
+    if (withdrawal.status !== 'PENDING') {
+      logger.info(
+        { withdrawalId, status: withdrawal.status },
+        '[UT] completePayout: already settled — idempotent skip'
+      );
+      return;
+    }
+
+    await prisma.utWithdrawal.update({
+      where: { id: withdrawalId },
+      data: { status: 'COMPLETED', completedAt: new Date() },
+    });
+
+    await auditService.log(
+      withdrawal.userId,
+      AuditAction.UT_WITHDRAWAL_COMPLETED,
+      'UtWithdrawal',
+      withdrawalId,
+      { amountKes: withdrawal.amountKes }
+    );
+
+    logger.info(
+      { withdrawalId, amountKes: withdrawal.amountKes },
+      '[UT] Payout completed'
+    );
+  }
+
+  async refundPayout(withdrawalId: string, reason: string): Promise<void> {
+    const withdrawal = await prisma.utWithdrawal.findUnique({
+      where: { id: withdrawalId },
+    });
+    if (!withdrawal) {
+      logger.warn({ withdrawalId }, '[UT] refundPayout: withdrawal not found');
+      return;
+    }
+    if (withdrawal.status !== 'PENDING') {
+      logger.info(
+        { withdrawalId, status: withdrawal.status },
+        '[UT] refundPayout: already settled — idempotent skip'
+      );
+      return;
+    }
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: withdrawal.userId },
+        data: { fiatBackedUtBalance: { increment: withdrawal.amountKes } },
+      }),
+      prisma.utWithdrawal.update({
+        where: { id: withdrawalId },
+        data: { status: 'FAILED' },
+      }),
+    ]);
+
+    await auditService.log(
+      withdrawal.userId,
+      AuditAction.UT_WITHDRAWAL_FAILED,
+      'UtWithdrawal',
+      withdrawalId,
+      { amountKes: withdrawal.amountKes, reason }
+    );
+
+    logger.warn(
+      { withdrawalId, amountKes: withdrawal.amountKes, reason },
+      '[UT] Payout failed — balance refunded'
+    );
   }
 
   async getWithdrawals(userId: string): Promise<{

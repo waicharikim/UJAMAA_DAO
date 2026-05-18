@@ -2,7 +2,13 @@ import { Request, Response } from 'express';
 import { paymentService } from '../services/payment.service.js';
 import { sendSuccess } from '../../../core/utils/response.js';
 import { ApiError } from '../../../core/errors/ApiError.js';
-import { InitiatePaymentDto, BuniCallbackPayload } from '../types.js';
+import {
+  InitiatePaymentDto,
+  BuniCallbackPayload,
+  BuniB2cCallbackPayload,
+} from '../types.js';
+import { utWithdrawalService } from '../../economy/services/utWithdrawal.service.js';
+import { logger } from '../../../core/logger/logger.js';
 
 /**
  * POST /api/v1/payments/initiate
@@ -31,6 +37,36 @@ export async function handleBuniWebhook(
   const payload = req.body as BuniCallbackPayload;
   const ack = await paymentService.handleBuniWebhook(payload);
   res.status(200).json(ack);
+}
+
+/**
+ * POST /api/v1/payments/webhook/buni-b2c
+ * NO auth — Buni/Safaricom B2C result callback; marks withdrawal COMPLETED or refunds on FAILED
+ */
+export async function handleBuniB2cWebhook(
+  req: Request,
+  res: Response
+): Promise<void> {
+  const payload = req.body as BuniB2cCallbackPayload;
+  const { withdrawalId, success, desc } =
+    await paymentService.handleBuniB2cWebhook(payload);
+
+  if (!withdrawalId) {
+    logger.warn(
+      { payload: JSON.stringify(payload) },
+      '[B2C] Callback missing withdrawalId — ignored'
+    );
+    res.status(200).json({ ResultCode: 0, ResultDesc: 'Accepted' });
+    return;
+  }
+
+  if (success) {
+    await utWithdrawalService.completePayout(withdrawalId);
+  } else {
+    await utWithdrawalService.refundPayout(withdrawalId, desc);
+  }
+
+  res.status(200).json({ ResultCode: 0, ResultDesc: 'Accepted' });
 }
 
 /**
