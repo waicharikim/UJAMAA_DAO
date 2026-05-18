@@ -238,3 +238,211 @@ describe('AdminService.generateReport', () => {
     expect(total).toBe(0);
   });
 });
+
+describe('AdminService.getStats', () => {
+  beforeEach(async () => {
+    await seedLocation();
+  });
+
+  it('returns expected stats shape', async () => {
+    await seedUser('stats-shape@ujamaa.test');
+
+    const stats = await adminService.getStats();
+
+    expect(typeof stats.users.total).toBe('number');
+    expect(typeof stats.users.active).toBe('number');
+    expect(typeof stats.users.suspended).toBe('number');
+    expect(stats.users.byVerification).toBeDefined();
+    expect(typeof stats.governance.activeProposals).toBe('number');
+    expect(typeof stats.pendingActions.total).toBe('number');
+    expect(typeof stats.economy.totalParticipationRights).toBe('number');
+    expect(typeof stats.economy.totalUtilityTokens).toBe('number');
+  });
+
+  it('counts users across verification levels', async () => {
+    await seedUser('stats-cv@ujamaa.test');
+
+    const stats = await adminService.getStats();
+
+    expect(stats.users.total).toBeGreaterThanOrEqual(1);
+    expect(stats.users.byVerification['COMMUNITY_VERIFIED']).toBeGreaterThanOrEqual(1);
+  });
+
+  it('pendingActions.total equals verifications + residenceChanges', async () => {
+    const stats = await adminService.getStats();
+    expect(stats.pendingActions.total).toBe(
+      stats.pendingActions.verifications + stats.pendingActions.residenceChanges
+    );
+  });
+});
+
+describe('AdminService.listUsers', () => {
+  beforeEach(async () => {
+    await seedLocation();
+  });
+
+  it('returns users with expected shape', async () => {
+    await seedUser('list-user@ujamaa.test');
+
+    const result = await adminService.listUsers({});
+
+    expect(Array.isArray(result.users)).toBe(true);
+    expect(typeof result.total).toBe('number');
+    expect(result.total).toBeGreaterThanOrEqual(1);
+
+    const user = result.users.find((u) => u.email === 'list-user@ujamaa.test');
+    expect(user).toBeDefined();
+    expect(user!.verificationLevel).toBe('COMMUNITY_VERIFIED');
+    expect(Array.isArray(user!.roles)).toBe(true);
+    expect(user!.participationRights).toBeDefined();
+  });
+
+  it('filters by search term (email match)', async () => {
+    await seedUser('searchable-unique-user@ujamaa.test');
+
+    const result = await adminService.listUsers({ search: 'searchable-unique-user' });
+
+    expect(result.users.length).toBeGreaterThanOrEqual(1);
+    expect(result.users.every((u) =>
+      u.email.includes('searchable-unique-user') || u.name?.includes('searchable-unique-user')
+    )).toBe(true);
+  });
+
+  it('respects limit and offset', async () => {
+    for (let i = 0; i < 3; i++) {
+      await seedUser(`paginate-list-${i}@ujamaa.test`);
+    }
+
+    const result = await adminService.listUsers({ limit: 2, offset: 0 });
+
+    expect(result.users.length).toBeLessThanOrEqual(2);
+    expect(result.limit).toBe(2);
+    expect(result.offset).toBe(0);
+  });
+});
+
+describe('AdminService.adjustParticipationRights', () => {
+  beforeEach(async () => {
+    await seedLocation();
+  });
+
+  it('ADDs PR to user balance', async () => {
+    const admin = await seedAdminUser();
+    const user = await seedUser('pr-add-target@ujamaa.test');
+    const before = await prisma.user.findUnique({ where: { id: user.id } });
+
+    const result = await adminService.adjustParticipationRights(admin.id, user.id, 50, 'ADD', 'test reward');
+
+    expect(result.previous).toBe(before!.participationRights);
+    expect(result.new).toBe(before!.participationRights + 50);
+  });
+
+  it('DEDUCTs PR from user balance', async () => {
+    const admin = await seedAdminUser();
+    const user = await prisma.user.create({
+      data: {
+        email: 'pr-deduct-target@ujamaa.test',
+        name: 'Deduct Target',
+        verificationLevel: 'COMMUNITY_VERIFIED',
+        emailVerified: true,
+        phoneVerified: false,
+        communityVerified: true,
+        primaryWardId: TEST_WARD_ID,
+        participationRights: 100,
+      },
+    });
+
+    const result = await adminService.adjustParticipationRights(admin.id, user.id, 30, 'DEDUCT', 'penalty');
+
+    expect(result.previous).toBe(100);
+    expect(result.new).toBe(70);
+  });
+
+  it('floors at 0 — never goes negative', async () => {
+    const admin = await seedAdminUser();
+    const user = await seedUser('pr-floor-target@ujamaa.test');
+
+    const result = await adminService.adjustParticipationRights(admin.id, user.id, 99999, 'DEDUCT', 'big penalty');
+
+    expect(result.new).toBe(0);
+  });
+
+  it('throws 400 when amount is 0', async () => {
+    const admin = await seedAdminUser();
+    const user = await seedUser('pr-zero-target@ujamaa.test');
+
+    await expect(
+      adminService.adjustParticipationRights(admin.id, user.id, 0, 'ADD', 'no-op')
+    ).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it('throws 404 for unknown userId', async () => {
+    const admin = await seedAdminUser();
+
+    await expect(
+      adminService.adjustParticipationRights(
+        admin.id,
+        '00000000-0000-4000-b000-000000000000',
+        10,
+        'ADD',
+        'ghost user'
+      )
+    ).rejects.toMatchObject({ statusCode: 404 });
+  });
+});
+
+describe('AdminService.suspendUser', () => {
+  beforeEach(async () => {
+    await seedLocation();
+  });
+
+  it('suspends a user — status becomes SUSPENDED', async () => {
+    const admin = await seedAdminUser();
+    const user = await seedUser('suspend-target@ujamaa.test');
+
+    await adminService.suspendUser(admin.id, user.id, true, 'ToS violation', 7);
+
+    const updated = await prisma.user.findUnique({ where: { id: user.id } });
+    expect(updated!.status).toBe('SUSPENDED');
+  });
+
+  it('unsuspends a user — status returns to ACTIVE', async () => {
+    const admin = await seedAdminUser();
+    const user = await seedUser('unsuspend-target@ujamaa.test');
+
+    await adminService.suspendUser(admin.id, user.id, true, 'ToS violation');
+    await adminService.suspendUser(admin.id, user.id, false, 'appeal granted');
+
+    const updated = await prisma.user.findUnique({ where: { id: user.id } });
+    expect(updated!.status).toBe('ACTIVE');
+  });
+
+  it('revokes all active sessions on suspend', async () => {
+    const admin = await seedAdminUser();
+    const user = await seedUser('suspend-sessions@ujamaa.test');
+
+    await prisma.session.create({
+      data: { userId: user.id, token: 'tok-abc', expiresAt: new Date(Date.now() + 3600000) },
+    });
+
+    await adminService.suspendUser(admin.id, user.id, true, 'ToS violation');
+
+    const activeSessions = await prisma.session.findMany({
+      where: { userId: user.id, revoked: false },
+    });
+    expect(activeSessions.length).toBe(0);
+  });
+
+  it('throws 404 for unknown userId', async () => {
+    const admin = await seedAdminUser();
+
+    await expect(
+      adminService.suspendUser(
+        admin.id,
+        '00000000-0000-4000-b000-000000000000',
+        true,
+        'ghost user'
+      )
+    ).rejects.toMatchObject({ statusCode: 404 });
+  });
+});

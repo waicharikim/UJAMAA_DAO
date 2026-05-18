@@ -250,3 +250,148 @@ describe('Admin Report Routes', () => {
     expect(res.headers['content-disposition']).toContain('attachment');
   });
 });
+
+describe('Admin Stats / Users / Config Routes', () => {
+  beforeAll(async () => {
+    await servicesReady;
+  });
+
+  it('GET /admin/stats — returns stats shape (200)', async () => {
+    const { token } = await seedAdminAndToken();
+
+    const res = await request(app)
+      .get('/api/v1/admin/stats')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(typeof res.body.data.users.total).toBe('number');
+    expect(typeof res.body.data.users.active).toBe('number');
+    expect(res.body.data.governance).toBeDefined();
+    expect(res.body.data.economy).toBeDefined();
+  });
+
+  it('GET /admin/stats — 401 without token', async () => {
+    const res = await request(app).get('/api/v1/admin/stats');
+    expect(res.status).toBe(401);
+  });
+
+  it('GET /admin/users — returns user list with pagination (200)', async () => {
+    const { token } = await seedAdminAndToken();
+
+    const res = await request(app)
+      .get('/api/v1/admin/users')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.data.users)).toBe(true);
+    expect(typeof res.body.data.total).toBe('number');
+    expect(typeof res.body.data.limit).toBe('number');
+  });
+
+  it('GET /admin/users?search= — filters results', async () => {
+    const { token } = await seedAdminAndToken();
+
+    const res = await request(app)
+      .get('/api/v1/admin/users?search=admin-routes-test')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.users.some((u: any) => u.email.includes('admin-routes-test'))).toBe(true);
+  });
+
+  it('GET /admin/config — returns config array (200)', async () => {
+    const { token } = await seedAdminAndToken();
+
+    const res = await request(app)
+      .get('/api/v1/admin/config')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.data)).toBe(true);
+  });
+});
+
+describe('Admin PR Adjust and Suspend Routes', () => {
+  beforeAll(async () => {
+    await servicesReady;
+  });
+
+  it('POST /admin/pr/adjust — adds PR to user (200)', async () => {
+    const { token } = await seedAdminAndToken();
+    const target = await seedTargetUser();
+
+    const before = await prisma.user.findUnique({ where: { id: target.id } });
+
+    const res = await request(app)
+      .post('/api/v1/admin/pr/adjust')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ userId: target.id, amount: 10, type: 'ADD', reason: 'test bonus' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.new).toBe(before!.participationRights + 10);
+  });
+
+  it('POST /admin/pr/adjust — 400 for zero amount (service guard)', async () => {
+    const { token } = await seedAdminAndToken();
+    const target = await seedTargetUser();
+
+    const res = await request(app)
+      .post('/api/v1/admin/pr/adjust')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ userId: target.id, amount: 0, type: 'ADD', reason: 'no-op' });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('POST /admin/pr/adjust — 401 without token', async () => {
+    await seedLocation();
+    const target = await seedTargetUser();
+
+    const res = await request(app)
+      .post('/api/v1/admin/pr/adjust')
+      .send({ userId: target.id, amount: 10, type: 'ADD', reason: 'ghost' });
+
+    expect(res.status).toBe(401);
+  });
+
+  it('POST /admin/users/:userId/suspend — suspends user (200)', async () => {
+    const { token } = await seedAdminAndToken();
+    const target = await seedTargetUser();
+
+    const res = await request(app)
+      .post(`/api/v1/admin/users/${target.id}/suspend`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ userId: target.id, banned: true, reason: 'ToS violation', durationDays: 7 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.suspended).toBe(true);
+
+    const updated = await prisma.user.findUnique({ where: { id: target.id } });
+    expect(updated!.status).toBe('SUSPENDED');
+  });
+
+  it('POST /admin/users/:userId/suspend — 400 for missing reason', async () => {
+    const { token } = await seedAdminAndToken();
+    const target = await seedTargetUser();
+
+    const res = await request(app)
+      .post(`/api/v1/admin/users/${target.id}/suspend`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ userId: target.id, banned: true });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('POST /admin/users/:userId/suspend — 401 without token', async () => {
+    await seedLocation();
+    const target = await seedTargetUser();
+
+    const res = await request(app)
+      .post(`/api/v1/admin/users/${target.id}/suspend`)
+      .send({ userId: target.id, banned: true, reason: 'ghost' });
+
+    expect(res.status).toBe(401);
+  });
+});
