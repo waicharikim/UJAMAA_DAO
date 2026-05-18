@@ -272,7 +272,7 @@
 | Elections | tested (63 tests) | functional | Full backend lifecycle; frontend list + detail pages |
 | Treasury | tested (40 tests) | functional | Geographic dues split (70/15/10/5) live; proposal disbursement + my-groups summary; GroupTreasury.sol pending |
 | Payments (M-Pesa) | tested (50 tests) | functional | Buni STK push + B2C payout (UT cash-out) wired end-to-end; 50K KES daily limit; BullMQ job with 3× retry + refund on exhaustion; completePayout/refundPayout idempotency verified |
-| Admin Tools | partial (no tests) | functional | stats/users/config endpoints live; Baraza management tab |
-| Audit / Feed | partial (no tests) | functional | 6+ audit events active; feed cursor-paginated stream |
+| Admin Tools | tested (50 tests) | functional | stats/users/config; PR adjust; suspend; role management; report generation (CSV) |
+| Audit / Feed | tested (31 tests) | functional | 6+ audit events active; feed cursor-paginated stream; geographic personalisation |
 | Integration (Baraza) | partial (no tests) | functional | Telegram/Discord/WhatsApp; attendance + invite jobs |
 | Platform / Cross-cutting | complete | complete | EN/SW i18n live; PWA installable |

@@ -6,9 +6,10 @@
 
 ---
 
-**Last updated:** 2026-05-18 (session 68 — payment module tests: B2C payout + completePayout + refundPayout + daily limit)
+**Last updated:** 2026-05-18 (session 69 — admin + audit + feed tests: full coverage, 81 total, 1076 grand total)
 **Branch:** `develop`
 **Last commits:**
+- `cb17de4` test(admin,audit,feed): full coverage — stats, users, PR adjust, suspend, feed stream
 - `c352555` test(payments): B2C payout flow + completePayout + refundPayout + daily limit
 - `4e9a8bd` docs: log session 67 — UT cash-out B2C payout implementation
 - `716d58f` feat(economy): UT cash-out — B2C M-Pesa payout via BullMQ
@@ -24,12 +25,24 @@
 | Backend API | ✅ healthy | http://localhost:4000/health |
 | Frontend | ✅ running (Turbopack) | http://localhost:3000 |
 | MailHog | ✅ auto-started by `make dev` | http://localhost:8025 |
-| Tests (core modules) | ✅ 1042 total green | auth (104) + user (35) + economy (66) + community (147) + governance (111) + projects (127) + marketplace (35) + emergency (30) + onboarding (22) + reputation (23) + education (42) + notifications (43) + verification (36) + elections (63) + treasury (40) + payments (50) |
+| Tests (core modules) | ✅ 1076 total green | auth (104) + user (35) + economy (66) + community (147) + governance (111) + projects (127) + marketplace (35) + emergency (30) + onboarding (22) + reputation (23) + education (42) + notifications (43) + verification (36) + elections (63) + treasury (40) + payments (50) + admin (50) + audit+feed (31) |
 | Sentry backend | ✅ wired | instrument.ts + setupExpressErrorHandler; DSN in docker/.env |
 | Sentry frontend | ✅ instrumentation loads | instrumentation.ts + sentry.*.config.ts files; NEXT_PUBLIC_SENTRY_DSN needs value |
 | Telegram webhook | ⚠️ needs `make dev` restart | `docker/.env` has bot token but container not restarted yet |
 
 ---
+
+## What was done this session (session 69)
+
+**Admin + audit + feed tests — full coverage:**
+
+1. **`tests/admin/admin.service.test.ts`** (+15 tests, total 29): `getStats` shape + verification breakdown + pendingActions arithmetic; `listUsers` shape, email search, limit/offset pagination; `adjustParticipationRights` ADD/DEDUCT/floor-at-0/zero-throws-400/404; `suspendUser` suspend/unsuspend/session-revocation/404.
+
+2. **`tests/admin/admin.routes.test.ts`** (+11 tests, total 21): `GET /admin/stats` (shape + 401), `GET /admin/users` (list + search), `GET /admin/config`, `POST /admin/pr/adjust` (ADD + zero 400 + 401), `POST /admin/users/:id/suspend` (suspend + missing-reason 400 + 401).
+
+3. **`tests/audit/feed.routes.test.ts`** (new — 8 tests): 401 gate, shape (items + nextCursor), empty feed for fresh user, own actions appear, item shape (id/category/description/timestamp/meta), limit parameter, platform-wide events visible to all users, non-whitelisted actions filtered out.
+
+Admin: `partial` → **tested (50 green tests)**. Audit+feed: `partial` → **tested (31 green tests)**. Total: 1042 → **1076 green tests**. Only `integration` remains partial.
 
 ## What was done this session (session 68)
 
@@ -262,8 +275,8 @@ _(See PROGRESS_LOG.md for full detail)_
 
 | Status | Modules |
 |---|---|
-| **tested** | auth (104), user (35), economy (66), community (147), governance (111), projects (127), marketplace (35), emergency (30), onboarding (22), reputation (23), education (42), notifications (43), verification (36), elections (63), treasury (40), payments (50) — **1042 total** |
-| **partial** | admin, audit, integration |
+| **tested** | auth (104), user (35), economy (66), community (147), governance (111), projects (127), marketplace (35), emergency (30), onboarding (22), reputation (23), education (42), notifications (43), verification (36), elections (63), treasury (40), payments (50), admin (50), audit+feed (31) — **1076 total** |
+| **partial** | integration |
 | **scaffold** | — |
 | **contracts written** | PrToken.sol, UtToken.sol (13 Foundry tests green; Base Sepolia deploy pending) |
 
@@ -274,7 +287,7 @@ _(See PROGRESS_LOG.md for full detail)_
 1. **Base Sepolia deploy** — fund minter wallet → `forge script Deploy.s.sol --rpc-url base_sepolia --broadcast` → set `PR_TOKEN_ADDRESS`/`UT_TOKEN_ADDRESS`; promotes contracts from `written` → `deployed`
 2. **Africa's Talking SMS** — configure real AT credentials for production phone verification
 3. **Real domain** — purchase domain → point at server → update `BASE_URL` + register Buni production callback + Telegram webhook (replaces ephemeral tunnel)
-4. **Admin + audit test coverage** — both modules are partial with no tests
+4. **Integration module tests** — only remaining partial module; covers Baraza group management, attendance, bot webhook
 
 ---
 
