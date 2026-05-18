@@ -47,11 +47,9 @@ const userIdParam = z.object({ userId: z.string().uuid() });
 const roleActionSchema = z.object({
   contract: z.enum(['PR', 'UT', 'GOVERNANCE']),
   role: z.string().min(1),
-  address: z
-    .string()
-    .refine((a) => ethers.isAddress(a), {
-      message: 'Invalid Ethereum address',
-    }),
+  address: z.string().refine((a) => ethers.isAddress(a), {
+    message: 'Invalid Ethereum address',
+  }),
 });
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

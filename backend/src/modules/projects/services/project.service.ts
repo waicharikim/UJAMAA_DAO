@@ -238,7 +238,9 @@ export class ProjectService {
 
     if (dto.approved && milestone.submittedById)
       await this.awardMilestoneVerificationRewards(
-        milestone.submittedById, milestone.projectId, dto.milestoneId
+        milestone.submittedById,
+        milestone.projectId,
+        dto.milestoneId
       );
 
     return { status: newStatus };
@@ -552,7 +554,10 @@ export class ProjectService {
     await this.awardContributionRewards(userId, projectId, dto.amount);
     await this.burnUtOnChain(userId, projectId, dto.amount);
 
-    logger.info({ userId, projectId, amount: dto.amount }, 'Project contribution recorded');
+    logger.info(
+      { userId, projectId, amount: dto.amount },
+      'Project contribution recorded'
+    );
 
     return { projectId, amount: dto.amount, newBalance, transactionId };
   }
@@ -872,7 +877,10 @@ export class ProjectService {
     });
     if (!session) throw ApiError.notFound('Work session');
     this.assertSessionOpen(session);
-    const { attestationsUsed, attestorDepth } = await this.assertCanAttest(attestorId, sessionId);
+    const { attestationsUsed, attestorDepth } = await this.assertCanAttest(
+      attestorId,
+      sessionId
+    );
     await this.assertValidAttestTarget(targetUserId, attestorId);
 
     try {
@@ -893,7 +901,9 @@ export class ProjectService {
       };
     } catch (err: any) {
       if (err?.code === 'P2002')
-        throw ApiError.conflict('This person is already checked in to this session');
+        throw ApiError.conflict(
+          'This person is already checked in to this session'
+        );
       throw err;
     }
   }
@@ -926,11 +936,18 @@ export class ProjectService {
     if (newStatus === 'APPROVED') {
       await this.awardAllPresences(session.presences, sessionId);
       logger.info(
-        { operationType: 'WORK_SESSION', sessionId, presenceCount: session.presences.length },
+        {
+          operationType: 'WORK_SESSION',
+          sessionId,
+          presenceCount: session.presences.length,
+        },
         'Work session approved — IP awarded to all members'
       );
     } else {
-      logger.warn({ operationType: 'WORK_SESSION', sessionId }, 'Work session flagged — no direct scans found');
+      logger.warn(
+        { operationType: 'WORK_SESSION', sessionId },
+        'Work session flagged — no direct scans found'
+      );
     }
 
     return this.mapWorkSession(updated, session.presences.length);
@@ -969,11 +986,20 @@ export class ProjectService {
   }
 
   private async tryDebitGroupTreasury(
-    proposal: { groupFundingAmount: unknown; groupId: string | null; title: string },
+    proposal: {
+      groupFundingAmount: unknown;
+      groupId: string | null;
+      title: string;
+    },
     projectId: string,
     userId: string
   ) {
-    if (!proposal.groupFundingAmount || Number(proposal.groupFundingAmount) <= 0 || !proposal.groupId) return;
+    if (
+      !proposal.groupFundingAmount ||
+      Number(proposal.groupFundingAmount) <= 0 ||
+      !proposal.groupId
+    )
+      return;
     try {
       await treasuryService.withdraw(
         proposal.groupId,
@@ -986,7 +1012,10 @@ export class ProjectService {
         userId
       );
     } catch (err) {
-      logger.warn({ groupId: proposal.groupId, projectId, err }, '[PROJECT] Treasury debit failed — project still created');
+      logger.warn(
+        { groupId: proposal.groupId, projectId, err },
+        '[PROJECT] Treasury debit failed — project still created'
+      );
     }
   }
 
@@ -996,11 +1025,25 @@ export class ProjectService {
     milestoneId: string
   ) {
     await participationRightsService
-      .award(submittedById, DEFAULT_REWARDS.PR, ParticipationRightsReason.MILESTONE_VERIFIED, { projectId, milestoneId })
-      .catch((err) => logger.warn({ err }, 'PR award failed after milestone verify'));
+      .award(
+        submittedById,
+        DEFAULT_REWARDS.PR,
+        ParticipationRightsReason.MILESTONE_VERIFIED,
+        { projectId, milestoneId }
+      )
+      .catch((err) =>
+        logger.warn({ err }, 'PR award failed after milestone verify')
+      );
     await globalImpactPointService
-      .award(submittedById, DEFAULT_REWARDS.IP, ImpactPointReason.MILESTONE_ACHIEVED, { projectId, milestoneId })
-      .catch((err) => logger.warn({ err }, 'IP award failed after milestone verify'));
+      .award(
+        submittedById,
+        DEFAULT_REWARDS.IP,
+        ImpactPointReason.MILESTONE_ACHIEVED,
+        { projectId, milestoneId }
+      )
+      .catch((err) =>
+        logger.warn({ err }, 'IP award failed after milestone verify')
+      );
   }
 
   private mapMilestones(milestones: any[]): MilestoneResponseDto[] {
@@ -1013,20 +1056,21 @@ export class ProjectService {
       dueDate: m.dueDate?.toISOString() ?? null,
       orderIndex: m.orderIndex,
       proposalMilestoneId: m.proposalMilestoneId,
-      tasks: (m as any).tasks?.map((t: any) => ({
-        id: t.id,
-        projectId: t.projectId,
-        milestoneId: t.milestoneId,
-        title: t.title,
-        description: t.description,
-        status: t.status,
-        skillCategory: t.skillCategory,
-        maxAssignees: t.maxAssignees,
-        dueDate: t.dueDate?.toISOString() ?? null,
-        assignedTo: t.assignedTo,
-        createdAt: t.createdAt.toISOString(),
-        updatedAt: t.updatedAt.toISOString(),
-      })) ?? [],
+      tasks:
+        (m as any).tasks?.map((t: any) => ({
+          id: t.id,
+          projectId: t.projectId,
+          milestoneId: t.milestoneId,
+          title: t.title,
+          description: t.description,
+          status: t.status,
+          skillCategory: t.skillCategory,
+          maxAssignees: t.maxAssignees,
+          dueDate: t.dueDate?.toISOString() ?? null,
+          assignedTo: t.assignedTo,
+          createdAt: t.createdAt.toISOString(),
+          updatedAt: t.updatedAt.toISOString(),
+        })) ?? [],
       createdAt: m.createdAt.toISOString(),
       updatedAt: m.updatedAt.toISOString(),
     }));
@@ -1046,17 +1090,22 @@ export class ProjectService {
       .award(userId, 5, ImpactPointReason.PROJECT_JOINED, { projectId })
       .catch(() => {});
     await auditService
-      .log(userId, AuditAction.PROJECT_CREATED, 'Project', projectId, { action: 'MEMBER_JOINED' })
+      .log(userId, AuditAction.PROJECT_CREATED, 'Project', projectId, {
+        action: 'MEMBER_JOINED',
+      })
       .catch(() => {});
   }
 
-  private assertProjectAcceptsContributions(
-    project: { status: string; ownerGroupId: string | null }
-  ): void {
+  private assertProjectAcceptsContributions(project: {
+    status: string;
+    ownerGroupId: string | null;
+  }): void {
     if (project.status !== 'ACTIVE' && project.status !== 'PLANNING')
       throw ApiError.badRequest('Project is not accepting contributions');
     if (!project.ownerGroupId)
-      throw ApiError.badRequest('Only group-owned projects accept UT contributions');
+      throw ApiError.badRequest(
+        'Only group-owned projects accept UT contributions'
+      );
   }
 
   private async creditProjectTreasury(
@@ -1072,7 +1121,9 @@ export class ProjectService {
         select: { fiatBackedUtBalance: true },
       });
 
-      const treasury = await treasuryService.getOrCreateTreasury(project.ownerGroupId!);
+      const treasury = await treasuryService.getOrCreateTreasury(
+        project.ownerGroupId!
+      );
 
       const walletTx = await t.walletTransaction.create({
         data: {
@@ -1091,7 +1142,10 @@ export class ProjectService {
         data: { balance: { increment: amount } },
       });
 
-      return { newBalance: updated.fiatBackedUtBalance, transactionId: walletTx.id };
+      return {
+        newBalance: updated.fiatBackedUtBalance,
+        transactionId: walletTx.id,
+      };
     });
   }
 
@@ -1101,10 +1155,16 @@ export class ProjectService {
     amount: number
   ): Promise<void> {
     await participationRightsService
-      .award(userId, 10, ParticipationRightsReason.PROJECT_CONTRIBUTED, { projectId, amount })
+      .award(userId, 10, ParticipationRightsReason.PROJECT_CONTRIBUTED, {
+        projectId,
+        amount,
+      })
       .catch(() => {});
     await globalImpactPointService
-      .award(userId, 10, ImpactPointReason.PROJECT_CONTRIBUTED, { projectId, amount })
+      .award(userId, 10, ImpactPointReason.PROJECT_CONTRIBUTED, {
+        projectId,
+        amount,
+      })
       .catch(() => {});
   }
 
@@ -1119,10 +1179,22 @@ export class ProjectService {
       data: { verifiedAt: new Date(), totalIPEarned },
       include: { user: { select: { id: true, name: true, avatarUrl: true } } },
     });
-    await globalImpactPointService.award(workLog.userId, totalIPEarned, ImpactPointReason.PHYSICAL_WORK_VERIFIED);
-    await auditService.log(verifierId, AuditAction.WORK_VERIFIED, 'PhysicalWorkLog', workLogId, {
-      approved: true, totalIPEarned, workerId: workLog.userId,
-    });
+    await globalImpactPointService.award(
+      workLog.userId,
+      totalIPEarned,
+      ImpactPointReason.PHYSICAL_WORK_VERIFIED
+    );
+    await auditService.log(
+      verifierId,
+      AuditAction.WORK_VERIFIED,
+      'PhysicalWorkLog',
+      workLogId,
+      {
+        approved: true,
+        totalIPEarned,
+        workerId: workLog.userId,
+      }
+    );
     logger.info({ verifierId, workLogId, approved: true }, 'Work verified');
     return this.mapWorkLog(updated);
   }
@@ -1134,16 +1206,34 @@ export class ProjectService {
     feedback: string | undefined
   ): Promise<WorkLogResponseDto> {
     await prisma.workVerification.create({
-      data: { workLogId, verifierId, method: 'SUPERVISOR', status: 'REJECTED', notes: feedback, verifiedAt: new Date() },
+      data: {
+        workLogId,
+        verifierId,
+        method: 'SUPERVISOR',
+        status: 'REJECTED',
+        notes: feedback,
+        verifiedAt: new Date(),
+      },
     });
-    await auditService.log(verifierId, AuditAction.WORK_VERIFIED, 'PhysicalWorkLog', workLogId, {
-      approved: false, feedback, workerId: workLog.userId,
-    });
+    await auditService.log(
+      verifierId,
+      AuditAction.WORK_VERIFIED,
+      'PhysicalWorkLog',
+      workLogId,
+      {
+        approved: false,
+        feedback,
+        workerId: workLog.userId,
+      }
+    );
     logger.info({ verifierId, workLogId, approved: false }, 'Work rejected');
     return this.mapWorkLog({ ...workLog, verifiedAt: null });
   }
 
-  private async scheduleSessionAutoClose(sessionId: string, durationMs: number): Promise<void> {
+  private async scheduleSessionAutoClose(
+    sessionId: string,
+    durationMs: number
+  ): Promise<void> {
     try {
       const job = await projectQueue.add(
         ProjectJobName.WORK_SESSION_CLOSE,
@@ -1172,17 +1262,29 @@ export class ProjectService {
       presences.map((p) =>
         Promise.all([
           prisma.workPresence
-            .update({ where: { id: p.id }, data: { ipAwarded: IP_PER_PRESENCE, awardedAt: now } })
+            .update({
+              where: { id: p.id },
+              data: { ipAwarded: IP_PER_PRESENCE, awardedAt: now },
+            })
             .catch(() => {}),
           globalImpactPointService
-            .award(p.userId, IP_PER_PRESENCE, ImpactPointReason.PHYSICAL_WORK_VERIFIED, { sessionId, depth: p.depth })
+            .award(
+              p.userId,
+              IP_PER_PRESENCE,
+              ImpactPointReason.PHYSICAL_WORK_VERIFIED,
+              { sessionId, depth: p.depth }
+            )
             .catch(() => {}),
         ])
       )
     );
   }
 
-  private async burnUtOnChain(userId: string, projectId: string, amount: number) {
+  private async burnUtOnChain(
+    userId: string,
+    projectId: string,
+    amount: number
+  ) {
     if (process.env.NODE_ENV === 'test') return;
     const contributor = await prisma.user.findUnique({
       where: { id: userId },
@@ -1194,9 +1296,15 @@ export class ProjectService {
     try {
       const amountWei = BigInt(amount) * BigInt(10 ** 18);
       await utContract.burn(contributor.walletAddress, amountWei);
-      logger.info({ userId, projectId, amount }, '[UT] On-chain burn succeeded (contribution)');
+      logger.info(
+        { userId, projectId, amount },
+        '[UT] On-chain burn succeeded (contribution)'
+      );
     } catch (err) {
-      logger.warn({ userId, err }, '[UT] On-chain burn failed — off-chain record intact');
+      logger.warn(
+        { userId, err },
+        '[UT] On-chain burn failed — off-chain record intact'
+      );
     }
   }
 
@@ -1205,7 +1313,8 @@ export class ProjectService {
     const isMember = await prisma.projectMember.findUnique({
       where: { projectId_userId: { projectId, userId } },
     });
-    if (!isMember) throw ApiError.forbidden('Join the project before claiming tasks');
+    if (!isMember)
+      throw ApiError.forbidden('Join the project before claiming tasks');
   }
 
   private assertSessionOpen(session: { status: string; expiresAt: Date }) {
@@ -1220,16 +1329,23 @@ export class ProjectService {
       where: { sessionId_userId: { sessionId, userId: attestorId } },
     });
     if (!attestorPresence)
-      throw ApiError.forbidden('You must be checked in to this session before attesting others');
+      throw ApiError.forbidden(
+        'You must be checked in to this session before attesting others'
+      );
     const attestationsUsed = await prisma.workPresence.count({
       where: { sessionId, attestedById: attestorId },
     });
     if (attestationsUsed >= 2)
-      throw ApiError.badRequest('You have already used both of your attestation slots');
+      throw ApiError.badRequest(
+        'You have already used both of your attestation slots'
+      );
     return { attestationsUsed, attestorDepth: attestorPresence.depth };
   }
 
-  private async assertValidAttestTarget(targetUserId: string, attestorId: string) {
+  private async assertValidAttestTarget(
+    targetUserId: string,
+    attestorId: string
+  ) {
     const target = await prisma.user.findUnique({
       where: { id: targetUserId },
       select: { id: true },

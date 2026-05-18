@@ -28,8 +28,8 @@ let govAbi: any[] | null = null;
 function loadAbis(): void {
   if (prAbi && utAbi && govAbi) return;
   try {
-    prAbi  = require('./abis/PrToken.json').abi;
-    utAbi  = require('./abis/UtToken.json').abi;
+    prAbi = require('./abis/PrToken.json').abi;
+    utAbi = require('./abis/UtToken.json').abi;
     govAbi = require('./abis/GovernanceVoting.json').abi;
   } catch (err) {
     logger.warn(
@@ -131,7 +131,10 @@ export function getGovernanceContract(): ethers.Contract | null {
   try {
     return new ethers.Contract(govAddress, govAbi, connection.signer);
   } catch (err) {
-    logger.warn({ err }, '[Blockchain] Failed to instantiate GovernanceVoting contract');
+    logger.warn(
+      { err },
+      '[Blockchain] Failed to instantiate GovernanceVoting contract'
+    );
     return null;
   }
 }

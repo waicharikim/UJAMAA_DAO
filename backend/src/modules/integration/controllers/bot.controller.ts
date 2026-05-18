@@ -103,7 +103,11 @@ async function requireTelegramLeader(
   });
   const isLeader = profile
     ? await prisma.groupMember.findFirst({
-        where: { userId: profile.userId, groupId: barazaGroup.groupId, role: 'LEADER' },
+        where: {
+          userId: profile.userId,
+          groupId: barazaGroup.groupId,
+          role: 'LEADER',
+        },
       })
     : null;
   if (!isLeader) {
@@ -137,7 +141,9 @@ async function requireHttpBarazaAdmin(
   if (!user.roles.includes(SystemRoles.SUPER_ADMIN)) {
     const managedIds = await getManagedGroupIds(user.userId);
     if (!managedIds.includes(barazaGroup.groupId)) {
-      throw ApiError.forbidden('You do not have admin rights over this baraza group');
+      throw ApiError.forbidden(
+        'You do not have admin rights over this baraza group'
+      );
     }
   }
   return barazaGroup as BarazaGroupRow;
@@ -179,7 +185,8 @@ export async function handleTelegramWebhook(
   })) as BarazaGroupRow | null;
 
   if (text.startsWith('/schedule')) {
-    if (barazaGroup) await handleScheduleCommand(text, from, chatId, barazaGroup);
+    if (barazaGroup)
+      await handleScheduleCommand(text, from, chatId, barazaGroup);
     return;
   }
   if (text.startsWith('/open')) {
@@ -278,7 +285,12 @@ async function handlePresentCommand(
     });
 
     logger.info(
-      { operationType: 'TELEGRAM_WEBHOOK', chatId, externalUserId, sessionDate },
+      {
+        operationType: 'TELEGRAM_WEBHOOK',
+        chatId,
+        externalUserId,
+        sessionDate,
+      },
       'Attendance recorded via /present command'
     );
 
@@ -346,7 +358,11 @@ async function handleScheduleCommand(
     return;
   }
 
-  const session = await barazaBotService.scheduleSession(barazaGroup.id, scheduledAt, userId);
+  const session = await barazaBotService.scheduleSession(
+    barazaGroup.id,
+    scheduledAt,
+    userId
+  );
 
   const formattedDate = scheduledAt.toLocaleDateString('en-KE', {
     weekday: 'long',
@@ -375,7 +391,12 @@ async function handleScheduleCommand(
   );
 
   logger.info(
-    { operationType: 'TELEGRAM_SCHEDULE', chatId, sessionId: session.id, scheduledAt },
+    {
+      operationType: 'TELEGRAM_SCHEDULE',
+      chatId,
+      sessionId: session.id,
+      scheduledAt,
+    },
     'Baraza session scheduled via bot'
   );
 }
@@ -437,7 +458,11 @@ async function handleCloseCommand(
 
   const result = await barazaBotService.closeSession(barazaGroup.id);
   if (!result) {
-    await sendTelegramMessage(from.id, 'ℹ️ Hakuna baraza inayoendelea saa hii.', chatId);
+    await sendTelegramMessage(
+      from.id,
+      'ℹ️ Hakuna baraza inayoendelea saa hii.',
+      chatId
+    );
     return;
   }
 
@@ -465,7 +490,12 @@ export async function handleDiscordWebhook(
     const rawBody = JSON.stringify(req.body);
 
     try {
-      const isValid = verifyDiscordSignature(PUBLIC_KEY, signature, timestamp, rawBody);
+      const isValid = verifyDiscordSignature(
+        PUBLIC_KEY,
+        signature,
+        timestamp,
+        rawBody
+      );
       if (!isValid) {
         res.status(401).json({ error: 'Invalid signature' });
         return;
@@ -624,11 +654,16 @@ export async function registerBarazaGroup(
     if (!user.roles.includes(SystemRoles.SUPER_ADMIN)) {
       const managedIds = await getManagedGroupIds(user.userId);
       if (!managedIds.includes(dto.groupId)) {
-        throw ApiError.forbidden('You do not have admin rights over the selected group');
+        throw ApiError.forbidden(
+          'You do not have admin rights over the selected group'
+        );
       }
     }
 
-    const barazaGroup = await barazaBotService.registerBarazaGroup(user.userId, dto);
+    const barazaGroup = await barazaBotService.registerBarazaGroup(
+      user.userId,
+      dto
+    );
     sendSuccess(res, barazaGroup, 'Baraza group registered', 201);
   } catch (err) {
     next(err);
@@ -776,12 +811,18 @@ export async function scheduleSessionHttp(
 
     const dt = new Date(scheduledAt);
     if (isNaN(dt.getTime()) || dt <= new Date()) {
-      throw ApiError.badRequest('scheduledAt must be a valid future ISO datetime');
+      throw ApiError.badRequest(
+        'scheduledAt must be a valid future ISO datetime'
+      );
     }
 
     await requireHttpBarazaAdmin(user, req.params.id);
 
-    const session = await barazaBotService.scheduleSession(req.params.id, dt, user.userId);
+    const session = await barazaBotService.scheduleSession(
+      req.params.id,
+      dt,
+      user.userId
+    );
     sendSuccess(res, session, 'Session scheduled', 201);
   } catch (err) {
     next(err);
@@ -802,9 +843,13 @@ export async function openSessionHttp(
       orderBy: { scheduledAt: 'asc' },
     });
     if (!pending) {
-      throw ApiError.badRequest('No scheduled session found — schedule one first');
+      throw ApiError.badRequest(
+        'No scheduled session found — schedule one first'
+      );
     }
-    const diffMs = Math.abs(Date.now() - new Date(pending.scheduledAt).getTime());
+    const diffMs = Math.abs(
+      Date.now() - new Date(pending.scheduledAt).getTime()
+    );
     if (diffMs > 4 * 60 * 60 * 1000) {
       throw ApiError.badRequest(
         'Session can only be opened within 4 hours of its scheduled time'
@@ -813,7 +858,9 @@ export async function openSessionHttp(
 
     const session = await barazaBotService.openSession(req.params.id);
     if (!session) {
-      throw ApiError.badRequest('No scheduled session found — schedule one first');
+      throw ApiError.badRequest(
+        'No scheduled session found — schedule one first'
+      );
     }
     sendSuccess(res, session, 'Session opened');
   } catch (err) {

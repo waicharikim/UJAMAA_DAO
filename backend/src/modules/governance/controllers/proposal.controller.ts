@@ -182,7 +182,11 @@ export class ProposalController {
     const userId = req.user!.userId;
     const { proposalId } = req.params;
     const { outcome } = req.body;
-    const result = await proposalService.recordOutcome(userId, proposalId, outcome);
+    const result = await proposalService.recordOutcome(
+      userId,
+      proposalId,
+      outcome
+    );
     sendSuccess(res, result, 'Outcome recorded');
   }
 
@@ -197,7 +201,10 @@ export class ProposalController {
     const userId = req.user!.userId;
     const { proposalId } = req.params;
     const { status, note } = req.body;
-    const result = await proposalService.updateProgress(userId, proposalId, { status, note });
+    const result = await proposalService.updateProgress(userId, proposalId, {
+      status,
+      note,
+    });
     sendSuccess(res, result, 'Proposal progress updated');
   }
 }

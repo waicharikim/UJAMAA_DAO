@@ -24,7 +24,7 @@ import { logger } from '../../../core/logger/logger.js';
 import { eventBus } from '../../../core/utils/eventBus.js';
 import { auditService } from '../../audit/services/audit.service.js';
 import { AuditAction } from '../../audit/types.js';
-import { getPrContract, getUtContract, getGovernanceContract } from '../../../core/blockchain/client.js';
+import { getPrContract } from '../../../core/blockchain/client.js';
 
 const {
   MAX_BALANCE,
@@ -206,7 +206,10 @@ export class ParticipationRightsService {
             await prContract.burn(user.walletAddress, amountWei);
             logger.info({ userId, amount }, '[PR] On-chain burn succeeded');
           } catch (err) {
-            logger.warn({ userId, err }, '[PR] On-chain burn failed — off-chain record intact');
+            logger.warn(
+              { userId, err },
+              '[PR] On-chain burn failed — off-chain record intact'
+            );
           }
         }
       }

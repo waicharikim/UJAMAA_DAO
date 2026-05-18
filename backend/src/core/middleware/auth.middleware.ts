@@ -123,7 +123,11 @@ async function validateTokenClaims(
       'TOKEN_MANIPULATION',
       'HIGH',
       'JWT token lacks jti claim - cannot be revoked if compromised',
-      { userId: payload.sub, ipAddress: req.ip, metadata: { correlationId: req.correlationId } }
+      {
+        userId: payload.sub,
+        ipAddress: req.ip,
+        metadata: { correlationId: req.correlationId },
+      }
     );
     throw new Error('Invalid token structure');
   }
@@ -138,7 +142,10 @@ async function validateTokenClaims(
       {
         userId: payload.sub,
         ipAddress: req.ip,
-        metadata: { jti: payload.jti.slice(0, 8) + '...', correlationId: req.correlationId },
+        metadata: {
+          jti: payload.jti.slice(0, 8) + '...',
+          correlationId: req.correlationId,
+        },
       }
     );
     throw new Error('Token has been revoked');
@@ -155,7 +162,10 @@ async function validateTokenClaims(
         {
           userId: payload.sub,
           ipAddress: req.ip,
-          metadata: { sessionId: payload.sessionId, correlationId: req.correlationId },
+          metadata: {
+            sessionId: payload.sessionId,
+            correlationId: req.correlationId,
+          },
         }
       );
       throw new Error('Session has been revoked');
@@ -172,7 +182,11 @@ async function validateTokenClaims(
       'AUTH_FAILURE',
       'HIGH',
       `Account status: ${account?.status ?? 'NOT_FOUND'}`,
-      { userId: payload.sub, ipAddress: req.ip, metadata: { correlationId: req.correlationId } }
+      {
+        userId: payload.sub,
+        ipAddress: req.ip,
+        metadata: { correlationId: req.correlationId },
+      }
     );
     throw new Error('Account is not active');
   }

@@ -120,9 +120,15 @@ class DuesService {
           try {
             const amountWei = BigInt(amountKes) * BigInt(10 ** 18);
             await utContract.mint(user.walletAddress, amountWei);
-            logger.info({ userId, amountKes }, '[UT] On-chain mint succeeded (dues)');
+            logger.info(
+              { userId, amountKes },
+              '[UT] On-chain mint succeeded (dues)'
+            );
           } catch (err) {
-            logger.warn({ userId, err }, '[UT] On-chain mint failed — off-chain record intact');
+            logger.warn(
+              { userId, err },
+              '[UT] On-chain mint failed — off-chain record intact'
+            );
           }
         }
       }

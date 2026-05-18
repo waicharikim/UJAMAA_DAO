@@ -120,9 +120,15 @@ export class UtWithdrawalService {
           try {
             const amountWei = BigInt(amountKes) * BigInt(10 ** 18);
             await utContract.burn(user.walletAddress, amountWei);
-            logger.info({ userId, amountKes }, '[UT] On-chain burn succeeded (withdrawal)');
+            logger.info(
+              { userId, amountKes },
+              '[UT] On-chain burn succeeded (withdrawal)'
+            );
           } catch (err) {
-            logger.warn({ userId, err }, '[UT] On-chain burn failed — off-chain record intact');
+            logger.warn(
+              { userId, err },
+              '[UT] On-chain burn failed — off-chain record intact'
+            );
           }
         }
       }

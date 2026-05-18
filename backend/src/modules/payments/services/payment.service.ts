@@ -352,9 +352,15 @@ class PaymentService {
               try {
                 const amountWei = BigInt(Math.round(amount)) * BigInt(10 ** 18);
                 await utContract.mint(payer.walletAddress, amountWei);
-                logger.info({ userId, amount }, '[UT] On-chain mint succeeded (treasury deposit)');
+                logger.info(
+                  { userId, amount },
+                  '[UT] On-chain mint succeeded (treasury deposit)'
+                );
               } catch (err) {
-                logger.warn({ userId, err }, '[UT] On-chain mint failed — off-chain record intact');
+                logger.warn(
+                  { userId, err },
+                  '[UT] On-chain mint failed — off-chain record intact'
+                );
               }
             }
           }

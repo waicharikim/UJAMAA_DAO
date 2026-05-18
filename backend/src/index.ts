@@ -73,7 +73,8 @@ function assertStartupRequirements(): void {
   }
   if (
     NODE_ENV === 'production' &&
-    jwtSecret === '6e603cfa9affb7677020ad6a930bd3f076867ff38d100586dc5d985bed845ad0'
+    jwtSecret ===
+      '6e603cfa9affb7677020ad6a930bd3f076867ff38d100586dc5d985bed845ad0'
   ) {
     throw new Error(
       'JWT_SECRET is set to the insecure development default — set a unique secret in production'
@@ -128,7 +129,10 @@ async function gracefulShutdown(
   );
 
   const forceExitTimeout = setTimeout(() => {
-    logger.error({ operationType: 'SHUTDOWN' }, 'Shutdown timeout — forcing exit');
+    logger.error(
+      { operationType: 'SHUTDOWN' },
+      'Shutdown timeout — forcing exit'
+    );
     process.exit(1);
   }, 15000).unref();
 
@@ -177,11 +181,19 @@ async function startServer() {
       logger.info(
         {
           operationType: 'SERVER',
-          metadata: { port: PORT, environment: NODE_ENV, nodeVersion: process.version, pid: process.pid },
+          metadata: {
+            port: PORT,
+            environment: NODE_ENV,
+            nodeVersion: process.version,
+            pid: process.pid,
+          },
         },
         `🚀 UjamaaDAO REST API running on http://localhost:${PORT}`
       );
-      logger.info({ operationType: 'SERVER' }, `📚 API Documentation: http://localhost:${PORT}/api/v1/docs`);
+      logger.info(
+        { operationType: 'SERVER' },
+        `📚 API Documentation: http://localhost:${PORT}/api/v1/docs`
+      );
       if (process.send) process.send('ready');
     });
 

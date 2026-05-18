@@ -20,7 +20,10 @@ export const TALLY_PROPOSALS_JOB = 'tally-proposals';
 export const EXPIRE_PROPOSAL_REVIEW_JOB = 'expire-proposal-review';
 
 export async function processTallyProposals(): Promise<void> {
-  logger.info({ job: TALLY_PROPOSALS_JOB }, '[Proposals] Tallying expired votes');
+  logger.info(
+    { job: TALLY_PROPOSALS_JOB },
+    '[Proposals] Tallying expired votes'
+  );
 
   const expired = await prisma.proposal.findMany({
     where: {
@@ -43,15 +46,23 @@ export async function processTallyProposals(): Promise<void> {
     }
   }
 
-  logger.info({ tallied, total: expired.length }, '[Proposals] Tally run complete');
+  logger.info(
+    { tallied, total: expired.length },
+    '[Proposals] Tally run complete'
+  );
 }
 
 const REVIEW_EXPIRY_DAYS = 30;
 
 export async function processExpireProposalReview(): Promise<void> {
-  logger.info({ job: EXPIRE_PROPOSAL_REVIEW_JOB }, '[Proposals] Checking for stale reviews');
+  logger.info(
+    { job: EXPIRE_PROPOSAL_REVIEW_JOB },
+    '[Proposals] Checking for stale reviews'
+  );
 
-  const cutoff = new Date(Date.now() - REVIEW_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
+  const cutoff = new Date(
+    Date.now() - REVIEW_EXPIRY_DAYS * 24 * 60 * 60 * 1000
+  );
 
   const stale = await prisma.proposal.findMany({
     where: {
@@ -78,7 +89,11 @@ export async function processExpireProposalReview(): Promise<void> {
           AuditAction.PROPOSAL_STATUS_CHANGED,
           'Proposal',
           proposal.id,
-          { newStatus: 'REJECTED', reason: 'review_expired', title: proposal.title }
+          {
+            newStatus: 'REJECTED',
+            reason: 'review_expired',
+            title: proposal.title,
+          }
         );
 
         await notificationService.send({
@@ -99,5 +114,8 @@ export async function processExpireProposalReview(): Promise<void> {
     }
   }
 
-  logger.info({ expired, total: stale.length }, '[Proposals] Review expiry run complete');
+  logger.info(
+    { expired, total: stale.length },
+    '[Proposals] Review expiry run complete'
+  );
 }
