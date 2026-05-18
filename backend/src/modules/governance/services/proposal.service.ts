@@ -35,8 +35,11 @@ import { auditService } from '../../audit/services/audit.service.js';
 import { AuditAction } from '../../audit/types.js';
 import { getGovernanceContract } from '../../../core/blockchain/client.js';
 import { ethers } from 'ethers';
+import { treasuryService } from '../../treasury/services/treasury.service.js';
 
-type ProposalWithGroup = Prisma.ProposalGetPayload<{ include: { group: true } }>;
+type ProposalWithGroup = Prisma.ProposalGetPayload<{
+  include: { group: true };
+}>;
 
 interface ReviewContext {
   userId: string;
@@ -151,38 +154,77 @@ class ProposalService {
     if (!proposal) throw ApiError.notFound('Proposal');
 
     if (proposal.status === ProposalStatus.DRAFT)
-      return this.handleDraftStage({ userId, proposalId, proposal, dto, callerSystemRoles });
+      return this.handleDraftStage({
+        userId,
+        proposalId,
+        proposal,
+        dto,
+        callerSystemRoles,
+      });
     if (proposal.status === ProposalStatus.PENDING_REVIEW)
-      return this.handlePendingReviewStage({ userId, proposalId, proposal, dto, callerSystemRoles });
+      return this.handlePendingReviewStage({
+        userId,
+        proposalId,
+        proposal,
+        dto,
+        callerSystemRoles,
+      });
 
     throw ApiError.badRequest('Proposal is not in a reviewable state');
   }
 
-  private async handleDraftStage({ userId, proposalId, proposal, dto, callerSystemRoles }: ReviewContext) {
+  private async handleDraftStage({
+    userId,
+    proposalId,
+    proposal,
+    dto,
+    callerSystemRoles,
+  }: ReviewContext) {
     const group = proposal.group;
     const groupId = proposal.groupId;
-    await this.assertDraftForwardAuth(userId, groupId, group, callerSystemRoles);
+    await this.assertDraftForwardAuth(
+      userId,
+      groupId,
+      group,
+      callerSystemRoles
+    );
 
     if (dto.decision === 'REJECT') {
       const updated = await prisma.proposal.update({
         where: { id: proposalId },
-        data: { status: ProposalStatus.REJECTED, reviewedById: userId, reviewNote: dto.note ?? null },
+        data: {
+          status: ProposalStatus.REJECTED,
+          reviewedById: userId,
+          reviewNote: dto.note ?? null,
+        },
       });
-      await auditService.log(userId, AuditAction.PROPOSAL_STATUS_CHANGED, 'Proposal', proposalId,
-        { newStatus: ProposalStatus.REJECTED, stage: 1, title: proposal.title });
+      await auditService.log(
+        userId,
+        AuditAction.PROPOSAL_STATUS_CHANGED,
+        'Proposal',
+        proposalId,
+        { newStatus: ProposalStatus.REJECTED, stage: 1, title: proposal.title }
+      );
       if (proposal.creatorId) {
-        notificationService.send({
-          userId: proposal.creatorId,
-          type: NotificationType.PROPOSAL_REJECTED,
-          title: 'Proposal rejected',
-          message: `"${proposal.title}" was rejected at stage 1.${dto.note ? ` Note: ${dto.note}` : ''}`,
-          data: { proposalId },
-        }).catch(() => {});
+        notificationService
+          .send({
+            userId: proposal.creatorId,
+            type: NotificationType.PROPOSAL_REJECTED,
+            title: 'Proposal rejected',
+            message: `"${proposal.title}" was rejected at stage 1.${dto.note ? ` Note: ${dto.note}` : ''}`,
+            data: { proposalId },
+          })
+          .catch(() => {});
       }
       return updated;
     }
 
-    const fastTrack = await this.tryVoluntaryGroupScopeFastTrack(userId, proposalId, proposal, group);
+    const fastTrack = await this.tryVoluntaryGroupScopeFastTrack(
+      userId,
+      proposalId,
+      proposal,
+      group
+    );
     if (fastTrack) return fastTrack;
 
     this.assertVoluntaryLocationAffiliation(group);
@@ -191,16 +233,27 @@ class ProposalService {
       where: { id: proposalId },
       data: { status: ProposalStatus.PENDING_REVIEW },
     });
-    await auditService.log(userId, AuditAction.PROPOSAL_STATUS_CHANGED, 'Proposal', proposalId,
-      { newStatus: ProposalStatus.PENDING_REVIEW, stage: 1, title: proposal.title });
+    await auditService.log(
+      userId,
+      AuditAction.PROPOSAL_STATUS_CHANGED,
+      'Proposal',
+      proposalId,
+      {
+        newStatus: ProposalStatus.PENDING_REVIEW,
+        stage: 1,
+        title: proposal.title,
+      }
+    );
     if (proposal.creatorId) {
-      notificationService.send({
-        userId: proposal.creatorId,
-        type: NotificationType.PROPOSAL_SUBMITTED,
-        title: 'Proposal forwarded for review',
-        message: `"${proposal.title}" has been forwarded to the location administrator for review.`,
-        data: { proposalId },
-      }).catch(() => {});
+      notificationService
+        .send({
+          userId: proposal.creatorId,
+          type: NotificationType.PROPOSAL_SUBMITTED,
+          title: 'Proposal forwarded for review',
+          message: `"${proposal.title}" has been forwarded to the location administrator for review.`,
+          data: { proposalId },
+        })
+        .catch(() => {});
     }
     return forwarded;
   }
@@ -225,7 +278,9 @@ class ProposalService {
         })
       : null;
     if (!membership || membership.role !== 'LEADER')
-      throw ApiError.forbidden('Only the group leader can forward proposals for review');
+      throw ApiError.forbidden(
+        'Only the group leader can forward proposals for review'
+      );
   }
 
   private async tryVoluntaryGroupScopeFastTrack(
@@ -242,21 +297,34 @@ class ProposalService {
       where: { id: proposalId },
       data: { status: ProposalStatus.APPROVED_FOR_VOTING },
     });
-    await auditService.log(userId, AuditAction.PROPOSAL_STATUS_CHANGED, 'Proposal', proposalId,
-      { newStatus: ProposalStatus.APPROVED_FOR_VOTING, stage: 1, title: proposal.title });
+    await auditService.log(
+      userId,
+      AuditAction.PROPOSAL_STATUS_CHANGED,
+      'Proposal',
+      proposalId,
+      {
+        newStatus: ProposalStatus.APPROVED_FOR_VOTING,
+        stage: 1,
+        title: proposal.title,
+      }
+    );
     if (proposal.creatorId) {
-      notificationService.send({
-        userId: proposal.creatorId,
-        type: NotificationType.PROPOSAL_APPROVED,
-        title: 'Proposal approved for voting',
-        message: `"${proposal.title}" is approved — you can now open voting.`,
-        data: { proposalId },
-      }).catch(() => {});
+      notificationService
+        .send({
+          userId: proposal.creatorId,
+          type: NotificationType.PROPOSAL_APPROVED,
+          title: 'Proposal approved for voting',
+          message: `"${proposal.title}" is approved — you can now open voting.`,
+          data: { proposalId },
+        })
+        .catch(() => {});
     }
     return updated;
   }
 
-  private assertVoluntaryLocationAffiliation(group: ProposalWithGroup['group']) {
+  private assertVoluntaryLocationAffiliation(
+    group: ProposalWithGroup['group']
+  ) {
     if (
       group?.voluntaryType &&
       !group.wardId &&
@@ -269,11 +337,19 @@ class ProposalService {
     }
   }
 
-  private async handlePendingReviewStage({ userId, proposalId, proposal, dto, callerSystemRoles }: ReviewContext) {
+  private async handlePendingReviewStage({
+    userId,
+    proposalId,
+    proposal,
+    dto,
+    callerSystemRoles,
+  }: ReviewContext) {
     const group = proposal.group;
     if (!group) throw ApiError.badRequest('Proposal has no associated group');
     if (!canLocationAdminApprove(group, callerSystemRoles))
-      throw ApiError.forbidden(`Requires ${requiredRoleLabel(group)} to approve this proposal`);
+      throw ApiError.forbidden(
+        `Requires ${requiredRoleLabel(group)} to approve this proposal`
+      );
 
     const newStatus =
       dto.decision === 'APPROVE'
@@ -281,21 +357,36 @@ class ProposalService {
         : ProposalStatus.REJECTED;
     const updated = await prisma.proposal.update({
       where: { id: proposalId },
-      data: { status: newStatus, reviewedById: userId, reviewNote: dto.note ?? null },
+      data: {
+        status: newStatus,
+        reviewedById: userId,
+        reviewNote: dto.note ?? null,
+      },
     });
-    await auditService.log(userId, AuditAction.PROPOSAL_STATUS_CHANGED, 'Proposal', proposalId,
-      { newStatus, stage: 2, title: proposal.title });
+    await auditService.log(
+      userId,
+      AuditAction.PROPOSAL_STATUS_CHANGED,
+      'Proposal',
+      proposalId,
+      { newStatus, stage: 2, title: proposal.title }
+    );
     if (proposal.creatorId) {
       const approved = newStatus === ProposalStatus.APPROVED_FOR_VOTING;
-      notificationService.send({
-        userId: proposal.creatorId,
-        type: approved ? NotificationType.PROPOSAL_APPROVED : NotificationType.PROPOSAL_REJECTED,
-        title: approved ? 'Proposal approved for voting' : 'Proposal rejected',
-        message: approved
-          ? `"${proposal.title}" has been approved by the administrator — you can now open voting.`
-          : `"${proposal.title}" was rejected by the administrator.${dto.note ? ` Note: ${dto.note}` : ''}`,
-        data: { proposalId },
-      }).catch(() => {});
+      notificationService
+        .send({
+          userId: proposal.creatorId,
+          type: approved
+            ? NotificationType.PROPOSAL_APPROVED
+            : NotificationType.PROPOSAL_REJECTED,
+          title: approved
+            ? 'Proposal approved for voting'
+            : 'Proposal rejected',
+          message: approved
+            ? `"${proposal.title}" has been approved by the administrator — you can now open voting.`
+            : `"${proposal.title}" was rejected by the administrator.${dto.note ? ` Note: ${dto.note}` : ''}`,
+          data: { proposalId },
+        })
+        .catch(() => {});
     }
     return updated;
   }
@@ -317,7 +408,9 @@ class ProposalService {
 
     if (!proposal) throw ApiError.notFound('Proposal');
     if (proposal.status !== ProposalStatus.APPROVED_FOR_VOTING)
-      throw ApiError.badRequest('Proposal must be approved before voting can start');
+      throw ApiError.badRequest(
+        'Proposal must be approved before voting can start'
+      );
 
     await this.assertStartVotingAuth(userId, proposal, callerSystemRoles);
 
@@ -329,13 +422,22 @@ class ProposalService {
 
     await prisma.proposal.update({
       where: { id: proposalId },
-      data: { status: ProposalStatus.VOTING, votingStartsAt: startsAt, votingEndsAt: endsAt },
+      data: {
+        status: ProposalStatus.VOTING,
+        votingStartsAt: startsAt,
+        votingEndsAt: endsAt,
+      },
     });
 
     logger.info({ proposalId, days }, 'Voting started');
 
-    await auditService.log(userId, AuditAction.PROPOSAL_STATUS_CHANGED, 'Proposal', proposalId,
-      { newStatus: ProposalStatus.VOTING, title: proposal.title });
+    await auditService.log(
+      userId,
+      AuditAction.PROPOSAL_STATUS_CHANGED,
+      'Proposal',
+      proposalId,
+      { newStatus: ProposalStatus.VOTING, title: proposal.title }
+    );
 
     await this.notifyGroupVotingStarted(proposalId, proposal, days);
 
@@ -394,11 +496,7 @@ class ProposalService {
    * COMMUNITY-scoped proposals: geographic eligibility check instead of group membership.
    * Abstain (null vote) counts toward quorum but not YES/NO tally.
    */
-  async castVote(
-    userId: string,
-    dto: CastVoteDto,
-    userPrimaryWardId?: string
-  ) {
+  async castVote(userId: string, dto: CastVoteDto, userPrimaryWardId?: string) {
     const proposal = await prisma.proposal.findUnique({
       where: { id: dto.proposalId },
       include: {
@@ -444,9 +542,11 @@ class ProposalService {
 
     // null = ABSTAIN, true = YES, false = NO
     const voteValue: boolean | null =
-      dto.option === VoteOption.YES ? true
-      : dto.option === VoteOption.NO ? false
-      : null;
+      dto.option === VoteOption.YES
+        ? true
+        : dto.option === VoteOption.NO
+          ? false
+          : null;
 
     await prisma.groupMemberVote.create({
       data: {
@@ -507,7 +607,10 @@ class ProposalService {
     const yesWeight = decidingVotes
       .filter((v) => v.vote === true)
       .reduce((sum, v) => sum + v.voteWeight, 0);
-    const decidingWeight = decidingVotes.reduce((sum, v) => sum + v.voteWeight, 0);
+    const decidingWeight = decidingVotes.reduce(
+      (sum, v) => sum + v.voteWeight,
+      0
+    );
 
     // Quorum: at least 40% of eligible members must have voted (including abstains)
     const quorum = totalEligible > 0 && voterCount / totalEligible >= 0.4;
@@ -548,12 +651,22 @@ class ProposalService {
     }
 
     if (proposal.creatorId && newStatus === ProposalStatus.APPROVED)
-      await this.awardTallyCreatorRewards(proposal.creatorId, proposalId, proposal.title);
+      await this.awardTallyCreatorRewards(
+        proposal.creatorId,
+        proposalId,
+        proposal.title
+      );
 
     await this.anchorResultOnChain(proposalId, newStatus);
 
     if (proposal.creatorId)
-      this.notifyTallyOutcome(proposal.creatorId, proposalId, proposal.title, newStatus, quorum);
+      this.notifyTallyOutcome(
+        proposal.creatorId,
+        proposalId,
+        proposal.title,
+        newStatus,
+        quorum
+      );
 
     return { newStatus, quorum, approved };
   }
@@ -783,7 +896,13 @@ class ProposalService {
   ) {
     const proposal = await prisma.proposal.findUnique({
       where: { id: proposalId },
-      select: { creatorId: true, status: true, groupId: true, title: true },
+      select: {
+        creatorId: true,
+        status: true,
+        groupId: true,
+        title: true,
+        groupFundingAmount: true,
+      },
     });
     if (!proposal) throw ApiError.notFound('Proposal');
 
@@ -798,6 +917,25 @@ class ProposalService {
 
     await this.assertCreatorOrLeaderAuth(userId, proposal, 'update progress');
 
+    const fundAmount =
+      dto.status === 'EXECUTING' && proposal.groupId
+        ? Number(proposal.groupFundingAmount ?? 0)
+        : 0;
+
+    if (fundAmount > 0 && proposal.groupId) {
+      const treasury = await prisma.groupTreasury.findUnique({
+        where: { groupId: proposal.groupId },
+      });
+      if (!treasury)
+        throw ApiError.badRequest(
+          'Group treasury does not exist — fund the treasury before executing this proposal'
+        );
+      if (Number(treasury.balance) < fundAmount)
+        throw ApiError.badRequest(
+          `Insufficient treasury balance for proposal disbursement (required: ${fundAmount}, available: ${Number(treasury.balance)})`
+        );
+    }
+
     const newStatus = dto.status as ProposalStatus;
     const updated = await prisma.proposal.update({
       where: { id: proposalId },
@@ -806,6 +944,24 @@ class ProposalService {
         ...(dto.note ? { outcome: dto.note } : {}),
       },
     });
+
+    if (fundAmount > 0 && proposal.groupId) {
+      await treasuryService.withdraw(
+        proposal.groupId,
+        {
+          amount: fundAmount,
+          description: `Proposal disbursement: ${proposal.title}`,
+          referenceType: 'PROPOSAL',
+          proposalId,
+        },
+        userId
+      );
+      logger.info(
+        { proposalId, groupId: proposal.groupId, fundAmount },
+        '[TREASURY] Proposal disbursement debited on EXECUTING transition'
+      );
+    }
+
     await auditService.log(
       userId,
       AuditAction.PROPOSAL_STATUS_CHANGED,
@@ -814,15 +970,21 @@ class ProposalService {
       { newStatus, title: proposal.title }
     );
     if (proposal.creatorId)
-      notificationService.send({
-        userId: proposal.creatorId,
-        type: NotificationType.PROPOSAL_APPROVED,
-        title: newStatus === 'EXECUTING' ? 'Proposal execution started' : 'Proposal completed',
-        message: newStatus === 'EXECUTING'
-          ? `"${proposal.title}" has been marked as in progress.`
-          : `"${proposal.title}" has been marked as completed.`,
-        data: { proposalId },
-      }).catch(() => {});
+      notificationService
+        .send({
+          userId: proposal.creatorId,
+          type: NotificationType.PROPOSAL_APPROVED,
+          title:
+            newStatus === 'EXECUTING'
+              ? 'Proposal execution started'
+              : 'Proposal completed',
+          message:
+            newStatus === 'EXECUTING'
+              ? `"${proposal.title}" has been marked as in progress.`
+              : `"${proposal.title}" has been marked as completed.`,
+          data: { proposalId },
+        })
+        .catch(() => {});
     return updated;
   }
 
@@ -844,11 +1006,15 @@ class ProposalService {
       return;
     }
     if (!userPrimaryWardId)
-      throw ApiError.forbidden('You must have a primary ward set to vote on community proposals');
+      throw ApiError.forbidden(
+        'You must have a primary ward set to vote on community proposals'
+      );
     const group = proposal.group;
     if (group?.wardId) {
       if (userPrimaryWardId !== group.wardId)
-        throw ApiError.forbidden('You must be a ward resident to vote on this proposal');
+        throw ApiError.forbidden(
+          'You must be a ward resident to vote on this proposal'
+        );
       return;
     }
     if (group?.constituencyId || group?.countyId) {
@@ -856,10 +1022,17 @@ class ProposalService {
         where: { id: userPrimaryWardId },
         select: { constituencyId: true, countyId: true },
       });
-      if (group.constituencyId && userWard?.constituencyId !== group.constituencyId)
-        throw ApiError.forbidden('You must be a constituency resident to vote on this proposal');
+      if (
+        group.constituencyId &&
+        userWard?.constituencyId !== group.constituencyId
+      )
+        throw ApiError.forbidden(
+          'You must be a constituency resident to vote on this proposal'
+        );
       if (group.countyId && userWard?.countyId !== group.countyId)
-        throw ApiError.forbidden('You must be a county resident to vote on this proposal');
+        throw ApiError.forbidden(
+          'You must be a county resident to vote on this proposal'
+        );
     }
     // NATIONAL scope: any user can vote
   }
@@ -880,11 +1053,20 @@ class ProposalService {
     if (!govContract) return;
     try {
       const proposalBytes32 = ethers.keccak256(ethers.toUtf8Bytes(proposalId));
-      const onChainOption = option === VoteOption.YES ? 0 : option === VoteOption.NO ? 1 : 2;
-      await govContract.recordVote(proposalBytes32, voter.walletAddress, onChainOption, BigInt(weight));
+      const onChainOption =
+        option === VoteOption.YES ? 0 : option === VoteOption.NO ? 1 : 2;
+      await govContract.recordVote(
+        proposalBytes32,
+        voter.walletAddress,
+        onChainOption,
+        BigInt(weight)
+      );
       logger.info({ userId, proposalId }, '[GOV] On-chain vote recorded');
     } catch (err) {
-      logger.warn({ userId, err }, '[GOV] On-chain vote failed — off-chain record intact');
+      logger.warn(
+        { userId, err },
+        '[GOV] On-chain vote failed — off-chain record intact'
+      );
     }
   }
 
@@ -894,14 +1076,25 @@ class ProposalService {
     title: string
   ): Promise<void> {
     await globalImpactPointService
-      .award(creatorId, 25, ImpactPointReason.PROPOSAL_PASSED, { proposalId, title })
+      .award(creatorId, 25, ImpactPointReason.PROPOSAL_PASSED, {
+        proposalId,
+        title,
+      })
       .catch(() => {});
     await participationRightsService
-      .award(creatorId, PR_CONFIG.PROPOSAL_EXECUTED, ParticipationRightsReason.PROPOSAL_EXECUTED, { proposalId, title })
+      .award(
+        creatorId,
+        PR_CONFIG.PROPOSAL_EXECUTED,
+        ParticipationRightsReason.PROPOSAL_EXECUTED,
+        { proposalId, title }
+      )
       .catch(() => {});
   }
 
-  private async anchorResultOnChain(proposalId: string, newStatus: ProposalStatus): Promise<void> {
+  private async anchorResultOnChain(
+    proposalId: string,
+    newStatus: ProposalStatus
+  ): Promise<void> {
     if (process.env.NODE_ENV === 'test') return;
     const govContract = getGovernanceContract();
     if (!govContract) return;
@@ -911,7 +1104,10 @@ class ProposalService {
       await govContract.recordResult(proposalBytes32, onChainOutcome);
       logger.info({ proposalId, newStatus }, '[GOV] On-chain result recorded');
     } catch (err) {
-      logger.warn({ proposalId, err }, '[GOV] On-chain result failed — DB record intact');
+      logger.warn(
+        { proposalId, err },
+        '[GOV] On-chain result failed — DB record intact'
+      );
     }
   }
 
@@ -926,7 +1122,9 @@ class ProposalService {
     notificationService
       .send({
         userId: creatorId,
-        type: isPassed ? NotificationType.PROPOSAL_PASSED : NotificationType.PROPOSAL_VOTE_CAST,
+        type: isPassed
+          ? NotificationType.PROPOSAL_PASSED
+          : NotificationType.PROPOSAL_VOTE_CAST,
         title: isPassed ? 'Proposal approved' : 'Proposal rejected',
         message: isPassed
           ? `"${title}" has passed the vote and is now approved.`
@@ -944,11 +1142,18 @@ class ProposalService {
     if (proposal.creatorId === userId) return;
     const isLeader = proposal.groupId
       ? !!(await prisma.groupMember.findFirst({
-          where: { userId, groupId: proposal.groupId, role: 'LEADER', active: true },
+          where: {
+            userId,
+            groupId: proposal.groupId,
+            role: 'LEADER',
+            active: true,
+          },
         }))
       : false;
     if (!isLeader)
-      throw ApiError.forbidden(`Only the proposal creator or group leader can ${action}`);
+      throw ApiError.forbidden(
+        `Only the proposal creator or group leader can ${action}`
+      );
   }
 }
 

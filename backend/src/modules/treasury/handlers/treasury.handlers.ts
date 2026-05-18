@@ -9,6 +9,12 @@ import { treasuryService } from '../services/treasury.service.js';
 import { DepositDto, WithdrawDto, TransactionQueryDto } from '../types.js';
 
 export class TreasuryHandlers {
+  static async getMyGroupsSummary(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const summary = await treasuryService.getMyGroupsSummary(userId);
+    sendSuccess(res, summary, 'My group treasuries retrieved');
+  }
+
   static async getGroupTreasury(req: AuthRequest, res: Response) {
     const { groupId } = req.params;
     const treasury = await treasuryService.getGroupTreasury(groupId);

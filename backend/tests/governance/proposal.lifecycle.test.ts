@@ -50,10 +50,11 @@ vi.mock('../../src/modules/community/services/groupMembership.service.js', () =>
 
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 import request from 'supertest';
-import { ProposalStatus } from '@prisma/client';
+import { ProposalStatus, ProposalType } from '@prisma/client';
 import { prisma } from '../../src/core/database/client.js';
 import app, { servicesReady } from '../../src/app.js';
 import { proposalService } from '../../src/modules/governance/services/proposal.service.js';
+import { treasuryService } from '../../src/modules/treasury/services/treasury.service.js';
 import {
   processTallyProposals,
   processExpireProposalReview,
@@ -262,6 +263,131 @@ describe('PATCH /:proposalId/progress', () => {
       .patch(`${BASE}/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/progress`)
       .send({ status: 'EXECUTING' });
     expect(res.status).toBe(401);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Treasury disbursement on EXECUTING transition
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function seedFundedProposal(
+  creatorId: string,
+  groupId: string,
+  fundingAmount: number
+) {
+  return prisma.proposal.create({
+    data: {
+      groupId,
+      creatorId,
+      title: 'Borehole Drilling Proposal',
+      description: 'Fund drilling of community borehole.',
+      proposalType: ProposalType.COMMUNITY_INITIATIVE,
+      proposalScope: 'GROUP',
+      status: ProposalStatus.APPROVED,
+      groupFundingAmount: fundingAmount,
+    },
+  });
+}
+
+describe('PATCH /:proposalId/progress — treasury disbursement', () => {
+  it('debits group treasury when moving APPROVED → EXECUTING with groupFundingAmount set', async () => {
+    const creator = await createGovernanceUser('disburse-ok@example.com');
+    const token = makeGovernanceToken(creator.id);
+    const group = await seedGovernanceGroup(creator.id);
+    await treasuryService.deposit(group.id, { amount: 50000 }, creator.id);
+    const proposal = await seedFundedProposal(creator.id, group.id, 10000);
+
+    const res = await request(app)
+      .patch(`${BASE}/${proposal.id}/progress`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ status: 'EXECUTING' });
+
+    expect(res.status).toBe(200);
+
+    const treasury = await prisma.groupTreasury.findUnique({ where: { groupId: group.id } });
+    expect(Number(treasury!.balance)).toBe(40000);
+
+    const txn = await prisma.walletTransaction.findFirst({
+      where: { treasuryId: treasury!.id, referenceType: 'PROPOSAL', proposalId: proposal.id },
+    });
+    expect(txn).not.toBeNull();
+    expect(txn!.transactionType).toBe('DEBIT');
+    expect(Number(txn!.amount)).toBe(10000);
+  });
+
+  it('skips disbursement when groupFundingAmount is null (no treasury needed)', async () => {
+    const creator = await createGovernanceUser('disburse-null@example.com');
+    const token = makeGovernanceToken(creator.id);
+    const group = await seedGovernanceGroup(creator.id);
+    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.APPROVED);
+
+    const res = await request(app)
+      .patch(`${BASE}/${proposal.id}/progress`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ status: 'EXECUTING' });
+
+    expect(res.status).toBe(200);
+    const treasury = await prisma.groupTreasury.findUnique({ where: { groupId: group.id } });
+    expect(treasury).toBeNull();
+  });
+
+  it('returns 400 when treasury has insufficient funds for disbursement', async () => {
+    const creator = await createGovernanceUser('disburse-insufficient@example.com');
+    const token = makeGovernanceToken(creator.id);
+    const group = await seedGovernanceGroup(creator.id);
+    await treasuryService.deposit(group.id, { amount: 500 }, creator.id);
+    const proposal = await seedFundedProposal(creator.id, group.id, 10000);
+
+    const res = await request(app)
+      .patch(`${BASE}/${proposal.id}/progress`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ status: 'EXECUTING' });
+
+    expect(res.status).toBe(400);
+    const updated = await prisma.proposal.findUnique({ where: { id: proposal.id } });
+    expect(updated!.status).toBe(ProposalStatus.APPROVED);
+  });
+
+  it('returns 400 when group has no treasury and groupFundingAmount > 0', async () => {
+    const creator = await createGovernanceUser('disburse-no-treasury@example.com');
+    const token = makeGovernanceToken(creator.id);
+    const group = await seedGovernanceGroup(creator.id);
+    const proposal = await seedFundedProposal(creator.id, group.id, 5000);
+
+    const res = await request(app)
+      .patch(`${BASE}/${proposal.id}/progress`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ status: 'EXECUTING' });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('does not re-debit treasury on EXECUTING → COMPLETED transition', async () => {
+    const creator = await createGovernanceUser('disburse-completed@example.com');
+    const token = makeGovernanceToken(creator.id);
+    const group = await seedGovernanceGroup(creator.id);
+    await treasuryService.deposit(group.id, { amount: 50000 }, creator.id);
+    const proposal = await prisma.proposal.create({
+      data: {
+        groupId: group.id,
+        creatorId: creator.id,
+        title: 'Already Executing Proposal',
+        description: 'Already in execution.',
+        proposalType: ProposalType.COMMUNITY_INITIATIVE,
+        proposalScope: 'GROUP',
+        status: ProposalStatus.EXECUTING,
+        groupFundingAmount: 10000,
+      },
+    });
+
+    const res = await request(app)
+      .patch(`${BASE}/${proposal.id}/progress`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ status: 'COMPLETED' });
+
+    expect(res.status).toBe(200);
+    const treasury = await prisma.groupTreasury.findUnique({ where: { groupId: group.id } });
+    expect(Number(treasury!.balance)).toBe(50000);
   });
 });
 

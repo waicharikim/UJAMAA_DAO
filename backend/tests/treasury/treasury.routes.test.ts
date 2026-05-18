@@ -108,6 +108,78 @@ async function seedRegularUser() {
   });
 }
 
+describe('GET /treasury/my-groups', () => {
+  beforeAll(async () => {
+    await servicesReady;
+  });
+
+  it('returns 401 with no token', async () => {
+    const res = await request(app).get('/api/v1/treasury/my-groups');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns empty array when user belongs to no groups with a treasury', async () => {
+    const { token } = await seedAdmin();
+
+    const res = await request(app)
+      .get('/api/v1/treasury/my-groups')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.data)).toBe(true);
+    expect(res.body.data.length).toBe(0);
+  });
+
+  it('returns treasury entries for all groups the user belongs to with a treasury', async () => {
+    const { user, token } = await seedAdmin();
+    const groupA = await seedGroup('My Groups A');
+    const groupB = await seedGroup('My Groups B');
+
+    // add user to both groups
+    await prisma.groupMember.create({
+      data: { userId: user.id, groupId: groupA.id, role: 'MEMBER', autoEnrolled: false, canLeave: true, joinedAt: new Date(), active: true },
+    });
+    await prisma.groupMember.create({
+      data: { userId: user.id, groupId: groupB.id, role: 'MEMBER', autoEnrolled: false, canLeave: true, joinedAt: new Date(), active: true },
+    });
+
+    // create treasury for groupA only
+    await treasuryService.deposit(groupA.id, { amount: 1000 }, user.id);
+
+    const res = await request(app)
+      .get('/api/v1/treasury/my-groups')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    const data: Array<{ groupId: string; balance: number; groupName: string }> = res.body.data;
+    expect(data.some((d) => d.groupId === groupA.id && d.balance === 1000)).toBe(true);
+    expect(data.every((d) => d.groupId !== groupB.id)).toBe(true);
+  });
+
+  it('returns correct balance and groupName fields', async () => {
+    const { user, token } = await seedAdmin();
+    const group = await seedGroup('My Groups Shape Group');
+
+    await prisma.groupMember.create({
+      data: { userId: user.id, groupId: group.id, role: 'MEMBER', autoEnrolled: false, canLeave: true, joinedAt: new Date(), active: true },
+    });
+    await treasuryService.deposit(group.id, { amount: 2500 }, user.id);
+
+    const res = await request(app)
+      .get('/api/v1/treasury/my-groups')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    const entry = res.body.data.find((d: any) => d.groupId === group.id);
+    expect(entry).toBeDefined();
+    expect(entry.groupName).toBe('My Groups Shape Group');
+    expect(entry.balance).toBe(2500);
+    expect(typeof entry.isSystem).toBe('boolean');
+    expect('systemType' in entry).toBe(true);
+    expect('updatedAt' in entry).toBe(true);
+  });
+});
+
 describe('GET /treasury/:groupId', () => {
   beforeAll(async () => {
     await servicesReady;

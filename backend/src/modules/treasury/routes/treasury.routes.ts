@@ -24,6 +24,9 @@ const router = Router();
 
 router.use(authenticate);
 
+// Summary of all group treasuries the user belongs to
+router.get('/my-groups', asyncHandler(TreasuryHandlers.getMyGroupsSummary));
+
 // Any authenticated user can view treasury info
 router.get('/:groupId', asyncHandler(TreasuryHandlers.getGroupTreasury));
 

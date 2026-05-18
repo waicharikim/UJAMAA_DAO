@@ -1960,7 +1960,21 @@ export interface WalletTransactionDto {
   metadata:        Record<string, unknown> | null
 }
 
+export interface MyGroupTreasuryDto {
+  groupId:      string
+  groupName:    string
+  isSystem:     boolean
+  systemType:   string | null
+  balance:      number
+  tokenBalance: number
+  updatedAt:    string
+}
+
 export const treasuryApi = {
+  /** GET /treasury/my-groups — balance summary for all groups the user belongs to */
+  getMyGroups: () =>
+    apiFetch<MyGroupTreasuryDto[]>('/treasury/my-groups'),
+
   /** GET /treasury/:groupId — balance + metadata (any authenticated member) */
   getTreasury: (groupId: string) =>
     apiFetch<TreasuryDto>(`/treasury/${groupId}`),

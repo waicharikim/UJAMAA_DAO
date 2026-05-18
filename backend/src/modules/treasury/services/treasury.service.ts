@@ -207,6 +207,48 @@ class TreasuryService {
   }
 
   // ────────────────────────────────────────────────────────────
+  // MY-GROUPS SUMMARY
+  // ────────────────────────────────────────────────────────────
+
+  /**
+   * Return treasury balance + recent credit/debit totals for all groups
+   * where the user is an active member and a treasury exists.
+   */
+  async getMyGroupsSummary(userId: string) {
+    const memberships = await prisma.groupMember.findMany({
+      where: { userId, active: true },
+      select: { groupId: true },
+    });
+
+    const groupIds = memberships.map((m) => m.groupId);
+    if (!groupIds.length) return [];
+
+    const treasuries = await prisma.groupTreasury.findMany({
+      where: { groupId: { in: groupIds } },
+      include: {
+        group: {
+          select: {
+            id: true,
+            name: true,
+            isSystemGroup: true,
+            systemType: true,
+          },
+        },
+      },
+    });
+
+    return treasuries.map((t) => ({
+      groupId: t.groupId,
+      groupName: t.group.name,
+      isSystem: t.group.isSystemGroup,
+      systemType: t.group.systemType,
+      balance: Number(t.balance),
+      tokenBalance: t.tokenBalance ?? 0,
+      updatedAt: t.updatedAt,
+    }));
+  }
+
+  // ────────────────────────────────────────────────────────────
   // DUES ALLOCATION
   // ────────────────────────────────────────────────────────────
 
