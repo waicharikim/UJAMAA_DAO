@@ -62,3 +62,10 @@ export interface TransactionQueryDto {
   fromDate?: string;
   toDate?: string;
 }
+
+export interface AllocationSplit {
+  WARD: number;
+  CONSTITUENCY: number;
+  COUNTY: number;
+  NATIONAL: number;
+}

@@ -223,7 +223,7 @@
 ### Major Features (implemented)
 
 - Group treasury ledger (`GroupTreasury` per group, `WalletTransaction` audit trail — credit/debit with referenceType)
-- Dues allocation: 100% of dues payment auto-credited to user's primary ward system group treasury (`DUES` referenceType)
+- Dues allocation: dues fan out across geographic hierarchy (Ward 70% / Constituency 15% / County 10% / National 5% by default); split configurable via `PlatformConfig` key `dues_allocation_split`; missing system groups skipped gracefully
 - Proposal disbursement: transitioning a proposal to EXECUTING with `groupFundingAmount > 0` pre-validates and debits the group treasury (`PROPOSAL` referenceType)
 - Project contributions: `contributeToProject` credits the project's group treasury (`PROJECT` referenceType)
 - M-Pesa `TREASURY_DEPOSIT` payment: Buni callback credits the target group treasury and mints on-chain UT for the payer

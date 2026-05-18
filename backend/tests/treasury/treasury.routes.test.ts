@@ -43,10 +43,16 @@ vi.mock('africastalking', () => ({
   })),
 }));
 
-import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 import request from 'supertest';
 import app, { servicesReady } from '../../src/app.js';
-import { makeAccessToken, seedLocation, TEST_WARD_ID } from '../auth/helpers.js';
+import {
+  makeAccessToken,
+  seedLocation,
+  TEST_WARD_ID,
+  TEST_CONST_ID,
+  TEST_COUNTY_ID,
+} from '../auth/helpers.js';
 import { prisma } from '../../src/core/database/client.js';
 import { treasuryService } from '../../src/modules/treasury/services/treasury.service.js';
 
@@ -399,5 +405,207 @@ describe('POST /treasury/:groupId/withdraw', () => {
       where: { groupId: group.id },
     });
     expect(Number(treasury!.balance)).toBe(7000);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// allocateDues — geographic split
+// ────────────────────────────────────────────────────────────────────────────
+
+async function seedSystemGroups() {
+  await seedLocation();
+  const wardGroup = await prisma.group.upsert({
+    where: { name: '__SYS_WARD__' },
+    update: {},
+    create: {
+      name: '__SYS_WARD__',
+      locationScope: 'WARD',
+      wardId: TEST_WARD_ID,
+      constituencyId: TEST_CONST_ID,
+      countyId: TEST_COUNTY_ID,
+      isSystemGroup: true,
+      systemType: 'WARD',
+      status: 'ACTIVE',
+      canBeDeleted: false,
+      canBeRenamed: false,
+    },
+  });
+  const constGroup = await prisma.group.upsert({
+    where: { name: '__SYS_CONSTITUENCY__' },
+    update: {},
+    create: {
+      name: '__SYS_CONSTITUENCY__',
+      locationScope: 'CONSTITUENCY',
+      constituencyId: TEST_CONST_ID,
+      countyId: TEST_COUNTY_ID,
+      isSystemGroup: true,
+      systemType: 'CONSTITUENCY',
+      status: 'ACTIVE',
+      canBeDeleted: false,
+      canBeRenamed: false,
+    },
+  });
+  const countyGroup = await prisma.group.upsert({
+    where: { name: '__SYS_COUNTY__' },
+    update: {},
+    create: {
+      name: '__SYS_COUNTY__',
+      locationScope: 'COUNTY',
+      countyId: TEST_COUNTY_ID,
+      isSystemGroup: true,
+      systemType: 'COUNTY',
+      status: 'ACTIVE',
+      canBeDeleted: false,
+      canBeRenamed: false,
+    },
+  });
+  const nationalGroup = await prisma.group.upsert({
+    where: { name: '__SYS_NATIONAL__' },
+    update: {},
+    create: {
+      name: '__SYS_NATIONAL__',
+      locationScope: 'NATIONAL',
+      isSystemGroup: true,
+      systemType: 'NATIONAL',
+      status: 'ACTIVE',
+      canBeDeleted: false,
+      canBeRenamed: false,
+    },
+  });
+  return { wardGroup, constGroup, countyGroup, nationalGroup };
+}
+
+async function seedDuesPayment(userId: string, period: string, amount: number) {
+  return prisma.duesPayment.create({
+    data: {
+      userId,
+      totalAmount: amount,
+      tier: 'ORDINARY',
+      period,
+      paymentMethod: 'MPESA',
+      status: 'COMPLETED',
+      paidAt: new Date(),
+    },
+  });
+}
+
+async function seedAllocUser(suffix: string) {
+  await seedLocation();
+  return prisma.user.create({
+    data: {
+      email: `alloc-${suffix}-${Date.now()}@ujamaa.test`,
+      name: `Alloc User ${suffix}`,
+      verificationLevel: 'COMMUNITY_VERIFIED',
+      emailVerified: true,
+      primaryWardId: TEST_WARD_ID,
+    },
+  });
+}
+
+describe('treasuryService.allocateDues() — geographic split', () => {
+  beforeAll(async () => {
+    await servicesReady;
+  });
+
+  afterEach(async () => {
+    // Remove any custom PlatformConfig override so tests don't bleed into each other
+    await prisma.platformConfig
+      .delete({ where: { key: 'dues_allocation_split' } })
+      .catch(() => {});
+  });
+
+  it('splits 70/15/10/5 across all 4 system group levels with default config', async () => {
+    await seedSystemGroups();
+    const user = await seedAllocUser('full');
+    const payment = await seedDuesPayment(user.id, '2026-06', 1000);
+
+    await treasuryService.allocateDues(payment.id, user.id);
+
+    // Assert via DuesAllocation records (per-payment, unaffected by other tests)
+    const allocations = await prisma.duesAllocation.findMany({
+      where: { duesPaymentId: payment.id },
+      orderBy: { amount: 'desc' },
+    });
+    expect(allocations).toHaveLength(4);
+
+    const amounts = allocations.map((a) => Number(a.amount)).sort((a, b) => b - a);
+    expect(amounts).toEqual([700, 150, 100, 50]);
+
+    const percentages = allocations.map((a) => Number(a.percentage)).sort((a, b) => b - a);
+    expect(percentages).toEqual([70, 15, 10, 5]);
+  });
+
+  it('respects custom split from PlatformConfig and skips zero-percentage levels', async () => {
+    await prisma.platformConfig.upsert({
+      where: { key: 'dues_allocation_split' },
+      update: {
+        value: JSON.stringify({ WARD: 60, CONSTITUENCY: 40, COUNTY: 0, NATIONAL: 0 }),
+      },
+      create: {
+        key: 'dues_allocation_split',
+        value: JSON.stringify({ WARD: 60, CONSTITUENCY: 40, COUNTY: 0, NATIONAL: 0 }),
+        label: 'Test override',
+        category: 'treasury',
+      },
+    });
+
+    await seedSystemGroups();
+    const user = await seedAllocUser('config');
+    const payment = await seedDuesPayment(user.id, '2026-07', 500);
+
+    await treasuryService.allocateDues(payment.id, user.id);
+
+    // Only 2 levels with non-zero percentage → 2 allocation records
+    const allocations = await prisma.duesAllocation.findMany({
+      where: { duesPaymentId: payment.id },
+    });
+    expect(allocations).toHaveLength(2);
+
+    const amounts = allocations.map((a) => Number(a.amount)).sort((a, b) => b - a);
+    expect(amounts).toEqual([300, 200]); // 60% and 40% of 500
+
+    const percentages = allocations.map((a) => Number(a.percentage)).sort((a, b) => b - a);
+    expect(percentages).toEqual([60, 40]);
+  });
+
+  it('skips allocation gracefully when user has no primaryWardId', async () => {
+    const user = await prisma.user.create({
+      data: {
+        email: `alloc-noward-${Date.now()}@ujamaa.test`,
+        name: 'No Ward User',
+        verificationLevel: 'EMAIL_VERIFIED',
+        emailVerified: true,
+        primaryWardId: null,
+      },
+    });
+    const payment = await prisma.duesPayment.create({
+      data: {
+        userId: user.id,
+        totalAmount: 100,
+        tier: 'ORDINARY',
+        period: '2026-09',
+        paymentMethod: 'MPESA',
+        status: 'COMPLETED',
+        paidAt: new Date(),
+      },
+    });
+
+    await expect(
+      treasuryService.allocateDues(payment.id, user.id)
+    ).resolves.toBeUndefined();
+
+    const allocations = await prisma.duesAllocation.findMany({
+      where: { duesPaymentId: payment.id },
+    });
+    expect(allocations).toHaveLength(0);
+  });
+
+  it('skips gracefully when DuesPayment does not exist', async () => {
+    const fakeId = '00000000-0000-4000-8000-000000000001';
+    const user = await seedAllocUser('nodues');
+
+    await expect(
+      treasuryService.allocateDues(fakeId, user.id)
+    ).resolves.toBeUndefined();
   });
 });

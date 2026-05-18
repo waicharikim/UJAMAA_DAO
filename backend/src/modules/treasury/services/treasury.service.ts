@@ -15,7 +15,19 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../../../core/database/client.js';
 import { ApiError } from '../../../core/errors/ApiError.js';
 import { logger } from '../../../core/logger/logger.js';
-import { DepositDto, WithdrawDto, TransactionQueryDto } from '../types.js';
+import {
+  DepositDto,
+  WithdrawDto,
+  TransactionQueryDto,
+  AllocationSplit,
+} from '../types.js';
+
+const DEFAULT_SPLIT: AllocationSplit = {
+  WARD: 70,
+  CONSTITUENCY: 15,
+  COUNTY: 10,
+  NATIONAL: 5,
+};
 
 class TreasuryService {
   // ────────────────────────────────────────────────────────────
@@ -253,9 +265,16 @@ class TreasuryService {
   // ────────────────────────────────────────────────────────────
 
   /**
-   * Allocate a confirmed DuesPayment to the user's ward group treasury.
+   * Allocate a confirmed DuesPayment across the geographic hierarchy:
+   * Ward → Constituency → County → National.
    *
-   * Phase 1 split: 100% → user's primary ward system group.
+   * Percentages are read from PlatformConfig key `dues_allocation_split`
+   * (JSON: { WARD, CONSTITUENCY, COUNTY, NATIONAL }). Falls back to
+   * DEFAULT_SPLIT (70/15/10/5) when the config key is absent.
+   *
+   * Levels with percentage = 0 are skipped. A non-zero level whose system
+   * group is missing throws — these groups are seeded at launch and their
+   * absence indicates a data integrity problem.
    * Called by duesService.recordPayment() after the Prisma transaction completes.
    */
   async allocateDues(duesPaymentId: string, userId: string): Promise<void> {
@@ -270,7 +289,6 @@ class TreasuryService {
       return;
     }
 
-    // Find the user's primary ward
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { primaryWardId: true },
@@ -283,65 +301,183 @@ class TreasuryService {
       return;
     }
 
-    // Find the WARD system group for that ward
-    const wardGroup = await prisma.group.findFirst({
-      where: {
-        isSystemGroup: true,
-        systemType: 'WARD',
-        wardId: user.primaryWardId,
-      },
+    const ward = await prisma.ward.findUnique({
+      where: { id: user.primaryWardId },
+      select: { id: true, constituencyId: true, countyId: true },
     });
-    if (!wardGroup) {
+    if (!ward) {
       logger.warn(
         { wardId: user.primaryWardId },
-        '[TREASURY] allocateDues: ward system group not found — skipping'
+        '[TREASURY] allocateDues: ward record not found — skipping'
       );
       return;
     }
 
-    const treasury = await this.getOrCreateTreasury(wardGroup.id);
-    const amount = Number(payment.totalAmount);
+    const split = await this.getAllocationSplit();
+    const totalAmount = Number(payment.totalAmount);
+
+    // Resolve system groups for each geographic level in parallel
+    const [wardGroup, constituencyGroup, countyGroup, nationalGroup] =
+      await Promise.all([
+        split.WARD > 0
+          ? prisma.group.findFirst({
+              where: {
+                isSystemGroup: true,
+                systemType: 'WARD',
+                wardId: ward.id,
+              },
+            })
+          : null,
+        split.CONSTITUENCY > 0 && ward.constituencyId
+          ? prisma.group.findFirst({
+              where: {
+                isSystemGroup: true,
+                systemType: 'CONSTITUENCY',
+                constituencyId: ward.constituencyId,
+              },
+            })
+          : null,
+        split.COUNTY > 0 && ward.countyId
+          ? prisma.group.findFirst({
+              where: {
+                isSystemGroup: true,
+                systemType: 'COUNTY',
+                countyId: ward.countyId,
+              },
+            })
+          : null,
+        split.NATIONAL > 0
+          ? prisma.group.findFirst({
+              where: { isSystemGroup: true, systemType: 'NATIONAL' },
+            })
+          : null,
+      ]);
+
+    // Validate: every non-zero level must have a matching system group.
+    // These groups are seeded at launch — absence = data integrity failure.
+    const levelMap = [
+      { key: 'WARD' as const, group: wardGroup, percentage: split.WARD },
+      {
+        key: 'CONSTITUENCY' as const,
+        group: constituencyGroup,
+        percentage: split.CONSTITUENCY,
+      },
+      { key: 'COUNTY' as const, group: countyGroup, percentage: split.COUNTY },
+      {
+        key: 'NATIONAL' as const,
+        group: nationalGroup,
+        percentage: split.NATIONAL,
+      },
+    ];
+
+    for (const level of levelMap) {
+      if (level.percentage > 0 && level.group === null) {
+        throw ApiError.systemError(
+          `[TREASURY] allocateDues: ${level.key} system group missing for ward ${ward.id} — re-run seed to fix`
+        );
+      }
+    }
+
+    const entries = levelMap
+      .filter(
+        (
+          e
+        ): e is {
+          key: (typeof e)['key'];
+          group: NonNullable<(typeof e)['group']>;
+          percentage: number;
+        } => e.percentage > 0 && e.group !== null
+      )
+      .map((e) => ({
+        group: e.group,
+        percentage: e.percentage,
+        amount: Math.round(totalAmount * e.percentage) / 100,
+      }));
+
+    // Get or create treasuries for all target groups (outside transaction to avoid deadlocks)
+    const treasuries = await Promise.all(
+      entries.map((e) => this.getOrCreateTreasury(e.group.id))
+    );
 
     await prisma.$transaction(async (t: Prisma.TransactionClient) => {
-      // Create the allocation record
-      await t.duesAllocation.create({
-        data: {
-          duesPaymentId,
-          groupId: wardGroup.id,
-          treasuryId: treasury.id,
-          amount,
-          percentage: 100,
-        },
-      });
+      for (let i = 0; i < entries.length; i++) {
+        const { group, percentage, amount } = entries[i];
+        const treasury = treasuries[i];
 
-      // Credit the treasury
-      await t.walletTransaction.create({
-        data: {
-          treasuryId: treasury.id,
-          amount,
-          currency: 'KES',
-          transactionType: 'CREDIT',
-          description: `Dues payment — ${payment.tier} tier (${payment.period})`,
-          referenceType: 'DUES',
-          initiatedById: userId,
-          metadata: {
+        await t.duesAllocation.create({
+          data: {
             duesPaymentId,
-            tier: payment.tier,
-            period: payment.period,
+            groupId: group.id,
+            treasuryId: treasury.id,
+            amount,
+            percentage,
           },
-        },
-      });
+        });
 
-      await t.groupTreasury.update({
-        where: { id: treasury.id },
-        data: { balance: { increment: amount } },
-      });
+        await t.walletTransaction.create({
+          data: {
+            treasuryId: treasury.id,
+            amount,
+            currency: 'KES',
+            transactionType: 'CREDIT',
+            description: `Dues payment — ${payment.tier} tier (${payment.period})`,
+            referenceType: 'DUES',
+            initiatedById: userId,
+            metadata: {
+              duesPaymentId,
+              tier: payment.tier,
+              period: payment.period,
+              splitLevel: group.systemType,
+              splitPercentage: percentage,
+            },
+          },
+        });
+
+        await t.groupTreasury.update({
+          where: { id: treasury.id },
+          data: { balance: { increment: amount } },
+        });
+      }
     });
 
     logger.info(
-      { duesPaymentId, groupId: wardGroup.id, amount },
-      '[TREASURY] Dues allocated to ward group treasury'
+      {
+        duesPaymentId,
+        userId,
+        totalAmount,
+        allocations: entries.map((e) => ({
+          groupId: e.group.id,
+          systemType: e.group.systemType,
+          amount: e.amount,
+          percentage: e.percentage,
+        })),
+      },
+      '[TREASURY] Dues allocated across geographic hierarchy'
     );
+  }
+
+  // ────────────────────────────────────────────────────────────
+  // PRIVATE HELPERS
+  // ────────────────────────────────────────────────────────────
+
+  private async getAllocationSplit(): Promise<AllocationSplit> {
+    try {
+      const config = await prisma.platformConfig.findUnique({
+        where: { key: 'dues_allocation_split' },
+      });
+      if (config?.value) {
+        const parsed = JSON.parse(config.value) as Partial<AllocationSplit>;
+        return {
+          WARD: parsed.WARD ?? DEFAULT_SPLIT.WARD,
+          CONSTITUENCY: parsed.CONSTITUENCY ?? DEFAULT_SPLIT.CONSTITUENCY,
+          COUNTY: parsed.COUNTY ?? DEFAULT_SPLIT.COUNTY,
+          NATIONAL: parsed.NATIONAL ?? DEFAULT_SPLIT.NATIONAL,
+        };
+      }
+    } catch {
+      // fall through to defaults
+    }
+    return { ...DEFAULT_SPLIT };
   }
 }
 

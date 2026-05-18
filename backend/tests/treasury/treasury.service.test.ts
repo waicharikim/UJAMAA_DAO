@@ -265,8 +265,8 @@ describe('TreasuryService.allocateDues', () => {
     await seedLocation();
   });
 
-  it('credits the ward group treasury after dues payment', async () => {
-    // Seed a WARD system group for the test ward
+  it('credits all 4 geographic system group treasuries with the default split', async () => {
+    // All 4 system groups must exist — seeded at launch in production
     const wardGroup = await prisma.group.create({
       data: {
         name: 'Ward System Group Dues Test',
@@ -274,6 +274,36 @@ describe('TreasuryService.allocateDues', () => {
         wardId: TEST_WARD_ID,
         isSystemGroup: true,
         systemType: 'WARD',
+        status: 'ACTIVE',
+      },
+    });
+    const constGroup = await prisma.group.create({
+      data: {
+        name: 'Const System Group Dues Test',
+        locationScope: 'CONSTITUENCY',
+        constituencyId: TEST_CONST_ID,
+        countyId: TEST_COUNTY_ID,
+        isSystemGroup: true,
+        systemType: 'CONSTITUENCY',
+        status: 'ACTIVE',
+      },
+    });
+    const countyGroup = await prisma.group.create({
+      data: {
+        name: 'County System Group Dues Test',
+        locationScope: 'COUNTY',
+        countyId: TEST_COUNTY_ID,
+        isSystemGroup: true,
+        systemType: 'COUNTY',
+        status: 'ACTIVE',
+      },
+    });
+    const nationalGroup = await prisma.group.create({
+      data: {
+        name: 'National System Group Dues Test',
+        locationScope: 'NATIONAL',
+        isSystemGroup: true,
+        systemType: 'NATIONAL',
         status: 'ACTIVE',
       },
     });
@@ -294,20 +324,25 @@ describe('TreasuryService.allocateDues', () => {
 
     await treasuryService.allocateDues(payment.id, user.id);
 
-    const treasury = await prisma.groupTreasury.findUnique({
-      where: { groupId: wardGroup.id },
-    });
-    expect(treasury).not.toBeNull();
-    expect(Number(treasury!.balance)).toBe(60);
+    // Default split: 70/15/10/5 of 60 KES
+    const [wardT, constT, countyT, nationalT] = await Promise.all([
+      prisma.groupTreasury.findUnique({ where: { groupId: wardGroup.id } }),
+      prisma.groupTreasury.findUnique({ where: { groupId: constGroup.id } }),
+      prisma.groupTreasury.findUnique({ where: { groupId: countyGroup.id } }),
+      prisma.groupTreasury.findUnique({ where: { groupId: nationalGroup.id } }),
+    ]);
+    expect(Number(wardT?.balance)).toBe(42);   // 70%
+    expect(Number(constT?.balance)).toBe(9);   // 15%
+    expect(Number(countyT?.balance)).toBe(6);  // 10%
+    expect(Number(nationalT?.balance)).toBe(3); // 5%
 
-    const allocation = await prisma.duesAllocation.findFirst({
+    const allocations = await prisma.duesAllocation.findMany({
       where: { duesPaymentId: payment.id },
     });
-    expect(allocation).not.toBeNull();
-    expect(Number(allocation!.percentage)).toBe(100);
+    expect(allocations).toHaveLength(4);
   });
 
-  it('skips gracefully when ward group does not exist', async () => {
+  it('throws when a non-zero-percentage system group is missing (data integrity failure)', async () => {
     const user = await prisma.user.create({
       data: {
         email: 'dues-no-ward-group@ujamaa.test',
@@ -332,10 +367,10 @@ describe('TreasuryService.allocateDues', () => {
       },
     });
 
-    // No ward system group exists — should not throw
+    // No system groups seeded — any non-zero level triggers an error
     await expect(
       treasuryService.allocateDues(payment.id, user.id)
-    ).resolves.not.toThrow();
+    ).rejects.toThrow();
   });
 
   it('skips gracefully when user has no primaryWardId', async () => {

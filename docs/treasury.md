@@ -185,7 +185,18 @@ Manually debit a group treasury. Throws if balance is insufficient.
 1. User pays dues via M-Pesa STK push (`POST /payments/initiate`).
 2. Buni callback fires (`POST /payments/webhook/buni`) → `dues.service.recordPayment()`.
 3. `dues.service.ts` calls `treasuryService.allocateDues()` after the transaction.
-4. `allocateDues()` finds the user's primary ward system group → creates a `DuesAllocation` record + `WalletTransaction (CREDIT, referenceType=DUES)` + increments treasury balance. Phase 1: 100% goes to the ward group. Future: configurable split (ward/constituency/county).
+4. `allocateDues()` walks the user's geographic hierarchy (Ward → Constituency → County → National) and fans out credits across the matching system groups.
+
+**Default split (configurable via `PlatformConfig` key `dues_allocation_split`):**
+
+| Level | Default % | System group query |
+|---|---|---|
+| Ward | 70% | `isSystemGroup=true, systemType=WARD, wardId=user.primaryWardId` |
+| Constituency | 15% | `isSystemGroup=true, systemType=CONSTITUENCY, constituencyId=ward.constituencyId` |
+| County | 10% | `isSystemGroup=true, systemType=COUNTY, countyId=ward.countyId` |
+| National | 5% | `isSystemGroup=true, systemType=NATIONAL` |
+
+Levels with percentage = 0 or no matching system group are silently skipped. Each active level gets a `DuesAllocation` record + `WalletTransaction (CREDIT, referenceType=DUES)` + treasury balance increment — all in one atomic transaction. To change the split, upsert the `dues_allocation_split` key via `POST /api/v1/admin/platform-config`.
 
 ### Project contribution (automatic)
 

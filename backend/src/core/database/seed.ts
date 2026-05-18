@@ -866,16 +866,70 @@ All votes, proposal texts, and results are stored immutably. No administrator ca
 ];
 
 const ROLE_COVERAGE_USERS_DATA: TestUser[] = [
-  { email: 'compliance@ujamaa.test',       name: 'Compliance Officer',          phoneNumber: '+254700000001', role: 'system:compliance_officer',  verificationLevel: 'FULL_VERIFIED' },
-  { email: 'auditor@ujamaa.test',           name: 'System Auditor',              phoneNumber: '+254700000005', role: 'system:auditor',              verificationLevel: 'FULL_VERIFIED' },
-  { email: 'coordinator@ujamaa.test',       name: 'County Coordinator',          phoneNumber: '+254700000006', role: 'system:county_coordinator',   verificationLevel: 'FULL_VERIFIED' },
-  { email: 'support@ujamaa.test',           name: 'Support Staff',               phoneNumber: '+254700000007', role: 'system:support',              verificationLevel: 'FULL_VERIFIED' },
-  { email: 'ward.admin@ujamaa.test',        name: 'Ward Administrator',          phoneNumber: '+254700000002', role: 'location:ward_admin',         verificationLevel: 'FULL_VERIFIED' },
-  { email: 'constituency.admin@ujamaa.test',name: 'Constituency Administrator',  phoneNumber: '+254700000003', role: 'location:constituency_admin', verificationLevel: 'FULL_VERIFIED' },
-  { email: 'county.admin@ujamaa.test',      name: 'County Administrator',        phoneNumber: '+254700000004', role: 'location:county_admin',       verificationLevel: 'FULL_VERIFIED' },
-  { email: 'waichari@ujamaa.test',          name: 'James Waichari',              phoneNumber: '+254700000010' },
-  { email: 'akinyi@ujamaa.test',            name: 'Grace Akinyi',               phoneNumber: '+254700000011' },
-  { email: 'otieno@ujamaa.test',            name: 'Kevin Otieno',               phoneNumber: '+254700000012' },
+  {
+    email: 'compliance@ujamaa.test',
+    name: 'Compliance Officer',
+    phoneNumber: '+254700000001',
+    role: 'system:compliance_officer',
+    verificationLevel: 'FULL_VERIFIED',
+  },
+  {
+    email: 'auditor@ujamaa.test',
+    name: 'System Auditor',
+    phoneNumber: '+254700000005',
+    role: 'system:auditor',
+    verificationLevel: 'FULL_VERIFIED',
+  },
+  {
+    email: 'coordinator@ujamaa.test',
+    name: 'County Coordinator',
+    phoneNumber: '+254700000006',
+    role: 'system:county_coordinator',
+    verificationLevel: 'FULL_VERIFIED',
+  },
+  {
+    email: 'support@ujamaa.test',
+    name: 'Support Staff',
+    phoneNumber: '+254700000007',
+    role: 'system:support',
+    verificationLevel: 'FULL_VERIFIED',
+  },
+  {
+    email: 'ward.admin@ujamaa.test',
+    name: 'Ward Administrator',
+    phoneNumber: '+254700000002',
+    role: 'location:ward_admin',
+    verificationLevel: 'FULL_VERIFIED',
+  },
+  {
+    email: 'constituency.admin@ujamaa.test',
+    name: 'Constituency Administrator',
+    phoneNumber: '+254700000003',
+    role: 'location:constituency_admin',
+    verificationLevel: 'FULL_VERIFIED',
+  },
+  {
+    email: 'county.admin@ujamaa.test',
+    name: 'County Administrator',
+    phoneNumber: '+254700000004',
+    role: 'location:county_admin',
+    verificationLevel: 'FULL_VERIFIED',
+  },
+  {
+    email: 'waichari@ujamaa.test',
+    name: 'James Waichari',
+    phoneNumber: '+254700000010',
+  },
+  {
+    email: 'akinyi@ujamaa.test',
+    name: 'Grace Akinyi',
+    phoneNumber: '+254700000011',
+  },
+  {
+    email: 'otieno@ujamaa.test',
+    name: 'Kevin Otieno',
+    phoneNumber: '+254700000012',
+  },
 ];
 
 // ============================================================================
@@ -1014,7 +1068,12 @@ function buildGeographyRecords(data: typeof countiesData) {
     }
   }
 
-  return { countyCreates, constituencyCreates, wardCreates, counts: { counties, constituencies, wards } };
+  return {
+    countyCreates,
+    constituencyCreates,
+    wardCreates,
+    counts: { counties, constituencies, wards },
+  };
 }
 
 async function seedGeography() {
@@ -1140,7 +1199,9 @@ async function seedRoles() {
     });
   }
 
-  console.log(`   Created/ensured ${BUILT_IN_ROLES_DATA.length} built-in roles`);
+  console.log(
+    `   Created/ensured ${BUILT_IN_ROLES_DATA.length} built-in roles`
+  );
 }
 
 // ============================================================================
@@ -1164,7 +1225,9 @@ async function seedOnboardingTutorials() {
     });
   }
 
-  console.log(`   Created/ensured ${ONBOARDING_TUTORIALS_DATA.length} tutorials`);
+  console.log(
+    `   Created/ensured ${ONBOARDING_TUTORIALS_DATA.length} tutorials`
+  );
 }
 
 // ============================================================================
@@ -1356,7 +1419,10 @@ async function upsertGeoSpreadUser(params: {
 }) {
   await prisma.user.upsert({
     where: { email: params.email },
-    update: { primaryWardId: params.primaryWardId, secondaryWardId: params.secondaryWardId },
+    update: {
+      primaryWardId: params.primaryWardId,
+      secondaryWardId: params.secondaryWardId,
+    },
     create: {
       id: uuidv4(),
       email: params.email,
@@ -1385,7 +1451,9 @@ async function seedGeographicSpreadUsers(refs: WardRefs) {
       primaryWardId: secondWard.id,
       secondaryWardId: firstWard.id,
     });
-    console.log(`   → ward2.member placed in ward: ${secondWard.name} (${secondWard.constituency.name})`);
+    console.log(
+      `   → ward2.member placed in ward: ${secondWard.name} (${secondWard.constituency.name})`
+    );
   }
 
   if (diffConstituencyWard) {
@@ -1396,7 +1464,9 @@ async function seedGeographicSpreadUsers(refs: WardRefs) {
       primaryWardId: diffConstituencyWard.id,
       secondaryWardId: firstWard.id,
     });
-    console.log(`   → const.member placed in constituency: ${diffConstituencyWard.constituency.name} (${diffConstituencyWard.constituency.county.name})`);
+    console.log(
+      `   → const.member placed in constituency: ${diffConstituencyWard.constituency.name} (${diffConstituencyWard.constituency.county.name})`
+    );
   }
 
   if (diffCountyWard) {
@@ -1407,7 +1477,9 @@ async function seedGeographicSpreadUsers(refs: WardRefs) {
       primaryWardId: diffCountyWard.id,
       secondaryWardId: firstWard.id,
     });
-    console.log(`   → county.member placed in county: ${diffCountyWard.constituency.county.name}`);
+    console.log(
+      `   → county.member placed in county: ${diffCountyWard.constituency.county.name}`
+    );
   }
 }
 
@@ -1579,11 +1651,21 @@ async function createSeedProposalIfAbsent(
       budget: data.budget,
     },
   });
-  await auditService.log(creatorId, AuditAction.PROPOSAL_CREATED, 'Proposal', p.id,
-    { groupId, title: p.title, scope: 'COMMUNITY' });
+  await auditService.log(
+    creatorId,
+    AuditAction.PROPOSAL_CREATED,
+    'Proposal',
+    p.id,
+    { groupId, title: p.title, scope: 'COMMUNITY' }
+  );
   for (const newStatus of extraAuditStatuses) {
-    await auditService.log(creatorId, AuditAction.PROPOSAL_STATUS_CHANGED, 'Proposal', p.id,
-      { newStatus, stage: 1 });
+    await auditService.log(
+      creatorId,
+      AuditAction.PROPOSAL_STATUS_CHANGED,
+      'Proposal',
+      p.id,
+      { newStatus, stage: 1 }
+    );
   }
 }
 
@@ -1593,33 +1675,88 @@ async function seedTestProposals(
 ) {
   await createSeedProposalIfAbsent(boreholeGroup.id, waichariId, {
     title: 'New Community Borehole',
-    description: 'Proposal to drill a new borehole in Kayole Ward to address water scarcity affecting 5,000 residents.',
+    description:
+      'Proposal to drill a new borehole in Kayole Ward to address water scarcity affecting 5,000 residents.',
     status: 'DRAFT',
     budget: 350000,
   });
-  await createSeedProposalIfAbsent(boreholeGroup.id, waichariId, {
-    title: 'Road Maintenance Request',
-    description: 'Request for maintenance of the main access road connecting Kayole to Embakasi Road.',
-    status: 'PENDING_REVIEW',
-    budget: 150000,
-  }, ['PENDING_REVIEW']);
-  await createSeedProposalIfAbsent(boreholeGroup.id, waichariId, {
-    title: 'Youth Skills Programme',
-    description: 'Six-month vocational skills programme for unemployed youth aged 18–35 in Kayole Ward.',
-    status: 'APPROVED_FOR_VOTING',
-    budget: 200000,
-  }, ['APPROVED_FOR_VOTING']);
+  await createSeedProposalIfAbsent(
+    boreholeGroup.id,
+    waichariId,
+    {
+      title: 'Road Maintenance Request',
+      description:
+        'Request for maintenance of the main access road connecting Kayole to Embakasi Road.',
+      status: 'PENDING_REVIEW',
+      budget: 150000,
+    },
+    ['PENDING_REVIEW']
+  );
+  await createSeedProposalIfAbsent(
+    boreholeGroup.id,
+    waichariId,
+    {
+      title: 'Youth Skills Programme',
+      description:
+        'Six-month vocational skills programme for unemployed youth aged 18–35 in Kayole Ward.',
+      status: 'APPROVED_FOR_VOTING',
+      budget: 200000,
+    },
+    ['APPROVED_FOR_VOTING']
+  );
 }
 
 function buildExtraEmailEnrollments(refs: WardRefs) {
-  const { firstWard, secondWard, diffConstituencyWard, diffCountyWard, mainSecondaryWardId } = refs;
+  const {
+    firstWard,
+    secondWard,
+    diffConstituencyWard,
+    diffCountyWard,
+    mainSecondaryWardId,
+  } = refs;
   return [
-    { email: 'phone-only@ujamaa.test',  primary: firstWard.id, secondary: mainSecondaryWardId },
-    { email: 'email-only@ujamaa.test',  primary: firstWard.id, secondary: mainSecondaryWardId },
-    { email: 'full-member@ujamaa.test', primary: firstWard.id, secondary: mainSecondaryWardId },
-    ...(secondWard          ? [{ email: 'ward2.member@ujamaa.test', primary: secondWard.id,          secondary: firstWard.id }] : []),
-    ...(diffConstituencyWard? [{ email: 'const.member@ujamaa.test', primary: diffConstituencyWard.id, secondary: firstWard.id }] : []),
-    ...(diffCountyWard      ? [{ email: 'county.member@ujamaa.test',primary: diffCountyWard.id,       secondary: firstWard.id }] : []),
+    {
+      email: 'phone-only@ujamaa.test',
+      primary: firstWard.id,
+      secondary: mainSecondaryWardId,
+    },
+    {
+      email: 'email-only@ujamaa.test',
+      primary: firstWard.id,
+      secondary: mainSecondaryWardId,
+    },
+    {
+      email: 'full-member@ujamaa.test',
+      primary: firstWard.id,
+      secondary: mainSecondaryWardId,
+    },
+    ...(secondWard
+      ? [
+          {
+            email: 'ward2.member@ujamaa.test',
+            primary: secondWard.id,
+            secondary: firstWard.id,
+          },
+        ]
+      : []),
+    ...(diffConstituencyWard
+      ? [
+          {
+            email: 'const.member@ujamaa.test',
+            primary: diffConstituencyWard.id,
+            secondary: firstWard.id,
+          },
+        ]
+      : []),
+    ...(diffCountyWard
+      ? [
+          {
+            email: 'county.member@ujamaa.test',
+            primary: diffCountyWard.id,
+            secondary: firstWard.id,
+          },
+        ]
+      : []),
   ];
 }
 
@@ -1629,14 +1766,27 @@ async function enrollAllUsersIntoSystemGroups(
 ) {
   console.log('   Enrolling test users into system groups...');
 
-  const allUsersForEnrollment: { userId: string; primary: string; secondary: string }[] = [];
+  const allUsersForEnrollment: {
+    userId: string;
+    primary: string;
+    secondary: string;
+  }[] = [];
 
   for (const [, userId] of Object.entries(createdUsers)) {
-    allUsersForEnrollment.push({ userId, primary: refs.firstWard.id, secondary: refs.mainSecondaryWardId });
+    allUsersForEnrollment.push({
+      userId,
+      primary: refs.firstWard.id,
+      secondary: refs.mainSecondaryWardId,
+    });
   }
 
-  for (const { email, primary, secondary } of buildExtraEmailEnrollments(refs)) {
-    const u = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+  for (const { email, primary, secondary } of buildExtraEmailEnrollments(
+    refs
+  )) {
+    const u = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
     if (u) allUsersForEnrollment.push({ userId: u.id, primary, secondary });
   }
 
@@ -1645,15 +1795,29 @@ async function enrollAllUsersIntoSystemGroups(
     select: { id: true },
   });
   if (adminUser) {
-    allUsersForEnrollment.push({ userId: adminUser.id, primary: refs.firstWard.id, secondary: refs.mainSecondaryWardId });
+    allUsersForEnrollment.push({
+      userId: adminUser.id,
+      primary: refs.firstWard.id,
+      secondary: refs.mainSecondaryWardId,
+    });
   }
 
   let enrolled = 0;
   for (const { userId, primary, secondary } of allUsersForEnrollment) {
     try {
-      await groupMembershipService.enrollInSystemGroups(userId, primary, secondary);
+      await groupMembershipService.enrollInSystemGroups(
+        userId,
+        primary,
+        secondary
+      );
       enrolled++;
-      await auditService.log(userId, AuditAction.GROUP_JOINED, 'Group', primary, {});
+      await auditService.log(
+        userId,
+        AuditAction.GROUP_JOINED,
+        'Group',
+        primary,
+        {}
+      );
     } catch {
       // already enrolled — safe to ignore
     }
@@ -1713,11 +1877,23 @@ async function seedTestUsers() {
 
   const mainSecondaryWardId = secondWard?.id ?? firstWard.id;
 
-  const refs: WardRefs = { firstWard, secondWard, diffConstituencyWard, diffCountyWard, mainSecondaryWardId };
+  const refs: WardRefs = {
+    firstWard,
+    secondWard,
+    diffConstituencyWard,
+    diffCountyWard,
+    mainSecondaryWardId,
+  };
   await seedSpecialCaseUsers(firstWard, mainSecondaryWardId);
   await seedGeographicSpreadUsers(refs);
-  const createdUsers = await seedRoleCoverageUsers(firstWard, mainSecondaryWardId);
-  const boreholeGroup = await seedBoreholeGroupAndMembers(firstWard, createdUsers);
+  const createdUsers = await seedRoleCoverageUsers(
+    firstWard,
+    mainSecondaryWardId
+  );
+  const boreholeGroup = await seedBoreholeGroupAndMembers(
+    firstWard,
+    createdUsers
+  );
   const waichariId = createdUsers['waichari@ujamaa.test'];
   if (waichariId) await seedTestProposals(boreholeGroup, waichariId);
   await enrollAllUsersIntoSystemGroups(refs, createdUsers);
@@ -1782,7 +1958,9 @@ async function seedEducationModules() {
     }
   }
 
-  console.log(`   Created/ensured ${EDUCATION_MODULES_DATA.length} education modules`);
+  console.log(
+    `   Created/ensured ${EDUCATION_MODULES_DATA.length} education modules`
+  );
 }
 
 // ============================================================================
@@ -1837,6 +2015,19 @@ async function seedPlatformConfig() {
       value: '1000',
       label: 'Sponsor tier — monthly dues (KES)',
       category: 'tier',
+    },
+    // Dues allocation split across geographic levels (percentages must sum to 100)
+    {
+      key: 'dues_allocation_split',
+      value: JSON.stringify({
+        WARD: 70,
+        CONSTITUENCY: 15,
+        COUNTY: 10,
+        NATIONAL: 5,
+      }),
+      label:
+        'Dues allocation split across Ward / Constituency / County / National (%)',
+      category: 'treasury',
     },
   ];
 
