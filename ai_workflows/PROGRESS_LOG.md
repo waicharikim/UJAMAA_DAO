@@ -2427,3 +2427,31 @@ Write payment module tests (B2C payout flow + webhook handler) to raise payment 
 
 **Token usage:**
 Claude Sonnet 4.6 — session 67
+
+---
+
+## [2026-05-18] — Session 68: Payment module tests — B2C payout flow, completePayout, refundPayout, daily limit
+
+**What was built:**
+- **`tests/payments/payment.service.test.ts`** — added `handleBuniB2cWebhook` describe block (4 tests: success/failure/no-ReferenceData/wrong-Key) + 1 additional `getPaymentStatus` idempotency test. Total: 22 tests.
+- **`tests/payments/payment.routes.test.ts`** — added `POST /webhook/buni-b2c` describe block (7 tests: no-auth pass-through, ResultCode 0 → completePayout, non-zero → refundPayout, missing ReferenceData, schema validation). Total: 28 tests.
+- **`tests/economy/utWithdrawal.service.test.ts`** — new file (12 tests): `completePayout` (6 tests: PENDING→COMPLETED, no balance restore, earnedUtBalance untouched, idempotent on COMPLETED/FAILED, graceful on missing ID) + `refundPayout` (6 tests: PENDING→FAILED, restores fiatBackedUtBalance, earnedUtBalance untouched, no double-refund, no downgrade from COMPLETED, graceful on missing ID).
+- **`tests/economy/utWithdrawal.routes.test.ts`** — added daily limit test (total → 12). Verifies 400 + "daily withdrawal limit" message when cumulative PENDING+COMPLETED would exceed 50,000 KES.
+- **`tests/payments/helpers.ts`** — added `seedWithdrawal()` helper for both test files.
+
+**Decisions made:**
+- **Valid nil UUID for nonexistent-ID tests** — `'00000000-nonexistent-id'` failed with `P2007` (invalid UUID syntax). Using `'00000000-0000-0000-0000-000000000000'` instead — PostgreSQL accepts it, Prisma returns `null`, service exits gracefully.
+- **Redis guard in withdrawals service is correct** — `NODE_ENV !== 'test'` wraps `economyQueue.add()` to prevent ECONNREFUSED in test suite (same as on-chain mint guards). Confirmed by running full suite — no Redis errors.
+- **Sequential upserts in beforeEach** — same-table seed operations not Promise.all'd; avoids Prisma "write conflict" deadlocks in test DB.
+
+**What's still broken or incomplete:**
+- Base Sepolia deploy still pending (blocked on funded minter wallet)
+- Africa's Talking SMS credentials not configured for production
+- WebAuthn endpoint tests were added in session 67 continuation (`3df8a91`) — those 39 tests are green
+- Admin + audit test coverage: zero tests for either module
+
+**Next milestone:**
+Fund minter wallet → `forge script Deploy.s.sol --rpc-url base_sepolia --broadcast` → set `PR_TOKEN_ADDRESS`/`UT_TOKEN_ADDRESS` in docker-compose (promotes contracts from `written` → `deployed`).
+
+**Token usage:**
+Claude Sonnet 4.6 — session 68

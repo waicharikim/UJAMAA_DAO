@@ -6,14 +6,14 @@
 
 ---
 
-**Last updated:** 2026-05-18 (session 67 — UT cash-out B2C M-Pesa payout via BullMQ)
+**Last updated:** 2026-05-18 (session 68 — payment module tests: B2C payout + completePayout + refundPayout + daily limit)
 **Branch:** `develop`
 **Last commits:**
+- `c352555` test(payments): B2C payout flow + completePayout + refundPayout + daily limit
+- `4e9a8bd` docs: log session 67 — UT cash-out B2C payout implementation
 - `716d58f` feat(economy): UT cash-out — B2C M-Pesa payout via BullMQ
 - `e9d6ca6` docs: log session 66 — geographic dues split + UT cash-out start
 - `272052d` feat(treasury): multi-level dues allocation across geographic hierarchy
-- `fb16348` feat(treasury): proposal disbursement + my-groups summary endpoint
-- `6d4066d` refactor: reduce cyclomatic complexity in api.ts and proposal.service.ts
 
 ---
 
@@ -24,12 +24,32 @@
 | Backend API | ✅ healthy | http://localhost:4000/health |
 | Frontend | ✅ running (Turbopack) | http://localhost:3000 |
 | MailHog | ✅ auto-started by `make dev` | http://localhost:8025 |
-| Tests (core modules) | ✅ 1017 total green | auth (104) + user (35) + economy (34) + community (147) + governance (111) + projects (127) + marketplace (35) + emergency (30) + onboarding (22) + reputation (23) + education (42) + notifications (43) + verification (36) + elections (63) + treasury (40) |
+| Tests (core modules) | ✅ 1042 total green | auth (104) + user (35) + economy (66) + community (147) + governance (111) + projects (127) + marketplace (35) + emergency (30) + onboarding (22) + reputation (23) + education (42) + notifications (43) + verification (36) + elections (63) + treasury (40) + payments (50) |
 | Sentry backend | ✅ wired | instrument.ts + setupExpressErrorHandler; DSN in docker/.env |
 | Sentry frontend | ✅ instrumentation loads | instrumentation.ts + sentry.*.config.ts files; NEXT_PUBLIC_SENTRY_DSN needs value |
 | Telegram webhook | ⚠️ needs `make dev` restart | `docker/.env` has bot token but container not restarted yet |
 
 ---
+
+## What was done this session (session 68)
+
+**Payment module tests — B2C payout flow, completePayout, refundPayout, daily limit:**
+
+1. **`tests/economy/utWithdrawal.service.test.ts`** (new — 12 tests): `completePayout` + `refundPayout` idempotency guarantees, balance safety, earnedUtBalance isolation, graceful missing-ID handling. Guards against double-refund and COMPLETED→FAILED downgrade.
+
+2. **`tests/economy/utWithdrawal.routes.test.ts`** (+1 test): daily limit test — verifies 400 + "daily withdrawal limit" message when cumulative PENDING+COMPLETED pushes over 50,000 KES.
+
+3. **`tests/payments/payment.service.test.ts`** (+5 tests): `handleBuniB2cWebhook` block (success/failure/no-ReferenceData/wrong-Key) + additional `getPaymentStatus` after failed webhook. Total: 22.
+
+4. **`tests/payments/payment.routes.test.ts`** (+7 tests): `POST /webhook/buni-b2c` (no-auth pass-through, ResultCode 0→completePayout, non-zero→refundPayout, missing ReferenceData, schema validation). Total: 28.
+
+5. **`tests/payments/helpers.ts`**: `seedWithdrawal()` helper added.
+
+**Fixes found while writing tests:**
+- `completePayout`/`refundPayout` nonexistent-ID tests required valid nil UUID (`00000000-0000-0000-0000-000000000000`) — Postgres rejects malformed UUID strings with P2007.
+- `economyQueue.add()` guarded by `NODE_ENV !== 'test'` to prevent ECONNREFUSED in test suite.
+
+Payments promoted from `partial (no tests)` → **50 tests green**. Economy: 53 → **66 tests** (5 files). All 1042 tests pass.
 
 ## What was done this session (session 67)
 
@@ -52,8 +72,6 @@
 6. **`docker-compose.yml`**: `BUNI_B2C_SHORTCODE`, `BUNI_B2C_INITIATOR_NAME`, `BUNI_B2C_SECURITY_CREDENTIAL` on worker service.
 
 7. **`audit/types.ts`**: `UT_WITHDRAWAL_COMPLETED` + `UT_WITHDRAWAL_FAILED` audit actions.
-
-No new tests (payment module remains partial). All 1017 existing tests stay green.
 
 ## What was done this session (session 66)
 
@@ -244,8 +262,8 @@ _(See PROGRESS_LOG.md for full detail)_
 
 | Status | Modules |
 |---|---|
-| **tested** | auth (104), user (35), economy (53), community (147), governance (111), projects (127), marketplace (35), emergency (30), onboarding (22), reputation (23), education (42), notifications (43), verification (36), elections (63), treasury (40) — **1017 total** |
-| **partial** | payments (no tests — B2C payout flow complete), admin, audit, integration |
+| **tested** | auth (104), user (35), economy (66), community (147), governance (111), projects (127), marketplace (35), emergency (30), onboarding (22), reputation (23), education (42), notifications (43), verification (36), elections (63), treasury (40), payments (50) — **1042 total** |
+| **partial** | admin, audit, integration |
 | **scaffold** | — |
 | **contracts written** | PrToken.sol, UtToken.sol (13 Foundry tests green; Base Sepolia deploy pending) |
 
@@ -253,12 +271,10 @@ _(See PROGRESS_LOG.md for full detail)_
 
 ## Next tasks (priority order)
 
-1. **Payment module tests** — write unit/integration tests for B2C payout flow (payment.service, ut-payout.jobs, webhook handler); promotes payments from `partial (no tests)` → `tested`
-2. **Base Sepolia deploy** — fund minter wallet → `forge script Deploy.s.sol --rpc-url base_sepolia --broadcast` → set `PR_TOKEN_ADDRESS`/`UT_TOKEN_ADDRESS`; promotes contracts from `written` → `deployed`
-3. **Africa's Talking SMS** — configure real AT credentials for production phone verification
-4. **Real domain** — purchase domain → point at server → update `BASE_URL` + register Buni production callback + Telegram webhook (replaces ephemeral tunnel)
-5. **WebAuthn test coverage** — no tests exist for the 6 passkey endpoints
-6. **Admin + audit test coverage** — both modules are partial with no tests
+1. **Base Sepolia deploy** — fund minter wallet → `forge script Deploy.s.sol --rpc-url base_sepolia --broadcast` → set `PR_TOKEN_ADDRESS`/`UT_TOKEN_ADDRESS`; promotes contracts from `written` → `deployed`
+2. **Africa's Talking SMS** — configure real AT credentials for production phone verification
+3. **Real domain** — purchase domain → point at server → update `BASE_URL` + register Buni production callback + Telegram webhook (replaces ephemeral tunnel)
+4. **Admin + audit test coverage** — both modules are partial with no tests
 
 ---
 
