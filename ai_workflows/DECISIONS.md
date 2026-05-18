@@ -489,3 +489,25 @@ The current `Promise.all([...])` pattern for multi-table aggregation (e.g. admin
 - Changing the split requires a SUPER_ADMIN to `POST /api/v1/admin/platform-config` with key `dues_allocation_split` and a new JSON value. No code change or redeploy is needed.
 - The default 70/15/10/5 split is ward-first, reflecting UjamaaDAO's philosophy that local community has the strongest claim on dues. Higher levels get a share to sustain coordination infrastructure (constituency events, county initiatives, national platform operations).
 - Treasury balances at constituency/county/national levels accumulate over time and can be disbursed via governance proposals at the appropriate geographic scope.
+
+---
+
+## [ADR-040] — UT cash-out uses BullMQ B2C job; earned UT has no cash-out path
+
+**Date:** 2026-05-18
+**Status:** Decided
+**Decision:** UT cash-out (fiat-backed UT → M-Pesa) is implemented as an async two-phase flow: (1) `POST /economy/ut/withdraw` atomically debits `fiatBackedUtBalance` and creates a `UtWithdrawal` record (status=PENDING), then enqueues an on-demand BullMQ job `process-mpesa-payout` on the economy queue; (2) the worker calls the Buni B2C API; (3) Safaricom delivers the result to `POST /payments/webhook/buni-b2c`, which calls `completePayout` (PENDING→COMPLETED) or `refundPayout` (PENDING→FAILED + balance restored). The `withdrawalId` travels in the Buni B2C request `Occasion` field and is surfaced back in the callback `ReferenceData.ReferenceItem`.
+
+**earnedUtBalance is never involved in any cash-out.** Only `fiatBackedUtBalance` (M-Pesa deposits at 1 UT = 1 KES) has a cash-out path. `earnedUtBalance` (platform rewards) has no cash-out path, ever. The withdrawal service reads only `fiatBackedUtBalance`; no code path ever decrements `earnedUtBalance` during withdrawal.
+
+**Why:** The two-pool design (ADR-004) was chosen to prevent the platform from becoming an unlicensed financial product. Earned UT functions as an in-app reward token — giving it a cash-out path would effectively make it e-money and trigger Central Bank of Kenya licensing requirements. `fiatBackedUtBalance` is already CBK-compliant because it only stores KES the user deposited via M-Pesa; returning those KES to the same user is a refund, not a new financial product.
+
+The async BullMQ design (rather than synchronous API call in the request handler) prevents request timeouts — Buni B2C may take several seconds to respond. The 3× exponential backoff covers transient Buni errors. The `failedJobHandler` in `workers.ts` calls `refundPayout` on permanent failure so the user's balance is always restored.
+
+**Consequences:**
+- Daily withdrawal limit: 50,000 KES per user (configurable via constant `DAILY_LIMIT_KES` in `utWithdrawal.service.ts`).
+- Minimum withdrawal: 10 KES. Maximum per request: 10,000 KES.
+- `completePayout` and `refundPayout` are idempotent — safe to call from both the B2C webhook and the `failedJobHandler` without double-credit/double-refund risk.
+- If `refundPayout` itself fails after job exhaustion, a CRITICAL log fires and the incident requires manual DB intervention. This case is logged but not auto-alerting in the current implementation.
+- B2C credentials (`BUNI_B2C_SHORTCODE`, `BUNI_B2C_INITIATOR_NAME`, `BUNI_B2C_SECURITY_CREDENTIAL`) live on the worker service only, never the web service.
+- On-chain UT burn (from `utWithdrawal.service.ts`) fires in parallel with the payout job in production — off-chain DB record and on-chain state stay in sync. Burn failure is non-fatal (logged as warn; withdrawal continues).

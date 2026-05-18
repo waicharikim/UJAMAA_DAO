@@ -6,14 +6,14 @@
 
 ---
 
-**Last updated:** 2026-05-18 (session 66 — multi-level dues allocation across geographic hierarchy)
+**Last updated:** 2026-05-18 (session 67 — UT cash-out B2C M-Pesa payout via BullMQ)
 **Branch:** `develop`
 **Last commits:**
+- `716d58f` feat(economy): UT cash-out — B2C M-Pesa payout via BullMQ
+- `e9d6ca6` docs: log session 66 — geographic dues split + UT cash-out start
 - `272052d` feat(treasury): multi-level dues allocation across geographic hierarchy
 - `fb16348` feat(treasury): proposal disbursement + my-groups summary endpoint
 - `6d4066d` refactor: reduce cyclomatic complexity in api.ts and proposal.service.ts
-- `25b6537` docs: log session 63 — schema source fix, Sentry ESM, Redis noeviction, CodeScene refactors
-- `a8ea578` refactor(projects): reduce complexity in project.service.ts + fix module schemas
 
 ---
 
@@ -30,6 +30,30 @@
 | Telegram webhook | ⚠️ needs `make dev` restart | `docker/.env` has bot token but container not restarted yet |
 
 ---
+
+## What was done this session (session 67)
+
+**UT cash-out — B2C M-Pesa payout via BullMQ (full implementation):**
+
+1. **`ut-payout.jobs.ts`** (new BullMQ on-demand job): `process-mpesa-payout` job. Idempotent via `jobId = withdrawalId`. Calls `paymentService.initiateB2CPayout()`. Status stays PENDING until B2C callback confirms.
+
+2. **`utWithdrawal.service.ts`** expanded:
+   - Daily 50,000 KES limit check (sums PENDING + COMPLETED withdrawals since midnight)
+   - Enqueues `process-mpesa-payout` after atomic debit (skipped in test to avoid Redis)
+   - `completePayout(withdrawalId)` — idempotent; PENDING → COMPLETED; audit `UT_WITHDRAWAL_COMPLETED`
+   - `refundPayout(withdrawalId, reason)` — idempotent; restores `fiatBackedUtBalance` + FAILED status in atomic `$transaction`; audit `UT_WITHDRAWAL_FAILED`
+
+3. **`payment.service.ts`**: `initiateB2CPayout()` stubs in test, throws if credentials missing, POSTs to Buni B2C API with `Occasion=withdrawalId`. `handleBuniB2cWebhook()` extracts `withdrawalId` from `ReferenceData.ReferenceItem`.
+
+4. **`POST /payments/webhook/buni-b2c`**: no-auth Safaricom B2C callback. Validates with `buniB2cCallbackSchema`; calls `completePayout` or `refundPayout`; always responds `{ ResultCode: 0, ResultDesc: "Accepted" }`.
+
+5. **`workers.ts`**: `MPESA_PAYOUT_JOB` case in `economyWorker` (3× retry, 30s exponential backoff). `failedJobHandler` calls `refundPayout` on exhaustion.
+
+6. **`docker-compose.yml`**: `BUNI_B2C_SHORTCODE`, `BUNI_B2C_INITIATOR_NAME`, `BUNI_B2C_SECURITY_CREDENTIAL` on worker service.
+
+7. **`audit/types.ts`**: `UT_WITHDRAWAL_COMPLETED` + `UT_WITHDRAWAL_FAILED` audit actions.
+
+No new tests (payment module remains partial). All 1017 existing tests stay green.
 
 ## What was done this session (session 66)
 
@@ -220,8 +244,8 @@ _(See PROGRESS_LOG.md for full detail)_
 
 | Status | Modules |
 |---|---|
-| **tested** | auth (104), user (35), economy (34), community (147), governance (111), projects (127), marketplace (35), emergency (30), onboarding (22), reputation (23), education (42), notifications (43), verification (36), elections (63), treasury (36) — **1013 total** |
-| **partial** | admin, audit, integration |
+| **tested** | auth (104), user (35), economy (53), community (147), governance (111), projects (127), marketplace (35), emergency (30), onboarding (22), reputation (23), education (42), notifications (43), verification (36), elections (63), treasury (40) — **1017 total** |
+| **partial** | payments (no tests — B2C payout flow complete), admin, audit, integration |
 | **scaffold** | — |
 | **contracts written** | PrToken.sol, UtToken.sol (13 Foundry tests green; Base Sepolia deploy pending) |
 
@@ -229,11 +253,12 @@ _(See PROGRESS_LOG.md for full detail)_
 
 ## Next tasks (priority order)
 
-1. **GroupTreasury.sol** — smart contract for on-chain treasury transparency; blocked on minter wallet funding + Base Sepolia deploy
-2. **Africa's Talking SMS** — configure real AT credentials for production phone verification
-3. **Real domain** — purchase domain → point at server → update `BASE_URL` + register Buni production callback + Telegram webhook (replaces ephemeral tunnel)
-4. **WebAuthn test coverage** — no tests exist for the 6 passkey endpoints
-5. **Admin + audit test coverage** — both modules are partial with no tests
+1. **Payment module tests** — write unit/integration tests for B2C payout flow (payment.service, ut-payout.jobs, webhook handler); promotes payments from `partial (no tests)` → `tested`
+2. **Base Sepolia deploy** — fund minter wallet → `forge script Deploy.s.sol --rpc-url base_sepolia --broadcast` → set `PR_TOKEN_ADDRESS`/`UT_TOKEN_ADDRESS`; promotes contracts from `written` → `deployed`
+3. **Africa's Talking SMS** — configure real AT credentials for production phone verification
+4. **Real domain** — purchase domain → point at server → update `BASE_URL` + register Buni production callback + Telegram webhook (replaces ephemeral tunnel)
+5. **WebAuthn test coverage** — no tests exist for the 6 passkey endpoints
+6. **Admin + audit test coverage** — both modules are partial with no tests
 
 ---
 

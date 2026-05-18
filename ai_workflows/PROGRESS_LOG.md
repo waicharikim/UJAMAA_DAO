@@ -2387,3 +2387,43 @@ Base Sepolia deploy (fund minter wallet → `forge script Deploy.s.sol --rpc-url
 
 **Token usage:**
 Claude Sonnet 4.6 — session 66
+
+---
+
+## [2026-05-18] — Session 67: UT cash-out — B2C M-Pesa payout via BullMQ
+
+**What was built:**
+- **`ut-payout.jobs.ts`** (new): BullMQ on-demand job `process-mpesa-payout`. Idempotent via `jobId = withdrawalId` (re-enqueue is a no-op). Calls `paymentService.initiateB2CPayout()`. Status stays `PENDING` until B2C webhook callback confirms.
+- **`utWithdrawal.service.ts`** — 4 changes:
+  1. Daily KES limit check (`DAILY_LIMIT_KES = 50_000`): sums pending + completed withdrawals since midnight before allowing the new request.
+  2. Enqueues `process-mpesa-payout` job after atomic debit + `UtWithdrawal` creation (skipped in `NODE_ENV=test` to avoid Redis connection in test suite).
+  3. `completePayout(withdrawalId)`: idempotent status=PENDING guard → update to `COMPLETED` + set `completedAt` → audit `UT_WITHDRAWAL_COMPLETED`.
+  4. `refundPayout(withdrawalId, reason)`: idempotent guard → `$transaction([refund fiatBackedUtBalance, update status=FAILED])` → audit `UT_WITHDRAWAL_FAILED`.
+- **`payment.service.ts`**: `initiateB2CPayout()` stubs in test mode; throws if B2C credentials missing; POSTs to `${BUNI_BASE_URL}/mm/api/b2c/v1/paymentrequest` with `Occasion=withdrawalId` for callback correlation. `handleBuniB2cWebhook()` parses callback, extracts `withdrawalId` from `ReferenceData.ReferenceItem` (Key=`"Occasion"`), returns `{ withdrawalId, success, desc }`.
+- **`payment.validators.ts`**: `buniB2cCallbackSchema` — Zod schema for B2C callback body.
+- **`payment.routes.ts`** + **`payment.handlers.ts`**: `POST /payments/webhook/buni-b2c` — no auth; validates with `buniB2cCallbackSchema`; calls `completePayout` on success or `refundPayout` on failure; always responds `{ ResultCode: 0, ResultDesc: "Accepted" }` to Safaricom.
+- **`workers.ts`**: `MPESA_PAYOUT_JOB` case in `economyWorker`; `failedJobHandler` calls `refundPayout` after all 3 retries exhausted.
+- **`audit/types.ts`**: `UT_WITHDRAWAL_COMPLETED` + `UT_WITHDRAWAL_FAILED` audit actions added.
+- **`docker-compose.yml`**: `BUNI_B2C_SHORTCODE`, `BUNI_B2C_INITIATOR_NAME`, `BUNI_B2C_SECURITY_CREDENTIAL`, `BUNI_CLIENT_ID/SECRET/BASE_URL` env vars on worker service.
+- **Docs**: SESSION_STATE, CLAUDE.md, DECISIONS.md, payments-api.md, features.md all updated.
+
+**Decisions made:**
+- **`earnedUtBalance` never touched** — only `fiatBackedUtBalance` can be cashed out (Rule 4). The withdrawal service never reads or modifies `earnedUtBalance`.
+- **Job enqueue guarded by `NODE_ENV !== 'test'`** — same pattern as on-chain burns. Prevents Redis connection attempts in tests, which run with `REDIS_URL=''`.
+- **`withdrawalId` as BullMQ jobId** — prevents double-enqueue if the service is called twice for the same withdrawal (duplicate job is silently dropped by BullMQ).
+- **3× exponential backoff (30s base)** — transient Buni API errors (rate limit, network) are retried; only permanent failures trigger refund.
+- **`completePayout`/`refundPayout` both idempotent** — safe to call from both the B2C callback and the failed-job handler; the status guard prevents double-credit or double-refund.
+- **`failedJobHandler` refunds on exhaustion** — if all 3 retries fail (permanent Buni error), the user's balance is restored automatically. CRITICAL log fires if the refund itself fails (manual intervention required).
+- **B2C correlation via `Occasion` field** — Safaricom surfaces the `Occasion` field from the B2C request back in `ReferenceData.ReferenceItem` in the callback. This is the only reliable way to map a callback to a specific withdrawal.
+
+**What's still broken or incomplete:**
+- No unit tests for the payout flow (payment.service, ut-payout.jobs, webhook handler)
+- `GroupTreasury.sol` on-chain mirroring not built — blocked on funded minter wallet + Base Sepolia deploy
+- Africa's Talking SMS credentials not configured for production
+- WebAuthn endpoints have no test coverage
+
+**Next milestone:**
+Write payment module tests (B2C payout flow + webhook handler) to raise payment module from `partial (no tests)` to `tested`, OR fund the minter wallet for Base Sepolia deploy.
+
+**Token usage:**
+Claude Sonnet 4.6 — session 67

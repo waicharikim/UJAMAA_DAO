@@ -271,7 +271,7 @@
 | Reputation / Impact Points | tested (23 tests) | functional | Ward-level impact tracking, leaderboard live |
 | Elections | tested (63 tests) | functional | Full backend lifecycle; frontend list + detail pages |
 | Treasury | tested (40 tests) | functional | Geographic dues split (70/15/10/5) live; proposal disbursement + my-groups summary; GroupTreasury.sol pending |
-| Payments (M-Pesa) | partial (no tests) | functional | Buni STK push end-to-end verified; unit tests pending |
+| Payments (M-Pesa) | partial (no tests) | functional | Buni STK push + B2C payout (UT cash-out) wired end-to-end; 50K KES daily limit; BullMQ job with 3× retry + refund on exhaustion; unit tests pending |
 | Admin Tools | partial (no tests) | functional | stats/users/config endpoints live; Baraza management tab |
 | Audit / Feed | partial (no tests) | functional | 6+ audit events active; feed cursor-paginated stream |
 | Integration (Baraza) | partial (no tests) | functional | Telegram/Discord/WhatsApp; attendance + invite jobs |
