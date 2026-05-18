@@ -259,7 +259,7 @@
 |---|---|---|---|
 | Identity & Verification | tested (104 auth + 36 verification = 140 tests) | functional | WebAuthn/passkeys live; SMS AT credentials → real |
 | Profile & Personal Data | tested (35 tests) | functional | Avatar upload pending |
-| Participation Rights (PR) | tested (34 tests) | functional | On-chain mint wired; Base Sepolia deploy pending |
+| Participation Rights (PR) + Economy (UT) | tested (66 tests) | functional | On-chain mint wired; UT cash-out idempotency tested; Base Sepolia deploy pending |
 | Community / Wards / Groups | tested (147 tests) | functional | Baraza integration live; conflict protocol live |
 | Governance / Voting | tested (111 tests) | functional | Proposal disbursement wired; 2-stage review + memory layer live |
 | Projects & Milestones | tested (127 tests) | functional | QR witness-chain work sessions; task board; contribution flows |
@@ -271,7 +271,7 @@
 | Reputation / Impact Points | tested (23 tests) | functional | Ward-level impact tracking, leaderboard live |
 | Elections | tested (63 tests) | functional | Full backend lifecycle; frontend list + detail pages |
 | Treasury | tested (40 tests) | functional | Geographic dues split (70/15/10/5) live; proposal disbursement + my-groups summary; GroupTreasury.sol pending |
-| Payments (M-Pesa) | partial (no tests) | functional | Buni STK push + B2C payout (UT cash-out) wired end-to-end; 50K KES daily limit; BullMQ job with 3× retry + refund on exhaustion; unit tests pending |
+| Payments (M-Pesa) | tested (50 tests) | functional | Buni STK push + B2C payout (UT cash-out) wired end-to-end; 50K KES daily limit; BullMQ job with 3× retry + refund on exhaustion; completePayout/refundPayout idempotency verified |
 | Admin Tools | partial (no tests) | functional | stats/users/config endpoints live; Baraza management tab |
 | Audit / Feed | partial (no tests) | functional | 6+ audit events active; feed cursor-paginated stream |
 | Integration (Baraza) | partial (no tests) | functional | Telegram/Discord/WhatsApp; attendance + invite jobs |
