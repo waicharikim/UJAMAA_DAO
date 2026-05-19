@@ -33,6 +33,8 @@ export class LocationImpactService {
         ward: {
           select: {
             name: true,
+            constituencyId: true,
+            countyId: true,
             constituency: {
               select: {
                 name: true,
@@ -50,6 +52,16 @@ export class LocationImpactService {
       return null;
     }
 
+    const { constituencyId, countyId } = primary.ward;
+
+    const constituencyPoints = impacts
+      .filter((i) => i.ward.constituencyId === constituencyId)
+      .reduce((sum, i) => sum + i.impactPoints, 0);
+
+    const countyPoints = impacts
+      .filter((i) => i.ward.countyId === countyId)
+      .reduce((sum, i) => sum + i.impactPoints, 0);
+
     return {
       ward: {
         name: primary.ward.name,
@@ -58,11 +70,11 @@ export class LocationImpactService {
       },
       constituency: {
         name: primary.ward.constituency?.name ?? 'Unknown',
-        points: primary.impactPoints,
+        points: constituencyPoints,
       },
       county: {
         name: primary.ward.constituency?.county?.name ?? 'Unknown',
-        points: primary.impactPoints,
+        points: countyPoints,
       },
     };
   }

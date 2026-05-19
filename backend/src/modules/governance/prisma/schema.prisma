@@ -69,6 +69,7 @@ model Proposal {
   // REVIEW
   reviewedById      String?        @db.Uuid
   reviewNote        String?        @db.Text
+  resubmissionCount Int            @default(0)
 
   // VOTING
   votesFor          Int            @default(0)

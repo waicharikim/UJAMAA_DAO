@@ -25,13 +25,28 @@ router.get('/:proposalId', asyncHandler(ProposalController.getProposal));
 router.post(
   '/:proposalId/review',
   validateRequest({
-    schema: z.object({
-      decision: z.enum(['APPROVE', 'REJECT']),
-      note: z.string().max(500).optional(),
-    }),
+    schema: z
+      .object({
+        decision: z.enum(['APPROVE', 'REJECT']),
+        note: z.string().min(10).max(500).optional(),
+      })
+      .superRefine((data, ctx) => {
+        if (data.decision === 'REJECT' && !data.note) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['note'],
+            message: 'A rejection reason is required (min 10 characters)',
+          });
+        }
+      }),
     target: 'body',
   }),
   asyncHandler(ProposalController.reviewProposal)
+);
+
+router.post(
+  '/:proposalId/resubmit',
+  asyncHandler(ProposalController.resubmitProposal)
 );
 
 router.post(

@@ -939,14 +939,57 @@ export class ElectionService {
     election: { scope: string; groupId: string | null; countyId: string | null }
   ): Promise<void> {
     if (election.scope === 'GROUP' && election.groupId) {
-      const membership = await prisma.groupMember.findFirst({
-        where: { userId, groupId: election.groupId, active: true },
-      });
+      const [membership, group] = await Promise.all([
+        prisma.groupMember.findFirst({
+          where: { userId, groupId: election.groupId, active: true },
+        }),
+        prisma.group.findUnique({
+          where: { id: election.groupId },
+          select: {
+            isSystemGroup: true,
+            wardId: true,
+            constituencyId: true,
+            countyId: true,
+          },
+        }),
+      ]);
       if (!membership)
         throw new ApiError(
           'You must be a member of this group to nominate',
           403
         );
+      // For system groups (ward/constituency/county communities), also verify
+      // the nominator is a resident of that geographic area
+      if (
+        group?.isSystemGroup &&
+        (group.wardId || group.constituencyId || group.countyId)
+      ) {
+        const user = await prisma.user.findUnique({
+          where: { id: userId },
+          select: {
+            primaryWardId: true,
+            primaryWard: { select: { constituencyId: true, countyId: true } },
+          },
+        });
+        if (group.wardId && user?.primaryWardId !== group.wardId)
+          throw new ApiError(
+            'You must be a ward resident to nominate here',
+            403
+          );
+        if (
+          group.constituencyId &&
+          user?.primaryWard?.constituencyId !== group.constituencyId
+        )
+          throw new ApiError(
+            'You must be a constituency resident to nominate here',
+            403
+          );
+        if (group.countyId && user?.primaryWard?.countyId !== group.countyId)
+          throw new ApiError(
+            'You must be a county resident to nominate here',
+            403
+          );
+      }
     } else if (election.scope === 'SYSTEM') {
       const user = await prisma.user.findUnique({
         where: { id: userId },

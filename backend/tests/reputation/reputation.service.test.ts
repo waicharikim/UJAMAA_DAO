@@ -11,6 +11,7 @@ import { ImpactPointReason } from '../../src/modules/reputation/types.js';
 import {
   createReputationUser,
   seedWard,
+  seedWardInConstituency,
   seedImpactPointLog,
   seedLocationImpact,
 } from './helpers.js';
@@ -154,6 +155,71 @@ describe('LocationImpactService.awardWardPoints', () => {
       where: { userId_wardId: { userId: user.id, wardId: ward.id } },
     });
     expect(impact?.impactPoints).toBeGreaterThanOrEqual(100);
+  });
+});
+
+// ─────────────────────────────────────────────
+// LocationImpactService.getPrimaryHierarchyImpact
+// ─────────────────────────────────────────────
+
+describe('LocationImpactService.getPrimaryHierarchyImpact', () => {
+  it('returns null when user has no impact record for the primary ward', async () => {
+    const user = await createReputationUser('nohierarchy@test.com');
+    const ward = await seedWard();
+
+    const result = await locService.getPrimaryHierarchyImpact(user.id, ward.id);
+    expect(result).toBeNull();
+  });
+
+  it('returns ward points equal to constituency and county when user has only one ward', async () => {
+    const user = await createReputationUser('singleward@test.com');
+    const ward = await seedWard();
+    await seedLocationImpact(user.id, ward.id, 200, 'BRONZE');
+
+    const result = await locService.getPrimaryHierarchyImpact(user.id, ward.id);
+    expect(result).not.toBeNull();
+    expect(result!.ward.points).toBe(200);
+    expect(result!.constituency.points).toBe(200);
+    expect(result!.county.points).toBe(200);
+  });
+
+  it('aggregates across multiple wards in the same constituency', async () => {
+    const user = await createReputationUser('multiward@test.com');
+
+    // Two wards in the same constituency
+    const primary = await seedWard('Primary Ward');
+    const { prisma: db } = await import('../../src/core/database/client.js');
+    const primaryFull = await db.ward.findUnique({
+      where: { id: primary.id },
+      select: { constituencyId: true, countyId: true },
+    });
+    const sibling = await seedWardInConstituency(
+      primaryFull!.constituencyId,
+      primaryFull!.countyId,
+      'Sibling Ward'
+    );
+
+    await seedLocationImpact(user.id, primary.id, 100, 'NONE');
+    await seedLocationImpact(user.id, sibling.id, 75, 'NONE');
+
+    const result = await locService.getPrimaryHierarchyImpact(user.id, primary.id);
+    expect(result!.ward.points).toBe(100);
+    expect(result!.constituency.points).toBe(175); // 100 + 75
+    expect(result!.county.points).toBe(175);       // same county
+  });
+
+  it('excludes wards in a different constituency from constituency total', async () => {
+    const user = await createReputationUser('isolated@test.com');
+
+    const primary = await seedWard('Primary Ward');
+    const unrelated = await seedWard('Unrelated Ward'); // different county/constituency
+
+    await seedLocationImpact(user.id, primary.id, 100, 'NONE');
+    await seedLocationImpact(user.id, unrelated.id, 999, 'PLATINUM');
+
+    const result = await locService.getPrimaryHierarchyImpact(user.id, primary.id);
+    expect(result!.constituency.points).toBe(100); // unrelated ward excluded
+    expect(result!.county.points).toBe(100);
   });
 });
 

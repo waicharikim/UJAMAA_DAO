@@ -39,6 +39,22 @@ export async function seedWard(name = 'Test Ward') {
   });
 }
 
+export async function seedWardInConstituency(
+  constituencyId: string,
+  countyId: string,
+  name = 'Extra Ward'
+) {
+  const ts = Date.now() + Math.floor(Math.random() * 100000);
+  return prisma.ward.create({
+    data: {
+      name: `${name} ${ts}`,
+      code: `W${ts}`,
+      constituencyId,
+      countyId,
+    },
+  });
+}
+
 export async function seedImpactPointLog(
   userId: string,
   amount: number,

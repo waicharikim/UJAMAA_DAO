@@ -107,7 +107,8 @@ class ProposalService {
           : ProposalType.COMMUNITY_INITIATIVE,
         status: ProposalStatus.DRAFT,
         proposalScope:
-          (dto.proposalScope as ProposalScope) ?? ProposalScope.COMMUNITY,
+          (dto.proposalScope as ProposalScope) ??
+          (dto.groupId ? ProposalScope.GROUP : ProposalScope.COMMUNITY),
         groupFundingAmount: dto.groupFundingAmount,
         locationFundingRequest: dto.locationFundingRequest,
       },
@@ -588,7 +589,11 @@ class ProposalService {
   /**
    * Tally votes (cron or at end)
    */
-  async tallyVotes(proposalId: string) {
+  async tallyVotes(
+    proposalId: string,
+    callerId?: string,
+    callerSystemRoles: string[] = []
+  ) {
     const proposal = await prisma.proposal.findUnique({
       where: { id: proposalId },
       include: { group: true, votes: true },
@@ -596,6 +601,12 @@ class ProposalService {
 
     if (!proposal) throw ApiError.notFound('Proposal');
     if (proposal.status !== ProposalStatus.VOTING) return;
+
+    // Auth: same gate as startVoting — group leader for voluntary groups,
+    // location admin for system groups. Skipped when called by the cron job (no callerId).
+    if (callerId) {
+      await this.assertStartVotingAuth(callerId, proposal, callerSystemRoles);
+    }
 
     const totalEligible = await prisma.groupMember.count({
       where: { groupId: proposal.groupId ?? undefined, active: true },
@@ -620,9 +631,19 @@ class ProposalService {
     const newStatus =
       quorum && approved ? ProposalStatus.APPROVED : ProposalStatus.REJECTED;
 
+    const tallyRejectionNote =
+      newStatus === ProposalStatus.REJECTED
+        ? !quorum
+          ? `Voting closed: proposal did not achieve quorum (${Math.round((voterCount / (totalEligible || 1)) * 100)}% turnout, 40% required).`
+          : `Voting closed: proposal did not achieve approval majority (${Math.round((yesWeight / (decidingWeight || 1)) * 100)}% yes, 50% required).`
+        : null;
+
     await prisma.proposal.update({
       where: { id: proposalId },
-      data: { status: newStatus },
+      data: {
+        status: newStatus,
+        ...(tallyRejectionNote ? { reviewNote: tallyRejectionNote } : {}),
+      },
     });
 
     logger.info(
@@ -886,6 +907,64 @@ class ProposalService {
   }
 
   /**
+   * Resubmit a rejected proposal — resets it to DRAFT so the creator can revise
+   * and push it through the review chain again. Capped at 3 attempts.
+   */
+  async resubmitProposal(userId: string, proposalId: string) {
+    const proposal = await prisma.proposal.findUnique({
+      where: { id: proposalId },
+      select: {
+        creatorId: true,
+        status: true,
+        title: true,
+        resubmissionCount: true,
+        reviewNote: true,
+      },
+    });
+    if (!proposal) throw ApiError.notFound('Proposal');
+    if (proposal.creatorId !== userId)
+      throw ApiError.forbidden('Only the proposal creator can resubmit it');
+    if (proposal.status !== ProposalStatus.REJECTED)
+      throw ApiError.badRequest('Only rejected proposals can be resubmitted');
+    if (proposal.resubmissionCount >= 3)
+      throw ApiError.badRequest(
+        'This proposal has reached the maximum number of resubmissions (3)'
+      );
+
+    const updated = await prisma.proposal.update({
+      where: { id: proposalId },
+      data: {
+        status: ProposalStatus.DRAFT,
+        resubmissionCount: { increment: 1 },
+        // Clear voting state for the new round
+        votesFor: 0,
+        votesAgainst: 0,
+        quorum: 0,
+        approvalThreshold: 0,
+        votingStartsAt: null,
+        votingEndsAt: null,
+        // Clear reviewer — reviewNote is kept so creator can see why it was rejected
+        reviewedById: null,
+      },
+    });
+
+    await auditService.log(
+      userId,
+      AuditAction.PROPOSAL_STATUS_CHANGED,
+      'Proposal',
+      proposalId,
+      {
+        from: ProposalStatus.REJECTED,
+        to: ProposalStatus.DRAFT,
+        resubmissionCount: updated.resubmissionCount,
+        title: proposal.title,
+      }
+    );
+
+    return updated;
+  }
+
+  /**
    * Advance an approved proposal through EXECUTING → COMPLETED.
    * Only the creator or group leader can call this.
    */
@@ -1005,11 +1084,14 @@ class ProposalService {
         throw ApiError.forbidden('Not a member of this group');
       return;
     }
+    const group = proposal.group;
+    // National COMMUNITY proposals (group has no geographic scope) — any user can vote
+    if (!group?.wardId && !group?.constituencyId && !group?.countyId) return;
+    // Geographically-scoped COMMUNITY proposals require a primary ward
     if (!userPrimaryWardId)
       throw ApiError.forbidden(
-        'You must have a primary ward set to vote on community proposals'
+        'You must have a primary ward set to vote on this community proposal'
       );
-    const group = proposal.group;
     if (group?.wardId) {
       if (userPrimaryWardId !== group.wardId)
         throw ApiError.forbidden(

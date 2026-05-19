@@ -141,7 +141,13 @@ export class ProposalController {
 
   static async tallyVotes(req: AuthRequest, res: Response) {
     const { proposalId } = req.params;
-    const result = await proposalService.tallyVotes(proposalId);
+    const userId = req.user!.userId;
+    const callerSystemRoles = req.user!.roles ?? [];
+    const result = await proposalService.tallyVotes(
+      proposalId,
+      userId,
+      callerSystemRoles
+    );
     sendSuccess(res, result, 'Votes tallied');
   }
 
@@ -195,6 +201,17 @@ export class ProposalController {
     const { proposalId } = req.params;
     const result = await proposalService.cancelProposal(userId, proposalId);
     sendSuccess(res, result, 'Proposal cancelled');
+  }
+
+  static async resubmitProposal(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const { proposalId } = req.params;
+    const result = await proposalService.resubmitProposal(userId, proposalId);
+    sendSuccess(
+      res,
+      result,
+      'Proposal resubmitted — it is now in Draft for revision'
+    );
   }
 
   static async updateProgress(req: AuthRequest, res: Response) {

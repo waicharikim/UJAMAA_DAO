@@ -160,6 +160,86 @@ describe('POST /:proposalId/cancel', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// POST /:proposalId/resubmit — route tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('POST /:proposalId/resubmit', () => {
+  it('returns 200 and resets proposal to DRAFT', async () => {
+    const creator = await createGovernanceUser('route-resub-ok@example.com');
+    const token = makeGovernanceToken(creator.id);
+    const group = await seedGovernanceGroup(creator.id);
+    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.REJECTED);
+
+    const res = await request(app)
+      .post(`${BASE}/${proposal.id}/resubmit`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    const updated = await prisma.proposal.findUnique({ where: { id: proposal.id } });
+    expect(updated!.status).toBe(ProposalStatus.DRAFT);
+    expect(updated!.resubmissionCount).toBe(1);
+  });
+
+  it('returns 403 when a non-creator tries to resubmit', async () => {
+    const creator = await createGovernanceUser('route-resub-owner@example.com');
+    const other = await createGovernanceUser('route-resub-other@example.com');
+    const otherToken = makeGovernanceToken(other.id);
+    const group = await seedGovernanceGroup(creator.id);
+    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.REJECTED);
+
+    const res = await request(app)
+      .post(`${BASE}/${proposal.id}/resubmit`)
+      .set('Authorization', `Bearer ${otherToken}`);
+
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 400 when proposal is not REJECTED', async () => {
+    const creator = await createGovernanceUser('route-resub-status@example.com');
+    const token = makeGovernanceToken(creator.id);
+    const group = await seedGovernanceGroup(creator.id);
+    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.DRAFT);
+
+    const res = await request(app)
+      .post(`${BASE}/${proposal.id}/resubmit`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when resubmission cap is reached', async () => {
+    const creator = await createGovernanceUser('route-resub-cap@example.com');
+    const token = makeGovernanceToken(creator.id);
+    const group = await seedGovernanceGroup(creator.id);
+    const proposal = await prisma.proposal.create({
+      data: {
+        groupId: group.id,
+        creatorId: creator.id,
+        title: 'Route cap test proposal for resubmission limit',
+        description: 'Testing that the 3-resubmission cap is enforced at the route level.',
+        proposalType: 'COMMUNITY_INITIATIVE',
+        proposalScope: 'GROUP',
+        status: ProposalStatus.REJECTED,
+        resubmissionCount: 3,
+      },
+    });
+
+    const res = await request(app)
+      .post(`${BASE}/${proposal.id}/resubmit`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 401 without auth token', async () => {
+    const res = await request(app).post(
+      `${BASE}/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/resubmit`
+    );
+    expect(res.status).toBe(401);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PATCH /:proposalId/progress — route tests
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -607,5 +687,96 @@ describe('processExpireProposalReview()', () => {
 
   it('completes without error when there are no stale reviews', async () => {
     await expect(processExpireProposalReview()).resolves.toBeUndefined();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// resubmitProposal() — service unit tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('resubmitProposal()', () => {
+  it('resets a REJECTED proposal to DRAFT and increments resubmissionCount', async () => {
+    const creator = await createGovernanceUser('resub-basic@example.com');
+    const group = await seedGovernanceGroup(creator.id);
+    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.REJECTED);
+
+    const result = await proposalService.resubmitProposal(creator.id, proposal.id);
+
+    expect(result.status).toBe(ProposalStatus.DRAFT);
+    expect(result.resubmissionCount).toBe(1);
+  });
+
+  it('clears voting fields on resubmission', async () => {
+    const creator = await createGovernanceUser('resub-voting@example.com');
+    const group = await seedGovernanceGroup(creator.id);
+    const proposal = await prisma.proposal.create({
+      data: {
+        groupId: group.id,
+        creatorId: creator.id,
+        title: 'Resubmit voting clear test',
+        description: 'Testing that voting fields are cleared on resubmission.',
+        proposalType: 'COMMUNITY_INITIATIVE',
+        proposalScope: 'GROUP',
+        status: ProposalStatus.REJECTED,
+        votesFor: 5,
+        votesAgainst: 10,
+        votingStartsAt: new Date(),
+        votingEndsAt: new Date(),
+        reviewNote: 'Did not achieve quorum.',
+        reviewedById: creator.id,
+      },
+    });
+
+    const result = await proposalService.resubmitProposal(creator.id, proposal.id);
+
+    expect(result.votesFor).toBe(0);
+    expect(result.votesAgainst).toBe(0);
+    expect(result.votingStartsAt).toBeNull();
+    expect(result.votingEndsAt).toBeNull();
+    expect(result.reviewedById).toBeNull();
+    // reviewNote is kept so creator can see why it was rejected
+    expect(result.reviewNote).toBe('Did not achieve quorum.');
+  });
+
+  it('throws 403 if a non-creator tries to resubmit', async () => {
+    const creator = await createGovernanceUser('resub-auth-creator@example.com');
+    const other = await createGovernanceUser('resub-auth-other@example.com');
+    const group = await seedGovernanceGroup(creator.id);
+    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.REJECTED);
+
+    await expect(
+      proposalService.resubmitProposal(other.id, proposal.id)
+    ).rejects.toMatchObject({ statusCode: 403 });
+  });
+
+  it('throws 400 if proposal is not REJECTED', async () => {
+    const creator = await createGovernanceUser('resub-status@example.com');
+    const group = await seedGovernanceGroup(creator.id);
+    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.DRAFT);
+
+    await expect(
+      proposalService.resubmitProposal(creator.id, proposal.id)
+    ).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it('throws 400 when resubmissionCount has reached 3', async () => {
+    const creator = await createGovernanceUser('resub-cap@example.com');
+    const group = await seedGovernanceGroup(creator.id);
+    const proposal = await prisma.proposal.create({
+      data: {
+        groupId: group.id,
+        creatorId: creator.id,
+        title: 'Resubmission cap test proposal',
+        description: 'Testing that the 3-resubmission cap is enforced correctly.',
+        proposalType: 'COMMUNITY_INITIATIVE',
+        proposalScope: 'GROUP',
+        status: ProposalStatus.REJECTED,
+        resubmissionCount: 3,
+      },
+    });
+
+    await expect(
+      proposalService.resubmitProposal(creator.id, proposal.id)
+    ).rejects.toMatchObject({ statusCode: 400 });
   });
 });

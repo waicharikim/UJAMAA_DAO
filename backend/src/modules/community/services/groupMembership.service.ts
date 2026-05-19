@@ -34,54 +34,37 @@ class GroupMembershipService {
   async enrollInSystemGroups(
     userId: string,
     primaryWardId: string,
-    secondaryWardId: string
+    secondaryWardId?: string | null
   ): Promise<void> {
     try {
-      const [primaryWard, secondaryWard] = await Promise.all([
-        prisma.ward.findUnique({
-          where: { id: primaryWardId },
+      const wardSelect = {
+        id: true,
+        name: true,
+        constituencyId: true,
+        constituency: {
           select: {
             id: true,
             name: true,
-            constituencyId: true,
-            constituency: {
-              select: {
-                id: true,
-                name: true,
-                countyId: true,
-                county: {
-                  select: { id: true, name: true },
-                },
-              },
-            },
+            countyId: true,
+            county: { select: { id: true, name: true } },
           },
-        }),
-        prisma.ward.findUnique({
-          where: { id: secondaryWardId },
-          select: {
-            id: true,
-            name: true,
-            constituencyId: true,
-            constituency: {
-              select: {
-                id: true,
-                name: true,
-                countyId: true,
-                county: {
-                  select: { id: true, name: true },
-                },
-              },
-            },
-          },
-        }),
-      ]);
+        },
+      } as const;
 
-      if (!primaryWard || !secondaryWard) {
-        throw ApiError.notFound(
-          'Ward',
-          !primaryWard ? primaryWardId : secondaryWardId
-        );
-      }
+      const primaryWard = await prisma.ward.findUnique({
+        where: { id: primaryWardId },
+        select: wardSelect,
+      });
+
+      if (!primaryWard) throw ApiError.notFound('Ward', primaryWardId);
+
+      const secondaryWard =
+        secondaryWardId && secondaryWardId !== primaryWardId
+          ? await prisma.ward.findUnique({
+              where: { id: secondaryWardId },
+              select: wardSelect,
+            })
+          : null;
 
       await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         const enrollmentPromises = [];
@@ -119,44 +102,46 @@ class GroupMembershipService {
           )
         );
 
-        // Secondary Ward Group
-        enrollmentPromises.push(
-          this.ensureSystemGroupAndEnroll(
-            tx,
-            userId,
-            secondaryWard.id,
-            LocationScope.WARD,
-            `${secondaryWard.name} Community`
-          )
-        );
-
-        // Secondary Constituency Group (if different from primary)
-        if (primaryWard.constituency.id !== secondaryWard.constituency.id) {
+        // Secondary Ward Group (only if different from primary)
+        if (secondaryWard) {
           enrollmentPromises.push(
             this.ensureSystemGroupAndEnroll(
               tx,
               userId,
-              secondaryWard.constituency.id,
-              LocationScope.CONSTITUENCY,
-              `${secondaryWard.constituency.name} Community`
+              secondaryWard.id,
+              LocationScope.WARD,
+              `${secondaryWard.name} Community`
             )
           );
-        }
 
-        // Secondary County Group (if different from primary)
-        if (
-          primaryWard.constituency.county.id !==
-          secondaryWard.constituency.county.id
-        ) {
-          enrollmentPromises.push(
-            this.ensureSystemGroupAndEnroll(
-              tx,
-              userId,
-              secondaryWard.constituency.county.id,
-              LocationScope.COUNTY,
-              `${secondaryWard.constituency.county.name} Community`
-            )
-          );
+          // Secondary Constituency Group (if different from primary)
+          if (primaryWard.constituency.id !== secondaryWard.constituency.id) {
+            enrollmentPromises.push(
+              this.ensureSystemGroupAndEnroll(
+                tx,
+                userId,
+                secondaryWard.constituency.id,
+                LocationScope.CONSTITUENCY,
+                `${secondaryWard.constituency.name} Community`
+              )
+            );
+          }
+
+          // Secondary County Group (if different from primary)
+          if (
+            primaryWard.constituency.county.id !==
+            secondaryWard.constituency.county.id
+          ) {
+            enrollmentPromises.push(
+              this.ensureSystemGroupAndEnroll(
+                tx,
+                userId,
+                secondaryWard.constituency.county.id,
+                LocationScope.COUNTY,
+                `${secondaryWard.constituency.county.name} Community`
+              )
+            );
+          }
         }
 
         // National Group (all users)
