@@ -1,6 +1,6 @@
 # Integration (Baraza) API Documentation
 
-> **Module status:** `partial` — full Baraza integration; no unit tests yet.
+> **Module status:** `tested` — 30 green tests across 3 files (service unit + reward jobs + route integration).
 > Base URL: `http://localhost:4000/api/v1/integration`
 
 ---
@@ -17,14 +17,23 @@ Baraza integration connects community groups to messaging platforms (Telegram, W
 
 | Platform | Integration method | Command |
 |---|---|---|
-| Telegram | Bot webhook | `/present` to record attendance |
-| Discord | Bot webhook | `/present` to record attendance |
+| Telegram | Bot webhook | `/present`, `/schedule`, `/open`, `/close`, `/verify` |
+| Discord | Bot webhook | Slash commands (placeholder) |
 | WhatsApp | Inbound webhook | message pattern matching |
 
-**Environment variables (worker service only, except Telegram webhook validation):**
+**Environment variables:**
 - `TELEGRAM_BOT_TOKEN` — set on **both** `web` (webhook validation) and `worker` (sending messages)
+- `TELEGRAM_WEBHOOK_SECRET` — set on both `web` and `worker`
 - `DISCORD_BOT_TOKEN` — `worker` only
 - WhatsApp uses inbound webhook pattern — no bot token required
+
+---
+
+## Auth Model for Admin Endpoints
+
+`POST /baraza-groups`, `POST /baraza-groups/:id/attendance`, `POST /baraza-groups/:id/deactivate`, and session management endpoints require **WARD_ADMIN or SUPER_ADMIN** role. Location admins (WARD_ADMIN) have blanket access over all groups in their area — they do **not** need to be a LEADER of the underlying community group.
+
+Non-admin users who are group LEADERs may also manage barazas for their own groups (checked in the controller after the route-level role gate).
 
 ---
 
@@ -33,13 +42,12 @@ Baraza integration connects community groups to messaging platforms (Telegram, W
 ### Webhooks (no auth — called by platform servers)
 
 #### `POST /integration/telegram/webhook`
-Receive Telegram bot events. Validates webhook signature using `TELEGRAM_WEBHOOK_SECRET`.
+Receive Telegram bot events. Validates `X-Telegram-Bot-Api-Secret-Token` header against `TELEGRAM_WEBHOOK_SECRET`.
+
+Handles commands: `/present` (attendance), `/schedule YYYY-MM-DD HH:MM` (schedule next session), `/open` (open session for check-in), `/close` (close session), `/verify <code>` (link Telegram account to platform account).
 
 #### `POST /integration/discord/webhook`
-Receive Discord bot events.
-
-#### `POST /integration/whatsapp/webhook`
-Receive WhatsApp inbound messages.
+Receive Discord interaction events. Validates Ed25519 signature using `DISCORD_PUBLIC_KEY`. Responds to ping (type 1). Slash command handling is a placeholder.
 
 ---
 
@@ -49,21 +57,21 @@ Receive WhatsApp inbound messages.
 
 **Auth:** Bearer token (EMAIL_VERIFIED)
 
-List all Baraza groups available to the authenticated user. Returns ALL active groups regardless of messaging platform (no platform filter — new users see everything).
+List all active Baraza groups for the authenticated user's community groups. Returns groups regardless of whether the user has a linked messaging profile — supports discovery so users can follow invite links before linking their platform account.
 
 **Response `200`:**
 ```json
 {
   "success": true,
-  "groups": [
+  "data": [
     {
       "id": "uuid",
-      "name": "Lang'ata Ward Baraza",
+      "groupId": "uuid",
       "platform": "TELEGRAM",
+      "name": "Lang'ata Ward Baraza",
       "inviteLink": "https://t.me/+abc123",
-      "communityGroupId": "uuid",
-      "attendanceCount": 42,
-      "lastSession": "2026-05-08T18:00:00.000Z"
+      "isActive": true,
+      "createdAt": "2026-05-01T10:00:00.000Z"
     }
   ]
 }
@@ -75,7 +83,7 @@ List all Baraza groups available to the authenticated user. Returns ALL active g
 
 **Auth:** Bearer token (WARD_ADMIN or SUPER_ADMIN role)
 
-Admin endpoint. Returns all Baraza groups with attendance count. Used by the admin `BarazaManagement` tab.
+Admin endpoint. Returns all Baraza groups with attendance count. WARD_ADMIN sees groups for groups they manage (LEADER role); SUPER_ADMIN sees all.
 
 ---
 
@@ -83,20 +91,34 @@ Admin endpoint. Returns all Baraza groups with attendance count. Used by the adm
 
 **Auth:** Bearer token (WARD_ADMIN or SUPER_ADMIN role)
 
-Register a new Baraza group.
+Register a new Baraza group. WARD_ADMIN can register for any group; non-admin group LEADERs can only register for groups they lead.
+
+If `inviteLink` is not provided for a Telegram group, the bot automatically generates one via `createChatInviteLink` (Telegram Bot API).
 
 **Body:**
-```json
-{
-  "name": "Westlands Ward Baraza",
-  "platform": "TELEGRAM",
-  "communityGroupId": "uuid",
-  "telegramChatId": "-1001234567890",
-  "inviteLink": "https://t.me/+xyz"
-}
-```
+| Field | Type | Required |
+|---|---|---|
+| `groupId` | string (UUID) | Yes |
+| `platform` | `TELEGRAM` \| `WHATSAPP` \| `DISCORD` | Yes |
+| `externalId` | string (1–200 chars) | Yes — the Telegram chat ID or equivalent |
+| `name` | string (1–200 chars) | Yes |
+| `inviteLink` | string (URL) | No — auto-generated for Telegram |
+| `metadata` | object | No |
 
-If `inviteLink` is not provided, the bot automatically generates one via `createChatInviteLink` (Telegram Bot API).
+**Responses:**
+- `201 Created` — BarazaGroup object
+- `400 Bad Request` — validation failure
+- `403 Forbidden` — non-admin caller is not a LEADER of the target group
+
+---
+
+#### `POST /integration/baraza-groups/:id/deactivate`
+
+**Auth:** Bearer token (WARD_ADMIN or SUPER_ADMIN role)
+
+Deactivate a Baraza group. Sets `isActive: false`. WARD_ADMIN can deactivate any group; non-admin LEADERs can only deactivate groups they lead.
+
+**Responses:** `200 OK` · `403 Forbidden` · `404 Not Found`
 
 ---
 
@@ -104,23 +126,9 @@ If `inviteLink` is not provided, the bot automatically generates one via `create
 
 **Auth:** Bearer token (WARD_ADMIN or SUPER_ADMIN role)
 
-Refresh the Telegram invite link for a Baraza group. Generates a new one via Bot API.
+Refresh the Telegram invite link for a Baraza group. Generates a new link via `createChatInviteLink` Bot API.
 
----
-
-#### `POST /integration/baraza-groups/:id/sessions`
-
-**Auth:** Bearer token (WARD_ADMIN role)
-
-Record a Baraza session manually.
-
----
-
-#### `GET /integration/baraza-groups/:id/sessions`
-
-**Auth:** Bearer token (EMAIL_VERIFIED)
-
-List sessions for a Baraza group.
+**Responses:** `200 OK` · `400 Bad Request` (bot not admin of group) · `404 Not Found`
 
 ---
 
@@ -128,29 +136,92 @@ List sessions for a Baraza group.
 
 #### `POST /integration/baraza-groups/:id/attendance`
 
-**Auth:** Bearer token (EMAIL_VERIFIED)
+**Auth:** Bearer token (WARD_ADMIN or SUPER_ADMIN role)
 
-Manually record attendance (fallback if bot command fails).
+Manually record attendance for a session (fallback if bot command fails or for WhatsApp/Discord).
 
-**Body:** `{ "sessionId": "uuid" }`
+**Body:**
+| Field | Type | Required |
+|---|---|---|
+| `sessionDate` | string (YYYY-MM-DD) | Yes |
+| `attendeeExternalIds` | string[] (1–500 items) | Yes — platform user IDs |
+| `facilitatorExternalId` | string | No |
+| `reportedBy` | string (max 100) | No |
+
+**Response `200`:** array of `AttendanceRecord` objects created or updated.
 
 ---
 
-## `/present` Bot Flow
+### Sessions
 
-When a user types `/present` in a Telegram/Discord Baraza group:
-1. Bot receives the command via webhook
-2. `baraza-bot.service.ts` matches the user's Telegram/Discord handle to their platform account
-3. A `BarazaAttendance` record is created
-4. A BullMQ job (`BARAZA_ATTENDANCE_REWARD`) is enqueued
-5. The worker job awards 15 PR to the user
+#### `GET /integration/baraza-groups/:id/sessions`
 
-The bot sends a confirmation message: "Attendance recorded ✓ +15 PR awarded".
+**Auth:** Bearer token (EMAIL_VERIFIED)
+
+List sessions for a Baraza group. Returns up to 20 (configurable via `?limit=`).
+
+---
+
+#### `POST /integration/baraza-groups/:id/sessions/schedule`
+
+**Auth:** Bearer token (WARD_ADMIN or SUPER_ADMIN role)
+
+Schedule the next Baraza session.
+
+**Body:** `{ "scheduledAt": "<ISO datetime>" }` — must be a future timestamp.
+
+**Response:** `201 Created` — session object.
+
+---
+
+#### `POST /integration/baraza-groups/:id/sessions/open`
+
+**Auth:** Bearer token (WARD_ADMIN or SUPER_ADMIN role)
+
+Open the next scheduled session for member check-in. Session must be within 4 hours of its scheduled time.
+
+---
+
+#### `POST /integration/baraza-groups/:id/sessions/close`
+
+**Auth:** Bearer token (WARD_ADMIN or SUPER_ADMIN role)
+
+Close the currently open session. Returns final attendance count.
+
+---
+
+## Telegram Bot Commands
+
+| Command | Who | What |
+|---|---|---|
+| `/present` | Any member | Marks attendance for the current open session. Awards 15 PR via BullMQ job. |
+| `/schedule YYYY-MM-DD HH:MM` | Group LEADER | Schedules next session (EAT timezone). |
+| `/open` | Group LEADER | Opens the scheduled session for `/present` check-ins. |
+| `/close` | Group LEADER | Closes the open session. Reports attendance count to the group chat. |
+| `/verify <code>` | Any Telegram user | Links Telegram account to platform account using a 6-digit code from the app. |
+
+---
+
+## BullMQ Jobs
+
+| Job | Trigger | Effect |
+|---|---|---|
+| `BARAZA_ATTENDANCE_REWARD` | `/present` command or manual attendance POST | Awards 15 PR to the user. Idempotent (`prAwarded` flag). |
+| `BARAZA_SEND_INVITE` | New Baraza group registered | Fans out invite jobs to all group members with matching platform profiles. |
+| `BARAZA_SESSION_REMINDER` | Session scheduled | Notifies group members 1 hour before scheduled session time. |
 
 ---
 
 ## Frontend
 
 - `BarazaGroupsCard` on the dashboard — shows "My Barazas" with invite links
-- Admin `BarazaManagement` component — Barazas tab in admin dashboard
+- Admin `BarazaManagement` component + Sessions panel — Barazas tab in admin dashboard
 - `integrationApi.getBarazaGroups()` and `integrationApi.getAllBarazaGroups()` in `frontend/lib/api.ts`
+
+---
+
+## Notes
+
+- `getBarazaGroupsForUser` returns ALL active baraza groups for the user's community groups — no platform filter. Users without a messaging profile can still see groups and follow invite links. This is intentional for discovery.
+- `/verify` links a Telegram user ID to a `UserMessagingProfile` using a one-time 6-digit code (stored in `PhoneVerification` table, reusing the phone verification flow).
+- Session management via HTTP API mirrors the bot command flow — same service methods, different auth path.
