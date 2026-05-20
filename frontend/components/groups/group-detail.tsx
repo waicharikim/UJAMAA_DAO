@@ -11,6 +11,7 @@ import { Globe, MapPin, Landmark, Home, Users, CalendarDays, ChevronRight, Setti
 import { formatDate } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { WardDeclarationScreen } from "@/components/groups/ward-declaration-screen"
+import { GroupTreasuryCard } from "@/components/groups/group-treasury-card"
 
 // ── Level display config ──────────────────────────────────────
 
@@ -507,6 +508,9 @@ export function GroupDetail({ groupId }: GroupDetailProps) {
         onContinue={() => setShowDeclaration(false)}
       />
     )}
+
+    {/* Treasury — visible to all members; returns null if group has no treasury yet */}
+    {isMember && <GroupTreasuryCard groupId={groupId} />}
 
     {/* Leader admin panel — only visible to group leaders */}
     {group.userRole === "LEADER" && !isSystemGroup && (
