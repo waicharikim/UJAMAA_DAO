@@ -12,6 +12,7 @@
 import { prisma } from '../../../core/database/client.js';
 import { logger } from '../../../core/logger/logger.js';
 import { AuditAction, AuditSearchDto } from '../types.js';
+import { SystemRoles } from '../../../core/rbac/roles.js';
 
 class AuditService {
   /**
@@ -41,17 +42,49 @@ class AuditService {
   }
 
   /**
-   * Search audit logs — scoped admin access
+   * Search audit logs — scoped admin access.
+   * SUPER_ADMIN sees all. Location admins see only users in their geographic scope
+   * (derived from the admin's own primaryWardId → constituency → county).
    */
-  async searchLogs(adminId: string, dto: AuditSearchDto) {
-    // In future: scope check (admin can only see logs in their scope)
-    // For now: super_admin or ward_admin+
+  async searchLogs(
+    adminId: string,
+    dto: AuditSearchDto,
+    callerRoles: string[] = [],
+    callerPrimaryWardId?: string | null
+  ) {
+    const isSuperAdmin =
+      callerRoles.includes(SystemRoles.SUPER_ADMIN) ||
+      callerRoles.includes(SystemRoles.COMPLIANCE_OFFICER);
 
     const limit = parseInt(String(dto.limit || 50), 10);
     const page = parseInt(String(dto.page || 1), 10);
     const skip = (page - 1) * limit;
 
     const where: any = {};
+
+    // Geographic scope filter — non-super admins only see their area
+    if (!isSuperAdmin && callerPrimaryWardId) {
+      const isCountyAdmin = callerRoles.includes(SystemRoles.COUNTY_ADMIN);
+      const isConstAdmin = callerRoles.includes(SystemRoles.CONSTITUENCY_ADMIN);
+      const isWardAdmin = callerRoles.includes(SystemRoles.WARD_ADMIN);
+
+      const adminWard = await prisma.ward.findUnique({
+        where: { id: callerPrimaryWardId },
+        select: { id: true, constituencyId: true, countyId: true },
+      });
+
+      if (adminWard) {
+        if (isWardAdmin) {
+          where.user = { primaryWardId: adminWard.id };
+        } else if (isConstAdmin) {
+          where.user = {
+            primaryWard: { constituencyId: adminWard.constituencyId },
+          };
+        } else if (isCountyAdmin) {
+          where.user = { primaryWard: { countyId: adminWard.countyId } };
+        }
+      }
+    }
 
     if (dto.userId) where.userId = dto.userId;
     if (dto.action) where.action = dto.action;

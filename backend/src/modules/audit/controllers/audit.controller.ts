@@ -13,8 +13,15 @@ import { auditService } from '../services/audit.service.js';
 export class AuditController {
   static async searchLogs(req: AuthRequest, res: Response) {
     const adminId = req.user!.userId;
+    const callerRoles = req.user!.roles ?? [];
+    const primaryWardId = req.user!.primaryWardId;
     const dto = req.query as any;
-    const result = await auditService.searchLogs(adminId, dto);
+    const result = await auditService.searchLogs(
+      adminId,
+      dto,
+      callerRoles,
+      primaryWardId
+    );
     sendSuccess(res, result, 'Audit logs retrieved');
   }
 }

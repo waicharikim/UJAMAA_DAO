@@ -18,13 +18,17 @@ export class ReputationController {
    */
   static async getMyReputation(req: AuthRequest, res: Response) {
     const userId = req.user!.userId;
-    const [total, breakdown] = await Promise.all([
+    const primaryWardId = req.user!.primaryWardId;
+    const [total, breakdown, hierarchy] = await Promise.all([
       globalImpactPointService.getTotal(userId),
       locationImpactService.getUserImpactBreakdown(userId),
+      primaryWardId
+        ? locationImpactService.getPrimaryHierarchyImpact(userId, primaryWardId)
+        : Promise.resolve(null),
     ]);
     sendSuccess(
       res,
-      { globalImpactPoints: total, ...breakdown },
+      { globalImpactPoints: total, ...breakdown, hierarchy },
       'Reputation profile'
     );
   }

@@ -1915,12 +1915,19 @@ export interface ImpactPointLogDto {
   createdAt: string
 }
 
+export interface ReputationHierarchyDto {
+  ward: { id: string; name: string; points: number }
+  constituency: { id: string; name: string; points: number }
+  county: { id: string; name: string; points: number }
+}
+
 export const reputationApi = {
   getMyReputation: () =>
     apiFetch<{
       globalImpactPoints: number
       breakdown: WardReputationBreakdownDto[]
       totals: { locations: number; totalPoints: number }
+      hierarchy: ReputationHierarchyDto | null
     }>("/reputation/me"),
 
   getMyHistory: (params?: { limit?: number; page?: number }) => {

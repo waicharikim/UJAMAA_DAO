@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Award, Coins, MapPin, History, ShieldCheck, LayoutGrid, Settings } from "lucide-react"
-import { reputationApi, type WardReputationBreakdownDto, type ImpactPointLogDto } from "@/lib/api"
+import { reputationApi, type WardReputationBreakdownDto, type ImpactPointLogDto, type ReputationHierarchyDto } from "@/lib/api"
 import { VerificationCard } from "@/components/profile/verification-card"
 import { DuesPaymentCard } from "@/components/payments/dues-payment-card"
 import { UtWithdrawalCard } from "@/components/payments/ut-withdrawal-card"
@@ -32,6 +32,41 @@ const REASON_LABELS: Record<string, string> = {
   MILESTONE_ACHIEVED:         "Milestone achieved",
   MANUAL_ADJUSTMENT:          "Manual adjustment",
   TEMPORARY_CHECKIN:          "Location check-in",
+}
+
+function HierarchyBar({ label, points, max, color }: { label: string; points: number; max: number; color: string }) {
+  const pct = max > 0 ? Math.round((points / max) * 100) : 0
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-xs">
+        <span className="font-medium text-[#0E0B08]/60">{label}</span>
+        <span className="font-bold" style={{ color }}>{points.toLocaleString()} IP</span>
+      </div>
+      <div className="h-1.5 rounded-full w-full" style={{ background: "rgba(14,11,8,0.07)" }}>
+        <div className="h-1.5 rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: color }} />
+      </div>
+    </div>
+  )
+}
+
+function HierarchyCard({ hierarchy, global: globalPts }: { hierarchy: ReputationHierarchyDto; global: number }) {
+  const max = globalPts || 1
+  return (
+    <Card className="border-0 shadow-card">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Award className="h-4 w-4" style={{ color: "#C9922A" }} />
+          Impact by Level
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <HierarchyBar label={`${hierarchy.ward.name} (Ward)`} points={hierarchy.ward.points} max={max} color="#1A6B3C" />
+        <HierarchyBar label={`${hierarchy.constituency.name} (Constituency)`} points={hierarchy.constituency.points} max={max} color="#7A4F1E" />
+        <HierarchyBar label={`${hierarchy.county.name} (County)`} points={hierarchy.county.points} max={max} color="#B03A1E" />
+        <HierarchyBar label="Global" points={globalPts} max={max} color="#C9922A" />
+      </CardContent>
+    </Card>
+  )
 }
 
 function WardBreakdownRow({ item }: { item: WardReputationBreakdownDto }) {
@@ -152,6 +187,9 @@ export default function ProfilePage() {
 
         {/* ── Activity: rep + history ──────────────────────── */}
         <TabsContent value="activity" className="mt-4 space-y-4">
+          {reputation?.hierarchy && (
+            <HierarchyCard hierarchy={reputation.hierarchy} global={reputation.globalImpactPoints} />
+          )}
           <Card className="border-0 shadow-card">
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
