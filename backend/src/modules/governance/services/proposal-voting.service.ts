@@ -190,7 +190,7 @@ class ProposalVotingService {
     await this.anchorResultOnChain(proposalId, newStatus);
 
     if (proposal.creatorId)
-      this.notifyTallyOutcome({
+      await this.notifyTallyOutcome({
         creatorId: proposal.creatorId,
         proposalId,
         title: proposal.title,
@@ -354,9 +354,9 @@ class ProposalVotingService {
     }
   }
 
-  private notifyTallyOutcome(ctx: TallyOutcomeContext): void {
+  private async notifyTallyOutcome(ctx: TallyOutcomeContext): Promise<void> {
     const isPassed = ctx.newStatus === ProposalStatus.APPROVED;
-    notificationService
+    await notificationService
       .send({
         userId: ctx.creatorId,
         type: isPassed

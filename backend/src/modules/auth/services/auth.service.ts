@@ -440,10 +440,9 @@ class AuthService {
         'Email verified successfully'
       );
 
-      // Emit event - Other modules will handle their responsibilities
-      // Economy module: Awards PR
-      // Community module: Enrolls in system groups
-      eventBus.publish('user.email.verified', {
+      // Emit event — await so PR award and group enrollment complete before
+      // the transaction is considered done (prevents deadlock with beforeEach TRUNCATE).
+      await eventBus.emit('user.email.verified', {
         userId: user.id,
         primaryWardId: user.primaryWardId,
         secondaryWardId: user.secondaryWardId,

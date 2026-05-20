@@ -108,14 +108,28 @@ beforeEach(async () => {
     .map(({ tablename }) => `"public"."${tablename}"`)
     .join(', ');
 
-  try {
-    await prisma.$executeRawUnsafe(`TRUNCATE TABLE ${tables} CASCADE;`);
-    console.log(`🧹 Truncated ${tablenames.length} tables before test`);
-  } catch (error) {
-    console.error('❌ Failed to truncate tables:', error);
-    throw error;
+  // Retry on deadlock (40P01): fire-and-forget writes from service methods
+  // (e.g. participationRightsService.award().catch(() => {})) can still be in
+  // flight when the next test's TRUNCATE starts, causing a lock conflict.
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    try {
+      await prisma.$executeRawUnsafe(`TRUNCATE TABLE ${tables} CASCADE;`);
+      console.log(`🧹 Truncated ${tablenames.length} tables before test`);
+      return;
+    } catch (error: unknown) {
+      const msg = String((error as { message?: string })?.message ?? '');
+      const isDeadlock =
+        msg.includes('deadlock') ||
+        (error as { code?: string })?.code === '40P01';
+      if (isDeadlock && attempt < 5) {
+        await new Promise((r) => setTimeout(r, 150 * attempt));
+        continue;
+      }
+      console.error('❌ Failed to truncate tables:', error);
+      throw error;
+    }
   }
-});
+}, 30000);
 
 // ===================================================================
 // 6. TEARDOWN — Graceful shutdown

@@ -375,7 +375,7 @@ class WalletService {
         { operationType: 'AUTH', userId: user.id },
         'User onboarded via wallet'
       );
-      eventBus.publish('user.onboarding.complete', { userId: user.id });
+      await eventBus.emit('user.onboarding.complete', { userId: user.id });
     }
 
     // Create session using sessionService

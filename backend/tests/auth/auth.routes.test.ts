@@ -51,6 +51,7 @@ import {
   createTestUser,
   TEST_CONST_ID,
   TEST_COUNTY_ID,
+  TEST_WARD_ID,
 } from './helpers.js';
 import { prisma } from '../../src/core/database/client.js';
 
@@ -70,6 +71,29 @@ describe('Auth Routes', () => {
     // Ensure async service initialization completes (resolves quickly in test env)
     await servicesReady.catch(() => {
       /* Redis init failure is non-fatal in tests */
+    });
+  });
+
+  beforeEach(async () => {
+    // Auth middleware (commit 86f1794) now queries prisma.user to verify ACTIVE status.
+    // Seed location hierarchy + create a real DB row for FAKE_USER_ID so all
+    // token-based tests pass the middleware's account check.
+    await seedLocation();
+    await prisma.user.upsert({
+      where: { id: FAKE_USER_ID },
+      update: {},
+      create: {
+        id: FAKE_USER_ID,
+        email: 'fake-route-test@test.com',
+        name: 'Fake User',
+        verificationLevel: 'FULL_VERIFIED',
+        emailVerified: true,
+        phoneVerified: true,
+        communityVerified: true,
+        locationVerified: false,
+        primaryWardId: TEST_WARD_ID,
+        secondaryWardId: TEST_WARD_ID,
+      },
     });
   });
 

@@ -879,7 +879,7 @@ class UserService {
 
     logger.info({ userId }, 'Community verification completed');
 
-    eventBus.publish('user.verification.completed', {
+    await eventBus.emit('user.verification.completed', {
       userId,
       level: 'COMMUNITY_VERIFIED',
     });
@@ -924,7 +924,7 @@ class UserService {
 
     logger.info({ userId }, 'User promoted to FULL_VERIFIED');
 
-    eventBus.publish('user.verification.completed', {
+    await eventBus.emit('user.verification.completed', {
       userId,
       level: 'FULL_VERIFIED',
     });

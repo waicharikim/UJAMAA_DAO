@@ -22,8 +22,8 @@ export class GlobalImpactPointService {
   ) {
     if (amount <= 0) return;
 
-    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const log = await tx.impactPointLog.create({
+    const log = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const entry = await tx.impactPointLog.create({
         data: {
           userId,
           amount,
@@ -43,18 +43,20 @@ export class GlobalImpactPointService {
         '[IP] Global Impact Points awarded'
       );
 
-      await auditService
-        .log(userId, AuditAction.IP_AWARDED, 'User', userId, {
-          amount,
-          reason,
-          ...metadata,
-        })
-        .catch(() => {
-          /* non-critical */
-        });
-
-      return log;
+      return entry;
     });
+
+    await auditService
+      .log(userId, AuditAction.IP_AWARDED, 'User', userId, {
+        amount,
+        reason,
+        ...metadata,
+      })
+      .catch(() => {
+        /* non-critical */
+      });
+
+    return log;
   }
 
   async getTotal(userId: string): Promise<number> {
