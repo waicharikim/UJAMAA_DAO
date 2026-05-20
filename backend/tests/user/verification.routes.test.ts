@@ -371,17 +371,17 @@ describe('POST /api/v1/users/verify-community/vouch', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('POST /api/v1/users/verify-community/payment', () => {
-  it('returns 200 and completes verification via payment on VOUCHING request', async () => {
+  it('returns 200 and completes verification via payment on PAYMENT_PENDING request', async () => {
     const user = await createTestUser('pay-verify@example.com', 'PHONE_VERIFIED');
     await prisma.user.update({ where: { id: user.id }, data: { phoneVerified: true } });
     const token = makeUserToken(user.id, 'PHONE_VERIFIED');
 
-    // Create a VOUCHING request (payment route now accepts VOUCHING too)
+    // processVerificationPayment only accepts PAYMENT_PENDING (commit 681c7cb)
     await prisma.verificationRequest.create({
       data: {
         userId: user.id,
         type: 'COMMUNITY',
-        status: 'VOUCHING',
+        status: 'PAYMENT_PENDING',
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
