@@ -147,7 +147,7 @@ describe('BarazaBotService.getBarazaGroupsForUser', () => {
     expect(results[0].id).toBe(baraza.id);
   });
 
-  it('returns empty when user has no messaging profiles', async () => {
+  it('returns groups even when user has no messaging profile (discovery mode)', async () => {
     const admin = await seedUser(`bgget-noprofile-admin-${Date.now()}@test.com`);
     const user = await seedUser(`bgget-noprofile-${Date.now()}@test.com`);
     const group = await seedGroup(INT_WARD_ID);
@@ -157,10 +157,10 @@ describe('BarazaBotService.getBarazaGroupsForUser', () => {
     });
 
     await seedBarazaGroup(group.id, 'TELEGRAM', admin.id);
-    // No messaging profile seeded
+    // No messaging profile seeded — baraza still visible for discovery
 
     const results = await barazaBotService.getBarazaGroupsForUser(user.id);
-    expect(results).toHaveLength(0);
+    expect(results).toHaveLength(1);
   });
 });
 

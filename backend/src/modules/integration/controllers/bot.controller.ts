@@ -138,7 +138,10 @@ async function requireHttpBarazaAdmin(
     where: { id: barazaGroupId },
   });
   if (!barazaGroup) throw ApiError.notFound('Baraza group not found');
-  if (!user.roles.includes(SystemRoles.SUPER_ADMIN)) {
+  const isLocationAdmin =
+    user.roles.includes(SystemRoles.SUPER_ADMIN) ||
+    user.roles.includes(SystemRoles.WARD_ADMIN);
+  if (!isLocationAdmin) {
     const managedIds = await getManagedGroupIds(user.userId);
     if (!managedIds.includes(barazaGroup.groupId)) {
       throw ApiError.forbidden(
@@ -650,8 +653,12 @@ export async function registerBarazaGroup(
     const user = (req as any).user;
     const dto = req.body as RegisterBarazaGroupDto;
 
-    // Non-super-admins may only register barazas for groups they manage
-    if (!user.roles.includes(SystemRoles.SUPER_ADMIN)) {
+    // Location admins (WARD_ADMIN+) can register barazas for any group;
+    // non-admins must be LEADER of the group.
+    const isLocationAdmin =
+      user.roles.includes(SystemRoles.SUPER_ADMIN) ||
+      user.roles.includes(SystemRoles.WARD_ADMIN);
+    if (!isLocationAdmin) {
       const managedIds = await getManagedGroupIds(user.userId);
       if (!managedIds.includes(dto.groupId)) {
         throw ApiError.forbidden(
