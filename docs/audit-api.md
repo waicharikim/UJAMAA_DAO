@@ -19,18 +19,27 @@ Two related endpoints:
 
 ### `GET /audit/search`
 
-**Auth:** Bearer token + admin or compliance role (SUPER_ADMIN, COMPLIANCE_OFFICER)
+**Auth:** Bearer token + admin or compliance role (`SUPER_ADMIN`, `COMPLIANCE_OFFICER`, `WARD_ADMIN`, `CONSTITUENCY_ADMIN`, `COUNTY_ADMIN`)
 
-Search the audit log.
+Search the audit log. Results are **automatically scoped to the caller's geographic area** based on their role and `primaryWardId`:
+
+| Caller role | Sees logs for users whose… |
+|---|---|
+| `SUPER_ADMIN` / `COMPLIANCE_OFFICER` | All users (no filter) |
+| `COUNTY_ADMIN` | `primaryWard.countyId` matches caller's county |
+| `CONSTITUENCY_ADMIN` | `primaryWard.constituencyId` matches caller's constituency |
+| `WARD_ADMIN` | `primaryWardId` matches caller's ward exactly |
+
+Geographic scope is derived from the caller's own `primaryWardId`. A WARD_ADMIN can only see audit events for users in their ward. The additional query params below further filter within that scope.
 
 **Query params:**
 | Param | Type | Notes |
 |---|---|---|
 | `action` | string | Filter by event type (e.g. `PR_AWARDED`) |
-| `userId` | string | Filter by actor |
+| `userId` | string | Filter by actor (must be within caller's geographic scope) |
 | `entityId` | string | Filter by affected entity |
-| `startDate` | ISO date | Date range start |
-| `endDate` | ISO date | Date range end |
+| `fromDate` | ISO date | Date range start |
+| `toDate` | ISO date | Date range end |
 | `limit` | number | Default 50 |
 | `page` | number | Default 1 |
 

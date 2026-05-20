@@ -299,7 +299,10 @@ Mark a conflict case as resolved. Any authenticated user can act as mediator.
 
 ## Notes
 
-- System groups are auto-created from seed data. Users are enrolled via the `registerCommunityListeners()` event — triggered on `user.email.verified`.
+- System groups are auto-created on demand. Users are enrolled via the `registerCommunityListeners()` event — triggered on `user.email.verified`. Both `primaryWardId` and `secondaryWardId` are required at registration; enrollment creates up to 7 groups (primary ward + constituency + county, secondary ward + any distinct constituency/county, national).
+- **System group names** follow the pattern `${locationName} Community` (e.g. "Kayole Community", "Embakasi East Community"). The frontend displays these with the geographic level appended: "Kayole Ward Community", "Embakasi East Constituency Community".
+- **Enrollment is sequential, not parallel.** `enrollInSystemGroups` uses sequential `await` calls inside a single `$transaction`. Using `Promise.all` for concurrent upserts on shared constituency/county groups deadlocks inside the transaction due to Postgres row locking. See DECISIONS.md ADR-041.
+- `secondaryWardId` is optional in `enrollInSystemGroups()` only for the residence-change path (`updateResidenceGroups`). Registration always requires both ward IDs.
 - Group roles: `LEADER`, `MEMBER`, `TREASURER`, `SECRETARY`, `AUDITOR`, `FACILITATOR`, `MENTOR`, `MODERATOR`.
 - `canLeave: false` is set for system group memberships.
 - `memberCount` on the `Group` model is tracked and updated on join/leave.

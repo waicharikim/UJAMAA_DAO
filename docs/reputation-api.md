@@ -1,6 +1,6 @@
 # Reputation API Documentation
 
-> **Module status:** `tested` — 23 green tests (12 service unit + 11 route integration).
+> **Module status:** `tested` — 27 green tests (service unit + route integration).
 > Base URL: `http://localhost:4000/api/v1/reputation`
 
 ---
@@ -59,22 +59,37 @@ Get the platform leaderboard.
 
 ### `GET /reputation/me`
 
-Get the authenticated user's reputation summary.
+Get the authenticated user's full reputation profile including per-ward breakdown and geographic hierarchy totals.
 
 **Response `200`:**
 ```json
 {
   "success": true,
-  "reputation": {
-    "globalImpactPoints": 120,
-    "wardImpactPoints": 85,
-    "participationRights": 50,
-    "verificationLevel": "COMMUNITY_VERIFIED",
-    "wardName": "Lang'ata",
-    "rank": { "global": 34, "ward": 5 }
+  "data": {
+    "globalImpactPoints": 175,
+    "breakdown": [
+      {
+        "wardId": "uuid",
+        "ward": "Kayole",
+        "constituency": "Embakasi East",
+        "county": "Nairobi",
+        "points": 100,
+        "tier": "BRONZE"
+      }
+    ],
+    "totals": { "locations": 2, "totalPoints": 175 },
+    "hierarchy": {
+      "ward":         { "id": "uuid", "name": "Kayole",         "points": 100 },
+      "constituency": { "id": "uuid", "name": "Embakasi East",  "points": 175 },
+      "county":       { "id": "uuid", "name": "Nairobi",        "points": 175 }
+    }
   }
 }
 ```
+
+`hierarchy` is derived from the user's `primaryWardId` and aggregates IP across all wards the user has contributed to that share the same constituency/county. Returns `null` if the user has no primary ward set.
+
+IP tiers by ward: `NONE` (0) · `BRONZE` (1–99) · `SILVER` (100–499) · `GOLD` (500–1999) · `PLATINUM` (2000+).
 
 ---
 
@@ -114,5 +129,5 @@ Get a public user's reputation profile. Respects privacy settings — some field
 ## Frontend
 
 - `/leaderboard` page: metric tabs (combined/IP/PR), scope tabs (global/county/ward), top-3 podium, ranked list with "You" badge.
-- Profile page Activity tab: Ward Reputation card + IP History card wired to real API.
-- `leaderboardApi` and `reputationApi` namespaces in `frontend/lib/api.ts`.
+- Profile page Activity tab: `HierarchyCard` (bar-chart across ward/constituency/county/global) + Ward Reputation card + IP History card, all wired to real API.
+- `leaderboardApi`, `reputationApi`, and `ReputationHierarchyDto` in `frontend/lib/api.ts`.
