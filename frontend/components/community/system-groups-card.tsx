@@ -29,10 +29,20 @@ const LEVEL_CONFIG: Record<
 
 // ── Sub-components ────────────────────────────────────────────
 
+function formatGroupDisplayName(g: GroupMembershipDto): string {
+  const level = g.systemType ?? "WARD"
+  if (level === "NATIONAL") return g.groupName
+  if (level === "WARD" && g.ward?.name) return `${g.ward.name} Ward Community`
+  if (level === "CONSTITUENCY" && g.constituency?.name) return `${g.constituency.name} Constituency Community`
+  if (level === "COUNTY" && g.county?.name) return `${g.county.name} County Community`
+  return g.groupName
+}
+
 function GroupRow({ g }: { g: GroupMembershipDto }) {
   const level = g.systemType ?? "WARD"
   const cfg = LEVEL_CONFIG[level] ?? LEVEL_CONFIG.WARD
   const { Icon, color, bg, label } = cfg
+  const displayName = formatGroupDisplayName(g)
 
   return (
     <Link href={`/groups/${g.groupId}`} className="block">
@@ -47,7 +57,7 @@ function GroupRow({ g }: { g: GroupMembershipDto }) {
 
         {/* Name + level */}
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-chai truncate">{g.groupName}</p>
+          <p className="text-sm font-semibold text-chai truncate">{displayName}</p>
           <p className="text-[11px]" style={{ color: "#7A6E60" }}>{label}</p>
         </div>
 

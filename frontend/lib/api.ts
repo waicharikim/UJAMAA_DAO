@@ -1467,18 +1467,35 @@ class ApiClient {
     return userApi.updateProfile(data)
   }
 
-  // Delegates to notificationsApi; maps backend isRead → frontend read field
+  // Delegates to notificationsApi; maps backend DTO → frontend Notification shape
   async getNotifications(): Promise<any[]> {
     try {
       const dtos = await notificationsApi.getNotifications()
-      return dtos.map((n) => ({
-        ...n,
-        read: n.isRead,
-        userId: "",
-        category: "system",
-        channels: [],
-        deliveryStatus: {},
-      }))
+      return dtos.map((n) => {
+        const meta = (n.metadata ?? {}) as Record<string, string>
+        let actionUrl: string | undefined
+        let actionLabel: string | undefined
+        if (n.type === "PROPOSAL" && meta.proposalId) {
+          actionUrl = `/governance/${meta.proposalId}`
+          actionLabel = "View proposal"
+        } else if (n.type === "ECONOMIC") {
+          actionUrl = "/economy"
+          actionLabel = "View economy"
+        } else if (n.type === "PROJECT" && meta.projectId) {
+          actionUrl = `/projects/${meta.projectId}`
+          actionLabel = "View project"
+        }
+        return {
+          ...n,
+          read: n.isRead,
+          userId: "",
+          category: "system",
+          channels: [],
+          deliveryStatus: {},
+          actionUrl,
+          actionLabel,
+        }
+      })
     } catch {
       return []
     }

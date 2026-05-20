@@ -35,43 +35,43 @@ const SLIDES: Slide[] = [
     icon: Zap,
     iconColor: "#C9922A",
     iconBg: "rgba(201,146,42,0.12)",
-    title: "Karibu UjamaaDAO 🌿",
-    body: "UjamaaDAO ni jukwaa la wananchi — ward kwa ward. Hapa unaweza kushirikiana, kuamua pamoja, na kukua kama jamii. Kila hatua unayochukua inakupa Participation Rights (PR).",
+    title: "Welcome to UjamaaDAO 🌿",
+    body: "UjamaaDAO is a citizen-led platform built ward by ward across Kenya. Here you collaborate, make decisions together, and grow as a community. Every contribution you make earns you Participation Rights (PR).",
   },
   {
     icon: Coins,
     iconColor: "#1E3D2F",
     iconBg: "rgba(30,61,47,0.10)",
     title: "Participation Rights (PR)",
-    body: "PR ni sarafu yako ya kiraia — haiwezi kuuzwa au kununuliwa. Unaipata kwa kuhudhuria barazas, kupiga kura, kukamilisha profile yako, na kuchangia jamii yako. Zaidi PR = nguvu zaidi katika maamuzi.",
+    body: "PR is your civic currency — it cannot be bought or sold. You earn it by attending barazas, voting on proposals, completing your profile, and contributing to your community. More PR means more voice in decisions.",
   },
   {
     icon: Smartphone,
     iconColor: "#2A6B7C",
     iconBg: "rgba(42,107,124,0.10)",
-    title: "Thibitisha namba yako",
-    body: "Hatua ya kwanza ni kuthibitisha namba yako ya simu. Tunakubaliana na SMS, WhatsApp, au Telegram. Hii inahakikisha kwamba wewe ni mtu wa kweli — si bot.",
+    title: "Verify your phone number",
+    body: "Your first step is verifying your phone number via SMS, WhatsApp, or Telegram. This confirms you are a real person — not a bot — and unlocks your community membership.",
   },
   {
     icon: Users,
     iconColor: "#1D4731",
     iconBg: "rgba(29,71,49,0.10)",
     title: "Community Verification",
-    body: "Baada ya simu, pata watu 3 wa ward yako wakukubalie. Hii ndiyo community verification — mtu kwa mtu, kama ilivyokuwa tangu zamani. Inakufungua governance na uchumi.",
+    body: "After phone verification, get 3 vouches from people in your ward. This is community verification — person to person, the way it has always been done. It unlocks governance participation and the cooperative economy.",
   },
   {
     icon: Vote,
     iconColor: "#B03A1E",
     iconBg: "rgba(176,58,30,0.10)",
-    title: "Governance ya kweli",
-    body: "Mwanachama yeyote aliyethibitishwa anaweza kupendekeza mabadiliko. Kila kura inapimwa kwa PR yako. Hakuna nguvu za fedha — nguvu za ushiriki tu.",
+    title: "Real governance, real power",
+    body: "Any verified member can submit a proposal for their ward, constituency, or county. Every vote is weighted by your PR — not your wealth. No money buys influence here, only participation.",
   },
   {
     icon: ShieldCheck,
     iconColor: "#C9922A",
     iconBg: "rgba(201,146,42,0.12)",
-    title: "Uko tayari — let's go!",
-    body: "Anza kwa kuthibitisha namba yako ya simu na kukamilisha profile yako. Ukifika COMMUNITY_VERIFIED utakuwa sehemu kamili ya jamii. Ukimaliza hapa unapata +10 PR 🎉. Heshima na Ujamaa! 🌿",
+    title: "You are ready — let's begin!",
+    body: "Start by verifying your phone and completing your profile. Once you reach Community Verified status you become a full member of your ward community. Finishing this walkthrough earns you +10 PR 🎉. Heshima na Ujamaa! 🌿",
   },
 ]
 
@@ -211,11 +211,11 @@ export function OnboardingWizard({ forceOpen, onClose }: OnboardingWizardProps) 
           >
             {isLast
               ? completeMutation.isPending
-                ? "Inaandikisha PR…"
-                : "Hebu tuanze → (+10 PR)"
+                ? "Recording your PR…"
+                : "Let's get started → (+10 PR)"
               : (
                 <span className="flex items-center justify-center gap-1">
-                  Endelea <ChevronRight className="h-4 w-4" />
+                  Continue <ChevronRight className="h-4 w-4" />
                 </span>
               )}
           </Button>
