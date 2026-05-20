@@ -67,87 +67,63 @@ class GroupMembershipService {
           : null;
 
       await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-        const enrollmentPromises = [];
-
-        // Primary Ward Group
-        enrollmentPromises.push(
-          this.ensureSystemGroupAndEnroll(
-            tx,
-            userId,
-            primaryWard.id,
-            LocationScope.WARD,
-            `${primaryWard.name} Community`
-          )
+        // Sequential — avoids deadlocks when wards share constituency/county groups.
+        // Concurrent upserts on the same group name inside one transaction deadlock
+        // because the first upsert holds a row lock the second is waiting for.
+        await this.ensureSystemGroupAndEnroll(
+          tx,
+          userId,
+          primaryWard.id,
+          LocationScope.WARD,
+          `${primaryWard.name} Community`
+        );
+        await this.ensureSystemGroupAndEnroll(
+          tx,
+          userId,
+          primaryWard.constituency.id,
+          LocationScope.CONSTITUENCY,
+          `${primaryWard.constituency.name} Community`
+        );
+        await this.ensureSystemGroupAndEnroll(
+          tx,
+          userId,
+          primaryWard.constituency.county.id,
+          LocationScope.COUNTY,
+          `${primaryWard.constituency.county.name} Community`
         );
 
-        // Primary Constituency Group
-        enrollmentPromises.push(
-          this.ensureSystemGroupAndEnroll(
-            tx,
-            userId,
-            primaryWard.constituency.id,
-            LocationScope.CONSTITUENCY,
-            `${primaryWard.constituency.name} Community`
-          )
-        );
-
-        // Primary County Group
-        enrollmentPromises.push(
-          this.ensureSystemGroupAndEnroll(
-            tx,
-            userId,
-            primaryWard.constituency.county.id,
-            LocationScope.COUNTY,
-            `${primaryWard.constituency.county.name} Community`
-          )
-        );
-
-        // Secondary Ward Group (only if different from primary)
         if (secondaryWard) {
-          enrollmentPromises.push(
-            this.ensureSystemGroupAndEnroll(
+          await this.ensureSystemGroupAndEnroll(
+            tx,
+            userId,
+            secondaryWard.id,
+            LocationScope.WARD,
+            `${secondaryWard.name} Community`
+          );
+          if (primaryWard.constituency.id !== secondaryWard.constituency.id) {
+            await this.ensureSystemGroupAndEnroll(
               tx,
               userId,
-              secondaryWard.id,
-              LocationScope.WARD,
-              `${secondaryWard.name} Community`
-            )
-          );
-
-          // Secondary Constituency Group (if different from primary)
-          if (primaryWard.constituency.id !== secondaryWard.constituency.id) {
-            enrollmentPromises.push(
-              this.ensureSystemGroupAndEnroll(
-                tx,
-                userId,
-                secondaryWard.constituency.id,
-                LocationScope.CONSTITUENCY,
-                `${secondaryWard.constituency.name} Community`
-              )
+              secondaryWard.constituency.id,
+              LocationScope.CONSTITUENCY,
+              `${secondaryWard.constituency.name} Community`
             );
           }
-
-          // Secondary County Group (if different from primary)
           if (
             primaryWard.constituency.county.id !==
             secondaryWard.constituency.county.id
           ) {
-            enrollmentPromises.push(
-              this.ensureSystemGroupAndEnroll(
-                tx,
-                userId,
-                secondaryWard.constituency.county.id,
-                LocationScope.COUNTY,
-                `${secondaryWard.constituency.county.name} Community`
-              )
+            await this.ensureSystemGroupAndEnroll(
+              tx,
+              userId,
+              secondaryWard.constituency.county.id,
+              LocationScope.COUNTY,
+              `${secondaryWard.constituency.county.name} Community`
             );
           }
         }
 
-        // National Group (all users)
-        enrollmentPromises.push(this.ensureNationalGroupAndEnroll(tx, userId));
-
-        await Promise.all(enrollmentPromises);
+        await this.ensureNationalGroupAndEnroll(tx, userId);
       });
 
       logger.info(

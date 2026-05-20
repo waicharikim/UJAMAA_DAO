@@ -358,7 +358,7 @@ class WalletService {
         await groupMembershipService.enrollInSystemGroups(
           updatedUser.id,
           updatedUser.primaryWardId!,
-          updatedUser.secondaryWardId!
+          updatedUser.secondaryWardId ?? null
         );
 
         // Award onboarding PR
