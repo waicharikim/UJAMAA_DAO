@@ -16,6 +16,7 @@ import { BarazaGroupsCard } from "@/components/integration/baraza-groups-card"
 import { SystemGroupsCard } from "@/components/community/system-groups-card"
 import { EmergencyAlertsCard } from "@/components/emergency/emergency-alerts-card"
 import { GettingStartedCard } from "@/components/onboarding/getting-started-card"
+import { ImpactTracker } from "@/components/user/impact-tracker"
 
 // ─── Stat card skeleton ───────────────────────────────────
 function StatSkeleton() {
@@ -584,6 +585,7 @@ export function DashboardContent() {
 
           <div className="space-y-4">
             <GettingStartedCard />
+            <ImpactTracker />
             <SystemGroupsCard />
             <Suspense fallback={<Skeleton className="h-48 w-full rounded-xl" />}>
               <BarazaGroupsCard />
