@@ -9,11 +9,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 import {
   Home,
-  Vote,
   Briefcase,
   Users,
   Store,
-  Landmark,
   User,
   Shield,
   LogOut,
@@ -21,29 +19,21 @@ import {
   ChevronRight,
   BookOpen,
   AlertTriangle,
-  Trophy,
-  ScrollText,
   Scale,
-  Flag,
   Globe,
 } from "lucide-react"
 
 const primaryNav = [
   { key: "nav.dashboard",  href: "/dashboard",  icon: Home },
-  { key: "nav.proposals",  href: "/proposals",  icon: Vote },
   { key: "nav.governance", href: "/governance", icon: Scale },
-  { key: "nav.elections",  href: "/elections",  icon: ScrollText },
   { key: "nav.projects",   href: "/projects",   icon: Briefcase },
   { key: "nav.community",  href: "/groups",     icon: Users },
-  { key: "nav.learn",      href: "/education",  icon: BookOpen },
   { key: "nav.emergency",  href: "/emergency",  icon: AlertTriangle },
 ]
 
 const secondaryNav = [
-  { key: "nav.leaderboard", href: "/leaderboard", icon: Trophy },
   { key: "nav.marketplace", href: "/marketplace", icon: Store },
-  { key: "nav.treasury",    href: "/treasury",    icon: Landmark },
-  { key: "nav.conflicts",   href: "/conflicts",   icon: Flag },
+  { key: "nav.learn",       href: "/education",   icon: BookOpen },
   { key: "nav.profile",     href: "/profile",     icon: User },
 ]
 

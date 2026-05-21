@@ -7,19 +7,16 @@ import { useRole } from "@/contexts/role-context"
 import { cn } from "@/lib/utils"
 import {
   Home,
-  Vote,
   Briefcase,
   Users,
   MoreHorizontal,
   Store,
-  Landmark,
   User,
   Shield,
   X,
   BookOpen,
-  ScrollText,
-  Trophy,
-  Flag,
+  AlertTriangle,
+  Scale,
 } from "lucide-react"
 import {
   Drawer,
@@ -29,19 +26,16 @@ import {
 } from "@/components/ui/drawer"
 
 const primaryNav = [
-  { label: "Home", href: "/dashboard", icon: Home },
-  { label: "Governance", href: "/proposals", icon: Vote },
-  { label: "Elections", href: "/elections", icon: ScrollText },
-  { label: "Community", href: "/groups", icon: Users },
+  { label: "Home",      href: "/dashboard",  icon: Home },
+  { label: "Govern",    href: "/governance", icon: Scale },
+  { label: "Projects",  href: "/projects",   icon: Briefcase },
+  { label: "Community", href: "/groups",     icon: Users },
 ]
 
 const drawerNav = [
-  { label: "Projects",   href: "/projects",   icon: Briefcase },
-  { label: "Learn",      href: "/education",  icon: BookOpen },
-  { label: "Leaderboard",href: "/leaderboard",icon: Trophy },
+  { label: "Emergency",  href: "/emergency",  icon: AlertTriangle },
   { label: "Marketplace",href: "/marketplace",icon: Store },
-  { label: "Treasury",   href: "/treasury",   icon: Landmark },
-  { label: "Conflicts",  href: "/conflicts",  icon: Flag },
+  { label: "Learn",      href: "/education",  icon: BookOpen },
   { label: "Profile",    href: "/profile",    icon: User },
 ]
 
