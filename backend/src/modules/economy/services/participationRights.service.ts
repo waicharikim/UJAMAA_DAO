@@ -66,70 +66,22 @@ export class ParticipationRightsService {
     metadata?: Record<string, any>
   ): Promise<ParticipationRightsLog> {
     if (amount <= 0) throw new Error('Award amount must be positive');
-
-    const log = await this.prisma.$transaction(
-      async (tx: Prisma.TransactionClient) => {
-        const current = await this.getBalanceWithTx(tx, userId);
-        const newBalance = Math.min(current + amount, MAX_BALANCE);
-
-        const entry = await tx.participationRightsLog.create({
-          data: {
-            userId,
-            amount,
-            balance: newBalance,
-            reason: reason,
-            metadata: metadata
-              ? JSON.parse(JSON.stringify(metadata))
-              : undefined,
-          },
-        });
-
-        // Update user field for quick access (denormalized)
-        await tx.user.update({
-          where: { id: userId },
-          data: { participationRights: newBalance },
-        });
-
-        logger.info(
-          { userId, amount, reason, newBalance, metadata },
-          '[PR] Awarded Participation Rights'
-        );
-
-        return entry;
-      }
+    const log = await this.prisma.$transaction((tx) =>
+      this.writeAwardTx(tx, userId, amount, reason, metadata)
     );
-
     await auditService.log(
       userId,
       AuditAction.PR_AWARDED,
       'participation_right',
       log.id,
-      { amount, reason, newBalance: log.balance, ...(metadata && { metadata }) }
-    );
-
-    // On-chain mint — silently skipped if: test env, no wallet address, contract not configured
-    if (process.env.NODE_ENV !== 'test') {
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { walletAddress: true },
-      });
-      if (user?.walletAddress) {
-        const prContract = getPrContract();
-        if (prContract) {
-          try {
-            const amountWei = BigInt(amount) * BigInt(10 ** 18);
-            await prContract.mint(user.walletAddress, amountWei);
-            logger.info({ userId, amount }, '[PR] On-chain mint succeeded');
-          } catch (err) {
-            logger.warn(
-              { userId, err },
-              '[PR] On-chain mint failed — off-chain record intact'
-            );
-          }
-        }
+      {
+        amount,
+        reason,
+        newBalance: log.balance,
+        ...(metadata && { metadata }),
       }
-    }
-
+    );
+    await this.syncOnChain(userId, amount, 'mint');
     return log;
   }
 
@@ -143,78 +95,22 @@ export class ParticipationRightsService {
     metadata?: Record<string, any>
   ): Promise<ParticipationRightsLog> {
     if (amount <= 0) throw new Error('Spend amount must be positive');
-
-    const log = await this.prisma.$transaction(
-      async (tx: Prisma.TransactionClient) => {
-        const current = await this.getBalanceWithTx(tx, userId);
-
-        if (current < amount) {
-          throw ApiError.insufficientParticipationRights(
-            'Insufficient Participation Rights',
-            amount,
-            current
-          );
-        }
-
-        const newBalance = current - amount;
-
-        const entry = await tx.participationRightsLog.create({
-          data: {
-            userId,
-            amount: -amount,
-            balance: newBalance,
-            reason: reason,
-            metadata: metadata
-              ? JSON.parse(JSON.stringify(metadata))
-              : undefined,
-          },
-        });
-
-        await tx.user.update({
-          where: { id: userId },
-          data: { participationRights: newBalance },
-        });
-
-        logger.info(
-          { userId, amount: -amount, reason, newBalance, metadata },
-          '[PR] Spent Participation Rights'
-        );
-
-        return entry;
-      }
+    const log = await this.prisma.$transaction((tx) =>
+      this.writeSpendTx(tx, userId, amount, reason, metadata)
     );
-
     await auditService.log(
       userId,
       AuditAction.PR_SPENT,
       'participation_right',
       log.id,
-      { amount, reason, newBalance: log.balance, ...(metadata && { metadata }) }
-    );
-
-    // On-chain burn — mirrors the DB deduction
-    if (process.env.NODE_ENV !== 'test') {
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { walletAddress: true },
-      });
-      if (user?.walletAddress) {
-        const prContract = getPrContract();
-        if (prContract) {
-          try {
-            const amountWei = BigInt(amount) * BigInt(10 ** 18);
-            await prContract.burn(user.walletAddress, amountWei);
-            logger.info({ userId, amount }, '[PR] On-chain burn succeeded');
-          } catch (err) {
-            logger.warn(
-              { userId, err },
-              '[PR] On-chain burn failed — off-chain record intact'
-            );
-          }
-        }
+      {
+        amount,
+        reason,
+        newBalance: log.balance,
+        ...(metadata && { metadata }),
       }
-    }
-
+    );
+    await this.syncOnChain(userId, amount, 'burn');
     return log;
   }
 
@@ -226,7 +122,6 @@ export class ParticipationRightsService {
     return balance >= required;
   }
 
-  // Helper for transaction
   private async getBalanceWithTx(tx: any, userId: string): Promise<number> {
     const logs = await tx.participationRightsLog.findMany({
       where: { userId },
@@ -236,6 +131,101 @@ export class ParticipationRightsService {
       (sum: number, log: ParticipationRightsLog) => sum + log.amount,
       0
     );
+  }
+
+  private async writeAwardTx(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    amount: number,
+    reason: ParticipationRightsReason,
+    metadata?: Record<string, any>
+  ): Promise<ParticipationRightsLog> {
+    const current = await this.getBalanceWithTx(tx, userId);
+    const newBalance = Math.min(current + amount, MAX_BALANCE);
+    const entry = await tx.participationRightsLog.create({
+      data: {
+        userId,
+        amount,
+        balance: newBalance,
+        reason,
+        metadata: metadata ? JSON.parse(JSON.stringify(metadata)) : undefined,
+      },
+    });
+    await tx.user.update({
+      where: { id: userId },
+      data: { participationRights: newBalance },
+    });
+    logger.info(
+      { userId, amount, reason, newBalance, metadata },
+      '[PR] Awarded Participation Rights'
+    );
+    return entry;
+  }
+
+  private async writeSpendTx(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    amount: number,
+    reason: ParticipationRightsReason,
+    metadata?: Record<string, any>
+  ): Promise<ParticipationRightsLog> {
+    const current = await this.getBalanceWithTx(tx, userId);
+    if (current < amount) {
+      throw ApiError.insufficientParticipationRights(
+        'Insufficient Participation Rights',
+        amount,
+        current
+      );
+    }
+    const newBalance = current - amount;
+    const entry = await tx.participationRightsLog.create({
+      data: {
+        userId,
+        amount: -amount,
+        balance: newBalance,
+        reason,
+        metadata: metadata ? JSON.parse(JSON.stringify(metadata)) : undefined,
+      },
+    });
+    await tx.user.update({
+      where: { id: userId },
+      data: { participationRights: newBalance },
+    });
+    logger.info(
+      { userId, amount: -amount, reason, newBalance, metadata },
+      '[PR] Spent Participation Rights'
+    );
+    return entry;
+  }
+
+  // On-chain sync — silently skipped in test env, no wallet, or contract not configured
+  private async syncOnChain(
+    userId: string,
+    amount: number,
+    operation: 'mint' | 'burn'
+  ): Promise<void> {
+    if (process.env.NODE_ENV === 'test') return;
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { walletAddress: true },
+    });
+    if (!user?.walletAddress) return;
+    const prContract = getPrContract();
+    if (!prContract) return;
+    const amountWei = BigInt(amount) * BigInt(10 ** 18);
+    try {
+      if (operation === 'mint') {
+        await prContract.mint(user.walletAddress, amountWei);
+      } else {
+        await prContract.burn(user.walletAddress, amountWei);
+      }
+      logger.info({ userId, amount }, `[PR] On-chain ${operation} succeeded`);
+    } catch (err) {
+      logger.warn(
+        { userId, err },
+        `[PR] On-chain ${operation} failed — off-chain record intact`
+      );
+    }
   }
 
   /**
