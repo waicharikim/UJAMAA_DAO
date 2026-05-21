@@ -90,6 +90,7 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.97.1",
     "@bull-board/api": "^6.17.0",
     "@bull-board/express": "^6.17.0",
     "@prisma/adapter-pg": "^7.2.0",

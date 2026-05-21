@@ -22,6 +22,7 @@ import { logger } from '../../../core/logger/logger.js';
 import { ApiError } from '../../../core/errors/ApiError.js';
 import { sendSuccess } from '../../../core/utils/response.js';
 import { barazaBotService } from '../services/baraza-bot.service.js';
+import { barazaAiService } from '../services/baraza-ai.service.js';
 import {
   RegisterBarazaGroupDto,
   MarkAttendanceDto,
@@ -162,10 +163,45 @@ function verifyWebhookSecret(req: Request): boolean {
   return req.headers['x-telegram-bot-api-secret-token'] === expected;
 }
 
-async function fetchBarazaGroup(chatId: number): Promise<BarazaGroupRow | null> {
+async function fetchBarazaGroup(
+  chatId: number
+): Promise<BarazaGroupRow | null> {
   return (await prisma.barazaGroup.findFirst({
     where: { platform: 'TELEGRAM', externalId: String(chatId), isActive: true },
   })) as BarazaGroupRow | null;
+}
+
+async function resolveUserContext(
+  from: TelegramFrom | undefined
+): Promise<{
+  userId: string | null;
+  displayName: string;
+  ward?: string;
+  verificationLevel?: string;
+}> {
+  const displayName = from?.first_name ?? from?.username ?? 'Member';
+  if (!from?.id) return { userId: null, displayName };
+
+  const profile = await prisma.userMessagingProfile.findFirst({
+    where: { platform: 'TELEGRAM', externalUserId: String(from.id) },
+    select: { userId: true },
+  });
+  if (!profile) return { userId: null, displayName };
+
+  const user = await prisma.user.findUnique({
+    where: { id: profile.userId },
+    select: {
+      verificationLevel: true,
+      primaryWard: { select: { name: true } },
+    },
+  });
+
+  return {
+    userId: profile.userId,
+    displayName,
+    ward: user?.primaryWard?.name,
+    verificationLevel: user?.verificationLevel ?? undefined,
+  };
 }
 
 async function dispatchCommand(
@@ -174,7 +210,8 @@ async function dispatchCommand(
   chatId: number,
   barazaGroup: BarazaGroupRow | null
 ): Promise<void> {
-  if (text.startsWith('/verify')) return handleVerifyCommand(text, from, chatId);
+  if (text.startsWith('/verify'))
+    return handleVerifyCommand(text, from, chatId);
   if (!barazaGroup) {
     if (text.startsWith('/present'))
       logger.info(
@@ -183,10 +220,26 @@ async function dispatchCommand(
       );
     return;
   }
-  if (text.startsWith('/schedule')) return handleScheduleCommand(text, from, chatId, barazaGroup);
-  if (text.startsWith('/open'))     return handleOpenCommand(from, chatId, barazaGroup);
-  if (text.startsWith('/close'))    return handleCloseCommand(from, chatId, barazaGroup);
-  if (text.startsWith('/present'))  return handlePresentCommand(from, chatId, barazaGroup);
+  if (text.startsWith('/schedule'))
+    return handleScheduleCommand(text, from, chatId, barazaGroup);
+  if (text.startsWith('/open'))
+    return handleOpenCommand(from, chatId, barazaGroup);
+  if (text.startsWith('/close'))
+    return handleCloseCommand(from, chatId, barazaGroup);
+  if (text.startsWith('/present'))
+    return handlePresentCommand(from, chatId, barazaGroup);
+
+  // Free-text → AI layer (skip empty messages and other slash commands)
+  if (!text || text.startsWith('/')) return;
+  if (!barazaAiService.isAvailable) return;
+
+  const userContext = await resolveUserContext(from);
+  const reply = await barazaAiService.reply(
+    text,
+    userContext,
+    barazaGroup.groupId
+  );
+  if (from?.id) await sendTelegramMessage(from.id, reply, chatId);
 }
 
 // ─────────────────────────────────────────────
@@ -296,7 +349,12 @@ async function handlePresentCommand(
     });
 
     logger.info(
-      { operationType: 'TELEGRAM_WEBHOOK', chatId, externalUserId, sessionDate },
+      {
+        operationType: 'TELEGRAM_WEBHOOK',
+        chatId,
+        externalUserId,
+        sessionDate,
+      },
       'Attendance recorded via /present command'
     );
 
@@ -319,10 +377,16 @@ async function handlePresentCommand(
 // /schedule — admin schedules next baraza
 // ─────────────────────────────────────────────
 
-function isValidScheduleInput(dateStr: string | undefined, timeStr: string | undefined): boolean {
-  return !!(dateStr && timeStr &&
+function isValidScheduleInput(
+  dateStr: string | undefined,
+  timeStr: string | undefined
+): boolean {
+  return !!(
+    dateStr &&
+    timeStr &&
     /^\d{4}-\d{2}-\d{2}$/.test(dateStr) &&
-    /^\d{2}:\d{2}$/.test(timeStr));
+    /^\d{2}:\d{2}$/.test(timeStr)
+  );
 }
 
 function isValidFutureDateTime(dt: Date): boolean {
@@ -577,7 +641,9 @@ async function linkTelegramProfile(
     },
   });
   await prisma.userMessagingProfile.upsert({
-    where: { userId_platform: { userId: verification.userId, platform: 'TELEGRAM' } },
+    where: {
+      userId_platform: { userId: verification.userId, platform: 'TELEGRAM' },
+    },
     create: {
       userId: verification.userId,
       platform: 'TELEGRAM',

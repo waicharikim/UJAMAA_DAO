@@ -240,6 +240,10 @@ const EnvSchema = z.object({
   // WebAuthn / Passkeys
   WEBAUTHN_RP_ID: z.string().optional().default('localhost'),
   WEBAUTHN_ORIGIN: z.string().optional().default('http://localhost:3000'),
+
+  // Baraza AI (Claude API)
+  CLAUDE_API_KEY: z.string().optional(),
+  BARAZA_AI_MODEL: z.string().optional(),
 });
 
 /**
