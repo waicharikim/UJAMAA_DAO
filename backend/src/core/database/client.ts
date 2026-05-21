@@ -7,21 +7,30 @@ import { logger } from '../logger/logger.js';
 
 declare global {
   var prisma: PrismaClient | undefined;
+  var dbPool: Pool | undefined;
 }
 
-// Create connection pool
-const pool = new Pool({
+// Vitest clears the module cache between test files but Node.js globals persist.
+// Caching both pool and prisma in globals ensures we reuse the same connection pool
+// across re-evaluations — preventing orphaned pool connections that accumulate and
+// cause Postgres deadlocks when the TRUNCATE in testSetup.ts runs.
+const isFirstInit = !global.dbPool;
+
+// Create connection pool (or reuse cached one)
+const pool = global.dbPool ?? new Pool({
   connectionString: env.DATABASE_URL,
+  max: 10,
 });
 
 // Create adapter
 const adapter = new PrismaPg(pool);
 
 // Instantiate PrismaClient with adapter
-export const prisma = global.prisma || new PrismaClient({ adapter });
+export const prisma = global.prisma ?? new PrismaClient({ adapter });
 
-// Hot reload in dev
+// Cache pool and prisma for re-evaluations (hot reload in dev, Vitest between files)
 if (env.NODE_ENV !== 'production') {
+  global.dbPool = pool;
   global.prisma = prisma;
 }
 
@@ -69,7 +78,11 @@ async function connectDB() {
   }
 }
 
-connectDB();
+// Only connect on first initialization — skip on Vitest module re-evaluations
+// where the pool is already live and accepting connections.
+if (isFirstInit) {
+  connectDB();
+}
 
 // Health check
 export async function checkDatabaseConnection(): Promise<boolean> {

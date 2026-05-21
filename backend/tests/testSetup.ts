@@ -97,6 +97,19 @@ beforeAll(async () => {
 // ===================================================================
 
 beforeEach(async () => {
+  // Terminate any connections stuck in an idle-in-transaction state before TRUNCATE.
+  // The PrismaPg adapter can leave connections in this state when a $transaction
+  // callback throws (e.g. deadlock) and the ROLLBACK path is slow. Those stale
+  // connections hold table-level locks that cause the TRUNCATE to deadlock.
+  // Only affects connections idle in transaction — normal idle connections are left alone.
+  await prisma.$executeRawUnsafe(`
+    SELECT pg_terminate_backend(pid)
+    FROM pg_stat_activity
+    WHERE datname = current_database()
+      AND pid != pg_backend_pid()
+      AND state IN ('idle in transaction', 'idle in transaction (aborted)')
+  `).catch(() => {});
+
   // Get all user-defined tables in public schema (exclude Prisma migration tables)
   const tablenames = await prisma.$queryRaw<
     Array<{ tablename: string }>

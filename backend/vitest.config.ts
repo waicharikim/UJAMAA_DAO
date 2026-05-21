@@ -37,8 +37,10 @@ export default defineConfig({
       // Explicitly blank — prevents dotenv loading .env's redis://redis:6379 (Docker hostname)
       // which causes createClient().connect() to retry indefinitely and block servicesReady.
       REDIS_URL: '',
-      REDIS_HOST: 'localhost',
-      REDIS_PORT: '6380',
+      // Inside Docker: Redis is reachable as 'redis:6379' (container network).
+      // On host: Redis is exposed on localhost:6380 (mapped host port).
+      REDIS_HOST: isDocker ? 'redis' : 'localhost',
+      REDIS_PORT: isDocker ? '6379' : '6380',
     },
     include: ['tests/**/*.test.{ts,js}', 'src/**/*.test.{ts,js}'],
     exclude: [
