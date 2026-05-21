@@ -14,9 +14,18 @@
  *   checkVouchingTimeouts         (1)
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { prisma } from '../../src/core/database/client.js';
 import { userService } from '../../src/modules/user/services/user.service.js';
+
+// Mock impact point awarding — not what these tests verify, and the $transaction
+// it uses can leave PrismaPg connections in a stale state that causes subsequent
+// count() queries to read from an old snapshot on the same connection.
+vi.mock('../../src/modules/reputation/service/impactPoint.service.js', () => ({
+  globalImpactPointService: {
+    award: vi.fn().mockResolvedValue(undefined),
+  },
+}));
 import {
   seedLocation,
   seedSecondWard,
