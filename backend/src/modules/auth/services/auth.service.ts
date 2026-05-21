@@ -40,6 +40,33 @@ type TrackLoginParams = {
   context?: VerifyMagicLinkContext;
 };
 
+type FailedLoginContext = {
+  ipAddress: string;
+  userId: string | null;
+  method: string;
+  failureReason?: string | null;
+  userAgent?: string;
+};
+
+type LoginRecord = {
+  userId: string;
+  method: string;
+  successful: boolean;
+  failureReason?: string | null;
+  ipAddress?: string;
+  userAgent?: string;
+};
+
+function isSignInWithNoAccount(params: SendMagicLinkDto): boolean {
+  const { name, phoneNumber, primaryWardId, secondaryWardId, industryIds, goodsServiceIds } = params;
+  return !name && !phoneNumber && !primaryWardId && !secondaryWardId && !industryIds && !goodsServiceIds;
+}
+
+function hasMissingRegistrationFields(params: SendMagicLinkDto): boolean {
+  const { name, phoneNumber, primaryWardId, secondaryWardId, industryIds, goodsServiceIds } = params;
+  return !name || !phoneNumber || !primaryWardId || !secondaryWardId || !industryIds || !goodsServiceIds;
+}
+
 const MAX_FAILED_ATTEMPTS = 5;
 const FAILED_ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
 
@@ -53,25 +80,18 @@ class AuthService {
   }
 
   private assertRegistrationComplete(params: SendMagicLinkDto): void {
-    const { name, phoneNumber, primaryWardId, secondaryWardId, industryIds, goodsServiceIds } = params;
-    if (!name && !phoneNumber && !primaryWardId && !secondaryWardId && !industryIds && !goodsServiceIds) {
+    if (isSignInWithNoAccount(params)) {
       throw ApiError.notFound(
         'No account found with that email. Please register first.'
       );
     }
-    if (!name || !phoneNumber || !primaryWardId || !secondaryWardId || !industryIds || !goodsServiceIds) {
+    if (hasMissingRegistrationFields(params)) {
+      const { name, phoneNumber, primaryWardId, secondaryWardId, industryIds, goodsServiceIds } = params;
       throw ApiError.validationError(
         'New users must provide: name, phoneNumber, primaryWardId, secondaryWardId, industryIds, and goodsServiceIds',
         {
           required: ['name', 'phoneNumber', 'primaryWardId', 'secondaryWardId', 'industryIds', 'goodsServiceIds'],
-          provided: {
-            name: !!name,
-            phoneNumber: !!phoneNumber,
-            primaryWardId: !!primaryWardId,
-            secondaryWardId: !!secondaryWardId,
-            industryIds: !!industryIds,
-            goodsServiceIds: !!goodsServiceIds,
-          },
+          provided: { name: !!name, phoneNumber: !!phoneNumber, primaryWardId: !!primaryWardId, secondaryWardId: !!secondaryWardId, industryIds: !!industryIds, goodsServiceIds: !!goodsServiceIds },
         }
       );
     }
@@ -264,20 +284,8 @@ class AuthService {
     return updatedUser;
   }
 
-  private async buildAuthResult(
-    user: any,
-    loginMethod: string,
-    context: VerifyMagicLinkContext | undefined,
-    isFirstTimeLogin: boolean
-  ): Promise<MagicLinkAuthResult> {
-    const { session } = await sessionService.createSession(user.id, {
-      ipAddress: context?.ipAddress,
-      userAgent: context?.userAgent,
-      deviceInfo: context?.deviceInfo,
-    });
-
-    const roles = user.userRoles.map((ur: any) => ur.role.name);
-    const jwtPayload: JwtPayload = {
+  private buildJwtPayload(user: any, session: { id: string }, roles: string[]): JwtPayload {
+    return {
       sub: user.id,
       jti: session.id,
       email: user.email || undefined,
@@ -300,11 +308,25 @@ class AuthService {
       type: 'permanent',
       sessionId: session.id,
     };
+  }
 
-    const accessToken = signJwtToken(jwtPayload, '7d');
+  private async buildAuthResult(
+    user: any,
+    loginMethod: string,
+    context: VerifyMagicLinkContext | undefined,
+    isFirstTimeLogin: boolean
+  ): Promise<MagicLinkAuthResult> {
+    const { session } = await sessionService.createSession(user.id, {
+      ipAddress: context?.ipAddress,
+      userAgent: context?.userAgent,
+      deviceInfo: context?.deviceInfo,
+    });
+
+    const roles = user.userRoles.map((ur: any) => ur.role.name);
+    const accessToken = signJwtToken(this.buildJwtPayload(user, session, roles), '7d');
+
     await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
     await this.trackLoginEvent({ userId: user.id, method: loginMethod, successful: true, context });
-
     eventBus.publish('auth.login', { userId: user.id, method: loginMethod, sessionId: session.id, isFirstTimeLogin });
 
     return {
@@ -402,44 +424,31 @@ class AuthService {
     }
   }
 
-  private async logFailedLoginSecurity(
-    ipAddress: string,
-    userId: string | null,
-    method: string,
-    failureReason: string | null | undefined,
-    userAgent: string | undefined
-  ): Promise<void> {
-    const isBruteForce = await this.detectBruteForce(ipAddress);
+  private async logFailedLoginSecurity(ctx: FailedLoginContext): Promise<void> {
+    const isBruteForce = await this.detectBruteForce(ctx.ipAddress);
     if (isBruteForce) {
       logSecurityEvent(
         'Brute force login attempt detected',
         'BRUTE_FORCE',
         'CRITICAL',
-        `${MAX_FAILED_ATTEMPTS}+ failed attempts from ${ipAddress} in ${FAILED_ATTEMPT_WINDOW_MS / 60000} minutes`,
-        { userId: userId || undefined, ipAddress, metadata: { method, failureReason, userAgent } }
+        `${MAX_FAILED_ATTEMPTS}+ failed attempts from ${ctx.ipAddress} in ${FAILED_ATTEMPT_WINDOW_MS / 60000} minutes`,
+        { userId: ctx.userId || undefined, ipAddress: ctx.ipAddress, metadata: { method: ctx.method, failureReason: ctx.failureReason, userAgent: ctx.userAgent } }
       );
     } else {
       logSecurityEvent(
         'Login failed',
         'AUTH_FAILURE',
         'MEDIUM',
-        failureReason || 'Authentication failed',
-        { userId: userId || undefined, ipAddress, metadata: { method, userAgent } }
+        ctx.failureReason || 'Authentication failed',
+        { userId: ctx.userId || undefined, ipAddress: ctx.ipAddress, metadata: { method: ctx.method, userAgent: ctx.userAgent } }
       );
     }
   }
 
-  private async recordDbLoginEvent(
-    userId: string,
-    method: string,
-    successful: boolean,
-    failureReason: string | null | undefined,
-    ipAddress: string | undefined,
-    userAgent: string | undefined
-  ): Promise<void> {
-    await prisma.loginEvent.create({ data: { userId, method, successful, failureReason, ipAddress, userAgent } });
-    if (successful) {
-      logger.info({ operationType: 'AUTH', userId, metadata: { method, ipAddress } }, 'User logged in successfully');
+  private async recordDbLoginEvent(record: LoginRecord): Promise<void> {
+    await prisma.loginEvent.create({ data: record });
+    if (record.successful) {
+      logger.info({ operationType: 'AUTH', userId: record.userId, metadata: { method: record.method, ipAddress: record.ipAddress } }, 'User logged in successfully');
     }
   }
 
@@ -450,11 +459,11 @@ class AuthService {
       const userAgent = context?.userAgent;
 
       if (!successful && ipAddress) {
-        await this.logFailedLoginSecurity(ipAddress, userId, method, failureReason, userAgent);
+        await this.logFailedLoginSecurity({ ipAddress, userId, method, failureReason, userAgent });
       }
 
       if (userId) {
-        await this.recordDbLoginEvent(userId, method, successful, failureReason, ipAddress, userAgent);
+        await this.recordDbLoginEvent({ userId, method, successful, failureReason, ipAddress, userAgent });
       } else if (!successful) {
         logger.warn(
           { operationType: 'AUTH', metadata: { method, failureReason, ipAddress, userAgent } },
