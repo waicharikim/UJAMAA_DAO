@@ -152,13 +152,17 @@ export class ApiError extends Error {
   }
 }
 
-function buildQs(params?: Record<string, string | number | boolean | undefined | null>): string {
+type QsValue = string | number | boolean | undefined | null
+
+function isActiveParam(v: QsValue): v is string | number | boolean {
+  return v !== undefined && v !== null && v !== "" && v !== "all" && v !== 0
+}
+
+function buildQs(params?: Record<string, QsValue>): string {
   if (!params) return ""
   const q = new URLSearchParams()
   for (const [k, v] of Object.entries(params)) {
-    if (v !== undefined && v !== null && v !== "" && v !== "all" && v !== 0) {
-      q.set(k, String(v))
-    }
+    if (isActiveParam(v)) q.set(k, String(v))
   }
   const qs = q.toString()
   return qs ? `?${qs}` : ""
