@@ -11,6 +11,7 @@ import {
   Users,
   MoreHorizontal,
   Store,
+  Landmark,
   User,
   Shield,
   X,
@@ -35,6 +36,7 @@ const primaryNav = [
 const drawerNav = [
   { label: "Emergency",  href: "/emergency",  icon: AlertTriangle },
   { label: "Marketplace",href: "/marketplace",icon: Store },
+  { label: "Treasury",   href: "/treasury",   icon: Landmark },
   { label: "Learn",      href: "/education",  icon: BookOpen },
   { label: "Profile",    href: "/profile",    icon: User },
 ]

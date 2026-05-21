@@ -12,6 +12,7 @@ import {
   Briefcase,
   Users,
   Store,
+  Landmark,
   User,
   Shield,
   LogOut,
@@ -33,6 +34,7 @@ const primaryNav = [
 
 const secondaryNav = [
   { key: "nav.marketplace", href: "/marketplace", icon: Store },
+  { key: "nav.treasury",    href: "/treasury",    icon: Landmark },
   { key: "nav.learn",       href: "/education",   icon: BookOpen },
   { key: "nav.profile",     href: "/profile",     icon: User },
 ]
