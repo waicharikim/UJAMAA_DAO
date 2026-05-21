@@ -61,6 +61,28 @@ const VERIFICATION_LEVEL_ORDER: VerificationLevel[] = [
   'FULL_VERIFIED',
 ];
 
+function hasMinimumVouchingLevel(voucher: { verificationLevel: string }): boolean {
+  const voucherIdx = VERIFICATION_LEVEL_ORDER.indexOf(
+    voucher.verificationLevel as VerificationLevel
+  );
+  return voucherIdx >= VERIFICATION_LEVEL_ORDER.indexOf('COMMUNITY_VERIFIED');
+}
+
+function isAuthorizedToVouchInWard(
+  voucher: { verificationLevel: string },
+  target: { primaryWardId: string | null },
+  wardId: string
+): boolean {
+  if (voucher.verificationLevel === 'FULL_VERIFIED') return true;
+  return target.primaryWardId === wardId;
+}
+
+function hasActiveVouchingRequest(
+  request: { status: string } | null
+): boolean {
+  return request !== null && request.status === 'VOUCHING';
+}
+
 class UserService {
   /**
    * Get rich user profile with full impact breakdown
@@ -100,25 +122,10 @@ class UserService {
 
     if (!user) throw ApiError.notFound('User', userId);
 
-    // Mock impact data (replace with real services when ready)
     const impactBreakdown = { breakdown: [], totals: {} };
     const globalIP = user.globalImpactPoints || 0;
     const primaryImpactPoints = user.primaryWardId
       ? { ward: { points: 0, tier: 'BRONZE' } }
-      : null;
-
-    const primaryHierarchy = user.primaryWard
-      ? {
-          ward: { id: user.primaryWard.id, name: user.primaryWard.name },
-          constituency: {
-            id: user.primaryWard.constituency.id,
-            name: user.primaryWard.constituency.name,
-          },
-          county: {
-            id: user.primaryWard.constituency.county.id,
-            name: user.primaryWard.constituency.county.name,
-          },
-        }
       : null;
 
     return {
@@ -129,21 +136,7 @@ class UserService {
       avatarUrl: user.avatarUrl || null,
       walletAddress: user.walletAddress,
 
-      geographic: {
-        primaryWard: primaryHierarchy?.ward ?? null,
-        primaryConstituency: primaryHierarchy?.constituency ?? null,
-        primaryCounty: primaryHierarchy?.county ?? null,
-        secondaryWard: user.secondaryWard
-          ? { id: user.secondaryWard.id, name: user.secondaryWard.name }
-          : null,
-        currentLocation: user.currentLocationId
-          ? {
-              wardId: user.currentLocationId,
-              wardName: user.currentWard?.name ?? null,
-              until: user.currentLocationUntil,
-            }
-          : null,
-      },
+      geographic: this.buildGeographic(user),
 
       verification: {
         level: user.verificationLevel,
@@ -256,6 +249,79 @@ class UserService {
         ? profile.impact
         : { global: 0, primary: null, allLocations: [], totals: {} },
     };
+  }
+
+  private buildGeographic(user: {
+    primaryWard: {
+      id: string;
+      name: string;
+      constituency: { id: string; name: string; county: { id: string; name: string } };
+    } | null;
+    secondaryWard: { id: string; name: string } | null;
+    currentLocationId: string | null;
+    currentLocationUntil: Date | null;
+    currentWard: { id: string; name: string } | null;
+  }) {
+    const primaryHierarchy = user.primaryWard
+      ? {
+          ward: { id: user.primaryWard.id, name: user.primaryWard.name },
+          constituency: {
+            id: user.primaryWard.constituency.id,
+            name: user.primaryWard.constituency.name,
+          },
+          county: {
+            id: user.primaryWard.constituency.county.id,
+            name: user.primaryWard.constituency.county.name,
+          },
+        }
+      : null;
+
+    return {
+      primaryWard: primaryHierarchy?.ward ?? null,
+      primaryConstituency: primaryHierarchy?.constituency ?? null,
+      primaryCounty: primaryHierarchy?.county ?? null,
+      secondaryWard: user.secondaryWard
+        ? { id: user.secondaryWard.id, name: user.secondaryWard.name }
+        : null,
+      currentLocation: user.currentLocationId
+        ? {
+            wardId: user.currentLocationId,
+            wardName: user.currentWard?.name ?? null,
+            until: user.currentLocationUntil,
+          }
+        : null,
+    };
+  }
+
+  private assertResidenceCooldown(user: { lastResidenceChangeAt: Date | null }): void {
+    if (!user.lastResidenceChangeAt) return;
+    const monthsSince =
+      (Date.now() - user.lastResidenceChangeAt.getTime()) /
+      (30 * 24 * 60 * 60 * 1000);
+    if (monthsSince < RESIDENCE_CHANGE_COOLDOWN_MONTHS) {
+      const remaining = Math.ceil(RESIDENCE_CHANGE_COOLDOWN_MONTHS - monthsSince);
+      throw ApiError.forbidden(
+        `Residence change on cooldown. ${remaining} month(s) remaining.`
+      );
+    }
+  }
+
+  private async safeCleanupJob(
+    task: string,
+    fn: () => Promise<{ count: number }>
+  ): Promise<number> {
+    try {
+      const result = await fn();
+      if (result.count > 0)
+        logger.info({ operationType: 'CLEANUP', task, count: result.count }, `${task} cleaned up`);
+      return result.count;
+    } catch (err) {
+      logger.error(
+        { operationType: 'CLEANUP_ERROR', task, error: String(err) },
+        `Failed to run cleanup: ${task}`
+      );
+      return 0;
+    }
   }
 
   /**
@@ -490,20 +556,7 @@ class UserService {
     });
 
     if (!user) throw ApiError.notFound('User');
-
-    if (user.lastResidenceChangeAt) {
-      const monthsSince =
-        (Date.now() - user.lastResidenceChangeAt.getTime()) /
-        (30 * 24 * 60 * 60 * 1000);
-      if (monthsSince < RESIDENCE_CHANGE_COOLDOWN_MONTHS) {
-        const remaining = Math.ceil(
-          RESIDENCE_CHANGE_COOLDOWN_MONTHS - monthsSince
-        );
-        throw ApiError.forbidden(
-          `Residence change on cooldown. ${remaining} month(s) remaining.`
-        );
-      }
-    }
+    this.assertResidenceCooldown(user);
 
     const pending = await prisma.residenceChangeRequest.findFirst({
       where: { userId, status: 'PENDING' },
@@ -730,16 +783,10 @@ class UserService {
     });
 
     if (!voucher) throw ApiError.notFound('Voucher user');
-    const voucherLevelIndex = VERIFICATION_LEVEL_ORDER.indexOf(
-      voucher.verificationLevel as VerificationLevel
-    );
-    const communityLevelIndex =
-      VERIFICATION_LEVEL_ORDER.indexOf('COMMUNITY_VERIFIED');
-    if (voucherLevelIndex < communityLevelIndex) {
+    if (!hasMinimumVouchingLevel(voucher))
       throw ApiError.insufficientVerification(
         'Only community-verified users can vouch'
       );
-    }
 
     const target = await prisma.user.findUnique({
       where: { id: targetUserId },
@@ -747,21 +794,15 @@ class UserService {
     });
 
     if (!target) throw ApiError.notFound('Target user');
-
-    // FULL_VERIFIED users (admins) can vouch across wards for bootstrapping.
-    // COMMUNITY_VERIFIED users must share the same ward as the target.
-    const isFullVerified = voucher.verificationLevel === 'FULL_VERIFIED';
-    if (!isFullVerified && target.primaryWardId !== wardId) {
+    if (!isAuthorizedToVouchInWard(voucher, target, wardId))
       throw ApiError.geographicError('Vouch must be in same ward');
-    }
 
     const request = await prisma.verificationRequest.findUnique({
       where: { userId_type: { userId: targetUserId, type: 'COMMUNITY' } },
     });
 
-    if (!request || request.status !== 'VOUCHING') {
+    if (!hasActiveVouchingRequest(request))
       throw ApiError.conflict('No active vouching request');
-    }
 
     try {
       await prisma.communityVouch.create({
@@ -1129,77 +1170,25 @@ class UserService {
    * @returns Number of requests expired
    */
   async expireResidenceChangeRequests(): Promise<number> {
-    try {
-      const result = await prisma.residenceChangeRequest.updateMany({
-        where: {
-          status: 'PENDING',
-          expiresAt: { lt: new Date() },
-        },
+    return this.safeCleanupJob('residence-requests', () =>
+      prisma.residenceChangeRequest.updateMany({
+        where: { status: 'PENDING', expiresAt: { lt: new Date() } },
         data: {
           status: 'EXPIRED',
           reviewedAt: new Date(),
           rejectionReason: 'Expired due to inactivity',
         },
-      });
-
-      if (result.count > 0) {
-        logger.info(
-          { operationType: 'CLEANUP', count: result.count },
-          'Stale residence change requests expired'
-        );
-      }
-
-      return result.count;
-    } catch (err) {
-      logger.error(
-        {
-          operationType: 'CLEANUP_ERROR',
-          task: 'residence-requests',
-          error: String(err),
-        },
-        'Failed to expire stale residence change requests'
-      );
-      return 0;
-    }
+      })
+    );
   }
 
-  /**
-   * Check and timeout incomplete vouching requests
-   * @returns Number of requests timed out
-   */
   async checkVouchingTimeouts(): Promise<number> {
-    try {
-      const result = await prisma.verificationRequest.updateMany({
-        where: {
-          type: 'COMMUNITY',
-          status: 'VOUCHING',
-          expiresAt: { lt: new Date() },
-        },
-        data: {
-          status: 'PAYMENT_PENDING',
-          reviewedAt: new Date(),
-        },
-      });
-
-      if (result.count > 0) {
-        logger.info(
-          { operationType: 'CLEANUP', count: result.count },
-          'Incomplete vouching requests timed out → payment pending'
-        );
-      }
-
-      return result.count;
-    } catch (err) {
-      logger.error(
-        {
-          operationType: 'CLEANUP_ERROR',
-          task: 'vouching-timeouts',
-          error: String(err),
-        },
-        'Failed to check vouching timeouts'
-      );
-      return 0;
-    }
+    return this.safeCleanupJob('vouching-timeouts', () =>
+      prisma.verificationRequest.updateMany({
+        where: { type: 'COMMUNITY', status: 'VOUCHING', expiresAt: { lt: new Date() } },
+        data: { status: 'PAYMENT_PENDING', reviewedAt: new Date() },
+      })
+    );
   }
 }
 
