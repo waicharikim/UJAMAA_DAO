@@ -153,6 +153,43 @@ async function requireHttpBarazaAdmin(
 }
 
 // ─────────────────────────────────────────────
+// Telegram webhook helpers
+// ─────────────────────────────────────────────
+
+function verifyWebhookSecret(req: Request): boolean {
+  const expected = process.env.TELEGRAM_WEBHOOK_SECRET;
+  if (!expected) return true;
+  return req.headers['x-telegram-bot-api-secret-token'] === expected;
+}
+
+async function fetchBarazaGroup(chatId: number): Promise<BarazaGroupRow | null> {
+  return (await prisma.barazaGroup.findFirst({
+    where: { platform: 'TELEGRAM', externalId: String(chatId), isActive: true },
+  })) as BarazaGroupRow | null;
+}
+
+async function dispatchCommand(
+  text: string,
+  from: TelegramFrom | undefined,
+  chatId: number,
+  barazaGroup: BarazaGroupRow | null
+): Promise<void> {
+  if (text.startsWith('/verify')) return handleVerifyCommand(text, from, chatId);
+  if (!barazaGroup) {
+    if (text.startsWith('/present'))
+      logger.info(
+        { operationType: 'TELEGRAM_UNREGISTERED_GROUP', chatId },
+        'Unregistered group — use this chatId to register a baraza group'
+      );
+    return;
+  }
+  if (text.startsWith('/schedule')) return handleScheduleCommand(text, from, chatId, barazaGroup);
+  if (text.startsWith('/open'))     return handleOpenCommand(from, chatId, barazaGroup);
+  if (text.startsWith('/close'))    return handleCloseCommand(from, chatId, barazaGroup);
+  if (text.startsWith('/present'))  return handlePresentCommand(from, chatId, barazaGroup);
+}
+
+// ─────────────────────────────────────────────
 // Telegram webhook
 // ─────────────────────────────────────────────
 
@@ -161,17 +198,11 @@ export async function handleTelegramWebhook(
   res: Response,
   next: NextFunction
 ): Promise<void> {
-  // Verify secret token header
-  const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
-  if (expectedSecret) {
-    const provided = req.headers['x-telegram-bot-api-secret-token'];
-    if (provided !== expectedSecret) {
-      res.status(403).json({ ok: false });
-      return;
-    }
+  if (!verifyWebhookSecret(req)) {
+    res.status(403).json({ ok: false });
+    return;
   }
 
-  // Ack immediately — Telegram requires fast response
   res.status(200).json({ ok: true });
 
   const update = req.body as TelegramUpdate;
@@ -182,44 +213,42 @@ export async function handleTelegramWebhook(
   const from = message.from;
   const text = message.text?.trim() ?? '';
 
-  // Find baraza group for this chat (needed by most commands)
-  const barazaGroup = (await prisma.barazaGroup.findFirst({
-    where: { platform: 'TELEGRAM', externalId: String(chatId), isActive: true },
-  })) as BarazaGroupRow | null;
-
-  if (text.startsWith('/schedule')) {
-    if (barazaGroup)
-      await handleScheduleCommand(text, from, chatId, barazaGroup);
-    return;
-  }
-  if (text.startsWith('/open')) {
-    if (barazaGroup) await handleOpenCommand(from, chatId, barazaGroup);
-    return;
-  }
-  if (text.startsWith('/close')) {
-    if (barazaGroup) await handleCloseCommand(from, chatId, barazaGroup);
-    return;
-  }
-  if (text.startsWith('/verify')) {
-    await handleVerifyCommand(text, from, chatId);
-    return;
-  }
-  if (!text.startsWith('/present')) return;
-
-  // ── /present ──────────────────────────────────
-  if (!barazaGroup) {
-    logger.info(
-      { operationType: 'TELEGRAM_UNREGISTERED_GROUP', chatId },
-      'Unregistered group — use this chatId to register a baraza group'
-    );
-    return;
-  }
-  await handlePresentCommand(from, chatId, barazaGroup);
+  const barazaGroup = await fetchBarazaGroup(chatId);
+  await dispatchCommand(text, from, chatId, barazaGroup);
 }
 
 // ─────────────────────────────────────────────
 // /present — member marks attendance
 // ─────────────────────────────────────────────
+
+async function syncTelegramUserId(from: TelegramFrom): Promise<void> {
+  await prisma.userMessagingProfile.updateMany({
+    where: {
+      platform: 'TELEGRAM',
+      externalUserId: null,
+      handle: from.username ? `@${from.username}` : undefined,
+    },
+    data: { externalUserId: String(from.id) },
+  });
+}
+
+async function hasAlreadyAttended(
+  profile: { userId: string } | null,
+  barazaGroup: BarazaGroupRow,
+  sessionDate: string
+): Promise<boolean> {
+  if (!profile) return false;
+  const record = await prisma.barazaAttendance.findUnique({
+    where: {
+      userId_barazaGroupId_sessionDate: {
+        userId: profile.userId,
+        barazaGroupId: barazaGroup.id,
+        sessionDate,
+      },
+    },
+  });
+  return record !== null;
+}
 
 async function handlePresentCommand(
   from: TelegramFrom | undefined,
@@ -230,18 +259,10 @@ async function handlePresentCommand(
     const externalUserId = String(from?.id ?? '');
     if (!externalUserId) return;
 
-    if (from?.id) {
-      await prisma.userMessagingProfile.updateMany({
-        where: {
-          platform: 'TELEGRAM',
-          externalUserId: null,
-          handle: from.username ? `@${from.username}` : undefined,
-        },
-        data: { externalUserId },
-      });
-    }
+    if (from?.id) await syncTelegramUserId(from);
 
     const firstName = from?.first_name ?? 'Wewe';
+    const sessionDate = new Date().toISOString().slice(0, 10);
 
     const openSession = await barazaBotService.getOpenSession(barazaGroup.id);
     if (!openSession) {
@@ -253,30 +274,17 @@ async function handlePresentCommand(
       return;
     }
 
-    const sessionDate = new Date().toISOString().slice(0, 10);
-
     const profile = await prisma.userMessagingProfile.findFirst({
       where: { platform: 'TELEGRAM', externalUserId },
     });
 
-    if (profile) {
-      const alreadyRecorded = await prisma.barazaAttendance.findUnique({
-        where: {
-          userId_barazaGroupId_sessionDate: {
-            userId: profile.userId,
-            barazaGroupId: barazaGroup.id,
-            sessionDate,
-          },
-        },
-      });
-      if (alreadyRecorded) {
-        await sendTelegramMessage(
-          from!.id,
-          `ℹ️ Wewe tayari umesajiliwa leo ${firstName}! 😄 Hongera kwa kuwa consistent. Tutaonana baraza ijayo! 🌿`,
-          chatId
-        );
-        return;
-      }
+    if (await hasAlreadyAttended(profile, barazaGroup, sessionDate)) {
+      await sendTelegramMessage(
+        from!.id,
+        `ℹ️ Wewe tayari umesajiliwa leo ${firstName}! 😄 Hongera kwa kuwa consistent. Tutaonana baraza ijayo! 🌿`,
+        chatId
+      );
+      return;
     }
 
     await barazaBotService.recordAttendance({
@@ -288,12 +296,7 @@ async function handlePresentCommand(
     });
 
     logger.info(
-      {
-        operationType: 'TELEGRAM_WEBHOOK',
-        chatId,
-        externalUserId,
-        sessionDate,
-      },
+      { operationType: 'TELEGRAM_WEBHOOK', chatId, externalUserId, sessionDate },
       'Attendance recorded via /present command'
     );
 
@@ -316,6 +319,16 @@ async function handlePresentCommand(
 // /schedule — admin schedules next baraza
 // ─────────────────────────────────────────────
 
+function isValidScheduleInput(dateStr: string | undefined, timeStr: string | undefined): boolean {
+  return !!(dateStr && timeStr &&
+    /^\d{4}-\d{2}-\d{2}$/.test(dateStr) &&
+    /^\d{2}:\d{2}$/.test(timeStr));
+}
+
+function isValidFutureDateTime(dt: Date): boolean {
+  return !isNaN(dt.getTime()) && dt > new Date();
+}
+
 async function handleScheduleCommand(
   text: string,
   from: TelegramFrom | undefined,
@@ -337,12 +350,7 @@ async function handleScheduleCommand(
   const dateStr = parts[1]; // YYYY-MM-DD
   const timeStr = parts[2]; // HH:MM
 
-  if (
-    !dateStr ||
-    !timeStr ||
-    !/^\d{4}-\d{2}-\d{2}$/.test(dateStr) ||
-    !/^\d{2}:\d{2}$/.test(timeStr)
-  ) {
+  if (!isValidScheduleInput(dateStr, timeStr)) {
     await sendTelegramMessage(
       from.id,
       '❌ Format si sahihi. Tuma hivi:\n\n`/schedule 2026-03-29 10:00`\n\nTarehe: YYYY-MM-DD, Muda: HH:MM (saa 24)',
@@ -352,7 +360,7 @@ async function handleScheduleCommand(
   }
 
   const scheduledAt = new Date(`${dateStr}T${timeStr}:00+03:00`); // Nairobi time (EAT = UTC+3)
-  if (isNaN(scheduledAt.getTime()) || scheduledAt <= new Date()) {
+  if (!isValidFutureDateTime(scheduledAt)) {
     await sendTelegramMessage(
       from.id,
       '❌ Tarehe au muda si sahihi. Lazima iwe wakati ujao.',
@@ -549,6 +557,40 @@ function verifyDiscordSignature(
 // /verify command — Telegram phone verification
 // ─────────────────────────────────────────────
 
+async function linkTelegramProfile(
+  verification: { id: string; userId: string | null; phoneNumber: string },
+  from: TelegramFrom
+): Promise<void> {
+  if (!verification.userId) return;
+  const user = await prisma.user.findUnique({
+    where: { id: verification.userId },
+    select: { verificationLevel: true },
+  });
+  await prisma.user.update({
+    where: { id: verification.userId },
+    data: {
+      phoneNumber: verification.phoneNumber,
+      phoneVerified: true,
+      ...(user?.verificationLevel === 'EMAIL_VERIFIED' && {
+        verificationLevel: 'PHONE_VERIFIED',
+      }),
+    },
+  });
+  await prisma.userMessagingProfile.upsert({
+    where: { userId_platform: { userId: verification.userId, platform: 'TELEGRAM' } },
+    create: {
+      userId: verification.userId,
+      platform: 'TELEGRAM',
+      externalUserId: String(from.id),
+      handle: from.username ? `@${from.username}` : null,
+    },
+    update: {
+      externalUserId: String(from.id),
+      handle: from.username ? `@${from.username}` : null,
+    },
+  });
+}
+
 async function handleVerifyCommand(
   text: string,
   from: TelegramFrom | undefined,
@@ -588,40 +630,7 @@ async function handleVerifyCommand(
     data: { verified: true, verifiedAt: new Date() },
   });
 
-  if (verification.userId) {
-    const user = await prisma.user.findUnique({
-      where: { id: verification.userId },
-      select: { verificationLevel: true },
-    });
-
-    await prisma.user.update({
-      where: { id: verification.userId },
-      data: {
-        phoneNumber: verification.phoneNumber,
-        phoneVerified: true,
-        ...(user?.verificationLevel === 'EMAIL_VERIFIED' && {
-          verificationLevel: 'PHONE_VERIFIED',
-        }),
-      },
-    });
-
-    // Link this Telegram user ID to their messaging profile
-    await prisma.userMessagingProfile.upsert({
-      where: {
-        userId_platform: { userId: verification.userId, platform: 'TELEGRAM' },
-      },
-      create: {
-        userId: verification.userId,
-        platform: 'TELEGRAM',
-        externalUserId: String(from.id),
-        handle: from.username ? `@${from.username}` : null,
-      },
-      update: {
-        externalUserId: String(from.id),
-        handle: from.username ? `@${from.username}` : null,
-      },
-    });
-  }
+  await linkTelegramProfile(verification, from);
 
   const firstName = from.first_name ?? 'Wewe';
   await sendTelegramMessage(
