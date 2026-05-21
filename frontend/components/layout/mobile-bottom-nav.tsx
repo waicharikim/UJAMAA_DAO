@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation"
 import { useRole } from "@/contexts/role-context"
 import { cn } from "@/lib/utils"
 import {
-  LayoutDashboard,
+  Home,
   Vote,
   Briefcase,
   Users,
@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/drawer"
 
 const primaryNav = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Home", href: "/dashboard", icon: Home },
   { label: "Governance", href: "/proposals", icon: Vote },
   { label: "Elections", href: "/elections", icon: ScrollText },
   { label: "Community", href: "/groups", icon: Users },

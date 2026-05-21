@@ -280,7 +280,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
 
       {/* Header card */}
       <Card className="border-0 shadow-sm">
-        <CardContent className="p-6 space-y-4">
+        <CardContent className="p-4 md:p-6 space-y-4">
           <div className="flex flex-wrap gap-2">
             <Badge className={`text-xs font-semibold ${statusMeta.className}`}>{statusMeta.label}</Badge>
             {proposal.proposalType && (
@@ -371,7 +371,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
       {/* DRAFT: LEADER reviews */}
       {proposal.status === "DRAFT" && isLeader && (
         <Card className="border-0 shadow-sm">
-          <CardContent className="p-6 space-y-3">
+          <CardContent className="p-4 md:p-6 space-y-3">
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-4 w-4 text-amber" />
               <h2 className="text-sm font-bold text-[#0A1F14]">
@@ -447,7 +447,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
       {/* PENDING_REVIEW: location admin approves/rejects */}
       {proposal.status === "PENDING_REVIEW" && (
         <Card className="border-0 shadow-sm">
-          <CardContent className="p-6 space-y-3">
+          <CardContent className="p-4 md:p-6 space-y-3">
             {canLocationApprove ? (
               <>
                 <div className="flex items-center gap-2">
@@ -520,7 +520,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
       {/* APPROVED_FOR_VOTING: LEADER opens voting */}
       {proposal.status === "APPROVED_FOR_VOTING" && (
         <Card className="border-0 shadow-sm">
-          <CardContent className="p-6 space-y-3">
+          <CardContent className="p-4 md:p-6 space-y-3">
             {isLeader ? (
               <>
                 <div className="flex items-center gap-2">
@@ -552,7 +552,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
 
       {/* Vote tally */}
       <Card className="border-0 shadow-sm">
-        <CardContent className="p-6 space-y-4">
+        <CardContent className="p-4 md:p-6 space-y-4">
           <div className="flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-amber" />
             <h2 className="text-sm font-bold text-[#0A1F14]">Vote Tally</h2>
@@ -602,7 +602,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
       {/* Launch project */}
       {proposal.status === "APPROVED" && (
         <Card className="border-0 shadow-sm">
-          <CardContent className="p-6 space-y-3">
+          <CardContent className="p-4 md:p-6 space-y-3">
             <div className="flex items-center gap-2">
               <Briefcase className="h-4 w-4 text-tea-green" />
               <h2 className="text-sm font-bold text-[#0A1F14]">Launch Project</h2>
@@ -626,7 +626,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
       {/* Cast vote */}
       {proposal.status === "VOTING" && (
         <Card className="border-0 shadow-sm">
-          <CardContent className="p-6 space-y-3">
+          <CardContent className="p-4 md:p-6 space-y-3">
             <h2 className="text-sm font-bold text-[#0A1F14]">Cast your vote</h2>
             <p className="text-xs text-warm-gray">Your vote is weighted by your Participation Rights balance.</p>
             <div className="grid grid-cols-3 gap-3">
@@ -661,7 +661,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
 
       {/* ── Ward Memory Layer ─────────────────────────────────── */}
       <Card className="border-0 shadow-card">
-        <CardContent className="p-6 space-y-4">
+        <CardContent className="p-4 md:p-6 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <BookMarked className="h-4 w-4" style={{ color: "#C9922A" }} />
@@ -812,7 +812,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
       {/* ── Failure Protocol: What next? ─────────────────── */}
       {proposal?.status === "REJECTED" && (
         <Card className="border-0 shadow-card" style={{ borderLeft: "3px solid #B03A1E" }}>
-          <CardContent className="p-6 space-y-4">
+          <CardContent className="p-4 md:p-6 space-y-4">
             <div className="flex items-center gap-2">
               <AlertTriangle className="h-4 w-4" style={{ color: "#B03A1E" }} />
               <h2 className="text-sm font-bold" style={{ color: "#B03A1E" }}>This proposal was rejected</h2>

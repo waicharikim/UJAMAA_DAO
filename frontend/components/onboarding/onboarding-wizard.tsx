@@ -171,25 +171,25 @@ export function OnboardingWizard({ forceOpen, onClose }: OnboardingWizardProps) 
           </button>
         )}
 
-        <div className="p-8 pt-10">
+        <div className="p-5 pt-7 sm:p-8 sm:pt-10">
           {/* Icon */}
           <div
-            className="w-16 h-16 rounded-2xl flex items-center justify-center mb-6"
+            className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center mb-4 sm:mb-6"
             style={{ background: current.iconBg }}
           >
-            <Icon className="h-8 w-8" style={{ color: current.iconColor }} />
+            <Icon className="h-7 w-7 sm:h-8 sm:w-8" style={{ color: current.iconColor }} />
           </div>
 
           {/* Content */}
-          <h2 className="text-xl font-bold mb-3" style={{ color: "#0E0B08" }}>
+          <h2 className="text-lg sm:text-xl font-bold mb-2 sm:mb-3" style={{ color: "#0E0B08" }}>
             {current.title}
           </h2>
-          <p className="text-sm leading-relaxed mb-8" style={{ color: "rgba(14,11,8,0.65)" }}>
+          <p className="text-sm leading-relaxed mb-5 sm:mb-8" style={{ color: "rgba(14,11,8,0.65)" }}>
             {current.body}
           </p>
 
           {/* Slide dots */}
-          <div className="flex gap-1.5 mb-6">
+          <div className="flex gap-1.5 mb-4 sm:mb-6">
             {SLIDES.map((_, i) => (
               <div
                 key={i}

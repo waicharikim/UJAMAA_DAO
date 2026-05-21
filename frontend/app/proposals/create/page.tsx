@@ -179,7 +179,7 @@ export default function CreateProposalPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-2xl space-y-6">
+    <div className="container mx-auto px-4 py-4 md:py-8 max-w-2xl space-y-5 md:space-y-6">
       <Link
         href="/proposals"
         className="inline-flex items-center gap-1.5 text-sm text-warm-gray hover:text-amber transition-colors"
@@ -200,7 +200,7 @@ export default function CreateProposalPage() {
       <StepBar step={step} />
 
       <Card className="border-0 shadow-sm">
-        <CardContent className="p-6 space-y-5">
+        <CardContent className="p-4 md:p-6 space-y-5">
           {/* ── STEP 1: Group & Type ─────────────────────────────────────── */}
           {step === 0 && (
             <>

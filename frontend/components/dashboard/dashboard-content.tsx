@@ -22,7 +22,7 @@ import { ImpactTracker } from "@/components/user/impact-tracker"
 function StatSkeleton() {
   return (
     <Card className="border-0 shadow-card">
-      <CardContent className="p-6 space-y-3">
+      <CardContent className="p-4 md:p-6 space-y-3">
         <Skeleton className="h-4 w-28" />
         <Skeleton className="h-8 w-20" />
         <Skeleton className="h-3 w-24" />
@@ -45,11 +45,11 @@ interface StatCardProps {
 function StatCard({ title, subtitle, value, change, changeType, icon: Icon, colorClass }: StatCardProps) {
   return (
     <Card className="border-0 shadow-card overflow-hidden">
-      <CardContent className="p-6">
+      <CardContent className="p-4 md:p-6">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">{subtitle}</p>
-            <p className="text-[28px] font-bold text-[#0E0B08] leading-none mb-2">{value}</p>
+            <p className="text-xl md:text-[28px] font-bold text-[#0E0B08] leading-none mb-2">{value}</p>
             <p
               className="text-xs font-medium"
               style={{
@@ -64,8 +64,8 @@ function StatCard({ title, subtitle, value, change, changeType, icon: Icon, colo
               {change}
             </p>
           </div>
-          <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${colorClass}`}>
-            <Icon className="h-5 w-5 text-white" />
+          <div className={`w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${colorClass}`}>
+            <Icon className="h-4 w-4 md:h-5 md:w-5 text-white" />
           </div>
         </div>
       </CardContent>
@@ -127,7 +127,7 @@ function AdminPanel() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
           {[
             { label: "Total Users", value: stats?.users.total ?? "—" },
             { label: "Active Proposals", value: stats?.governance.activeProposals ?? "—" },
@@ -333,7 +333,7 @@ function WelcomeHeader({
   ]
   return (
     <div>
-      <h2 className="font-display font-bold text-3xl text-[#0E0B08] leading-tight">
+      <h2 className="font-display font-bold text-2xl md:text-3xl text-[#0E0B08] leading-tight">
         Karibu,{" "}
         <span style={{ color: "#C9922A" }}>{user.username || user.email?.split("@")[0] || "Mwanachama"}</span>
       </h2>
@@ -369,7 +369,7 @@ function StatsGrid({
   isLoading: boolean
 }) {
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
       {isLoading ? (
         <><StatSkeleton /><StatSkeleton /><StatSkeleton /><StatSkeleton /></>
       ) : (
@@ -413,17 +413,17 @@ function NeedsActionBanner({ total }: { total: number }) {
 // ─── Quick action cards ────────────────────────────────────
 function QuickActions() {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-5">
       <Card
         className="group border-0 overflow-hidden shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:shadow-gold"
         style={{ background: "linear-gradient(135deg, #C9922A 0%, #E8B84B 100%)" }}
       >
-        <CardContent className="p-6">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-4" style={{ background: "rgba(14,11,8,0.15)" }}>
+        <CardContent className="p-4 md:p-6">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3 md:mb-4" style={{ background: "rgba(14,11,8,0.15)" }}>
             <Vote className="h-5 w-5 text-white" />
           </div>
-          <h3 className="font-display font-bold text-xl text-[#0E0B08] mb-1">Governance</h3>
-          <p className="text-sm text-[#0E0B08]/60 mb-4">Vote on ward proposals and shape your community&apos;s future.</p>
+          <h3 className="font-display font-bold text-lg md:text-xl text-[#0E0B08] mb-1">Governance</h3>
+          <p className="text-sm text-[#0E0B08]/60 mb-3 md:mb-4">Vote on ward proposals and shape your community&apos;s future.</p>
           <Link href="/proposals">
             <Button size="sm" className="w-full font-semibold" style={{ background: "rgba(14,11,8,0.15)", color: "#0E0B08", border: "1px solid rgba(14,11,8,0.15)" }}>
               View Proposals
@@ -436,12 +436,12 @@ function QuickActions() {
         className="group border-0 overflow-hidden shadow-card transition-all duration-300 hover:-translate-y-0.5"
         style={{ background: "linear-gradient(135deg, #1E3D2F 0%, #2A5240 100%)" }}
       >
-        <CardContent className="p-6">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-4" style={{ background: "rgba(255,255,255,0.1)" }}>
+        <CardContent className="p-4 md:p-6">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3 md:mb-4" style={{ background: "rgba(255,255,255,0.1)" }}>
             <Briefcase className="h-5 w-5 text-white" />
           </div>
-          <h3 className="font-display font-bold text-xl text-white mb-1">Projects</h3>
-          <p className="text-sm text-white/60 mb-4">Join ward projects — boreholes, schools, clean energy.</p>
+          <h3 className="font-display font-bold text-lg md:text-xl text-white mb-1">Projects</h3>
+          <p className="text-sm text-white/60 mb-3 md:mb-4">Join ward projects — boreholes, schools, clean energy.</p>
           <Link href="/projects">
             <Button size="sm" className="w-full font-semibold" style={{ background: "rgba(255,255,255,0.1)", color: "#fff", border: "1px solid rgba(255,255,255,0.15)" }}>
               Browse Projects
@@ -454,12 +454,12 @@ function QuickActions() {
         className="group border-0 overflow-hidden shadow-card transition-all duration-300 hover:-translate-y-0.5"
         style={{ background: "linear-gradient(135deg, #FAF7F2 0%, #F6F0E6 100%)", border: "1px solid rgba(201,146,42,0.2)" }}
       >
-        <CardContent className="p-6">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-4" style={{ background: "rgba(201,146,42,0.12)" }}>
+        <CardContent className="p-4 md:p-6">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3 md:mb-4" style={{ background: "rgba(201,146,42,0.12)" }}>
             <Users className="h-5 w-5" style={{ color: "#C9922A" }} />
           </div>
-          <h3 className="font-display font-bold text-xl text-[#0E0B08] mb-1">Community</h3>
-          <p className="text-sm text-[#0E0B08]/60 mb-4">Connect with ward members and join interest groups.</p>
+          <h3 className="font-display font-bold text-lg md:text-xl text-[#0E0B08] mb-1">Community</h3>
+          <p className="text-sm text-[#0E0B08]/60 mb-3 md:mb-4">Connect with ward members and join interest groups.</p>
           <Link href="/groups">
             <Button size="sm" className="w-full font-semibold" style={{ background: "rgba(201,146,42,0.1)", color: "#C9922A", border: "1px solid rgba(201,146,42,0.3)" }}>
               Explore Groups
@@ -474,7 +474,7 @@ function QuickActions() {
 // ─── Activity section ──────────────────────────────────────
 function ActivitySection() {
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
       <div className="lg:col-span-2">
         <Card className="border-0 shadow-card">
           <CardHeader className="pb-3">
@@ -555,7 +555,7 @@ export function DashboardContent() {
   }
 
   return (
-    <div className="px-4 md:px-8 py-6 space-y-8 max-w-6xl mx-auto">
+    <div className="px-4 md:px-8 py-4 md:py-6 space-y-4 md:space-y-8 max-w-6xl mx-auto">
       {user && <WelcomeHeader user={user} prBalance={prBalance} impactPoints={impactPoints} />}
       {user?.verificationLevel && <VerificationNudge level={user.verificationLevel} />}
       <RolePanels isAdmin={isAdmin} isCompliance={isCompliance} isCoordinator={isCoordinator} />

@@ -2087,6 +2087,40 @@ export const feedApi = {
 }
 
 // ─────────────────────────────────────────────────────────
+// Posts API  — /api/v1/posts
+// ─────────────────────────────────────────────────────────
+
+export type PostScope = "WARD" | "CONSTITUENCY" | "COUNTY" | "NATIONAL"
+
+export interface PostDto {
+  id: string
+  content: string
+  scope: PostScope
+  authorId: string
+  authorName: string
+  authorInitials: string
+  wardName: string | null
+  createdAt: string
+}
+
+export interface PostPageDto {
+  items: PostDto[]
+  nextCursor: string | null
+}
+
+export const postsApi = {
+  getPosts: (params?: { scope?: PostScope; cursor?: string }): Promise<PostPageDto> => {
+    const qs = new URLSearchParams()
+    if (params?.scope) qs.set("scope", params.scope)
+    if (params?.cursor) qs.set("cursor", params.cursor)
+    const q = qs.toString()
+    return apiFetch<PostPageDto>(`/posts${q ? `?${q}` : ""}`)
+  },
+  createPost: (body: { content: string; scope: PostScope }): Promise<PostDto> =>
+    apiFetch<PostDto>("/posts", { method: "POST", body: JSON.stringify(body) }),
+}
+
+// ─────────────────────────────────────────────────────────
 // Elections API  — /api/v1/elections
 // ─────────────────────────────────────────────────────────
 

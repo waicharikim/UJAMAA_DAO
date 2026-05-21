@@ -31,7 +31,7 @@ export default function RegisterPage() {
 
         {/* Card */}
         <div
-          className="rounded-2xl p-8"
+          className="rounded-2xl p-5 sm:p-8"
           style={{
             background: "#F7F2E8",
             border: "1px solid rgba(212,145,30,0.15)",

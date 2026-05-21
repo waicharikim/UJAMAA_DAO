@@ -73,6 +73,7 @@ import integrationRoutes from './modules/integration/routes/bot.routes.js';
 import treasuryRoutes from './modules/treasury/routes/treasury.routes.js';
 import paymentRoutes from './modules/payments/routes/payment.routes.js';
 import electionRoutes from './modules/elections/routes/election.routes.js';
+import postRoutes from './modules/posts/routes/post.routes.js';
 import platformConfigRoutes from './modules/admin/routes/platform-config.routes.js';
 import blockchainAdminRoutes from './modules/admin/routes/blockchain.routes.js';
 
@@ -290,6 +291,7 @@ app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/emergency', emergencyRoutes);
 app.use('/api/v1/audit', auditRoutes);
 app.use('/api/v1/feed', feedRoutes);
+app.use('/api/v1/posts', postRoutes);
 app.use('/api/v1/onboarding', onboardingRoutes);
 app.use('/api/v1/reputation', reputationRoutes);
 app.use('/api/v1/education', educationRoutes);

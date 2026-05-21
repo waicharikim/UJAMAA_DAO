@@ -186,7 +186,7 @@ export default function GovernancePage() {
   ]
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-3xl space-y-8">
+    <div className="container mx-auto px-4 py-4 md:py-8 max-w-3xl space-y-5 md:space-y-8">
       {/* Header */}
       <div className="space-y-3">
         <div className="flex items-center gap-3">
@@ -268,7 +268,7 @@ export default function GovernancePage() {
 
       {/* Platform Finances */}
       <Card className="border-0 shadow-card">
-        <CardContent className="p-6 space-y-5">
+        <CardContent className="p-4 md:p-6 space-y-5">
           <div className="flex items-center gap-2">
             <Coins className="h-4 w-4" style={{ color: "#C9922A" }} />
             <h2 className="text-sm font-bold text-[#0A1F14]">What it costs to run UjamaaDAO</h2>
@@ -350,7 +350,7 @@ export default function GovernancePage() {
 
       {/* How this works */}
       <Card className="border-0 shadow-card">
-        <CardContent className="p-6 space-y-4">
+        <CardContent className="p-4 md:p-6 space-y-4">
           <h2 className="text-sm font-bold text-[#0A1F14]">How platform governance works</h2>
           <div className="space-y-3">
             {[

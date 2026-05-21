@@ -8,7 +8,7 @@ import { useLanguage } from "@/contexts/language-context"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 import {
-  LayoutDashboard,
+  Home,
   Vote,
   Briefcase,
   Users,
@@ -29,7 +29,7 @@ import {
 } from "lucide-react"
 
 const primaryNav = [
-  { key: "nav.dashboard",  href: "/dashboard",  icon: LayoutDashboard },
+  { key: "nav.dashboard",  href: "/dashboard",  icon: Home },
   { key: "nav.proposals",  href: "/proposals",  icon: Vote },
   { key: "nav.governance", href: "/governance", icon: Scale },
   { key: "nav.elections",  href: "/elections",  icon: ScrollText },

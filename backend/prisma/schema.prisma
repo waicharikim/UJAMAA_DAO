@@ -113,6 +113,9 @@ model Ward {
   // Reputation module
   locationImpacts UserLocationImpact[] @relation("WardLocationImpacts")
 
+  // Posts module
+  posts Post[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -312,6 +315,9 @@ model User {
 
   // ---- Payments module ----
   paymentRecords            PaymentRecord[]
+
+  // ---- Posts module ----
+  posts                     Post[]
 
   // ---- System ----
   updatedConfigs            SystemConfiguration[]  @relation("ConfigUpdater")
@@ -2820,4 +2826,36 @@ model PaymentRecord {
   @@index([flwRef])
   @@index([status])
   @@map("payment_records")
+}
+
+
+// ============================================================================
+// MODULE: POSTS (Community Feed)
+// ============================================================================
+
+enum PostScope {
+  WARD
+  CONSTITUENCY
+  COUNTY
+  NATIONAL
+}
+
+model Post {
+  id        String    @id @default(uuid()) @db.Uuid
+  content   String    @db.Text
+  scope     PostScope @default(WARD)
+  authorId  String    @db.Uuid
+  wardId    String?   @db.Uuid
+
+  author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  ward      Ward?     @relation(fields: [wardId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([authorId])
+  @@index([wardId])
+  @@index([scope])
+  @@index([createdAt(sort: Desc)])
+  @@map("posts")
 }
