@@ -1,17 +1,3 @@
-/**
- * @file src/modules/auth/services/auth.service.ts
- * @description
- * Auth Service — Magic Link Flow + User Creation
- *
- * REFACTORED: Separated concerns - auth only handles authentication
- * - Emits events for other modules to react to
- * - Economy module listens and awards PR
- * - Community module listens and enrolls in groups
- * - OnboardingProgress tracking improved
- *
- * Version: 3.1 — January 2026
- */
-
 import { prisma } from '../../../core/database/client.js';
 import { Prisma } from '@prisma/client';
 import {
@@ -46,433 +32,254 @@ import { AuditAction } from '../../audit/types.js';
 
 type VerifyMagicLinkContext = WalletAuthContext;
 
-// Brute force detection constants
+type TrackLoginParams = {
+  userId: string | null;
+  method: string;
+  successful: boolean;
+  failureReason?: string | null;
+  context?: VerifyMagicLinkContext;
+};
+
 const MAX_FAILED_ATTEMPTS = 5;
-const FAILED_ATTEMPT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const FAILED_ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
 
 class AuthService {
-  /**
-   * Send magic link or verification email.
-   * New users: Creates user + sends verification email
-   * Existing users: Sends magic link login email
-   */
   async sendMagicLink(
     params: SendMagicLinkDto
   ): Promise<SendMagicLinkResponse> {
-    const {
-      email,
-      name,
-      phoneNumber,
-      primaryWardId,
-      secondaryWardId,
-      industryIds,
-      goodsServiceIds,
-      messagingPlatforms,
-    } = params;
+    const user = await prisma.user.findUnique({ where: { email: params.email } });
+    if (!user) return this.registerNewUser(params);
+    return this.sendLoginMagicLink(user, params.email);
+  }
 
-    // Check if user exists
-    let user = await prisma.user.findUnique({ where: { email } });
-
-    if (!user) {
-      // Sign-in attempt (only email provided) → user doesn't exist
-      if (
-        !name &&
-        !phoneNumber &&
-        !primaryWardId &&
-        !secondaryWardId &&
-        !industryIds &&
-        !goodsServiceIds
-      ) {
-        throw ApiError.notFound(
-          'No account found with that email. Please register first.'
-        );
-      }
-
-      // New user registration — validate all required fields present
-      if (
-        !name ||
-        !phoneNumber ||
-        !primaryWardId ||
-        !secondaryWardId ||
-        !industryIds ||
-        !goodsServiceIds
-      ) {
-        throw ApiError.validationError(
-          'New users must provide: name, phoneNumber, primaryWardId, secondaryWardId, industryIds, and goodsServiceIds',
-          {
-            required: [
-              'name',
-              'phoneNumber',
-              'primaryWardId',
-              'secondaryWardId',
-              'industryIds',
-              'goodsServiceIds',
-            ],
-            provided: {
-              name: !!name,
-              phoneNumber: !!phoneNumber,
-              primaryWardId: !!primaryWardId,
-              secondaryWardId: !!secondaryWardId,
-              industryIds: !!industryIds,
-              goodsServiceIds: !!goodsServiceIds,
-            },
-          }
-        );
-      }
-
-      // Validate wards exist
-      const [primaryWard, secondaryWard] = await Promise.all([
-        prisma.ward.findUnique({
-          where: { id: primaryWardId },
-          select: {
-            id: true,
-            constituencyId: true,
-            countyId: true,
-            name: true,
-          },
-        }),
-        prisma.ward.findUnique({
-          where: { id: secondaryWardId },
-          select: {
-            id: true,
-            constituencyId: true,
-            countyId: true,
-            name: true,
-          },
-        }),
-      ]);
-
-      if (!primaryWard || !secondaryWard) {
-        throw ApiError.validationError('Invalid ward selection', {
-          primaryWardId: primaryWard ? 'valid' : 'invalid',
-          secondaryWardId: secondaryWard ? 'valid' : 'invalid',
-        });
-      }
-
-      // Validate industries and goods/services
-      const [industries, goodsServices] = await Promise.all([
-        prisma.industry.findMany({
-          where: { id: { in: industryIds } },
-          select: { id: true },
-        }),
-        prisma.goodsService.findMany({
-          where: { id: { in: goodsServiceIds }, active: true },
-          select: { id: true },
-        }),
-      ]);
-
-      if (industries.length !== industryIds.length) {
-        throw ApiError.validationError('One or more industries are invalid', {
-          expected: industryIds.length,
-          found: industries.length,
-        });
-      }
-
-      if (goodsServices.length !== goodsServiceIds.length) {
-        throw ApiError.validationError(
-          'One or more goods/services are invalid or inactive',
-          {
-            expected: goodsServiceIds.length,
-            found: goodsServices.length,
-          }
-        );
-      }
-
-      // Create user in transaction
-      user = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-        const newUser = await tx.user.create({
-          data: {
-            email,
-            name,
-            phoneNumber,
-            primaryWardId,
-            secondaryWardId,
-            verificationLevel: 'UNVERIFIED',
-            emailVerified: false,
-            phoneVerified: false,
-            communityVerified: false,
-            locationVerified: false,
-          },
-        });
-
-        // Create industry associations (first one is primary by default)
-        await Promise.all(
-          industryIds.map((id, index) =>
-            tx.userIndustry.create({
-              data: {
-                userId: newUser.id,
-                industryId: id,
-                isPrimary: index === 0, // First industry is primary
-              },
-            })
-          )
-        );
-
-        // Create goods/service associations (all start as can provide AND request)
-        await Promise.all(
-          goodsServiceIds.map((id) =>
-            tx.userGoodsService.create({
-              data: {
-                userId: newUser.id,
-                goodsServiceId: id,
-                canProvide: true,
-                canRequest: true,
-              },
-            })
-          )
-        );
-
-        // Initialize onboarding progress
-        await tx.onboardingProgress.create({
-          data: {
-            userId: newUser.id,
-            industriesSelected: true,
-            goodsServicesSelected: true,
-            profileCompleted: true, // Name provided
-            currentStep: 'EMAIL_VERIFICATION',
-          },
-        });
-
-        // Create messaging platform preferences if provided
-        if (messagingPlatforms?.length) {
-          await Promise.all(
-            messagingPlatforms.map((pref) =>
-              tx.userMessagingProfile.create({
-                data: {
-                  userId: newUser.id,
-                  platform: pref.platform as any,
-                  handle: pref.handle ?? null,
-                  isVerified: false,
-                },
-              })
-            )
-          );
-        }
-
-        return newUser;
-      });
-
-      // Send verification email
-      const verificationToken = await tokenService.createVerificationToken(
-        user.id
+  private assertRegistrationComplete(params: SendMagicLinkDto): void {
+    const { name, phoneNumber, primaryWardId, secondaryWardId, industryIds, goodsServiceIds } = params;
+    if (!name && !phoneNumber && !primaryWardId && !secondaryWardId && !industryIds && !goodsServiceIds) {
+      throw ApiError.notFound(
+        'No account found with that email. Please register first.'
       );
-      const verificationLink = `${process.env.FRONTEND_URL}/auth/callback?token=${verificationToken}`;
-
-      await sendVerificationEmail(email, name, verificationLink);
-
-      logger.info(
-        {
-          operationType: 'AUTH',
-          userId: user.id,
-          metadata: { primaryWardId, secondaryWardId },
-        },
-        'New user created and verification email sent'
-      );
-
-      eventBus.publish('user.created', {
-        userId: user.id,
-        email,
-        primaryWardId,
-        secondaryWardId,
-      });
-
-      await auditService.log(
-        user.id,
-        AuditAction.USER_CREATED,
-        'user',
-        user.id,
-        { primaryWardId, secondaryWardId, registrationMethod: 'email' }
-      );
-
-      return { newUser: true, sentVerification: true };
     }
+    if (!name || !phoneNumber || !primaryWardId || !secondaryWardId || !industryIds || !goodsServiceIds) {
+      throw ApiError.validationError(
+        'New users must provide: name, phoneNumber, primaryWardId, secondaryWardId, industryIds, and goodsServiceIds',
+        {
+          required: ['name', 'phoneNumber', 'primaryWardId', 'secondaryWardId', 'industryIds', 'goodsServiceIds'],
+          provided: {
+            name: !!name,
+            phoneNumber: !!phoneNumber,
+            primaryWardId: !!primaryWardId,
+            secondaryWardId: !!secondaryWardId,
+            industryIds: !!industryIds,
+            goodsServiceIds: !!goodsServiceIds,
+          },
+        }
+      );
+    }
+  }
 
-    // Existing user - send magic link
-    const payload: JwtPayload = {
-      sub: user.id,
-      email: user.email || undefined,
-      type: 'magic-link',
-    };
+  private async validateWards(primaryWardId: string, secondaryWardId: string) {
+    const wardSelect = { id: true, constituencyId: true, countyId: true, name: true };
+    const [primaryWard, secondaryWard] = await Promise.all([
+      prisma.ward.findUnique({ where: { id: primaryWardId }, select: wardSelect }),
+      prisma.ward.findUnique({ where: { id: secondaryWardId }, select: wardSelect }),
+    ]);
+    if (!primaryWard || !secondaryWard) {
+      throw ApiError.validationError('Invalid ward selection', {
+        primaryWardId: primaryWard ? 'valid' : 'invalid',
+        secondaryWardId: secondaryWard ? 'valid' : 'invalid',
+      });
+    }
+    return [primaryWard, secondaryWard] as const;
+  }
 
-    const magicLinkToken = await tokenService.createMagicLinkToken(payload);
-    const loginLink = `${process.env.FRONTEND_URL}/auth/callback?token=${magicLinkToken}`;
+  private async validateIndustriesAndGoods(
+    industryIds: string[],
+    goodsServiceIds: string[]
+  ): Promise<void> {
+    const [industries, goodsServices] = await Promise.all([
+      prisma.industry.findMany({ where: { id: { in: industryIds } }, select: { id: true } }),
+      prisma.goodsService.findMany({ where: { id: { in: goodsServiceIds }, active: true }, select: { id: true } }),
+    ]);
+    if (industries.length !== industryIds.length) {
+      throw ApiError.validationError('One or more industries are invalid', {
+        expected: industryIds.length,
+        found: industries.length,
+      });
+    }
+    if (goodsServices.length !== goodsServiceIds.length) {
+      throw ApiError.validationError('One or more goods/services are invalid or inactive', {
+        expected: goodsServiceIds.length,
+        found: goodsServices.length,
+      });
+    }
+  }
 
-    await sendLoginEmail(email, user.name || 'User', loginLink);
+  private async createUserInTransaction(
+    email: string,
+    name: string,
+    phoneNumber: string,
+    primaryWardId: string,
+    secondaryWardId: string,
+    industryIds: string[],
+    goodsServiceIds: string[],
+    messagingPlatforms: SendMagicLinkDto['messagingPlatforms']
+  ) {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const newUser = await tx.user.create({
+        data: {
+          email,
+          name,
+          phoneNumber,
+          primaryWardId,
+          secondaryWardId,
+          verificationLevel: 'UNVERIFIED',
+          emailVerified: false,
+          phoneVerified: false,
+          communityVerified: false,
+          locationVerified: false,
+        },
+      });
 
-    logger.info(
-      { operationType: 'AUTH', userId: user.id },
-      'Magic link sent to existing user'
+      await Promise.all(
+        industryIds.map((id, index) =>
+          tx.userIndustry.create({
+            data: { userId: newUser.id, industryId: id, isPrimary: index === 0 },
+          })
+        )
+      );
+
+      await Promise.all(
+        goodsServiceIds.map((id) =>
+          tx.userGoodsService.create({
+            data: { userId: newUser.id, goodsServiceId: id, canProvide: true, canRequest: true },
+          })
+        )
+      );
+
+      await tx.onboardingProgress.create({
+        data: {
+          userId: newUser.id,
+          industriesSelected: true,
+          goodsServicesSelected: true,
+          profileCompleted: true,
+          currentStep: 'EMAIL_VERIFICATION',
+        },
+      });
+
+      if (messagingPlatforms?.length) {
+        await Promise.all(
+          messagingPlatforms.map((pref) =>
+            tx.userMessagingProfile.create({
+              data: {
+                userId: newUser.id,
+                platform: pref.platform as any,
+                handle: pref.handle ?? null,
+                isVerified: false,
+              },
+            })
+          )
+        );
+      }
+
+      return newUser;
+    });
+  }
+
+  private async registerNewUser(params: SendMagicLinkDto): Promise<SendMagicLinkResponse> {
+    const { email, name, phoneNumber, primaryWardId, secondaryWardId, industryIds, goodsServiceIds, messagingPlatforms } = params;
+    this.assertRegistrationComplete(params);
+    await this.validateWards(primaryWardId!, secondaryWardId!);
+    await this.validateIndustriesAndGoods(industryIds!, goodsServiceIds!);
+
+    const user = await this.createUserInTransaction(
+      email, name!, phoneNumber!, primaryWardId!, secondaryWardId!, industryIds!, goodsServiceIds!, messagingPlatforms
     );
 
+    const verificationToken = await tokenService.createVerificationToken(user.id);
+    const verificationLink = `${process.env.FRONTEND_URL}/auth/callback?token=${verificationToken}`;
+    await sendVerificationEmail(email, name!, verificationLink);
+
+    logger.info(
+      { operationType: 'AUTH', userId: user.id, metadata: { primaryWardId, secondaryWardId } },
+      'New user created and verification email sent'
+    );
+    eventBus.publish('user.created', { userId: user.id, email, primaryWardId, secondaryWardId });
+    await auditService.log(user.id, AuditAction.USER_CREATED, 'user', user.id, { primaryWardId, secondaryWardId, registrationMethod: 'email' });
+
+    return { newUser: true, sentVerification: true };
+  }
+
+  private async sendLoginMagicLink(
+    user: { id: string; email: string | null; name: string | null },
+    email: string
+  ): Promise<SendMagicLinkResponse> {
+    const payload: JwtPayload = { sub: user.id, email: user.email || undefined, type: 'magic-link' };
+    const magicLinkToken = await tokenService.createMagicLinkToken(payload);
+    const loginLink = `${process.env.FRONTEND_URL}/auth/callback?token=${magicLinkToken}`;
+    await sendLoginEmail(email, user.name || 'User', loginLink);
+    logger.info({ operationType: 'AUTH', userId: user.id }, 'Magic link sent to existing user');
     return { newUser: false, sentLogin: true };
   }
 
-  /**
-   * Complete email verification and create session.
-   *
-   * REFACTORED:
-   * - Only awards PR for EMAIL_VERIFIED (not full onboarding)
-   * - Updates OnboardingProgress correctly
-   * - Enrolls in system groups (can be moved to event listener later)
-   * - No premature onboardingCompletedAt
-   */
-  private async completeEmailVerificationAndCreateSession(
-    userId: string,
+  private async handleFirstTimeEmailVerification(
+    user: any,
     loginMethod: string,
     context?: VerifyMagicLinkContext
-  ): Promise<MagicLinkAuthResult> {
-    let user = await prisma.user.findUnique({
-      where: { id: userId },
-      include: {
-        primaryWard: {
-          select: {
-            id: true,
-            constituencyId: true,
-            countyId: true,
-            name: true,
-          },
+  ) {
+    if (!user.primaryWardId || !user.secondaryWardId) {
+      await this.trackLoginEvent({ userId: user.id, method: loginMethod, successful: false, failureReason: 'Missing ward assignments', context });
+      throw ApiError.validationError('Ward assignments required');
+    }
+
+    const wardSelect = { id: true, constituencyId: true, countyId: true, name: true };
+    const updatedUser = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const u = await tx.user.update({
+        where: { id: user.id },
+        data: { emailVerified: true, verificationLevel: 'EMAIL_VERIFIED' },
+        include: {
+          primaryWard: { select: wardSelect },
+          secondaryWard: { select: wardSelect },
+          currentWard: { select: wardSelect },
+          userRoles: { where: { active: true }, include: { role: { select: { id: true, name: true } } } },
         },
-        secondaryWard: {
-          select: {
-            id: true,
-            constituencyId: true,
-            countyId: true,
-            name: true,
-          },
-        },
-        currentWard: {
-          select: {
-            id: true,
-            constituencyId: true,
-            countyId: true,
-            name: true,
-          },
-        },
-        userRoles: {
-          where: { active: true },
-          include: { role: { select: { id: true, name: true } } },
-        },
-      },
+      });
+      await tx.onboardingProgress.update({
+        where: { userId: u.id },
+        data: { emailVerified: true, currentStep: 'PLATFORM_INTRO' },
+      });
+      return u;
     });
 
-    if (!user) {
-      await this.trackLoginEvent(
-        null,
-        loginMethod,
-        false,
-        'User not found',
-        context
-      );
-      throw ApiError.authenticationError('Invalid link - user not found');
-    }
+    logger.info({ operationType: 'AUTH', userId: updatedUser.id }, 'Email verified successfully');
 
-    const isFirstTimeLogin = user.verificationLevel === 'UNVERIFIED';
+    await eventBus.emit('user.email.verified', {
+      userId: updatedUser.id,
+      primaryWardId: updatedUser.primaryWardId,
+      secondaryWardId: updatedUser.secondaryWardId,
+    });
 
-    // First-time email verification
-    if (isFirstTimeLogin) {
-      if (!user.primaryWardId || !user.secondaryWardId) {
-        await this.trackLoginEvent(
-          user.id,
-          loginMethod,
-          false,
-          'Missing ward assignments',
-          context
-        );
-        throw ApiError.validationError('Ward assignments required');
-      }
+    await auditService.log(updatedUser.id, AuditAction.EMAIL_VERIFIED, 'user', updatedUser.id, { verificationLevel: 'EMAIL_VERIFIED', loginMethod });
+    await userService.checkFullVerification(updatedUser.id);
 
-      // Complete email verification in transaction
-      user = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-        // 1. Update user verification status
-        const updatedUser = await tx.user.update({
-          where: { id: user!.id },
-          data: {
-            emailVerified: true,
-            verificationLevel: 'EMAIL_VERIFIED',
-            // NOTE: onboardingCompletedAt NOT set here - too early!
-          },
-          include: {
-            primaryWard: {
-              select: {
-                id: true,
-                constituencyId: true,
-                countyId: true,
-                name: true,
-              },
-            },
-            secondaryWard: {
-              select: {
-                id: true,
-                constituencyId: true,
-                countyId: true,
-                name: true,
-              },
-            },
-            currentWard: {
-              select: {
-                id: true,
-                constituencyId: true,
-                countyId: true,
-                name: true,
-              },
-            },
-            userRoles: {
-              where: { active: true },
-              include: { role: { select: { id: true, name: true } } },
-            },
-          },
-        });
+    return updatedUser;
+  }
 
-        // 2. Update onboarding progress
-        await tx.onboardingProgress.update({
-          where: { userId: updatedUser.id },
-          data: {
-            emailVerified: true,
-            currentStep: 'PLATFORM_INTRO', // Next: show platform tutorial
-          },
-        });
-
-        return updatedUser;
-      });
-
-      logger.info(
-        { operationType: 'AUTH', userId: user.id },
-        'Email verified successfully'
-      );
-
-      // Emit event — await so PR award and group enrollment complete before
-      // the transaction is considered done (prevents deadlock with beforeEach TRUNCATE).
-      await eventBus.emit('user.email.verified', {
-        userId: user.id,
-        primaryWardId: user.primaryWardId,
-        secondaryWardId: user.secondaryWardId,
-      });
-
-      await auditService.log(
-        user.id,
-        AuditAction.EMAIL_VERIFIED,
-        'user',
-        user.id,
-        { verificationLevel: 'EMAIL_VERIFIED', loginMethod }
-      );
-
-      // Check if all four flags now met → promote to FULL_VERIFIED
-      await userService.checkFullVerification(user.id);
-    }
-
-    // Create session using sessionService
+  private async buildAuthResult(
+    user: any,
+    loginMethod: string,
+    context: VerifyMagicLinkContext | undefined,
+    isFirstTimeLogin: boolean
+  ): Promise<MagicLinkAuthResult> {
     const { session } = await sessionService.createSession(user.id, {
       ipAddress: context?.ipAddress,
       userAgent: context?.userAgent,
       deviceInfo: context?.deviceInfo,
     });
 
-    const roles = user.userRoles.map((ur) => ur.role.name);
-
-    // Build JWT access token with sessionId for validation
+    const roles = user.userRoles.map((ur: any) => ur.role.name);
     const jwtPayload: JwtPayload = {
       sub: user.id,
-      jti: session.id, // Use session ID as JWT ID for revocation
+      jti: session.id,
       email: user.email || undefined,
       phoneNumber: user.phoneNumber || undefined,
       walletAddress: user.walletAddress || undefined,
@@ -488,30 +295,17 @@ class AuthService {
       communityVerified: user.communityVerified,
       roles,
       globalImpactPoints: user.globalImpactPoints,
-      utilityTokens:
-        (user.fiatBackedUtBalance ?? 0) + (user.earnedUtBalance ?? 0),
+      utilityTokens: (user.fiatBackedUtBalance ?? 0) + (user.earnedUtBalance ?? 0),
       participationRights: user.participationRights,
       type: 'permanent',
       sessionId: session.id,
     };
 
     const accessToken = signJwtToken(jwtPayload, '7d');
+    await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+    await this.trackLoginEvent({ userId: user.id, method: loginMethod, successful: true, context });
 
-    // Update last login
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { lastLoginAt: new Date() },
-    });
-
-    // Track successful login event
-    await this.trackLoginEvent(user.id, loginMethod, true, null, context);
-
-    eventBus.publish('auth.login', {
-      userId: user.id,
-      method: loginMethod,
-      sessionId: session.id,
-      isFirstTimeLogin,
-    });
+    eventBus.publish('auth.login', { userId: user.id, method: loginMethod, sessionId: session.id, isFirstTimeLogin });
 
     return {
       user: toUserResponse(user),
@@ -521,209 +315,154 @@ class AuthService {
     };
   }
 
-  /**
-   * Verify email verification token.
-   */
+  private async completeEmailVerificationAndCreateSession(
+    userId: string,
+    loginMethod: string,
+    context?: VerifyMagicLinkContext
+  ): Promise<MagicLinkAuthResult> {
+    const wardSelect = { id: true, constituencyId: true, countyId: true, name: true };
+    let user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        primaryWard: { select: wardSelect },
+        secondaryWard: { select: wardSelect },
+        currentWard: { select: wardSelect },
+        userRoles: { where: { active: true }, include: { role: { select: { id: true, name: true } } } },
+      },
+    });
+
+    if (!user) {
+      await this.trackLoginEvent({ userId: null, method: loginMethod, successful: false, failureReason: 'User not found', context });
+      throw ApiError.authenticationError('Invalid link - user not found');
+    }
+
+    const isFirstTimeLogin = user.verificationLevel === 'UNVERIFIED';
+    if (isFirstTimeLogin) {
+      user = await this.handleFirstTimeEmailVerification(user, loginMethod, context);
+    }
+
+    return this.buildAuthResult(user, loginMethod, context, isFirstTimeLogin);
+  }
+
   async verifyEmailToken(
     token: string,
     context?: VerifyMagicLinkContext
   ): Promise<MagicLinkAuthResult> {
     const loginMethod = 'EMAIL_VERIFICATION';
-
     try {
       const user = await tokenService.validateVerificationToken(token);
       if (!user) {
-        await this.trackLoginEvent(
-          null,
-          loginMethod,
-          false,
-          'Invalid or expired token',
-          context
-        );
+        await this.trackLoginEvent({ userId: null, method: loginMethod, successful: false, failureReason: 'Invalid or expired token', context });
         throw ApiError.tokenInvalid('Invalid or expired verification link');
       }
-
-      return this.completeEmailVerificationAndCreateSession(
-        user.id,
-        loginMethod,
-        context
-      );
+      return this.completeEmailVerificationAndCreateSession(user.id, loginMethod, context);
     } catch (error) {
       if (!(error instanceof ApiError)) {
-        logger.error(
-          { operationType: 'AUTH', error },
-          'Email verification failed'
-        );
+        logger.error({ operationType: 'AUTH', error }, 'Email verification failed');
         throw ApiError.tokenInvalid('Invalid or expired verification link');
       }
       throw error;
     }
   }
 
-  /**
-   * Verify magic link JWT and complete login.
-   */
   async verifyMagicLink(
     token: string,
     context?: VerifyMagicLinkContext
   ): Promise<MagicLinkAuthResult> {
     const loginMethod = 'MAGIC_LINK';
     let userId: string | undefined;
-
     try {
       const payload = verifyJwtToken<JwtPayload>(token);
       userId = payload.sub;
-
-      if (!userId) {
-        throw ApiError.authenticationError(
-          'Invalid token payload - missing user ID'
-        );
-      }
-
-      // Verify token type
-      if (payload.type !== 'magic-link') {
-        throw ApiError.authenticationError('Invalid token type');
-      }
-
-      return this.completeEmailVerificationAndCreateSession(
-        userId,
-        loginMethod,
-        context
-      );
+      if (!userId) throw ApiError.authenticationError('Invalid token payload - missing user ID');
+      if (payload.type !== 'magic-link') throw ApiError.authenticationError('Invalid token type');
+      return this.completeEmailVerificationAndCreateSession(userId, loginMethod, context);
     } catch (error) {
       if (userId) {
-        await this.trackLoginEvent(
-          userId,
-          loginMethod,
-          false,
-          'Invalid or expired token',
-          context
-        );
+        await this.trackLoginEvent({ userId, method: loginMethod, successful: false, failureReason: 'Invalid or expired token', context });
       }
       if (!(error instanceof ApiError)) {
-        logger.error(
-          { operationType: 'AUTH', userId, error },
-          'Magic link verification failed'
-        );
+        logger.error({ operationType: 'AUTH', userId, error }, 'Magic link verification failed');
         throw ApiError.tokenInvalid('Invalid or expired magic link');
       }
       throw error;
     }
   }
 
-  /**
-   * Detect brute force attempts based on recent failed logins
-   */
   private async detectBruteForce(ipAddress: string): Promise<boolean> {
     try {
       const windowStart = new Date(Date.now() - FAILED_ATTEMPT_WINDOW_MS);
-
       const failedAttempts = await prisma.loginEvent.count({
-        where: {
-          ipAddress,
-          successful: false,
-          createdAt: { gte: windowStart },
-        },
+        where: { ipAddress, successful: false, createdAt: { gte: windowStart } },
       });
-
       return failedAttempts >= MAX_FAILED_ATTEMPTS;
     } catch (error) {
-      logger.error(
-        { operationType: 'SECURITY', error },
-        'Failed to check brute force'
-      );
+      logger.error({ operationType: 'SECURITY', error }, 'Failed to check brute force');
       return false;
     }
   }
 
-  /**
-   * Track login event (success or failure).
-   * Includes security event logging and brute force detection.
-   */
-  private async trackLoginEvent(
+  private async logFailedLoginSecurity(
+    ipAddress: string,
     userId: string | null,
     method: string,
+    failureReason: string | null | undefined,
+    userAgent: string | undefined
+  ): Promise<void> {
+    const isBruteForce = await this.detectBruteForce(ipAddress);
+    if (isBruteForce) {
+      logSecurityEvent(
+        'Brute force login attempt detected',
+        'BRUTE_FORCE',
+        'CRITICAL',
+        `${MAX_FAILED_ATTEMPTS}+ failed attempts from ${ipAddress} in ${FAILED_ATTEMPT_WINDOW_MS / 60000} minutes`,
+        { userId: userId || undefined, ipAddress, metadata: { method, failureReason, userAgent } }
+      );
+    } else {
+      logSecurityEvent(
+        'Login failed',
+        'AUTH_FAILURE',
+        'MEDIUM',
+        failureReason || 'Authentication failed',
+        { userId: userId || undefined, ipAddress, metadata: { method, userAgent } }
+      );
+    }
+  }
+
+  private async recordDbLoginEvent(
+    userId: string,
+    method: string,
     successful: boolean,
-    failureReason: string | null,
-    context?: VerifyMagicLinkContext
-  ) {
+    failureReason: string | null | undefined,
+    ipAddress: string | undefined,
+    userAgent: string | undefined
+  ): Promise<void> {
+    await prisma.loginEvent.create({ data: { userId, method, successful, failureReason, ipAddress, userAgent } });
+    if (successful) {
+      logger.info({ operationType: 'AUTH', userId, metadata: { method, ipAddress } }, 'User logged in successfully');
+    }
+  }
+
+  private async trackLoginEvent(params: TrackLoginParams) {
     try {
+      const { userId, method, successful, failureReason, context } = params;
       const ipAddress = context?.ipAddress;
       const userAgent = context?.userAgent;
 
-      // Track failed login attempts and detect brute force
       if (!successful && ipAddress) {
-        const isBruteForce = await this.detectBruteForce(ipAddress);
-
-        if (isBruteForce) {
-          logSecurityEvent(
-            'Brute force login attempt detected',
-            'BRUTE_FORCE',
-            'CRITICAL',
-            `${MAX_FAILED_ATTEMPTS}+ failed attempts from ${ipAddress} in ${FAILED_ATTEMPT_WINDOW_MS / 60000} minutes`,
-            {
-              userId: userId || undefined,
-              ipAddress,
-              metadata: {
-                method,
-                failureReason,
-                userAgent,
-              },
-            }
-          );
-        } else {
-          logSecurityEvent(
-            'Login failed',
-            'AUTH_FAILURE',
-            'MEDIUM',
-            failureReason || 'Authentication failed',
-            {
-              userId: userId || undefined,
-              ipAddress,
-              metadata: {
-                method,
-                userAgent,
-              },
-            }
-          );
-        }
+        await this.logFailedLoginSecurity(ipAddress, userId, method, failureReason, userAgent);
       }
 
-      // Only create database record if we have a valid userId
       if (userId) {
-        await prisma.loginEvent.create({
-          data: {
-            userId,
-            method,
-            successful,
-            failureReason,
-            ipAddress,
-            userAgent,
-          },
-        });
-
-        // Log successful login
-        if (successful) {
-          logger.info(
-            { operationType: 'AUTH', userId, metadata: { method, ipAddress } },
-            'User logged in successfully'
-          );
-        }
+        await this.recordDbLoginEvent(userId, method, successful, failureReason, ipAddress, userAgent);
       } else if (!successful) {
-        // Failed login without user context
         logger.warn(
-          {
-            operationType: 'AUTH',
-            metadata: { method, failureReason, ipAddress, userAgent },
-          },
+          { operationType: 'AUTH', metadata: { method, failureReason, ipAddress, userAgent } },
           'Login attempt failed without valid user context'
         );
       }
     } catch (error) {
-      logger.error(
-        { operationType: 'AUTH', userId, error },
-        'Failed to track login event'
-      );
+      logger.error({ operationType: 'AUTH', userId: params.userId, error }, 'Failed to track login event');
     }
   }
 }
