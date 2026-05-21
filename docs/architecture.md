@@ -55,25 +55,25 @@ All routes are mounted at `/api/v1/` in `backend/src/app.ts`.
 |---|---|---|---|
 | auth | `/api/v1/auth` | tested | 104 |
 | user | `/api/v1/users` | tested | 35 |
-| economy | `/api/v1/economy` | tested | 34 |
-| community | `/api/v1/community` | tested | 82 |
+| economy | `/api/v1/economy` | tested | 66 |
+| community | `/api/v1/community` | tested | 147 |
 | conflicts | `/api/v1/conflicts` | tested (community) | — |
-| governance | `/api/v1/governance` | tested | 58 |
-| elections | `/api/v1/elections` | partial | — |
-| projects | `/api/v1/projects` | tested | 41 |
+| governance | `/api/v1/governance` | tested | 121 |
+| elections | `/api/v1/elections` | tested | 63 |
+| projects | `/api/v1/projects` | tested | 127 |
 | marketplace | `/api/v1/marketplace` | tested | 35 |
 | notifications | `/api/v1/notifications` | tested | 43 |
 | emergency | `/api/v1/emergency` | tested | 30 |
-| audit | `/api/v1/audit` | partial | — |
-| feed | `/api/v1/feed` | partial | — |
+| audit | `/api/v1/audit` | tested | 31 (includes feed) |
+| feed | `/api/v1/feed` | tested (audit) | — |
 | onboarding | `/api/v1/onboarding` | tested | 22 |
-| reputation | `/api/v1/reputation` | tested | 23 |
+| reputation | `/api/v1/reputation` | tested | 27 |
 | education | `/api/v1/education` | tested | 42 |
-| integration | `/api/v1/integration` | partial | — |
-| treasury | `/api/v1/treasury` | tested | 36 |
-| payments | `/api/v1/payments` | partial | — |
-| admin | `/api/v1/admin` | partial | — |
-| platform-config | `/api/v1/platform-config` | partial | — |
+| integration | `/api/v1/integration` | tested | 30 |
+| treasury | `/api/v1/treasury` | tested | 40 |
+| payments | `/api/v1/payments` | tested | 50 |
+| admin | `/api/v1/admin` | tested | 50 |
+| platform-config | `/api/v1/platform-config` | tested (admin) | — |
 | verification | `/api/v1/verify-community` | tested | 36 |
 
 Health endpoints: `GET /health` · `GET /ready`

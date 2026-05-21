@@ -1,7 +1,7 @@
 # UjamaaDAO – Feature Inventory
 
 **Status:** May 2026 – Current Implementation + Planned / Designed Features
-**Version:** 1.3 (updated May 2026 — session 55)
+**Version:** 1.4 (updated May 2026 — session 72)
 
 > Use this as the single source of truth for what exists, what is designed, and what is still to come.
 > Update the summary table at the end of every session that changes module status.
@@ -253,26 +253,26 @@
 
 ## Summary Table – Feature Maturity (May 2026)
 
-**Total: 1017 green tests across 15 tested modules**
+**Total: ~1121 green tests across 16 tested modules (0 known pre-existing failures — session 72)**
 
 | Area | Backend Status | Frontend Status | Notes / Next Work |
 |---|---|---|---|
-| Identity & Verification | tested (104 auth + 36 verification = 140 tests) | functional | WebAuthn/passkeys live; SMS AT credentials → real |
+| Identity & Verification | tested (104 auth + 36 verification = 140 tests) | functional | WebAuthn/passkeys live; SMS AT credentials → real; auth middleware checks user is ACTIVE in DB on every request |
 | Profile & Personal Data | tested (35 tests) | functional | Avatar upload pending |
 | Participation Rights (PR) + Economy (UT) | tested (66 tests) | functional | On-chain mint wired; UT cash-out idempotency tested; Base Sepolia deploy pending |
 | Community / Wards / Groups | tested (147 tests) | functional | Baraza integration live; conflict protocol live |
-| Governance / Voting | tested (111 tests) | functional | Proposal disbursement wired; 2-stage review + memory layer live |
+| Governance / Voting | tested (121 tests) | functional | Proposal disbursement wired; 2-stage review + memory layer live; resubmit (max 3×) live |
 | Projects & Milestones | tested (127 tests) | functional | QR witness-chain work sessions; task board; contribution flows |
 | Marketplace | tested (35 tests) | functional | Discovery-only per Rule 1 |
 | Education | tested (42 tests) | functional | Module completion, react-markdown prose rendering |
 | Onboarding | tested (22 tests) | functional | Auto-completion via AUTO_CONDITIONS map |
 | Notifications | tested (43 tests) | functional | Dues-reminder job + governance hooks live |
 | Emergency | tested (30 tests) | functional | Alert lifecycle (ACTIVE→IN_PROGRESS→RESOLVED) live |
-| Reputation / Impact Points | tested (23 tests) | functional | Ward-level impact tracking, leaderboard live |
+| Reputation / Impact Points | tested (27 tests) | functional | Ward-level impact tracking, leaderboard, hierarchy breakdown live |
 | Elections | tested (63 tests) | functional | Full backend lifecycle; frontend list + detail pages |
 | Treasury | tested (40 tests) | functional | Geographic dues split (70/15/10/5) live; proposal disbursement + my-groups summary; GroupTreasury.sol pending |
 | Payments (M-Pesa) | tested (50 tests) | functional | Buni STK push + B2C payout (UT cash-out) wired end-to-end; 50K KES daily limit; BullMQ job with 3× retry + refund on exhaustion; completePayout/refundPayout idempotency verified |
 | Admin Tools | tested (50 tests) | functional | stats/users/config; PR adjust; suspend; role management; report generation (CSV) |
 | Audit / Feed | tested (31 tests) | functional | 6+ audit events active; feed cursor-paginated stream; geographic personalisation |
-| Integration (Baraza) | partial (no tests) | functional | Telegram/Discord/WhatsApp; attendance + invite jobs |
+| Integration (Baraza) | tested (30 tests) | functional | Telegram/Discord/WhatsApp; attendance + invite jobs; WARD_ADMIN bypasses group-leader check |
 | Platform / Cross-cutting | complete | complete | EN/SW i18n live; PWA installable |

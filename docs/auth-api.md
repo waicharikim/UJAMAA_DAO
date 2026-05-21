@@ -58,6 +58,18 @@ See `PATCH /users/me/profile` for routes available at `EMAIL_VERIFIED`.
 
 ---
 
+## Bearer Token Requirements
+
+Every request with a `Bearer` token passes through `auth.middleware.ts`, which does **three** checks beyond JWT signature and expiry:
+
+1. **JTI blacklist** — token revoked via `DELETE /auth/sessions/:id` → 401
+2. **Session liveness** — `Session` row must exist and not be revoked in DB → 401
+3. **Account status** — `User` row must exist and have `status = ACTIVE` → 401 (suspended or deleted accounts are rejected even with a valid JWT)
+
+Consequence: a valid JWT for a suspended or deleted account will return `401 Unauthorized`. Tokens do not outlive account status. This is intentional.
+
+---
+
 ## Endpoints
 
 ### Public (no auth required)
