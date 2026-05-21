@@ -205,10 +205,17 @@ function ComposeBox() {
           border: "1px dashed rgba(201,146,42,0.3)",
         }}
       >
-        <span className="text-lg">🌿</span>
-        <p className="text-[12px]" style={{ color: "rgba(14,11,8,0.55)" }}>
-          Complete community verification to post in your ward.
+        <span className="text-lg flex-shrink-0">🌿</span>
+        <p className="text-[12px] flex-1" style={{ color: "rgba(14,11,8,0.55)" }}>
+          Community members can post in their ward.
         </p>
+        <Link
+          href="/profile#verification"
+          className="flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold transition-opacity hover:opacity-80"
+          style={{ background: "#1D4731", color: "#fff" }}
+        >
+          Get verified
+        </Link>
       </div>
     )
   }
@@ -321,7 +328,7 @@ function StatsStrip() {
 
   return (
     <div
-      className="flex items-center gap-2 px-4 py-2.5 overflow-x-auto scrollbar-none border-b"
+      className="md:hidden flex items-center gap-2 px-4 py-2.5 overflow-x-auto scrollbar-none border-b"
       style={{ background: "#F7F2E8", borderColor: "rgba(14,11,8,0.06)" }}
     >
       {chips.map(({ icon: Icon, label, value, color }) => (
