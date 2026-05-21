@@ -4,7 +4,6 @@
  * Project Service — Execution of Approved Proposals (Funded or Non-Funded)
  */
 
-import crypto from 'crypto';
 import { prisma } from '../../../core/database/client.js';
 import { participationRightsService } from '../../economy/services/participationRights.service.js';
 import { globalImpactPointService } from '../../reputation/service/impactPoint.service.js';
@@ -13,7 +12,6 @@ import { ApiError } from '../../../core/errors/ApiError.js';
 import { logger } from '../../../core/logger/logger.js';
 import { auditService } from '../../audit/services/audit.service.js';
 import { treasuryService } from '../../treasury/services/treasury.service.js';
-import { projectQueue } from '../../../core/queue/index.js';
 import { AuditAction } from '../../audit/types.js';
 import { ParticipationRightsReason } from '../../economy/types.js';
 import { ImpactPointReason } from '../../reputation/types.js';
@@ -45,10 +43,27 @@ import type {
   ScanQrResponseDto,
   AttestResponseDto,
 } from '../types.js';
-import { ProjectStatus, MilestoneStatus, ProjectJobName } from '../types.js';
+import { ProjectStatus, MilestoneStatus } from '../types.js';
 import { getUtContract } from '../../../core/blockchain/client.js';
+import { workSessionService } from './work-session.service.js';
+import { workLogService } from './work-log.service.js';
 
 const DEFAULT_REWARDS = { IP: 50, PR: 25 };
+
+function hasNoGroupFunding(proposal: {
+  groupFundingAmount: unknown;
+  groupId: string | null;
+}): boolean {
+  return (
+    !proposal.groupFundingAmount ||
+    Number(proposal.groupFundingAmount) <= 0 ||
+    !proposal.groupId
+  );
+}
+
+function isProjectClosed(status: string): boolean {
+  return status === 'CANCELLED' || status === 'COMPLETED';
+}
 
 export class ProjectService {
   /**
@@ -383,102 +398,18 @@ export class ProjectService {
     };
   }
 
-  // ── WORK LOGGING ────────────────────────────────────────────────────────────
+  // ── Work Logging (delegated to WorkLogService) ───────────────────────────
 
   async logWork(userId: string, dto: LogWorkDto): Promise<WorkLogResponseDto> {
-    const milestone = await prisma.milestone.findUnique({
-      where: { id: dto.milestoneId },
-      select: { id: true, projectId: true, status: true },
-    });
-    if (!milestone) throw ApiError.notFound('Milestone');
-    if (milestone.status !== 'IN_PROGRESS') {
-      throw ApiError.badRequest(
-        'Can only log work on an in-progress milestone'
-      );
-    }
-
-    // Must be a project member
-    const member = await prisma.projectMember.findFirst({
-      where: { projectId: milestone.projectId, userId },
-    });
-    if (!member)
-      throw ApiError.forbidden('You must be a project member to log work');
-
-    const IP_PER_HOUR = 10;
-    const baseIP = Math.round(dto.hours * IP_PER_HOUR);
-
-    const workLog = await prisma.physicalWorkLog.create({
-      data: {
-        userId,
-        milestoneId: dto.milestoneId,
-        projectId: milestone.projectId,
-        workType: dto.workType,
-        description: dto.description,
-        hours: dto.hours,
-        photoUrls: dto.photoUrls ?? [],
-        witnessIds: dto.witnessIds ?? [],
-        baseIP,
-        totalIPEarned: 0, // awarded on verification
-      },
-      include: { user: { select: { id: true, name: true, avatarUrl: true } } },
-    });
-
-    await auditService.log(
-      userId,
-      AuditAction.WORK_LOGGED,
-      'PhysicalWorkLog',
-      workLog.id,
-      { milestoneId: dto.milestoneId, hours: dto.hours, workType: dto.workType }
-    );
-
-    logger.info(
-      { userId, workLogId: workLog.id, milestoneId: dto.milestoneId },
-      'Work logged'
-    );
-
-    return this.mapWorkLog(workLog);
+    return workLogService.logWork(userId, dto);
   }
 
-  async verifyWork(
-    verifierId: string,
-    dto: VerifyWorkDto
-  ): Promise<WorkLogResponseDto> {
-    const workLog = await prisma.physicalWorkLog.findUnique({
-      where: { id: dto.workLogId },
-      include: { user: { select: { id: true, name: true, avatarUrl: true } } },
-    });
-    if (!workLog) throw ApiError.notFound('Work log');
-    if (workLog.verifiedAt)
-      throw ApiError.conflict('Work log already verified');
-
-    // Must be project leader or a system verifier
-    const isLeader = await roleService.isProjectLeader(
-      verifierId,
-      workLog.projectId!
-    );
-    const isVerifier = await roleService.isVerifier(verifierId);
-    if (!isLeader && !isVerifier) {
-      throw ApiError.forbidden(
-        'Only project leaders or verifiers can verify work'
-      );
-    }
-
-    if (dto.approved)
-      return this.approveWorkLog(workLog, verifierId, dto.workLogId);
-    return this.rejectWorkLog(workLog, verifierId, dto.workLogId, dto.feedback);
+  async verifyWork(verifierId: string, dto: VerifyWorkDto): Promise<WorkLogResponseDto> {
+    return workLogService.verifyWork(verifierId, dto);
   }
 
   async listWorkLogs(milestoneId: string): Promise<WorkLogListDto> {
-    const workLogs = await prisma.physicalWorkLog.findMany({
-      where: { milestoneId },
-      include: { user: { select: { id: true, name: true, avatarUrl: true } } },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    return {
-      workLogs: workLogs.map((w) => this.mapWorkLog(w)),
-      total: workLogs.length,
-    };
+    return workLogService.listWorkLogs(milestoneId);
   }
 
   // ── Join project ─────────────────────────────────────────────────────────
@@ -489,7 +420,7 @@ export class ProjectService {
       select: { id: true, title: true, status: true },
     });
     if (!project) throw ApiError.notFound('Project');
-    if (project.status === 'CANCELLED' || project.status === 'COMPLETED')
+    if (isProjectClosed(project.status))
       throw ApiError.badRequest('Cannot join a completed or cancelled project');
 
     try {
@@ -523,9 +454,7 @@ export class ProjectService {
     projectId: string,
     dto: ContributeToProjectDto
   ): Promise<ContributionResponseDto> {
-    if (dto.amount <= 0) throw ApiError.badRequest('Amount must be positive');
-    if (dto.amount > 100_000)
-      throw ApiError.badRequest('Maximum single contribution is 100,000 UT');
+    this.assertContributionAmount(dto.amount);
 
     const project = await prisma.project.findUnique({
       where: { id: projectId },
@@ -723,14 +652,7 @@ export class ProjectService {
       },
     });
     if (!task) throw ApiError.notFound('Task');
-    if (task.status !== 'TODO')
-      throw ApiError.badRequest('Task is not available to claim');
-    if (task.assignedToId) throw ApiError.conflict('Task is already claimed');
-    if (task.milestone.status !== 'IN_PROGRESS')
-      throw ApiError.badRequest(
-        'Milestone must be in progress before claiming tasks'
-      );
-
+    this.assertTaskClaimable(task);
     await this.assertProjectMember(userId, task.projectId);
 
     await prisma.task.update({
@@ -778,211 +700,26 @@ export class ProjectService {
     return { taskId, status: 'DONE', ipAwarded: IP_REWARD };
   }
 
-  // ── QR Work Sessions ─────────────────────────────────────────────────────
+  // ── QR Work Sessions (delegated to WorkSessionService) ───────────────────
 
-  async createWorkSession(
-    leaderId: string,
-    dto: CreateWorkSessionDto
-  ): Promise<WorkSessionDto> {
-    const milestone = await prisma.milestone.findUnique({
-      where: { id: dto.milestoneId },
-      select: { id: true, projectId: true, status: true },
-    });
-    if (!milestone) throw ApiError.notFound('Milestone');
-    if (milestone.status !== 'IN_PROGRESS')
-      throw ApiError.badRequest(
-        'Milestone must be IN_PROGRESS to start a work session'
-      );
-
-    const isLeader = await roleService.isProjectLeader(
-      leaderId,
-      milestone.projectId
-    );
-    if (!isLeader)
-      throw ApiError.forbidden('Only project leaders can create work sessions');
-
-    const existing = await prisma.workSession.findFirst({
-      where: { milestoneId: dto.milestoneId, status: 'OPEN' },
-    });
-    if (existing)
-      throw ApiError.conflict(
-        'An open work session already exists for this milestone'
-      );
-
-    const durationMs = dto.durationMinutes * 60 * 1000;
-    const expiresAt = new Date(Date.now() + durationMs);
-    const qrSecret = crypto.randomBytes(24).toString('hex');
-
-    const session = await prisma.workSession.create({
-      data: {
-        milestoneId: dto.milestoneId,
-        projectId: milestone.projectId,
-        createdById: leaderId,
-        qrSecret,
-        expiresAt,
-      },
-    });
-
-    await this.scheduleSessionAutoClose(session.id, durationMs);
-
-    logger.info(
-      {
-        operationType: 'WORK_SESSION',
-        sessionId: session.id,
-        milestoneId: dto.milestoneId,
-      },
-      'Work session created'
-    );
-
-    return this.mapWorkSession(session, 0);
+  async createWorkSession(leaderId: string, dto: CreateWorkSessionDto): Promise<WorkSessionDto> {
+    return workSessionService.createWorkSession(leaderId, dto);
   }
 
   async scanQr(userId: string, qrSecret: string): Promise<ScanQrResponseDto> {
-    const session = await prisma.workSession.findUnique({
-      where: { qrSecret },
-      include: { _count: { select: { presences: true } } },
-    });
-    if (!session) throw ApiError.notFound('Work session');
-    this.assertSessionOpen(session);
-
-    try {
-      const presence = await prisma.workPresence.create({
-        data: { sessionId: session.id, userId, depth: 0 },
-      });
-
-      const attestationsUsed = await prisma.workPresence.count({
-        where: { sessionId: session.id, attestedById: userId },
-      });
-
-      return {
-        sessionId: session.id,
-        depth: presence.depth,
-        expiresAt: session.expiresAt.toISOString(),
-        attestationsRemaining: 2 - attestationsUsed,
-      };
-    } catch (err: any) {
-      if (err?.code === 'P2002')
-        throw ApiError.conflict('You have already checked in to this session');
-      throw err;
-    }
+    return workSessionService.scanQr(userId, qrSecret);
   }
 
-  async attestPresence(
-    attestorId: string,
-    sessionId: string,
-    targetUserId: string
-  ): Promise<AttestResponseDto> {
-    const session = await prisma.workSession.findUnique({
-      where: { id: sessionId },
-    });
-    if (!session) throw ApiError.notFound('Work session');
-    this.assertSessionOpen(session);
-    const { attestationsUsed, attestorDepth } = await this.assertCanAttest(
-      attestorId,
-      sessionId
-    );
-    await this.assertValidAttestTarget(targetUserId, attestorId);
-
-    try {
-      const presence = await prisma.workPresence.create({
-        data: {
-          sessionId,
-          userId: targetUserId,
-          attestedById: attestorId,
-          depth: attestorDepth + 1,
-        },
-      });
-
-      return {
-        presenceId: presence.id,
-        targetUserId,
-        depth: presence.depth,
-        attestationsRemaining: 2 - (attestationsUsed + 1),
-      };
-    } catch (err: any) {
-      if (err?.code === 'P2002')
-        throw ApiError.conflict(
-          'This person is already checked in to this session'
-        );
-      throw err;
-    }
+  async attestPresence(attestorId: string, sessionId: string, targetUserId: string): Promise<AttestResponseDto> {
+    return workSessionService.attestPresence(attestorId, sessionId, targetUserId);
   }
 
   async closeWorkSession(sessionId: string): Promise<WorkSessionDto> {
-    const session = await prisma.workSession.findUnique({
-      where: { id: sessionId },
-      include: {
-        presences: {
-          include: {
-            user: { select: { id: true, name: true, avatarUrl: true } },
-          },
-        },
-      },
-    });
-    if (!session) throw ApiError.notFound('Work session');
-    if (session.status !== 'OPEN')
-      return this.mapWorkSession(session, session.presences.length);
-
-    const directScanCount = session.presences.filter(
-      (p) => p.depth === 0
-    ).length;
-    const newStatus = directScanCount >= 1 ? 'APPROVED' : 'FLAGGED';
-
-    const updated = await prisma.workSession.update({
-      where: { id: sessionId },
-      data: { status: newStatus, closedAt: new Date() },
-    });
-
-    if (newStatus === 'APPROVED') {
-      await this.awardAllPresences(session.presences, sessionId);
-      logger.info(
-        {
-          operationType: 'WORK_SESSION',
-          sessionId,
-          presenceCount: session.presences.length,
-        },
-        'Work session approved — IP awarded to all members'
-      );
-    } else {
-      logger.warn(
-        { operationType: 'WORK_SESSION', sessionId },
-        'Work session flagged — no direct scans found'
-      );
-    }
-
-    return this.mapWorkSession(updated, session.presences.length);
+    return workSessionService.closeWorkSession(sessionId);
   }
 
-  async getWorkSession(
-    sessionId: string
-  ): Promise<WorkSessionDto & { presences: WorkPresenceDto[] }> {
-    const session = await prisma.workSession.findUnique({
-      where: { id: sessionId },
-      include: {
-        presences: {
-          include: {
-            user: { select: { id: true, name: true, avatarUrl: true } },
-          },
-          orderBy: { createdAt: 'asc' },
-        },
-      },
-    });
-    if (!session) throw ApiError.notFound('Work session');
-
-    return {
-      ...this.mapWorkSession(session, session.presences.length),
-      presences: session.presences.map((p) => ({
-        id: p.id,
-        sessionId: p.sessionId,
-        userId: p.userId,
-        user: p.user,
-        attestedById: p.attestedById,
-        depth: p.depth,
-        ipAwarded: p.ipAwarded,
-        awardedAt: p.awardedAt ? p.awardedAt.toISOString() : null,
-        createdAt: p.createdAt.toISOString(),
-      })),
-    };
+  async getWorkSession(sessionId: string): Promise<WorkSessionDto & { presences: WorkPresenceDto[] }> {
+    return workSessionService.getWorkSession(sessionId);
   }
 
   private async tryDebitGroupTreasury(
@@ -994,15 +731,10 @@ export class ProjectService {
     projectId: string,
     userId: string
   ) {
-    if (
-      !proposal.groupFundingAmount ||
-      Number(proposal.groupFundingAmount) <= 0 ||
-      !proposal.groupId
-    )
-      return;
+    if (hasNoGroupFunding(proposal)) return;
     try {
       await treasuryService.withdraw(
-        proposal.groupId,
+        proposal.groupId!,
         {
           amount: Number(proposal.groupFundingAmount),
           description: `Project funding: ${proposal.title}`,
@@ -1168,118 +900,6 @@ export class ProjectService {
       .catch(() => {});
   }
 
-  private async approveWorkLog(
-    workLog: { id: string; baseIP: number; userId: string },
-    verifierId: string,
-    workLogId: string
-  ): Promise<WorkLogResponseDto> {
-    const totalIPEarned = workLog.baseIP;
-    const updated = await prisma.physicalWorkLog.update({
-      where: { id: workLogId },
-      data: { verifiedAt: new Date(), totalIPEarned },
-      include: { user: { select: { id: true, name: true, avatarUrl: true } } },
-    });
-    await globalImpactPointService.award(
-      workLog.userId,
-      totalIPEarned,
-      ImpactPointReason.PHYSICAL_WORK_VERIFIED
-    );
-    await auditService.log(
-      verifierId,
-      AuditAction.WORK_VERIFIED,
-      'PhysicalWorkLog',
-      workLogId,
-      {
-        approved: true,
-        totalIPEarned,
-        workerId: workLog.userId,
-      }
-    );
-    logger.info({ verifierId, workLogId, approved: true }, 'Work verified');
-    return this.mapWorkLog(updated);
-  }
-
-  private async rejectWorkLog(
-    workLog: { id: string; userId: string; verifiedAt: Date | null },
-    verifierId: string,
-    workLogId: string,
-    feedback: string | undefined
-  ): Promise<WorkLogResponseDto> {
-    await prisma.workVerification.create({
-      data: {
-        workLogId,
-        verifierId,
-        method: 'SUPERVISOR',
-        status: 'REJECTED',
-        notes: feedback,
-        verifiedAt: new Date(),
-      },
-    });
-    await auditService.log(
-      verifierId,
-      AuditAction.WORK_VERIFIED,
-      'PhysicalWorkLog',
-      workLogId,
-      {
-        approved: false,
-        feedback,
-        workerId: workLog.userId,
-      }
-    );
-    logger.info({ verifierId, workLogId, approved: false }, 'Work rejected');
-    return this.mapWorkLog({ ...workLog, verifiedAt: null });
-  }
-
-  private async scheduleSessionAutoClose(
-    sessionId: string,
-    durationMs: number
-  ): Promise<void> {
-    try {
-      const job = await projectQueue.add(
-        ProjectJobName.WORK_SESSION_CLOSE,
-        { sessionId },
-        { delay: durationMs, jobId: `ws-close-${sessionId}` }
-      );
-      await prisma.workSession.update({
-        where: { id: sessionId },
-        data: { closeJobId: job.id ?? null },
-      });
-    } catch (err) {
-      logger.warn(
-        { operationType: 'WORK_SESSION', sessionId, err: String(err) },
-        'Could not schedule auto-close job — session will require manual close'
-      );
-    }
-  }
-
-  private async awardAllPresences(
-    presences: Array<{ id: string; userId: string; depth: number }>,
-    sessionId: string
-  ): Promise<void> {
-    const IP_PER_PRESENCE = 10;
-    const now = new Date();
-    await Promise.all(
-      presences.map((p) =>
-        Promise.all([
-          prisma.workPresence
-            .update({
-              where: { id: p.id },
-              data: { ipAwarded: IP_PER_PRESENCE, awardedAt: now },
-            })
-            .catch(() => {}),
-          globalImpactPointService
-            .award(
-              p.userId,
-              IP_PER_PRESENCE,
-              ImpactPointReason.PHYSICAL_WORK_VERIFIED,
-              { sessionId, depth: p.depth }
-            )
-            .catch(() => {}),
-        ])
-      )
-    );
-  }
-
   private async burnUtOnChain(
     userId: string,
     projectId: string,
@@ -1308,6 +928,26 @@ export class ProjectService {
     }
   }
 
+  private assertContributionAmount(amount: number): void {
+    if (amount <= 0) throw ApiError.badRequest('Amount must be positive');
+    if (amount > 100_000)
+      throw ApiError.badRequest('Maximum single contribution is 100,000 UT');
+  }
+
+  private assertTaskClaimable(task: {
+    status: string;
+    assignedToId: string | null;
+    milestone: { status: string };
+  }): void {
+    if (task.status !== 'TODO')
+      throw ApiError.badRequest('Task is not available to claim');
+    if (task.assignedToId) throw ApiError.conflict('Task is already claimed');
+    if (task.milestone.status !== 'IN_PROGRESS')
+      throw ApiError.badRequest(
+        'Milestone must be in progress before claiming tasks'
+      );
+  }
+
   private async assertProjectMember(userId: string, projectId: string | null) {
     if (!projectId) return;
     const isMember = await prisma.projectMember.findUnique({
@@ -1317,80 +957,6 @@ export class ProjectService {
       throw ApiError.forbidden('Join the project before claiming tasks');
   }
 
-  private assertSessionOpen(session: { status: string; expiresAt: Date }) {
-    if (session.status !== 'OPEN')
-      throw ApiError.badRequest('This work session is no longer open');
-    if (new Date() > session.expiresAt)
-      throw ApiError.badRequest('This QR code has expired');
-  }
-
-  private async assertCanAttest(attestorId: string, sessionId: string) {
-    const attestorPresence = await prisma.workPresence.findUnique({
-      where: { sessionId_userId: { sessionId, userId: attestorId } },
-    });
-    if (!attestorPresence)
-      throw ApiError.forbidden(
-        'You must be checked in to this session before attesting others'
-      );
-    const attestationsUsed = await prisma.workPresence.count({
-      where: { sessionId, attestedById: attestorId },
-    });
-    if (attestationsUsed >= 2)
-      throw ApiError.badRequest(
-        'You have already used both of your attestation slots'
-      );
-    return { attestationsUsed, attestorDepth: attestorPresence.depth };
-  }
-
-  private async assertValidAttestTarget(
-    targetUserId: string,
-    attestorId: string
-  ) {
-    const target = await prisma.user.findUnique({
-      where: { id: targetUserId },
-      select: { id: true },
-    });
-    if (!target) throw ApiError.notFound('Target user');
-    if (targetUserId === attestorId)
-      throw ApiError.badRequest('You cannot attest yourself');
-  }
-
-  private mapWorkSession(s: any, presenceCount: number): WorkSessionDto {
-    return {
-      id: s.id,
-      milestoneId: s.milestoneId,
-      projectId: s.projectId,
-      qrSecret: s.qrSecret,
-      expiresAt: s.expiresAt.toISOString(),
-      status: s.status,
-      closedAt: s.closedAt ? s.closedAt.toISOString() : null,
-      presenceCount,
-      createdAt: s.createdAt.toISOString(),
-    };
-  }
-
-  private mapWorkLog(w: any): WorkLogResponseDto {
-    const isVerified = !!w.verifiedAt;
-    const isRejected =
-      !isVerified &&
-      (w.verifications?.some((v: any) => v.status === 'REJECTED') ?? false);
-
-    return {
-      id: w.id,
-      milestoneId: w.milestoneId,
-      projectId: w.projectId,
-      userId: w.userId,
-      worker: w.user,
-      workType: w.workType,
-      description: w.description,
-      hours: Number(w.hours),
-      photoUrls: w.photoUrls ?? [],
-      status: isVerified ? 'APPROVED' : isRejected ? 'REJECTED' : 'PENDING',
-      totalIPEarned: w.totalIPEarned ?? 0,
-      verifiedAt: w.verifiedAt ? w.verifiedAt.toISOString() : null,
-      createdAt: w.createdAt.toISOString(),
-    };
-  }
 }
 
 export const projectService = new ProjectService();
