@@ -11,6 +11,7 @@ export const createPostSchema = z.object({
     .trim(),
   scope: scopeEnum.default('WARD'),
   type: typeEnum.default('NOTICE'),
+  wardId: z.string().uuid().optional(),
   proposalId: z.string().uuid().optional(),
   resourceUrl: z.string().url().optional().or(z.literal('')),
   resourceTitle: z.string().max(200).optional(),

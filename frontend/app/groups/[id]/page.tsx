@@ -314,8 +314,24 @@ function FeedTab({ group }: { group: GroupDetailDto }) {
               transition: "box-shadow 0.15s",
             }}
           >
+            {/* "Posting in" context */}
+            <div className="flex items-center gap-2 px-4 pt-3">
+              <span className="text-[11px]" style={{ color: "rgba(14,11,8,0.35)" }}>
+                Posting in
+              </span>
+              <span
+                className="text-[11px] font-bold px-2.5 py-1 rounded-full"
+                style={{
+                  background: LEVEL_CONFIG[groupScope(group)]?.bg ?? "rgba(29,71,49,0.10)",
+                  color: LEVEL_CONFIG[groupScope(group)]?.color ?? "#1D4731",
+                }}
+              >
+                {group.name}
+              </span>
+            </div>
+
             {/* Type selector */}
-            <div className="flex gap-1 px-3 pt-3">
+            <div className="flex gap-1 px-3 pt-2.5">
               {POST_TYPE_LIST.map(({ value, label, icon: Icon }) => (
                 <button
                   key={value}
@@ -429,7 +445,7 @@ function FeedTab({ group }: { group: GroupDetailDto }) {
       >
         <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: "rgba(14,11,8,0.06)" }}>
           <span className="text-xs font-semibold" style={{ color: "#7A6E60" }}>
-            {scope.charAt(0) + scope.slice(1).toLowerCase()} updates
+            {group.name} updates
           </span>
           <button
             onClick={() => refetch()}

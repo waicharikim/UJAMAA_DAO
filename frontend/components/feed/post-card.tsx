@@ -27,7 +27,8 @@ function relativeTime(iso: string): string {
 
 // ── Config ────────────────────────────────────────────────────
 
-const SCOPE_CONFIG: Record<PostScope, { color: string; bg: string }> = {
+// Scope color = visual reach indicator (local=green → national=amber)
+const SCOPE_COLOR: Record<PostScope, { color: string; bg: string }> = {
   WARD:         { color: "#1D4731", bg: "rgba(29,71,49,0.10)"   },
   CONSTITUENCY: { color: "#2A6B7C", bg: "rgba(42,107,124,0.10)" },
   COUNTY:       { color: "#7A4F1E", bg: "rgba(122,79,30,0.10)"  },
@@ -52,41 +53,39 @@ const PROPOSAL_STATUS_COLOR: Record<string, string> = {
   REJECTED:            "#B03A1E",
 }
 
-// ── Shared author row ─────────────────────────────────────────
+// ── Author row ────────────────────────────────────────────────
 
 function AuthorRow({ post }: { post: PostDto }) {
-  const scope = post.scope as PostScope
-  const scopeCfg = SCOPE_CONFIG[scope]
+  const scopeColor = SCOPE_COLOR[post.scope as PostScope]
   const typeCfg = TYPE_CONFIG[post.type]
   const TypeIcon = typeCfg.icon
 
   return (
     <div className="flex items-center gap-2 mb-3">
+      {/* Avatar — scope-colored as a subtle reach indicator */}
       <div
         className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-[11px] font-extrabold"
-        style={{ background: scopeCfg.bg, color: scopeCfg.color }}
+        style={{ background: scopeColor.bg, color: scopeColor.color }}
       >
         {post.authorInitials}
       </div>
+
       <div className="flex-1 min-w-0">
-        <div className="flex items-baseline gap-1.5 flex-wrap">
-          <span className="text-[13px] font-semibold" style={{ color: "#0E0B08" }}>
-            {post.authorName}
+        <div className="text-[13px] font-semibold leading-tight" style={{ color: "#0E0B08" }}>
+          {post.authorName}
+        </div>
+        <div className="flex items-center gap-1 mt-0.5">
+          <span className="text-[11px]" style={{ color: scopeColor.color }}>
+            {post.communityName}
           </span>
-          {post.wardName && (
-            <>
-              <span style={{ color: "rgba(14,11,8,0.25)" }}>·</span>
-              <span className="text-[11px]" style={{ color: "rgba(14,11,8,0.40)" }}>
-                {post.wardName}
-              </span>
-            </>
-          )}
           <span style={{ color: "rgba(14,11,8,0.25)" }}>·</span>
           <span className="text-[11px]" style={{ color: "rgba(14,11,8,0.38)" }}>
             {relativeTime(post.createdAt)}
           </span>
         </div>
       </div>
+
+      {/* Post type badge */}
       <span
         className="flex-shrink-0 flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
         style={{ color: typeCfg.color, background: typeCfg.bg }}
@@ -98,7 +97,7 @@ function AuthorRow({ post }: { post: PostDto }) {
   )
 }
 
-// ── Proposal context panel ────────────────────────────────────
+// ── Proposal panel ────────────────────────────────────────────
 
 function ProposalPanel({ proposal }: { proposal: NonNullable<PostDto["proposal"]> }) {
   const statusColor = PROPOSAL_STATUS_COLOR[proposal.status] ?? "#7A6E60"
@@ -112,7 +111,6 @@ function ProposalPanel({ proposal }: { proposal: NonNullable<PostDto["proposal"]
       className="block group rounded-xl overflow-hidden hover:opacity-95 transition-opacity"
       style={{ background: "rgba(176,58,30,0.05)", border: "1px solid rgba(176,58,30,0.14)" }}
     >
-      {/* Header */}
       <div className="flex items-start gap-3 px-3 pt-3 pb-2">
         <div
           className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
@@ -133,7 +131,6 @@ function ProposalPanel({ proposal }: { proposal: NonNullable<PostDto["proposal"]
         </span>
       </div>
 
-      {/* Vote data */}
       {totalVotes > 0 && (
         <div className="px-3 pb-2 border-t" style={{ borderColor: "rgba(176,58,30,0.10)", paddingTop: "8px" }}>
           <div className="flex items-center justify-between mb-1.5">
@@ -149,17 +146,13 @@ function ProposalPanel({ proposal }: { proposal: NonNullable<PostDto["proposal"]
             <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(176,58,30,0.12)" }}>
               <div
                 className="h-full rounded-full transition-all"
-                style={{
-                  width: `${forPct}%`,
-                  background: "linear-gradient(to right, #1D4731, #2A7A4B)",
-                }}
+                style={{ width: `${forPct}%`, background: "linear-gradient(to right, #1D4731, #2A7A4B)" }}
               />
             </div>
           )}
         </div>
       )}
 
-      {/* Deadline */}
       {isVoting && proposal.votingEndsAt && (
         <div
           className="flex items-center gap-1.5 px-3 py-2 border-t"
@@ -173,15 +166,12 @@ function ProposalPanel({ proposal }: { proposal: NonNullable<PostDto["proposal"]
         </div>
       )}
 
-      {/* View link (when no deadline row) */}
       {!(isVoting && proposal.votingEndsAt) && (
         <div
           className="flex items-center justify-end px-3 py-2 border-t gap-1"
           style={{ borderColor: "rgba(176,58,30,0.10)" }}
         >
-          <span className="text-[10px] font-semibold" style={{ color: "#B03A1E" }}>
-            View proposal
-          </span>
+          <span className="text-[10px] font-semibold" style={{ color: "#B03A1E" }}>View proposal</span>
           <ArrowUpRight className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: "#B03A1E" }} />
         </div>
       )}

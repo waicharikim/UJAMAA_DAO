@@ -106,6 +106,9 @@ function mapBackendUser(raw: any): User {
 
     // Location hierarchy — only available from getMe shape
     primaryWardId: raw.geographic?.primaryWard?.id ?? undefined,
+    primaryWardName: raw.geographic?.primaryWard?.name ?? undefined,
+    secondaryWardId: raw.geographic?.secondaryWard?.id ?? undefined,
+    secondaryWardName: raw.geographic?.secondaryWard?.name ?? undefined,
     residenceCounty: primaryCountyName,
     residenceConstituency: primaryConstituencyName,
     // originCounty / originConstituency are not in backend — omit or empty

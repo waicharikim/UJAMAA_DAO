@@ -12,7 +12,10 @@ export interface User {
   verificationLevel?: "UNVERIFIED" | "EMAIL_VERIFIED" | "PHONE_VERIFIED" | "COMMUNITY_VERIFIED" | "FULL_VERIFIED"
 
   // Dual location system (populated from geographic hierarchy in getMe response)
-  primaryWardId?: string   // from geographic.primaryWard.id in getMe response
+  primaryWardId?: string
+  primaryWardName?: string
+  secondaryWardId?: string
+  secondaryWardName?: string
   residenceCounty: string
   residenceConstituency: string
   originCounty: string  // not in backend — always empty

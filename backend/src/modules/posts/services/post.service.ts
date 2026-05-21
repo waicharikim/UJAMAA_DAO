@@ -9,6 +9,7 @@ interface CreatePostInput {
   scope: PostScope;
   type: PostType;
   authorId: string;
+  wardId?: string;
   proposalId?: string;
   resourceUrl?: string;
   resourceTitle?: string;
@@ -31,7 +32,10 @@ type PostWithRelations = {
   resourceTitle: string | null;
   createdAt: Date;
   author: { id: string; name: string | null };
-  ward: { name: string } | null;
+  ward: {
+    name: string;
+    constituency: { name: string; county: { name: string } };
+  } | null;
   proposal: {
     id: string;
     title: string;
@@ -62,6 +66,15 @@ function toDto(post: PostWithRelations) {
     };
   }
 
+  const communityName =
+    post.scope === 'NATIONAL'
+      ? 'Kenya'
+      : post.scope === 'COUNTY'
+        ? (post.ward?.constituency?.county?.name ?? 'County')
+        : post.scope === 'CONSTITUENCY'
+          ? (post.ward?.constituency?.name ?? 'Constituency')
+          : (post.ward?.name ?? 'Ward');
+
   return {
     id: post.id,
     type: post.type,
@@ -72,7 +85,7 @@ function toDto(post: PostWithRelations) {
     authorId: post.author.id,
     authorName: post.author.name ?? 'Community Member',
     authorInitials: initials(post.author.name),
-    wardName: post.ward?.name ?? null,
+    communityName,
     proposal: proposalDto,
     createdAt: post.createdAt.toISOString(),
   };
@@ -80,7 +93,14 @@ function toDto(post: PostWithRelations) {
 
 const POST_INCLUDE = {
   author: { select: { id: true, name: true } },
-  ward: { select: { name: true } },
+  ward: {
+    select: {
+      name: true,
+      constituency: {
+        select: { name: true, county: { select: { name: true } } },
+      },
+    },
+  },
   proposal: {
     select: {
       id: true,
@@ -97,8 +117,17 @@ export class PostService {
   async create(input: CreatePostInput) {
     const user = await prisma.user.findUnique({
       where: { id: input.authorId },
-      select: { primaryWardId: true },
+      select: { primaryWardId: true, secondaryWardId: true },
     });
+
+    // Accept caller-supplied wardId only if it matches one of the user's wards
+    const allowedWards = [user?.primaryWardId, user?.secondaryWardId].filter(
+      Boolean
+    );
+    const wardId =
+      input.wardId && allowedWards.includes(input.wardId)
+        ? input.wardId
+        : (user?.primaryWardId ?? null);
 
     const post = await prisma.post.create({
       data: {
@@ -106,7 +135,7 @@ export class PostService {
         content: input.content,
         scope: input.scope,
         authorId: input.authorId,
-        wardId: user?.primaryWardId ?? null,
+        wardId,
         proposalId: input.proposalId ?? null,
         resourceUrl: input.resourceUrl ?? null,
         resourceTitle: input.resourceTitle ?? null,
@@ -125,18 +154,36 @@ export class PostService {
       select: {
         primaryWardId: true,
         primaryWard: { select: { constituencyId: true, countyId: true } },
+        secondaryWardId: true,
+        secondaryWard: { select: { constituencyId: true, countyId: true } },
       },
     });
 
-    const wardId = user?.primaryWardId ?? null;
-    const constituencyId = user?.primaryWard?.constituencyId ?? null;
-    const countyId = user?.primaryWard?.countyId ?? null;
+    // Collect unique IDs across both wards so the feed merges both communities
+    const wardIds = [user?.primaryWardId, user?.secondaryWardId].filter(
+      Boolean
+    ) as string[];
+    const constituencyIds = [
+      ...new Set(
+        [
+          user?.primaryWard?.constituencyId,
+          user?.secondaryWard?.constituencyId,
+        ].filter(Boolean) as string[]
+      ),
+    ];
+    const countyIds = [
+      ...new Set(
+        [user?.primaryWard?.countyId, user?.secondaryWard?.countyId].filter(
+          Boolean
+        ) as string[]
+      ),
+    ];
 
     const scopeFilter = buildScopeFilter(
       input.scope,
-      wardId,
-      constituencyId,
-      countyId
+      wardIds,
+      constituencyIds,
+      countyIds
     );
 
     const posts = await prisma.post.findMany({
@@ -166,38 +213,40 @@ export class PostService {
 
 function buildScopeFilter(
   scope: PostScope | undefined,
-  wardId: string | null,
-  constituencyId: string | null,
-  countyId: string | null
+  wardIds: string[],
+  constituencyIds: string[],
+  countyIds: string[]
 ): Prisma.PostWhereInput {
-  if (scope === 'NATIONAL' || (!scope && !wardId)) return {};
+  if (scope === 'NATIONAL' || (!scope && wardIds.length === 0)) return {};
 
   if (scope === 'COUNTY') {
-    if (!countyId) return {};
-    return { OR: [{ scope: 'NATIONAL' }, { ward: { countyId } }] };
+    if (countyIds.length === 0) return {};
+    return {
+      OR: [{ scope: 'NATIONAL' }, { ward: { countyId: { in: countyIds } } }],
+    };
   }
 
   if (scope === 'CONSTITUENCY') {
-    if (!constituencyId) return {};
+    if (constituencyIds.length === 0) return {};
     return {
       OR: [
         { scope: 'NATIONAL' },
-        { scope: 'COUNTY', ward: { countyId: countyId ?? undefined } },
-        { ward: { constituencyId } },
+        { scope: 'COUNTY', ward: { countyId: { in: countyIds } } },
+        { ward: { constituencyId: { in: constituencyIds } } },
       ],
     };
   }
 
-  // WARD default
+  // WARD — include posts from all of the user's wards
   return {
     OR: [
       { scope: 'NATIONAL' },
-      { scope: 'COUNTY', ward: { countyId: countyId ?? undefined } },
+      { scope: 'COUNTY', ward: { countyId: { in: countyIds } } },
       {
         scope: 'CONSTITUENCY',
-        ward: { constituencyId: constituencyId ?? undefined },
+        ward: { constituencyId: { in: constituencyIds } },
       },
-      { wardId: wardId ?? undefined },
+      { wardId: { in: wardIds } },
     ],
   };
 }

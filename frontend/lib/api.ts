@@ -2101,7 +2101,7 @@ export interface PostDto {
   authorId: string
   authorName: string
   authorInitials: string
-  wardName: string | null
+  communityName: string
   resourceUrl: string | null
   resourceTitle: string | null
   proposal: {
@@ -2148,6 +2148,7 @@ export const postsApi = {
     content: string
     scope: PostScope
     type?: PostType
+    wardId?: string
     proposalId?: string
     resourceUrl?: string
     resourceTitle?: string

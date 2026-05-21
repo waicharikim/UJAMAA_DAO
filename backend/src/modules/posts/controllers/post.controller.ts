@@ -7,21 +7,30 @@ import { postService } from '../services/post.service.js';
 export class PostController {
   static async create(req: AuthRequest, res: Response) {
     const userId = req.user!.userId;
-    const { content, scope, type, proposalId, resourceUrl, resourceTitle } =
-      req.body as {
-        content: string;
-        scope: PostScope;
-        type?: PostType;
-        proposalId?: string;
-        resourceUrl?: string;
-        resourceTitle?: string;
-      };
+    const {
+      content,
+      scope,
+      type,
+      wardId,
+      proposalId,
+      resourceUrl,
+      resourceTitle,
+    } = req.body as {
+      content: string;
+      scope: PostScope;
+      type?: PostType;
+      wardId?: string;
+      proposalId?: string;
+      resourceUrl?: string;
+      resourceTitle?: string;
+    };
 
     const post = await postService.create({
       content,
       scope,
       type: type ?? 'NOTICE',
       authorId: userId,
+      wardId,
       proposalId,
       resourceUrl,
       resourceTitle,
