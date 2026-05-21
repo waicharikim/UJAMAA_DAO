@@ -369,4 +369,38 @@ router.post(
   asyncHandler(ProjectController.contribute)
 );
 
+// ── Project Updates ────────────────────────────────────────────────────────────
+
+router.post(
+  '/:projectId/updates',
+  authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
+  validateRequest({
+    schema: z.object({ projectId: z.string().uuid() }),
+    target: 'params',
+  }),
+  validateRequest({
+    schema: z.object({
+      content: z.string().min(1).max(1000).trim(),
+    }),
+    target: 'body',
+  }),
+  asyncHandler(ProjectController.createUpdate)
+);
+
+router.get(
+  '/:projectId/updates',
+  validateRequest({
+    schema: z.object({ projectId: z.string().uuid() }),
+    target: 'params',
+  }),
+  validateRequest({
+    schema: z.object({
+      cursor: z.string().optional(),
+      limit: z.coerce.number().min(1).max(30).optional(),
+    }),
+    target: 'query',
+  }),
+  asyncHandler(ProjectController.listUpdates)
+);
+
 export default router;

@@ -2091,16 +2091,43 @@ export const feedApi = {
 // ─────────────────────────────────────────────────────────
 
 export type PostScope = "WARD" | "CONSTITUENCY" | "COUNTY" | "NATIONAL"
+export type PostType = "NOTICE" | "ANNOUNCEMENT" | "RESOURCE"
 
 export interface PostDto {
   id: string
+  type: PostType
   content: string
   scope: PostScope
   authorId: string
   authorName: string
   authorInitials: string
   wardName: string | null
+  resourceUrl: string | null
+  resourceTitle: string | null
+  proposal: {
+    id: string
+    title: string
+    status: string
+    votesFor: number
+    votesAgainst: number
+    votingEndsAt: string | null
+  } | null
   createdAt: string
+}
+
+export interface ProjectUpdateDto {
+  id: string
+  content: string
+  authorId: string
+  authorName: string
+  authorInitials: string
+  authorAvatarUrl: string | null
+  createdAt: string
+}
+
+export interface ProjectUpdatePageDto {
+  items: ProjectUpdateDto[]
+  nextCursor: string | null
 }
 
 export interface PostPageDto {
@@ -2109,15 +2136,42 @@ export interface PostPageDto {
 }
 
 export const postsApi = {
-  getPosts: (params?: { scope?: PostScope; cursor?: string }): Promise<PostPageDto> => {
+  getPosts: (params?: { scope?: PostScope; type?: PostType; cursor?: string }): Promise<PostPageDto> => {
     const qs = new URLSearchParams()
     if (params?.scope) qs.set("scope", params.scope)
+    if (params?.type) qs.set("type", params.type)
     if (params?.cursor) qs.set("cursor", params.cursor)
     const q = qs.toString()
     return apiFetch<PostPageDto>(`/posts${q ? `?${q}` : ""}`)
   },
-  createPost: (body: { content: string; scope: PostScope }): Promise<PostDto> =>
+  createPost: (body: {
+    content: string
+    scope: PostScope
+    type?: PostType
+    proposalId?: string
+    resourceUrl?: string
+    resourceTitle?: string
+  }): Promise<PostDto> =>
     apiFetch<PostDto>("/posts", { method: "POST", body: JSON.stringify(body) }),
+}
+
+// ─────────────────────────────────────────────────────────
+// Project Updates API  — /api/v1/projects/:projectId/updates
+// ─────────────────────────────────────────────────────────
+
+export const projectUpdatesApi = {
+  list: (projectId: string, params?: { cursor?: string; limit?: number }): Promise<ProjectUpdatePageDto> => {
+    const qs = new URLSearchParams()
+    if (params?.cursor) qs.set("cursor", params.cursor)
+    if (params?.limit) qs.set("limit", String(params.limit))
+    const q = qs.toString()
+    return apiFetch<ProjectUpdatePageDto>(`/projects/${projectId}/updates${q ? `?${q}` : ""}`)
+  },
+  create: (projectId: string, content: string): Promise<ProjectUpdateDto> =>
+    apiFetch<ProjectUpdateDto>(`/projects/${projectId}/updates`, {
+      method: "POST",
+      body: JSON.stringify({ content }),
+    }),
 }
 
 // ─────────────────────────────────────────────────────────

@@ -7,7 +7,6 @@ import { useRole } from "@/contexts/role-context"
 import { cn } from "@/lib/utils"
 import {
   Home,
-  Briefcase,
   Users,
   MoreHorizontal,
   Store,
@@ -27,18 +26,17 @@ import {
 } from "@/components/ui/drawer"
 
 const primaryNav = [
-  { label: "Home",      href: "/dashboard",  icon: Home },
-  { label: "Govern",    href: "/governance", icon: Scale },
-  { label: "Projects",  href: "/projects",   icon: Briefcase },
-  { label: "Community", href: "/groups",     icon: Users },
+  { label: "Home",      href: "/dashboard", icon: Home },
+  { label: "Community", href: "/groups",    icon: Users },
+  { label: "Emergency", href: "/emergency", icon: AlertTriangle },
+  { label: "Profile",   href: "/profile",   icon: User },
 ]
 
 const drawerNav = [
-  { label: "Emergency",  href: "/emergency",  icon: AlertTriangle },
-  { label: "Marketplace",href: "/marketplace",icon: Store },
-  { label: "Treasury",   href: "/treasury",   icon: Landmark },
-  { label: "Learn",      href: "/education",  icon: BookOpen },
-  { label: "Profile",    href: "/profile",    icon: User },
+  { label: "Govern",      href: "/governance",  icon: Scale },
+  { label: "Marketplace", href: "/marketplace", icon: Store },
+  { label: "Treasury",    href: "/treasury",    icon: Landmark },
+  { label: "Learn",       href: "/education",   icon: BookOpen },
 ]
 
 export function MobileBottomNav() {

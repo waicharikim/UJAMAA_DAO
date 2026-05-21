@@ -2,27 +2,44 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../../../core/database/client.js';
 
 export type PostScope = 'WARD' | 'CONSTITUENCY' | 'COUNTY' | 'NATIONAL';
+export type PostType = 'NOTICE' | 'ANNOUNCEMENT' | 'RESOURCE';
 
 interface CreatePostInput {
   content: string;
   scope: PostScope;
+  type: PostType;
   authorId: string;
+  proposalId?: string;
+  resourceUrl?: string;
+  resourceTitle?: string;
 }
 
 interface GetPostsInput {
   userId: string;
   scope?: PostScope;
+  type?: PostType;
   cursor?: string;
   limit?: number;
 }
 
 type PostWithRelations = {
   id: string;
+  type: string;
   content: string;
   scope: string;
+  resourceUrl: string | null;
+  resourceTitle: string | null;
   createdAt: Date;
   author: { id: string; name: string | null };
   ward: { name: string } | null;
+  proposal: {
+    id: string;
+    title: string;
+    status: string;
+    votesFor: number;
+    votesAgainst: number;
+    votingEndsAt: Date | null;
+  } | null;
 };
 
 function initials(name: string | null): string {
@@ -33,17 +50,48 @@ function initials(name: string | null): string {
 }
 
 function toDto(post: PostWithRelations) {
+  let proposalDto = null;
+  if (post.proposal) {
+    proposalDto = {
+      id: post.proposal.id,
+      title: post.proposal.title,
+      status: post.proposal.status,
+      votesFor: post.proposal.votesFor,
+      votesAgainst: post.proposal.votesAgainst,
+      votingEndsAt: post.proposal.votingEndsAt?.toISOString() ?? null,
+    };
+  }
+
   return {
     id: post.id,
+    type: post.type,
     content: post.content,
     scope: post.scope,
+    resourceUrl: post.resourceUrl,
+    resourceTitle: post.resourceTitle,
     authorId: post.author.id,
     authorName: post.author.name ?? 'Community Member',
     authorInitials: initials(post.author.name),
     wardName: post.ward?.name ?? null,
+    proposal: proposalDto,
     createdAt: post.createdAt.toISOString(),
   };
 }
+
+const POST_INCLUDE = {
+  author: { select: { id: true, name: true } },
+  ward: { select: { name: true } },
+  proposal: {
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      votesFor: true,
+      votesAgainst: true,
+      votingEndsAt: true,
+    },
+  },
+} as const;
 
 export class PostService {
   async create(input: CreatePostInput) {
@@ -54,15 +102,16 @@ export class PostService {
 
     const post = await prisma.post.create({
       data: {
+        type: input.type,
         content: input.content,
         scope: input.scope,
         authorId: input.authorId,
         wardId: user?.primaryWardId ?? null,
+        proposalId: input.proposalId ?? null,
+        resourceUrl: input.resourceUrl ?? null,
+        resourceTitle: input.resourceTitle ?? null,
       },
-      include: {
-        author: { select: { id: true, name: true } },
-        ward: { select: { name: true } },
-      },
+      include: POST_INCLUDE,
     });
 
     return toDto(post);
@@ -83,21 +132,26 @@ export class PostService {
     const constituencyId = user?.primaryWard?.constituencyId ?? null;
     const countyId = user?.primaryWard?.countyId ?? null;
 
-    const scopeFilter = buildScopeFilter(input.scope, wardId, constituencyId, countyId);
+    const scopeFilter = buildScopeFilter(
+      input.scope,
+      wardId,
+      constituencyId,
+      countyId
+    );
 
     const posts = await prisma.post.findMany({
       where: {
         AND: [
           scopeFilter,
-          ...(input.cursor ? [{ createdAt: { lt: new Date(input.cursor) } }] : []),
+          ...(input.type ? [{ type: input.type }] : []),
+          ...(input.cursor
+            ? [{ createdAt: { lt: new Date(input.cursor) } }]
+            : []),
         ],
       },
       orderBy: { createdAt: 'desc' },
       take: limit + 1,
-      include: {
-        author: { select: { id: true, name: true } },
-        ward: { select: { name: true } },
-      },
+      include: POST_INCLUDE,
     });
 
     const hasMore = posts.length > limit;
@@ -139,7 +193,10 @@ function buildScopeFilter(
     OR: [
       { scope: 'NATIONAL' },
       { scope: 'COUNTY', ward: { countyId: countyId ?? undefined } },
-      { scope: 'CONSTITUENCY', ward: { constituencyId: constituencyId ?? undefined } },
+      {
+        scope: 'CONSTITUENCY',
+        ward: { constituencyId: constituencyId ?? undefined },
+      },
       { wardId: wardId ?? undefined },
     ],
   };

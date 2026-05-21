@@ -7,8 +7,9 @@
 
 import { Response } from 'express';
 import { AuthRequest } from '../../../core/types/Ujamaadao.types.js';
-import { sendSuccess } from '../../../core/utils/response.js';
+import { sendSuccess, sendCreated } from '../../../core/utils/response.js';
 import { projectService } from '../services/project.service.js';
+import { projectUpdateService } from '../services/project-update.service.js';
 
 export class ProjectController {
   static async listProjects(req: AuthRequest, res: Response) {
@@ -170,5 +171,27 @@ export class ProjectController {
     const { sessionId } = req.params;
     const result = await projectService.getWorkSession(sessionId);
     sendSuccess(res, result);
+  }
+
+  static async createUpdate(req: AuthRequest, res: Response) {
+    const { projectId } = req.params;
+    const { content } = req.body as { content: string };
+    const update = await projectUpdateService.create({
+      projectId,
+      authorId: req.user!.userId,
+      content,
+    });
+    sendCreated(res, update, 'Update posted');
+  }
+
+  static async listUpdates(req: AuthRequest, res: Response) {
+    const { projectId } = req.params;
+    const { cursor, limit } = req.query as { cursor?: string; limit?: string };
+    const result = await projectUpdateService.list({
+      projectId,
+      cursor,
+      limit: limit ? Number(limit) : undefined,
+    });
+    sendSuccess(res, result, 'Updates fetched');
   }
 }

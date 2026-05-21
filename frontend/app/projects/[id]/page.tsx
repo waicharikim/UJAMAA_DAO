@@ -1,10 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import Link from "next/link"
 import { use } from "react"
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { projectApi, type ProjectDetailDto, type ProjectMilestoneDto, type WorkLogResponseDto } from "@/lib/api"
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query"
+import { projectApi, projectUpdatesApi, type ProjectDetailDto, type ProjectMilestoneDto, type WorkLogResponseDto } from "@/lib/api"
 import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -29,6 +29,8 @@ import {
   UserPlus,
   Coins,
   ListTodo,
+  MessageSquare,
+  Send,
 } from "lucide-react"
 import { formatDate } from "@/lib/utils"
 
@@ -436,15 +438,29 @@ function MilestoneCard({
   )
 }
 
+// ── Relative time ─────────────────────────────────────────
+
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime()
+  const mins = Math.floor(diff / 60_000)
+  if (mins < 1) return "now"
+  if (mins < 60) return `${mins}m`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h`
+  const days = Math.floor(hrs / 24)
+  return days === 1 ? "1d" : `${days}d`
+}
+
 // ── Tabs ──────────────────────────────────────────────────
 
-type Tab = "milestones" | "tasks" | "team"
+type Tab = "milestones" | "tasks" | "team" | "updates"
 
 function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "milestones", label: "Milestones", icon: <PlayCircle className="h-3.5 w-3.5" /> },
     { id: "tasks",      label: "Tasks",      icon: <ListTodo className="h-3.5 w-3.5" /> },
     { id: "team",       label: "Team",       icon: <Users className="h-3.5 w-3.5" /> },
+    { id: "updates",    label: "Updates",    icon: <MessageSquare className="h-3.5 w-3.5" /> },
   ]
   return (
     <div
@@ -728,6 +744,172 @@ function TeamTab({ projectId, members }: { projectId: string; members: ProjectDe
   )
 }
 
+// ── Updates tab ───────────────────────────────────────────
+
+function UpdatesTab({ projectId, isMember }: { projectId: string; isMember: boolean }) {
+  const { user } = useAuth()
+  const queryClient = useQueryClient()
+  const [content, setContent] = useState("")
+  const [focused, setFocused] = useState(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  const mutation = useMutation({
+    mutationFn: () => projectUpdatesApi.create(projectId, content.trim()),
+    onSuccess: () => {
+      setContent("")
+      setFocused(false)
+      queryClient.invalidateQueries({ queryKey: ["project-updates", projectId] })
+    },
+  })
+
+  useEffect(() => {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = "auto"
+    el.style.height = `${el.scrollHeight}px`
+  }, [content])
+
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } = useInfiniteQuery({
+    queryKey: ["project-updates", projectId],
+    queryFn: ({ pageParam }) =>
+      projectUpdatesApi.list(projectId, { cursor: pageParam as string | undefined }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+    staleTime: 30_000,
+  })
+
+  const updates = data?.pages.flatMap((p) => p.items) ?? []
+
+  return (
+    <div className="space-y-4">
+      {/* Compose — only for project members */}
+      {isMember && (
+        <div
+          className="rounded-2xl overflow-hidden"
+          style={{
+            background: "#fff",
+            boxShadow: focused
+              ? "0 0 0 2px rgba(201,146,42,0.35), 0 1px 6px rgba(14,11,8,0.07)"
+              : "0 1px 6px rgba(14,11,8,0.07), 0 0 0 1px rgba(14,11,8,0.04)",
+            transition: "box-shadow 0.15s",
+          }}
+        >
+          <div className="flex gap-3 px-4 pt-4 pb-3">
+            <div
+              className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-[11px] font-extrabold"
+              style={{ background: "rgba(29,71,49,0.10)", color: "#1D4731" }}
+            >
+              {user?.username?.slice(0, 2).toUpperCase() ?? user?.email?.slice(0, 2).toUpperCase() ?? "Me"}
+            </div>
+            <textarea
+              ref={textareaRef}
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              onFocus={() => setFocused(true)}
+              placeholder="What's the latest on this project?"
+              rows={1}
+              maxLength={1000}
+              className="flex-1 resize-none bg-transparent text-[14px] leading-relaxed outline-none placeholder:text-[rgba(14,11,8,0.35)]"
+              style={{ color: "#0E0B08", minHeight: "24px" }}
+            />
+          </div>
+          {(focused || content.length > 0) && (
+            <div
+              className="flex items-center justify-end px-4 pb-3 pt-1 border-t gap-3"
+              style={{ borderColor: "rgba(14,11,8,0.06)" }}
+            >
+              <span
+                className="text-[11px] font-medium"
+                style={{ color: content.length > 900 ? "#B03A1E" : "rgba(14,11,8,0.30)" }}
+              >
+                {1000 - content.length}
+              </span>
+              <button
+                onClick={() => mutation.mutate()}
+                disabled={mutation.isPending || !content.trim()}
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[12px] font-bold disabled:opacity-40"
+                style={{ background: "#1D4731", color: "#fff" }}
+              >
+                {mutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                Post Update
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Updates list */}
+      <div
+        className="rounded-2xl overflow-hidden"
+        style={{ background: "#fff", boxShadow: "0 1px 6px rgba(14,11,8,0.07), 0 0 0 1px rgba(14,11,8,0.04)" }}
+      >
+        {isLoading ? (
+          <div className="p-4 space-y-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex gap-3">
+                <Skeleton className="w-8 h-8 rounded-full flex-shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-3 w-24" />
+                  <Skeleton className="h-4 w-full" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : updates.length === 0 ? (
+          <div className="py-12 text-center">
+            <p className="text-sm font-medium" style={{ color: "#7A6E60" }}>No updates yet.</p>
+            {isMember && (
+              <p className="text-xs mt-1" style={{ color: "rgba(14,11,8,0.35)" }}>
+                Be the first to post a project update above.
+              </p>
+            )}
+          </div>
+        ) : (
+          <div>
+            {updates.map((u) => (
+              <div
+                key={u.id}
+                className="flex gap-3 px-4 py-4 border-b last:border-0"
+                style={{ borderColor: "rgba(14,11,8,0.05)" }}
+              >
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-[11px] font-extrabold"
+                  style={{ background: "rgba(29,71,49,0.10)", color: "#1D4731" }}
+                >
+                  {u.authorInitials}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline gap-1.5 mb-1">
+                    <span className="text-[13px] font-semibold" style={{ color: "#0E0B08" }}>{u.authorName}</span>
+                    <span style={{ color: "rgba(14,11,8,0.25)" }}>·</span>
+                    <span className="text-[11px]" style={{ color: "rgba(14,11,8,0.38)" }}>
+                      {relativeTime(u.createdAt)}
+                    </span>
+                  </div>
+                  <p className="text-[14px] leading-relaxed" style={{ color: "#0E0B08" }}>{u.content}</p>
+                </div>
+              </div>
+            ))}
+            {hasNextPage && (
+              <div className="px-4 py-3 border-t" style={{ borderColor: "rgba(14,11,8,0.05)" }}>
+                <button
+                  onClick={() => fetchNextPage()}
+                  disabled={isFetchingNextPage}
+                  className="w-full text-xs font-semibold py-2 rounded-xl hover:bg-black/[0.03] flex items-center justify-center gap-1.5"
+                  style={{ color: "#1D4731" }}
+                >
+                  {isFetchingNextPage ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                  Load more
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Main page ─────────────────────────────────────────────
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -791,6 +973,9 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
       )}
       {activeTab === "team" && (
         <TeamTab projectId={id} members={project.members} />
+      )}
+      {activeTab === "updates" && (
+        <UpdatesTab projectId={id} isMember={isMember} />
       )}
     </div>
   )

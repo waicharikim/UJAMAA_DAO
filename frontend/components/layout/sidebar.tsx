@@ -9,7 +9,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 import {
   Home,
-  Briefcase,
   Users,
   Store,
   Landmark,
@@ -26,17 +25,16 @@ import {
 
 const primaryNav = [
   { key: "nav.dashboard",  href: "/dashboard",  icon: Home },
-  { key: "nav.governance", href: "/governance", icon: Scale },
-  { key: "nav.projects",   href: "/projects",   icon: Briefcase },
   { key: "nav.community",  href: "/groups",     icon: Users },
   { key: "nav.emergency",  href: "/emergency",  icon: AlertTriangle },
+  { key: "nav.profile",    href: "/profile",    icon: User },
 ]
 
 const secondaryNav = [
+  { key: "nav.governance",  href: "/governance",  icon: Scale },
   { key: "nav.marketplace", href: "/marketplace", icon: Store },
   { key: "nav.treasury",    href: "/treasury",    icon: Landmark },
   { key: "nav.learn",       href: "/education",   icon: BookOpen },
-  { key: "nav.profile",     href: "/profile",     icon: User },
 ]
 
 // Adinkra Gye Nyame motif in amber-on-tea-green

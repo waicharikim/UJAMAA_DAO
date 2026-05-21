@@ -4,7 +4,6 @@ import { useState, useRef, useEffect } from "react"
 import Link from "next/link"
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import {
-  ArrowRight,
   Coins,
   Award,
   Zap,
@@ -16,10 +15,14 @@ import {
   MapPin,
   Landmark,
   Home,
+  Megaphone,
+  BookOpen,
+  FileText,
 } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
-import { postsApi, type PostDto, type PostScope } from "@/lib/api"
+import { postsApi, type PostDto, type PostScope, type PostType } from "@/lib/api"
 import { useAuth } from "@/contexts/auth-context"
+import { PostCard, TYPE_CONFIG } from "@/components/feed/post-card"
 
 // ─── Time helper ──────────────────────────────────────────────
 
@@ -47,55 +50,26 @@ const SCOPE_CONFIG: Record<
   NATIONAL:     { label: "National",     icon: Globe,    color: "#C9922A", bg: "rgba(201,146,42,0.12)" },
 }
 
+// TYPE_CONFIG imported from post-card.tsx
+
 // ─── Filter tabs ──────────────────────────────────────────────
 
 type Filter = "all" | PostScope
 
 const FILTERS: { key: Filter; label: string }[] = [
-  { key: "all",         label: "All"         },
-  { key: "WARD",        label: "My Ward"     },
-  { key: "CONSTITUENCY",label: "Constituency"},
-  { key: "COUNTY",      label: "County"      },
-  { key: "NATIONAL",    label: "National"    },
+  { key: "all",          label: "All"          },
+  { key: "WARD",         label: "My Ward"      },
+  { key: "CONSTITUENCY", label: "Constituency" },
+  { key: "COUNTY",       label: "County"       },
+  { key: "NATIONAL",     label: "National"     },
 ]
 
-// ─── Author avatar ────────────────────────────────────────────
-
-function AuthorAvatar({ initials, scope }: { initials: string; scope: PostScope }) {
-  const cfg = SCOPE_CONFIG[scope]
-  return (
-    <div
-      className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-[12px] font-extrabold"
-      style={{ background: cfg.bg, color: cfg.color }}
-    >
-      {initials}
-    </div>
-  )
-}
-
-// ─── Scope badge ──────────────────────────────────────────────
-
-function ScopeBadge({ scope }: { scope: PostScope }) {
-  const cfg = SCOPE_CONFIG[scope]
-  const Icon = cfg.icon
-  if (scope === "WARD") return null // ward is the default — no badge needed
-  return (
-    <span
-      className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
-      style={{ color: cfg.color, background: cfg.bg }}
-    >
-      <Icon className="h-2.5 w-2.5" />
-      {cfg.label}
-    </span>
-  )
-}
-
-// ─── Skeleton ─────────────────────────────────────────────────
+// ─── Post skeleton ────────────────────────────────────────────
 
 function PostSkeleton() {
   return (
     <div className="divide-y" style={{ borderColor: "rgba(14,11,8,0.05)" }}>
-      {Array.from({ length: 5 }).map((_, i) => (
+      {Array.from({ length: 4 }).map((_, i) => (
         <div key={i} className="flex gap-3 px-4 py-4">
           <Skeleton className="w-9 h-9 rounded-full flex-shrink-0" />
           <div className="flex-1 space-y-2 pt-0.5">
@@ -109,52 +83,7 @@ function PostSkeleton() {
   )
 }
 
-// ─── Single post row ──────────────────────────────────────────
-
-function PostRow({ post }: { post: PostDto }) {
-  const scope = post.scope as PostScope
-  const cfg = SCOPE_CONFIG[scope]
-
-  return (
-    <div className="flex gap-3 px-4 py-4">
-      <AuthorAvatar initials={post.authorInitials} scope={scope} />
-
-      <div className="flex-1 min-w-0">
-        {/* Author name + time */}
-        <div className="flex items-baseline gap-1.5 mb-0.5 flex-wrap">
-          <span className="text-[13px] font-semibold" style={{ color: "#0E0B08" }}>
-            {post.authorName}
-          </span>
-          {post.wardName && (
-            <>
-              <span className="text-[11px]" style={{ color: "rgba(14,11,8,0.25)" }}>·</span>
-              <span className="text-[11px]" style={{ color: "rgba(14,11,8,0.40)" }}>
-                {post.wardName}
-              </span>
-            </>
-          )}
-          <span className="text-[11px]" style={{ color: "rgba(14,11,8,0.25)" }}>·</span>
-          <span className="text-[11px]" style={{ color: "rgba(14,11,8,0.38)" }}>
-            {relativeTime(post.createdAt)}
-          </span>
-        </div>
-
-        {/* Content */}
-        <p
-          className="text-[14px] leading-relaxed"
-          style={{ color: "#0E0B08" }}
-        >
-          {post.content}
-        </p>
-
-        {/* Scope badge (non-ward) */}
-        <div className="mt-1.5">
-          <ScopeBadge scope={scope} />
-        </div>
-      </div>
-    </div>
-  )
-}
+// PostCard imported from post-card.tsx
 
 // ─── Compose box ─────────────────────────────────────────────
 
@@ -165,28 +94,46 @@ const SCOPE_OPTIONS: { value: PostScope; label: string }[] = [
   { value: "NATIONAL",     label: "National"     },
 ]
 
+const POST_TYPES: { value: PostType; label: string; icon: React.ElementType }[] = [
+  { value: "NOTICE",       label: "Notice",       icon: FileText  },
+  { value: "ANNOUNCEMENT", label: "Announcement", icon: Megaphone },
+  { value: "RESOURCE",     label: "Resource",     icon: BookOpen  },
+]
+
 function ComposeBox() {
   const { user, isAuthenticated } = useAuth()
   const queryClient = useQueryClient()
   const [content, setContent] = useState("")
   const [scope, setScope] = useState<PostScope>("WARD")
+  const [type, setType] = useState<PostType>("NOTICE")
+  const [resourceUrl, setResourceUrl] = useState("")
+  const [resourceTitle, setResourceTitle] = useState("")
   const [focused, setFocused] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
   const canPost =
     isAuthenticated &&
     (user?.verificationLevel === "COMMUNITY_VERIFIED" ||
       user?.verificationLevel === "FULL_VERIFIED")
 
   const mutation = useMutation({
-    mutationFn: () => postsApi.createPost({ content: content.trim(), scope }),
+    mutationFn: () =>
+      postsApi.createPost({
+        content: content.trim(),
+        scope,
+        type,
+        resourceUrl: type === "RESOURCE" && resourceUrl.trim() ? resourceUrl.trim() : undefined,
+        resourceTitle: type === "RESOURCE" && resourceTitle.trim() ? resourceTitle.trim() : undefined,
+      }),
     onSuccess: () => {
       setContent("")
+      setResourceUrl("")
+      setResourceTitle("")
       setFocused(false)
       queryClient.invalidateQueries({ queryKey: ["posts"] })
     },
   })
 
-  // Auto-resize textarea
   useEffect(() => {
     const el = textareaRef.current
     if (!el) return
@@ -200,14 +147,11 @@ function ComposeBox() {
     return (
       <div
         className="mx-3 mt-3 rounded-2xl px-4 py-3 flex items-center gap-3"
-        style={{
-          background: "rgba(201,146,42,0.07)",
-          border: "1px dashed rgba(201,146,42,0.3)",
-        }}
+        style={{ background: "rgba(201,146,42,0.07)", border: "1px dashed rgba(201,146,42,0.3)" }}
       >
         <span className="text-lg flex-shrink-0">🌿</span>
         <p className="text-[12px] flex-1" style={{ color: "rgba(14,11,8,0.55)" }}>
-          Community members can post in their ward.
+          Community members can share updates and resources.
         </p>
         <Link
           href="/profile#verification"
@@ -220,6 +164,8 @@ function ComposeBox() {
     )
   }
 
+  const typeCfg = TYPE_CONFIG[type]
+
   return (
     <div
       className="mx-3 mt-3 rounded-2xl overflow-hidden"
@@ -231,25 +177,65 @@ function ComposeBox() {
         transition: "box-shadow 0.15s",
       }}
     >
-      <div className="flex gap-3 px-4 pt-4 pb-3">
-        {/* Author avatar initials */}
+      {/* Type selector row */}
+      <div className="flex gap-1 px-3 pt-3 pb-0">
+        {POST_TYPES.map(({ value, label, icon: Icon }) => (
+          <button
+            key={value}
+            onClick={() => setType(value)}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all"
+            style={
+              type === value
+                ? { background: TYPE_CONFIG[value].bg, color: TYPE_CONFIG[value].color }
+                : { background: "rgba(14,11,8,0.04)", color: "rgba(14,11,8,0.40)" }
+            }
+          >
+            <Icon className="h-2.5 w-2.5" />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Resource URL fields (only for RESOURCE type) */}
+      {type === "RESOURCE" && (
+        <div className="px-4 pt-3 space-y-2">
+          <input
+            value={resourceUrl}
+            onChange={(e) => setResourceUrl(e.target.value)}
+            placeholder="https://… (link to the resource)"
+            className="w-full h-8 rounded-lg border bg-white/60 px-3 text-[13px] outline-none focus:ring-1"
+            style={{
+              borderColor: "rgba(42,107,124,0.3)",
+              color: "#0E0B08",
+            }}
+          />
+          <input
+            value={resourceTitle}
+            onChange={(e) => setResourceTitle(e.target.value)}
+            placeholder="Resource title (optional)"
+            className="w-full h-8 rounded-lg border bg-white/60 px-3 text-[13px] outline-none focus:ring-1"
+            style={{ borderColor: "rgba(14,11,8,0.10)", color: "#0E0B08" }}
+          />
+        </div>
+      )}
+
+      {/* Textarea */}
+      <div className="flex gap-3 px-4 pt-3 pb-3">
         <div
-          className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-[12px] font-extrabold"
-          style={{ background: "rgba(29,71,49,0.10)", color: "#1D4731" }}
+          className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-[11px] font-extrabold"
+          style={{ background: typeCfg.bg, color: typeCfg.color }}
         >
           {user?.username
             ? user.username.slice(0, 2).toUpperCase()
             : user?.email?.slice(0, 2).toUpperCase() ?? "Me"}
         </div>
-
-        {/* Input */}
         <div className="flex-1 min-w-0">
           <textarea
             ref={textareaRef}
             value={content}
             onChange={(e) => setContent(e.target.value)}
             onFocus={() => setFocused(true)}
-            placeholder="What's happening in your ward?"
+            placeholder={typeCfg.placeholder}
             rows={1}
             maxLength={500}
             className="w-full resize-none bg-transparent text-[14px] leading-relaxed outline-none placeholder:text-[rgba(14,11,8,0.35)]"
@@ -258,7 +244,7 @@ function ComposeBox() {
         </div>
       </div>
 
-      {/* Actions row — shown when focused or has content */}
+      {/* Actions row */}
       {(focused || content.length > 0) && (
         <div
           className="flex items-center justify-between px-4 pb-3 pt-1 border-t"
@@ -281,19 +267,18 @@ function ComposeBox() {
           </select>
 
           <div className="flex items-center gap-3">
-            {/* Character count */}
             <span
               className="text-[11px] font-medium"
               style={{
-                color: content.length > 450
-                  ? content.length > 480 ? "#B03A1E" : "#C9922A"
-                  : "rgba(14,11,8,0.30)",
+                color:
+                  content.length > 450
+                    ? content.length > 480 ? "#B03A1E" : "#C9922A"
+                    : "rgba(14,11,8,0.30)",
               }}
             >
               {500 - content.length}
             </span>
 
-            {/* Post button */}
             <button
               onClick={() => mutation.mutate()}
               disabled={!content.trim() || mutation.isPending}
@@ -391,7 +376,7 @@ function UnauthenticatedState() {
         Karibu UjamaaDAO
       </h2>
       <p className="text-sm mb-6 max-w-xs" style={{ color: "rgba(14,11,8,0.5)" }}>
-        Sign in to read and post in your ward community.
+        Sign in to read and share updates in your ward community.
       </p>
       <Link
         href="/auth/callback"
@@ -441,16 +426,10 @@ export function HomeFeed() {
 
   return (
     <div className="flex flex-col" style={{ background: "#F7F2E8", minHeight: "100%" }}>
-      {/* Stats strip */}
       <StatsStrip />
-
-      {/* Filter pills */}
       <FilterPills active={filter} onChange={(f) => { setFilter(f); refresh() }} />
-
-      {/* Compose box */}
       <ComposeBox />
 
-      {/* Posts container */}
       <div
         className="mx-3 mt-3 rounded-2xl overflow-hidden"
         style={{
@@ -461,9 +440,9 @@ export function HomeFeed() {
         {isLoading && <PostSkeleton />}
 
         {!isLoading && allPosts.length > 0 && (
-          <div className="divide-y" style={{ borderColor: "rgba(14,11,8,0.05)" }}>
+          <div>
             {allPosts.map((post) => (
-              <PostRow key={post.id} post={post} />
+              <PostCard key={post.id} post={post} />
             ))}
           </div>
         )}
@@ -476,13 +455,12 @@ export function HomeFeed() {
             </p>
             <p className="text-xs" style={{ color: "rgba(14,11,8,0.40)" }}>
               {filter === "all"
-                ? "Be the first to post something in your ward."
-                : `No ${filter.toLowerCase()} posts yet. Be the first.`}
+                ? "Be the first to share an update in your ward."
+                : `No ${filter.toLowerCase()} updates yet. Be the first.`}
             </p>
           </div>
         )}
 
-        {/* Load more */}
         {!isLoading && hasNextPage && (
           <div className="border-t px-4 py-3" style={{ borderColor: "rgba(14,11,8,0.05)" }}>
             <button

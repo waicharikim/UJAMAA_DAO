@@ -72,7 +72,7 @@ function GroupDetailSkeleton() {
 
 const GROUP_ROLES = ["MEMBER", "LEADER", "TREASURER", "SECRETARY", "AUDITOR", "FACILITATOR", "MENTOR", "MODERATOR"] as const
 
-function LeaderAdminPanel({ group }: { group: GroupDetailDto }) {
+export function LeaderAdminPanel({ group }: { group: GroupDetailDto }) {
   const queryClient = useQueryClient()
   const { toast } = useToast()
   const groupId = group.groupId
