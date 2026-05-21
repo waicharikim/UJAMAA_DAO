@@ -61,28 +61,6 @@ const VERIFICATION_LEVEL_ORDER: VerificationLevel[] = [
   'FULL_VERIFIED',
 ];
 
-function hasMinimumVouchingLevel(voucher: { verificationLevel: string }): boolean {
-  const voucherIdx = VERIFICATION_LEVEL_ORDER.indexOf(
-    voucher.verificationLevel as VerificationLevel
-  );
-  return voucherIdx >= VERIFICATION_LEVEL_ORDER.indexOf('COMMUNITY_VERIFIED');
-}
-
-function isAuthorizedToVouchInWard(
-  voucher: { verificationLevel: string },
-  target: { primaryWardId: string | null },
-  wardId: string
-): boolean {
-  if (voucher.verificationLevel === 'FULL_VERIFIED') return true;
-  return target.primaryWardId === wardId;
-}
-
-function hasActiveVouchingRequest(
-  request: { status: string } | null
-): boolean {
-  return request !== null && request.status === 'VOUCHING';
-}
-
 class UserService {
   /**
    * Get rich user profile with full impact breakdown
@@ -322,6 +300,45 @@ class UserService {
       );
       return 0;
     }
+  }
+
+  private async assertVoucherCanVouch(
+    voucherId: string,
+    targetUserId: string,
+    wardId: string
+  ): Promise<void> {
+    const voucher = await prisma.user.findUnique({
+      where: { id: voucherId },
+      select: { verificationLevel: true, primaryWardId: true },
+    });
+    if (!voucher) throw ApiError.notFound('Voucher user');
+
+    const minIdx = VERIFICATION_LEVEL_ORDER.indexOf('COMMUNITY_VERIFIED');
+    const voucherIdx = VERIFICATION_LEVEL_ORDER.indexOf(
+      voucher.verificationLevel as VerificationLevel
+    );
+    if (voucherIdx < minIdx)
+      throw ApiError.insufficientVerification(
+        'Only community-verified users can vouch'
+      );
+
+    const target = await prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: { primaryWardId: true },
+    });
+    if (!target) throw ApiError.notFound('Target user');
+
+    if (
+      voucher.verificationLevel !== 'FULL_VERIFIED' &&
+      target.primaryWardId !== wardId
+    )
+      throw ApiError.geographicError('Vouch must be in same ward');
+
+    const request = await prisma.verificationRequest.findUnique({
+      where: { userId_type: { userId: targetUserId, type: 'COMMUNITY' } },
+    });
+    if (request === null || request.status !== 'VOUCHING')
+      throw ApiError.conflict('No active vouching request');
   }
 
   /**
@@ -686,34 +703,19 @@ class UserService {
    * Get privacy settings (create default if missing)
    */
   async getPrivacySettings(userId: string) {
-    let settings = await prisma.userPrivacySettings.findUnique({
+    return prisma.userPrivacySettings.upsert({
       where: { userId },
+      update: {},
+      create: { userId },
     });
-
-    if (!settings) {
-      settings = await prisma.userPrivacySettings.create({
-        data: { userId },
-      });
-    }
-
-    return settings;
   }
 
-  /**
-   * Get accessibility settings (create default if missing)
-   */
   async getAccessibilitySettings(userId: string) {
-    let settings = await prisma.userAccessibility.findUnique({
+    return prisma.userAccessibility.upsert({
       where: { userId },
+      update: {},
+      create: { userId },
     });
-
-    if (!settings) {
-      settings = await prisma.userAccessibility.create({
-        data: { userId },
-      });
-    }
-
-    return settings;
   }
 
   // ─────────────────────────────────────────────
@@ -776,33 +778,7 @@ class UserService {
 
   async vouchForUser(voucherId: string, dto: VouchRequestDto) {
     const { targetUserId, wardId } = dto;
-
-    const voucher = await prisma.user.findUnique({
-      where: { id: voucherId },
-      select: { verificationLevel: true, primaryWardId: true },
-    });
-
-    if (!voucher) throw ApiError.notFound('Voucher user');
-    if (!hasMinimumVouchingLevel(voucher))
-      throw ApiError.insufficientVerification(
-        'Only community-verified users can vouch'
-      );
-
-    const target = await prisma.user.findUnique({
-      where: { id: targetUserId },
-      select: { primaryWardId: true },
-    });
-
-    if (!target) throw ApiError.notFound('Target user');
-    if (!isAuthorizedToVouchInWard(voucher, target, wardId))
-      throw ApiError.geographicError('Vouch must be in same ward');
-
-    const request = await prisma.verificationRequest.findUnique({
-      where: { userId_type: { userId: targetUserId, type: 'COMMUNITY' } },
-    });
-
-    if (!hasActiveVouchingRequest(request))
-      throw ApiError.conflict('No active vouching request');
+    await this.assertVoucherCanVouch(voucherId, targetUserId, wardId);
 
     try {
       await prisma.communityVouch.create({
