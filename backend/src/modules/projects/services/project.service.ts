@@ -75,13 +75,7 @@ export class ProjectService {
       include: { group: true, milestones: { orderBy: { orderIndex: 'asc' } } },
     });
 
-    if (!proposal) throw ApiError.notFound('Proposal');
-    if (proposal.status !== 'APPROVED')
-      throw ApiError.badRequest('Proposal must be approved');
-    if (proposal.creatorId !== userId)
-      throw ApiError.forbidden(
-        'Only the proposal creator can create a project'
-      );
+    this.assertProposalForNewProject(proposal, userId);
 
     const existing = await prisma.project.findFirst({
       where: { proposalId: dto.proposalId },
@@ -92,32 +86,19 @@ export class ProjectService {
     const project = await prisma.project.create({
       data: {
         proposalId: dto.proposalId,
-        ownerGroupId: proposal.groupId,
+        ownerGroupId: proposal!.groupId,
         ownerUserId: userId,
-        title: proposal.title,
-        description: proposal.description,
+        title: proposal!.title,
+        description: proposal!.description,
         status: ProjectStatus.PLANNING,
       },
     });
 
-    // Add creator as LEAD member
     await prisma.projectMember.create({
       data: { projectId: project.id, userId, role: 'LEAD' },
     });
 
-    // Auto-create milestones from linked ProposalMilestones if any
-    if (proposal.milestones.length > 0) {
-      await prisma.milestone.createMany({
-        data: proposal.milestones.map((m) => ({
-          projectId: project.id,
-          proposalMilestoneId: m.id,
-          title: m.title,
-          description: m.description ?? null,
-          orderIndex: m.orderIndex,
-          status: MilestoneStatus.PENDING,
-        })),
-      });
-    }
+    await this.createMilestonesFromProposal(project.id, proposal!.milestones);
 
     logger.info(
       { userId, proposalId: dto.proposalId, projectId: project.id },
@@ -132,7 +113,7 @@ export class ProjectService {
       { proposalId: dto.proposalId, title: project.title }
     );
 
-    await this.tryDebitGroupTreasury(proposal, project.id, userId);
+    await this.tryDebitGroupTreasury(proposal!, project.id, userId);
     return project;
   }
 
@@ -212,21 +193,29 @@ export class ProjectService {
       where: { id: dto.milestoneId },
       include: { project: true },
     });
-
     if (!milestone) throw ApiError.notFound('Milestone');
     if (milestone.status !== MilestoneStatus.AWAITING_VERIFICATION)
       throw ApiError.badRequest('Milestone is not awaiting verification');
+    await this.assertMilestoneVerifyAuth(verifierId, milestone.projectId);
+    const newStatus = await this.applyMilestoneVerification(verifierId, dto, milestone);
+    return { status: newStatus };
+  }
 
+  private async assertMilestoneVerifyAuth(verifierId: string, projectId: string): Promise<void> {
     const [isLeader, isVerifier] = await Promise.all([
-      roleService.isProjectLeader(verifierId, milestone.projectId),
+      roleService.isProjectLeader(verifierId, projectId),
       roleService.isVerifier(verifierId),
     ]);
     if (!isLeader && !isVerifier)
       throw ApiError.forbidden('Not authorised to verify milestones');
+  }
 
-    const newStatus = dto.approved
-      ? MilestoneStatus.VERIFIED
-      : MilestoneStatus.REJECTED;
+  private async applyMilestoneVerification(
+    verifierId: string,
+    dto: VerifyMilestoneDto,
+    milestone: { id: string; projectId: string; title: string; submittedById: string | null; project: { title: string } }
+  ): Promise<MilestoneStatus> {
+    const newStatus = dto.approved ? MilestoneStatus.VERIFIED : MilestoneStatus.REJECTED;
 
     await prisma.milestone.update({
       where: { id: dto.milestoneId },
@@ -238,18 +227,12 @@ export class ProjectService {
       },
     });
 
-    await auditService.log(
-      verifierId,
-      AuditAction.MILESTONE_VERIFIED,
-      'Milestone',
-      dto.milestoneId,
-      {
-        approved: dto.approved,
-        projectId: milestone.projectId,
-        milestoneName: milestone.title,
-        projectTitle: milestone.project.title,
-      }
-    );
+    await auditService.log(verifierId, AuditAction.MILESTONE_VERIFIED, 'Milestone', dto.milestoneId, {
+      approved: dto.approved,
+      projectId: milestone.projectId,
+      milestoneName: milestone.title,
+      projectTitle: milestone.project.title,
+    });
 
     if (dto.approved && milestone.submittedById)
       await this.awardMilestoneVerificationRewards(
@@ -258,7 +241,7 @@ export class ProjectService {
         dto.milestoneId
       );
 
-    return { status: newStatus };
+    return newStatus;
   }
 
   /**
@@ -422,7 +405,10 @@ export class ProjectService {
     if (!project) throw ApiError.notFound('Project');
     if (isProjectClosed(project.status))
       throw ApiError.badRequest('Cannot join a completed or cancelled project');
+    return this.createProjectMembership(userId, projectId);
+  }
 
+  private async createProjectMembership(userId: string, projectId: string) {
     try {
       const member = await prisma.projectMember.create({
         data: { projectId, userId, role: 'CONTRIBUTOR' },
@@ -430,9 +416,7 @@ export class ProjectService {
           user: { select: { id: true, name: true, avatarUrl: true } },
         },
       });
-
       await this.awardProjectJoinRewards(userId, projectId);
-
       return {
         projectId: member.projectId,
         userId: member.userId,
@@ -677,12 +661,7 @@ export class ProjectService {
       select: { id: true, projectId: true, status: true, assignedToId: true },
     });
     if (!task) throw ApiError.notFound('Task');
-    if (task.assignedToId !== userId)
-      throw ApiError.forbidden(
-        'Only the assigned member can complete this task'
-      );
-    if (task.status !== 'IN_PROGRESS')
-      throw ApiError.badRequest('Task must be in progress to mark as done');
+    this.assertTaskCompletable(task, userId);
 
     await prisma.task.update({
       where: { id: taskId },
@@ -720,6 +699,44 @@ export class ProjectService {
 
   async getWorkSession(sessionId: string): Promise<WorkSessionDto & { presences: WorkPresenceDto[] }> {
     return workSessionService.getWorkSession(sessionId);
+  }
+
+  private assertProposalForNewProject(
+    proposal: { status: string; creatorId: string | null } | null,
+    userId: string
+  ): void {
+    if (!proposal) throw ApiError.notFound('Proposal');
+    if (proposal.status !== 'APPROVED')
+      throw ApiError.badRequest('Proposal must be approved');
+    if (proposal.creatorId !== userId)
+      throw ApiError.forbidden('Only the proposal creator can create a project');
+  }
+
+  private async createMilestonesFromProposal(
+    projectId: string,
+    milestones: Array<{ id: string; title: string; description: string | null; orderIndex: number }>
+  ): Promise<void> {
+    if (!milestones.length) return;
+    await prisma.milestone.createMany({
+      data: milestones.map((m) => ({
+        projectId,
+        proposalMilestoneId: m.id,
+        title: m.title,
+        description: m.description ?? null,
+        orderIndex: m.orderIndex,
+        status: MilestoneStatus.PENDING,
+      })),
+    });
+  }
+
+  private assertTaskCompletable(
+    task: { assignedToId: string | null; status: string },
+    userId: string
+  ): void {
+    if (task.assignedToId !== userId)
+      throw ApiError.forbidden('Only the assigned member can complete this task');
+    if (task.status !== 'IN_PROGRESS')
+      throw ApiError.badRequest('Task must be in progress to mark as done');
   }
 
   private async tryDebitGroupTreasury(
