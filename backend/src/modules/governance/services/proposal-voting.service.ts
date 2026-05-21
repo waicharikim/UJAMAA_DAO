@@ -17,6 +17,12 @@ import { assertStartVotingAuth } from './proposal-lifecycle.service.js';
 
 type VoteRecord = { vote: boolean | null; voteWeight: number };
 
+function resolveVoteOption(option: VoteOption): boolean | null {
+  if (option === VoteOption.YES) return true;
+  if (option === VoteOption.NO) return false;
+  return null;
+}
+
 interface TallyResult {
   quorum: boolean;
   approved: boolean;
@@ -77,13 +83,7 @@ class ProposalVotingService {
       })
       .catch(() => {});
 
-    // null = ABSTAIN, true = YES, false = NO
-    const voteValue: boolean | null =
-      dto.option === VoteOption.YES
-        ? true
-        : dto.option === VoteOption.NO
-          ? false
-          : null;
+    const voteValue = resolveVoteOption(dto.option);
 
     await prisma.groupMemberVote.create({
       data: {
@@ -160,43 +160,7 @@ class ProposalVotingService {
       'Proposal tallied'
     );
 
-    if (proposal.creatorId) {
-      await auditService
-        .log(
-          proposal.creatorId,
-          AuditAction.PROPOSAL_STATUS_CHANGED,
-          'Proposal',
-          proposalId,
-          {
-            newStatus,
-            quorum,
-            approved,
-            tallySource: 'auto',
-            title: proposal.title,
-          }
-        )
-        .catch(() => {
-          /* non-critical */
-        });
-    }
-
-    if (proposal.creatorId && newStatus === ProposalStatus.APPROVED)
-      await this.awardTallyCreatorRewards(
-        proposal.creatorId,
-        proposalId,
-        proposal.title
-      );
-
-    await this.anchorResultOnChain(proposalId, newStatus);
-
-    if (proposal.creatorId)
-      await this.notifyTallyOutcome({
-        creatorId: proposal.creatorId,
-        proposalId,
-        title: proposal.title,
-        newStatus,
-        quorum,
-      });
+    await this.executeTallyPost(proposal, proposalId, newStatus, quorum, approved);
 
     return { newStatus, quorum, approved };
   }
@@ -311,6 +275,33 @@ class ProposalVotingService {
         '[GOV] On-chain vote failed — off-chain record intact'
       );
     }
+  }
+
+  private async executeTallyPost(
+    proposal: { creatorId: string | null; title: string },
+    proposalId: string,
+    newStatus: ProposalStatus,
+    quorum: boolean,
+    approved: boolean
+  ): Promise<void> {
+    if (proposal.creatorId) {
+      await auditService
+        .log(proposal.creatorId, AuditAction.PROPOSAL_STATUS_CHANGED, 'Proposal', proposalId, {
+          newStatus, quorum, approved, tallySource: 'auto', title: proposal.title,
+        })
+        .catch(() => {});
+    }
+    if (proposal.creatorId && newStatus === ProposalStatus.APPROVED)
+      await this.awardTallyCreatorRewards(proposal.creatorId, proposalId, proposal.title);
+    await this.anchorResultOnChain(proposalId, newStatus);
+    if (proposal.creatorId)
+      await this.notifyTallyOutcome({
+        creatorId: proposal.creatorId,
+        proposalId,
+        title: proposal.title,
+        newStatus,
+        quorum,
+      });
   }
 
   private async awardTallyCreatorRewards(

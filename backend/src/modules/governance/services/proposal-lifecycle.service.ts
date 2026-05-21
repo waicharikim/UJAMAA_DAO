@@ -105,6 +105,27 @@ export async function assertStartVotingAuth(
 }
 
 class ProposalLifecycleService {
+  private assertProposalCreatorEligibility(
+    userId: string,
+    group: { members: Array<{ userId: string; user: { globalImpactPoints: number } }> },
+    scope: string
+  ): void {
+    const membership = group.members.find((m) => m.userId === userId);
+    if (!membership)
+      throw ApiError.forbidden('You are not a member of this group');
+
+    const requiredPercentile =
+      IP_PERCENTILE_THRESHOLD[scope as keyof typeof IP_PERCENTILE_THRESHOLD] || 1.0;
+    const ips = group.members.map((m) => m.user.globalImpactPoints);
+    const userRank = ips.filter((ip) => ip > membership.user.globalImpactPoints).length + 1;
+    const allowedRank = Math.ceil(requiredPercentile * ips.length);
+
+    if (userRank > allowedRank)
+      throw ApiError.forbidden(
+        `You need to be in the top ${(requiredPercentile * 100).toFixed(0)}% of IP in this group`
+      );
+  }
+
   async createProposal(userId: string, dto: CreateProposalDto) {
     const group = await prisma.group.findUnique({
       where: { id: dto.groupId },
@@ -118,27 +139,11 @@ class ProposalLifecycleService {
 
     if (!group) throw ApiError.notFound('Group', dto.groupId);
 
-    const membership = group.members.find((m) => m.userId === userId);
-    if (!membership)
-      throw ApiError.forbidden('You are not a member of this group');
-
     const scope = group.locationScope || 'VOLUNTARY';
+    this.assertProposalCreatorEligibility(userId, group, scope);
+
     const prCost =
       PR_COST_BY_SCOPE[scope as keyof typeof PR_COST_BY_SCOPE] || 50;
-    const requiredPercentile =
-      IP_PERCENTILE_THRESHOLD[scope as keyof typeof IP_PERCENTILE_THRESHOLD] ||
-      1.0;
-
-    const ips = group.members.map((m) => m.user.globalImpactPoints);
-    const userRank =
-      ips.filter((ip) => ip > membership.user.globalImpactPoints).length + 1;
-    const allowedRank = Math.ceil(requiredPercentile * ips.length);
-
-    if (userRank > allowedRank) {
-      throw ApiError.forbidden(
-        `You need to be in the top ${(requiredPercentile * 100).toFixed(0)}% of IP in this group`
-      );
-    }
 
     await participationRightsService.spend(
       userId,
@@ -167,7 +172,7 @@ class ProposalLifecycleService {
     });
 
     logger.info(
-      { userId, groupId: dto.groupId, scope, prCost, userRank, allowedRank },
+      { userId, groupId: dto.groupId, scope, prCost },
       'Proposal created'
     );
 
@@ -425,25 +430,30 @@ class ProposalLifecycleService {
       proposalId,
       { newStatus, stage: 2, title: proposal.title }
     );
-    if (proposal.creatorId) {
-      const approved = newStatus === ProposalStatus.APPROVED_FOR_VOTING;
-      notificationService
-        .send({
-          userId: proposal.creatorId,
-          type: approved
-            ? NotificationType.PROPOSAL_APPROVED
-            : NotificationType.PROPOSAL_REJECTED,
-          title: approved
-            ? 'Proposal approved for voting'
-            : 'Proposal rejected',
-          message: approved
-            ? `"${proposal.title}" has been approved by the administrator — you can now open voting.`
-            : `"${proposal.title}" was rejected by the administrator.${dto.note ? ` Note: ${dto.note}` : ''}`,
-          data: { proposalId },
-        })
-        .catch(() => {});
-    }
+    if (proposal.creatorId)
+      this.notifyReviewOutcome(proposal.creatorId, proposalId, proposal.title, newStatus, dto.note);
     return updated;
+  }
+
+  private notifyReviewOutcome(
+    creatorId: string,
+    proposalId: string,
+    title: string,
+    newStatus: ProposalStatus,
+    note?: string | null
+  ): void {
+    const approved = newStatus === ProposalStatus.APPROVED_FOR_VOTING;
+    notificationService
+      .send({
+        userId: creatorId,
+        type: approved ? NotificationType.PROPOSAL_APPROVED : NotificationType.PROPOSAL_REJECTED,
+        title: approved ? 'Proposal approved for voting' : 'Proposal rejected',
+        message: approved
+          ? `"${title}" has been approved by the administrator — you can now open voting.`
+          : `"${title}" was rejected by the administrator.${note ? ` Note: ${note}` : ''}`,
+        data: { proposalId },
+      })
+      .catch(() => {});
   }
 
   async startVoting(
@@ -661,22 +671,28 @@ class ProposalLifecycleService {
       { newStatus, title: proposal.title }
     );
     if (proposal.creatorId)
-      notificationService
-        .send({
-          userId: proposal.creatorId,
-          type: NotificationType.PROPOSAL_APPROVED,
-          title:
-            newStatus === 'EXECUTING'
-              ? 'Proposal execution started'
-              : 'Proposal completed',
-          message:
-            newStatus === 'EXECUTING'
-              ? `"${proposal.title}" has been marked as in progress.`
-              : `"${proposal.title}" has been marked as completed.`,
-          data: { proposalId },
-        })
-        .catch(() => {});
+      this.notifyProgressUpdate(proposal.creatorId, proposalId, proposal.title, newStatus);
     return updated;
+  }
+
+  private notifyProgressUpdate(
+    creatorId: string,
+    proposalId: string,
+    title: string,
+    newStatus: string
+  ): void {
+    const executing = newStatus === 'EXECUTING';
+    notificationService
+      .send({
+        userId: creatorId,
+        type: NotificationType.PROPOSAL_APPROVED,
+        title: executing ? 'Proposal execution started' : 'Proposal completed',
+        message: executing
+          ? `"${title}" has been marked as in progress.`
+          : `"${title}" has been marked as completed.`,
+        data: { proposalId },
+      })
+      .catch(() => {});
   }
 
   private async assertTreasuryFunds(
