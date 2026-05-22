@@ -56,11 +56,11 @@ interface FormData {
 }
 
 const STEPS = [
-  { label: "Account", icon: User },
-  { label: "Residence", icon: MapPin },
-  { label: "Origin", icon: MapPin },
-  { label: "Economy", icon: Briefcase },
-  { label: "Connect", icon: MessageSquare },
+  { label: "Account",  icon: User        },
+  { label: "Home",     icon: MapPin      },
+  { label: "Roots",    icon: MapPin      },
+  { label: "Economy",  icon: Briefcase   },
+  { label: "Connect",  icon: MessageSquare },
 ]
 
 const PLATFORM_INFO: Record<MessagingPlatform, { label: string; description: string; showHandle: boolean; handlePlaceholder: string }> = {
@@ -129,8 +129,7 @@ function StepIndicator({ current }: { current: number }) {
 }
 
 function WardCascade({
-  label,
-  prefix,
+  heading,
   countyId,
   constituencyId,
   wardId,
@@ -139,8 +138,7 @@ function WardCascade({
   onConstituencyChange,
   onWardChange,
 }: {
-  label: string
-  prefix: string
+  heading: string
   countyId: string
   constituencyId: string
   wardId: string
@@ -153,6 +151,10 @@ function WardCascade({
   const [wards, setWards] = useState<RefItem[]>([])
   const [loadingC, setLoadingC] = useState(false)
   const [loadingW, setLoadingW] = useState(false)
+
+  const selectedCounty = counties.find((c) => c.id === countyId)
+  const selectedConstituency = constituencies.find((c) => c.id === constituencyId)
+  const selectedWard = wards.find((w) => w.id === wardId)
 
   useEffect(() => {
     if (!countyId) { setConstituencies([]); setWards([]); return }
@@ -174,7 +176,7 @@ function WardCascade({
 
   return (
     <div className="space-y-3">
-      <p className="text-sm font-semibold text-chai">{label}</p>
+      <p className="text-sm font-semibold text-chai">{heading}</p>
 
       <div>
         <Label className="text-xs text-warm-gray mb-1 block">County</Label>
@@ -205,20 +207,43 @@ function WardCascade({
       </div>
 
       <div>
-        <Label className="text-xs text-warm-gray mb-1 block">Ward</Label>
+        <Label className="text-xs text-warm-gray mb-1 block">Ward / community</Label>
         <Select
           value={wardId}
           onValueChange={onWardChange}
           disabled={!constituencyId || loadingW}
         >
           <SelectTrigger>
-            <SelectValue placeholder={loadingW ? "Loading…" : "Select ward…"} />
+            <SelectValue placeholder={loadingW ? "Loading…" : "Select your ward…"} />
           </SelectTrigger>
           <SelectContent>
             {wards.map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
+
+      {/* Community confirmation — appears once ward is selected */}
+      {selectedWard && (
+        <div
+          className="flex items-center gap-1.5 flex-wrap px-3 py-2.5 rounded-xl text-[12px] font-medium"
+          style={{ background: "rgba(29,71,49,0.07)", border: "1px solid rgba(29,71,49,0.14)" }}
+        >
+          <span style={{ color: "rgba(14,11,8,0.45)" }}>Joining</span>
+          <span className="font-bold" style={{ color: "#1D4731" }}>{selectedWard.name}</span>
+          {selectedConstituency && (
+            <>
+              <span style={{ color: "rgba(14,11,8,0.30)" }}>›</span>
+              <span style={{ color: "#2A6B7C" }}>{selectedConstituency.name}</span>
+            </>
+          )}
+          {selectedCounty && (
+            <>
+              <span style={{ color: "rgba(14,11,8,0.30)" }}>›</span>
+              <span style={{ color: "#7A4F1E" }}>{selectedCounty.name}</span>
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -281,9 +306,9 @@ export function RegisterForm() {
   const canAdvance = () => {
     if (step === 0) return form.email.trim() && form.name.trim() && form.phoneNumber.trim()
     if (step === 1) return form.primaryWardId
-    if (step === 2) return form.secondaryWardId
+    if (step === 2) return true // Secondary ward is optional
     if (step === 3) return form.industryIds.length > 0 && form.goodsServiceIds.length > 0
-    if (step === 4) return true // Step 5 is optional — always can proceed
+    if (step === 4) return true
     return false
   }
 
@@ -424,16 +449,15 @@ export function RegisterForm() {
         </div>
       )}
 
-      {/* Step 1 — Primary residence (where you live now) */}
+      {/* Step 1 — Home community */}
       {step === 1 && (
         <div className="space-y-2">
           <p className="text-sm text-warm-gray mb-4">
-            Select the ward where you currently live. This determines which community projects
-            and governance you participate in.
+            Pick the ward where you live day-to-day. This is your primary community — where
+            your posts appear, where your vote counts, and where your dues go.
           </p>
           <WardCascade
-            label="Where do you currently live?"
-            prefix="primary"
+            heading="Your home community"
             countyId={form.primaryCountyId}
             constituencyId={form.primaryConstituencyId}
             wardId={form.primaryWardId}
@@ -445,16 +469,18 @@ export function RegisterForm() {
         </div>
       )}
 
-      {/* Step 2 — Origin / Secondary ward */}
+      {/* Step 2 — Root community (optional) */}
       {step === 2 && (
         <div className="space-y-2">
-          <p className="text-sm text-warm-gray mb-4">
-            Select your home area — where you are originally from. This connects you to
-            your ancestral ward&apos;s community even while living elsewhere.
+          <p className="text-sm text-warm-gray mb-1">
+            Where are you originally from? This connects you to your ancestral community
+            so you can follow and contribute there too.
+          </p>
+          <p className="text-xs mb-4" style={{ color: "rgba(14,11,8,0.38)" }}>
+            Optional — skip if you live where you grew up.
           </p>
           <WardCascade
-            label="Where are you originally from?"
-            prefix="secondary"
+            heading="Your root community"
             countyId={form.secondaryCountyId}
             constituencyId={form.secondaryConstituencyId}
             wardId={form.secondaryWardId}
@@ -533,8 +559,8 @@ export function RegisterForm() {
           <div>
             <h3 className="text-base font-semibold text-chai">Stay Connected</h3>
             <p className="text-sm text-warm-gray mt-1">
-              UjamaaDAO discussions happen in dedicated group chats. Choose where you want
-              to join your ward&apos;s Baraza.
+              UjamaaDAO discussions happen in dedicated community group chats. Choose where
+              you want to receive updates and join your local Baraza.
             </p>
           </div>
 
