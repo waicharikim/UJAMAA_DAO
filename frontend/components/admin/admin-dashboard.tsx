@@ -10,6 +10,7 @@ import { AuditLogs } from "./audit-logs"
 import { FinancialOverview } from "./financial-overview"
 import { GovernanceReview, ProposalReviewRow } from "./governance-review"
 import { LocationTreasury } from "./location-treasury"
+import { PendingApprovals } from "./pending-approvals"
 import { Settings, FileText, DollarSign, Shield, AlertTriangle, CheckCircle, Clock, Coins, Vote } from "lucide-react"
 import { adminApi, auditApi, governanceApi, type AdminStatsDto } from "@/lib/api"
 import { BarazaManagement } from "./baraza-management"
@@ -101,7 +102,7 @@ export function AdminDashboard({ stats, isLocationAdmin = false }: Props) {
   }
 
   // Tab layout: location admins get overview/governance/financial/barazas/logs (5 cols)
-  const tabCols = isLocationAdmin ? "grid-cols-5" : "grid-cols-7"
+  const tabCols = isLocationAdmin ? "grid-cols-5" : "grid-cols-8"
 
   return (
     <div className="space-y-6">
@@ -110,6 +111,7 @@ export function AdminDashboard({ stats, isLocationAdmin = false }: Props) {
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="governance">Governance</TabsTrigger>
           {!isLocationAdmin && <TabsTrigger value="users">Users</TabsTrigger>}
+          {!isLocationAdmin && <TabsTrigger value="approvals">Approvals</TabsTrigger>}
           <TabsTrigger value="financial">Financial</TabsTrigger>
           <TabsTrigger value="barazas">Barazas</TabsTrigger>
           {!isLocationAdmin && <TabsTrigger value="settings">Settings</TabsTrigger>}
@@ -316,6 +318,7 @@ export function AdminDashboard({ stats, isLocationAdmin = false }: Props) {
 
         <TabsContent value="governance"><GovernanceReview /></TabsContent>
         {!isLocationAdmin && <TabsContent value="users"><UserManagement /></TabsContent>}
+        {!isLocationAdmin && <TabsContent value="approvals"><PendingApprovals /></TabsContent>}
         <TabsContent value="financial">
           {isLocationAdmin ? <LocationTreasury /> : <FinancialOverview stats={stats} />}
         </TabsContent>

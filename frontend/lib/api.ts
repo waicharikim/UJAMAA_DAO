@@ -1761,6 +1761,18 @@ export const adminApi = {
     return apiFetch<{ requests: any[]; pagination: { total: number } }>(`/admin/residence/pending${qs ? `?${qs}` : ""}`)
   },
 
+  approveVerification: (dto: { requestId: string; approved: boolean; reason: string }) =>
+    apiFetch<void>("/admin/verification/community/approve", {
+      method: "PATCH",
+      body: JSON.stringify(dto),
+    }),
+
+  approveResidenceChange: (dto: { requestId: string; approved: boolean; reason: string }) =>
+    apiFetch<void>("/admin/residence/approve", {
+      method: "POST",
+      body: JSON.stringify(dto),
+    }),
+
   assignRole: (userId: string, role: string, scope?: string) =>
     apiFetch<null>(`/admin/users/${userId}/roles`, {
       method: "POST",
