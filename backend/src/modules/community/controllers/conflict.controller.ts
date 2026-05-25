@@ -33,6 +33,14 @@ export class ConflictController {
     sendSuccess(res, conflict, 'Case retrieved');
   }
 
+  static async addEvidence(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const { caseId } = req.params;
+    const { urls } = req.body;
+    const result = await conflictService.addEvidence(userId, caseId, urls);
+    sendSuccess(res, result, 'Evidence added');
+  }
+
   static async resolveCase(req: AuthRequest, res: Response) {
     const actorId = req.user!.userId;
     const { caseId } = req.params;

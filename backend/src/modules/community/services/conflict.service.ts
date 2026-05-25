@@ -119,6 +119,51 @@ class ConflictService {
   }
 
   /**
+   * Append evidence URLs to an open case. Only parties can add evidence.
+   * Hard cap: 10 total items across all submissions.
+   */
+  async addEvidence(userId: string, caseId: string, urls: string[]) {
+    const conflict = await prisma.conflictCase.findUnique({
+      where: { id: caseId },
+    });
+    if (!conflict) throw ApiError.notFound('Conflict case');
+    if (conflict.complainantId !== userId && conflict.respondentId !== userId) {
+      throw ApiError.forbidden('Access denied');
+    }
+    if (conflict.status === 'CLOSED') {
+      throw ApiError.badRequest('Cannot add evidence to a closed case');
+    }
+
+    const current = (conflict.evidence ?? []) as string[];
+    const remaining = 10 - current.length;
+    if (remaining <= 0)
+      throw ApiError.badRequest('Evidence limit reached (max 10)');
+
+    const toAdd = urls.slice(0, remaining);
+    const updated = await prisma.conflictCase.update({
+      where: { id: caseId },
+      data: { evidence: [...current, ...toAdd] },
+      include: {
+        complainant: { select: { id: true, name: true } },
+        respondent: { select: { id: true, name: true } },
+      },
+    });
+
+    await auditService.log(
+      userId,
+      AuditAction.CONFLICT_FILED,
+      'ConflictCase',
+      caseId,
+      {
+        action: 'addEvidence',
+        count: toAdd.length,
+      }
+    );
+
+    return updated;
+  }
+
+  /**
    * Resolve a conflict case (admin or assigned mediator only).
    */
   async resolveCase(actorId: string, caseId: string, resolution: string) {

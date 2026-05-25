@@ -2372,6 +2372,12 @@ export const conflictApi = {
   getCase: (caseId: string): Promise<ConflictCaseDto> =>
     apiFetch<ConflictCaseDto>(`/conflicts/${caseId}`),
 
+  addEvidence: (caseId: string, urls: string[]): Promise<ConflictCaseDto> =>
+    apiFetch<ConflictCaseDto>(`/conflicts/${caseId}/evidence`, {
+      method: "PATCH",
+      body: JSON.stringify({ urls }),
+    }),
+
   resolveCase: (caseId: string, resolution: string): Promise<ConflictCaseDto> =>
     apiFetch<ConflictCaseDto>(`/conflicts/${caseId}/resolve`, {
       method: "PATCH",

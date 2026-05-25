@@ -20,6 +20,11 @@ import {
   User,
   FileText,
   Gavel,
+  Link2,
+  Plus,
+  X,
+  Loader2,
+  ExternalLink,
 } from "lucide-react"
 
 // ── Status config ──────────────────────────────────────────
@@ -47,12 +52,32 @@ export default function ConflictCasePage() {
   const queryClient = useQueryClient()
   const [resolution, setResolution] = useState("")
   const [showResolveForm, setShowResolveForm] = useState(false)
+  const [showEvidenceForm, setShowEvidenceForm] = useState(false)
+  const [evidenceUrls, setEvidenceUrls] = useState([""])
 
   const { data: conflict, isLoading } = useQuery({
     queryKey: ["conflict", caseId],
     queryFn:  () => conflictApi.getCase(caseId),
     staleTime: 30_000,
     enabled:  !!caseId,
+  })
+
+  const evidenceMutation = useMutation({
+    mutationFn: () => {
+      const valid = evidenceUrls.map((u) => u.trim()).filter(Boolean)
+      return conflictApi.addEvidence(caseId, valid)
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["conflict", caseId], updated)
+      toast({ title: "Evidence added" })
+      setShowEvidenceForm(false)
+      setEvidenceUrls([""])
+    },
+    onError: (err: any) => toast({
+      title: "Failed to add evidence",
+      description: err?.message ?? "Please try again.",
+      variant: "destructive",
+    }),
   })
 
   const resolveMutation = useMutation({
@@ -94,9 +119,10 @@ export default function ConflictCasePage() {
 
   const cfg = STATUS_CFG[conflict.status] ?? STATUS_CFG.OPEN
   const { Icon, color, bg, label } = cfg
-  const isClosed    = conflict.status === "CLOSED"
-  const isParty     = user?.id === conflict.complainant.id || user?.id === conflict.respondent.id
-  const canResolve  = isParty && !isClosed
+  const isClosed         = conflict.status === "CLOSED"
+  const isParty          = user?.id === conflict.complainant.id || user?.id === conflict.respondent.id
+  const canResolve       = isParty && !isClosed
+  const canAddEvidence   = isParty && !isClosed && conflict.evidence.length < 10
 
   return (
     <div className="px-4 md:px-8 py-6 max-w-2xl mx-auto space-y-5">
@@ -187,18 +213,107 @@ export default function ConflictCasePage() {
       {conflict.evidence.length > 0 && (
         <Card className="border-0 shadow-card">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-[#0E0B08]/60">Evidence</CardTitle>
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Link2 className="h-4 w-4 text-[#0E0B08]/40" />
+              Evidence
+              <span className="text-[10px] font-normal text-[#0E0B08]/40">
+                ({conflict.evidence.length}/10)
+              </span>
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {conflict.evidence.map((e, i) => (
-              <div
+              <a
                 key={i}
-                className="rounded-xl px-3 py-2 text-xs font-mono text-[#0E0B08]/70"
+                href={e}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-mono transition-colors hover:bg-black/[0.06] group"
                 style={{ background: "rgba(14,11,8,0.04)" }}
               >
-                {e}
-              </div>
+                <span className="flex-1 truncate text-[#0E0B08]/70">{e}</span>
+                <ExternalLink className="h-3 w-3 text-[#0E0B08]/30 group-hover:text-[#0E0B08]/60 flex-shrink-0 transition-colors" />
+              </a>
             ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Add evidence */}
+      {canAddEvidence && !showEvidenceForm && (
+        <button
+          onClick={() => setShowEvidenceForm(true)}
+          className="flex items-center gap-2 text-xs font-semibold transition-opacity hover:opacity-80"
+          style={{ color: "#2A6B7C" }}
+        >
+          <Link2 className="h-3.5 w-3.5" />
+          Add evidence ({10 - conflict.evidence.length} slots remaining)
+        </button>
+      )}
+
+      {canAddEvidence && showEvidenceForm && (
+        <Card className="border-0 shadow-card">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Link2 className="h-4 w-4" style={{ color: "#2A6B7C" }} />
+              Add Evidence
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-[#0E0B08]/50">
+              Attach links to documents, photos, or any supporting material (e.g. Google Drive, Dropbox, government portal).
+            </p>
+            <div className="space-y-2">
+              {evidenceUrls.map((url, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input
+                    type="url"
+                    value={url}
+                    onChange={(e) => {
+                      const next = [...evidenceUrls]
+                      next[i] = e.target.value
+                      setEvidenceUrls(next)
+                    }}
+                    placeholder="https://…"
+                    className="flex-1 h-9 rounded-xl border border-black/10 bg-white px-3 text-xs focus:outline-none focus:ring-2 focus:ring-[#2A6B7C]/30"
+                  />
+                  {evidenceUrls.length > 1 && (
+                    <button
+                      onClick={() => setEvidenceUrls(evidenceUrls.filter((_, j) => j !== i))}
+                      className="p-1.5 rounded-lg hover:bg-black/5 transition-colors"
+                    >
+                      <X className="h-3.5 w-3.5 text-[#0E0B08]/40" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            {evidenceUrls.length < 5 && (
+              <button
+                onClick={() => setEvidenceUrls([...evidenceUrls, ""])}
+                className="flex items-center gap-1.5 text-xs font-semibold text-[#2A6B7C] hover:opacity-80 transition-opacity"
+              >
+                <Plus className="h-3.5 w-3.5" /> Add another link
+              </button>
+            )}
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => evidenceMutation.mutate()}
+                disabled={!evidenceUrls.some((u) => u.trim()) || evidenceMutation.isPending}
+                className="flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-bold transition-opacity hover:opacity-90 disabled:opacity-40"
+                style={{ background: "#2A6B7C", color: "#fff" }}
+              >
+                {evidenceMutation.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+                Submit Evidence
+              </button>
+              <button
+                onClick={() => { setShowEvidenceForm(false); setEvidenceUrls([""]) }}
+                className="rounded-xl px-4 py-2 text-xs font-semibold transition-opacity hover:opacity-80"
+                style={{ background: "rgba(0,0,0,0.05)", color: "#0E0B08" }}
+              >
+                Cancel
+              </button>
+            </div>
           </CardContent>
         </Card>
       )}

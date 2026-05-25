@@ -32,6 +32,17 @@ router.get('/my-cases', asyncHandler(ConflictController.listMyCases));
 router.get('/:caseId', asyncHandler(ConflictController.getCase));
 
 router.patch(
+  '/:caseId/evidence',
+  validateRequest({
+    schema: z.object({
+      urls: z.array(z.string().url()).min(1).max(5),
+    }),
+    target: 'body',
+  }),
+  asyncHandler(ConflictController.addEvidence)
+);
+
+router.patch(
   '/:caseId/resolve',
   validateRequest({
     schema: z.object({
