@@ -558,7 +558,7 @@ function ProposalsTab({ groupId, canCreate }: { groupId: string; canCreate: bool
     <div className="space-y-3">
       {canCreate && (
         <Link
-          href={`/proposals/new?groupId=${groupId}`}
+          href={`/proposals/create?groupId=${groupId}`}
           className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-xs font-bold transition-all hover:scale-[1.01]"
           style={{ background: "#1D4731", color: "#fff" }}
         >
@@ -673,7 +673,7 @@ function ProjectsTab({ groupId, canCreate }: { groupId: string; canCreate: boole
     <div className="space-y-3">
       {canCreate && (
         <Link
-          href={`/projects/new?groupId=${groupId}`}
+          href={`/proposals/create?groupId=${groupId}`}
           className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-xs font-bold transition-all hover:scale-[1.01]"
           style={{ background: "#1D4731", color: "#fff" }}
         >

@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState, Suspense } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useQuery, useMutation } from "@tanstack/react-query"
 import { Card, CardContent } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
@@ -80,15 +80,16 @@ const inputCls =
 const textareaCls =
   "w-full rounded-lg border border-cream bg-white px-3 py-2.5 text-sm text-[#0A1F14] placeholder:text-warm-gray/60 focus:outline-none focus:ring-2 focus:ring-amber/40 resize-none"
 
-export default function CreateProposalPage() {
+function CreateProposalForm() {
   const router = useRouter()
   const { toast } = useToast()
   const { isAuthenticated, user } = useAuth()
+  const searchParams = useSearchParams()
 
   const [step, setStep] = useState(0)
 
   // Step 1
-  const [groupId, setGroupId] = useState("")
+  const [groupId, setGroupId] = useState(searchParams.get("groupId") ?? "")
   const [proposalType, setProposalType] = useState<ProposalType>("COMMUNITY_INITIATIVE")
   const [proposalScope, setProposalScope] = useState<ProposalScope>("COMMUNITY")
   const [title, setTitle] = useState("")
@@ -496,5 +497,14 @@ export default function CreateProposalPage() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+
+export default function CreateProposalPage() {
+  return (
+    <Suspense>
+      <CreateProposalForm />
+    </Suspense>
   )
 }
