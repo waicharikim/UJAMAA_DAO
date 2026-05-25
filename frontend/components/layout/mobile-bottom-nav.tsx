@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useRole } from "@/contexts/role-context"
@@ -80,14 +80,30 @@ export function MobileBottomNav() {
   const { hasAnyRole } = useRole()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [fabOpen, setFabOpen] = useState(false)
+  const [hidden, setHidden] = useState(false)
+  const lastScrollY = useRef(0)
   const showAdmin = hasAnyRole(["super_admin", "compliance_officer", "ward_admin", "constituency_admin", "county_admin"])
+
+  useEffect(() => {
+    const main = document.querySelector("main")
+    if (!main) return
+    const onScroll = () => {
+      const y = main.scrollTop
+      if (y < 40) { setHidden(false); lastScrollY.current = y; return }
+      if (y > lastScrollY.current + 6) setHidden(true)
+      else if (y < lastScrollY.current - 6) setHidden(false)
+      lastScrollY.current = y
+    }
+    main.addEventListener("scroll", onScroll, { passive: true })
+    return () => main.removeEventListener("scroll", onScroll)
+  }, [])
 
   return (
     <>
       {/* "+" FAB — sits above the pill nav */}
       <button
         onClick={() => setFabOpen(true)}
-        className="md:hidden fixed z-40 flex items-center justify-center rounded-full transition-all duration-200 active:scale-95"
+        className="md:hidden fixed z-40 flex items-center justify-center rounded-full active:scale-95"
         style={{
           bottom: "88px",
           right: "16px",
@@ -96,6 +112,8 @@ export function MobileBottomNav() {
           background: "linear-gradient(135deg, #1D4731 0%, #2A5C3F 100%)",
           border: "1.5px solid rgba(212,145,30,0.45)",
           boxShadow: "0 8px 28px rgba(0,0,0,0.32), 0 0 0 1px rgba(212,145,30,0.12)",
+          transform: hidden ? "translateY(160px)" : "translateY(0)",
+          transition: "transform 0.35s cubic-bezier(0.4,0,0.2,1)",
         }}
         aria-label="Quick actions"
       >
@@ -154,6 +172,8 @@ export function MobileBottomNav() {
           background: "linear-gradient(135deg, #1D4731 0%, #1A3D2B 100%)",
           border: "1px solid rgba(212,145,30,0.28)",
           boxShadow: "0 20px 60px rgba(0,0,0,0.38), 0 4px 16px rgba(0,0,0,0.20)",
+          transform: hidden ? "translateY(120px)" : "translateY(0)",
+          transition: "transform 0.35s cubic-bezier(0.4,0,0.2,1)",
         }}
       >
         {primaryNav.map((item) => {
