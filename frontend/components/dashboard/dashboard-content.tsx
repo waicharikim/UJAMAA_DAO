@@ -3,7 +3,7 @@
 import { Suspense } from "react"
 import Link from "next/link"
 import { useQuery } from "@tanstack/react-query"
-import { Vote, Users, Briefcase, Award, Coins, TrendingUp, AlertCircle, ShieldCheck, MapPin, BarChart3, ArrowRight } from "lucide-react"
+import { Vote, Users, Briefcase, Award, Coins, Zap, AlertCircle, ShieldCheck, MapPin, BarChart3, ArrowRight } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/contexts/auth-context"
 import { useRole } from "@/contexts/role-context"
 import { economyApi, governanceApi, communityApi, adminApi } from "@/lib/api"
-import { ActivityFeed } from "@/components/feed/activity-feed"
+import { HomeFeed } from "@/components/feed/home-feed"
 import { BarazaGroupsCard } from "@/components/integration/baraza-groups-card"
 import { SystemGroupsCard } from "@/components/community/system-groups-card"
 import { EmergencyAlertsCard } from "@/components/emergency/emergency-alerts-card"
@@ -354,32 +354,68 @@ function WelcomeHeader({
   )
 }
 
-// ─── Stats grid ────────────────────────────────────────────
-function StatsGrid({
+// ─── Section label ─────────────────────────────────────────
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[10px] font-semibold uppercase tracking-widest mb-2" style={{ color: "rgba(14,11,8,0.40)" }}>
+      {children}
+    </p>
+  )
+}
+
+// ─── Your Impact row (PR · IP · UT) ───────────────────────
+function ImpactRow({
+  prBalance,
+  impactPoints,
+  utBalance,
+  isLoading,
+}: {
+  prBalance: number
+  impactPoints: number
+  utBalance: number
+  isLoading: boolean
+}) {
+  return (
+    <div>
+      <SectionLabel>Your Impact</SectionLabel>
+      <div className="grid grid-cols-3 gap-3 md:gap-4">
+        {isLoading ? (
+          <><StatSkeleton /><StatSkeleton /><StatSkeleton /></>
+        ) : (
+          <>
+            <StatCard title="Haki za Ushiriki"  subtitle="Participation Rights" value={prBalance}    change="PR balance"      changeType="neutral"  icon={Coins} colorClass="bg-[#2A5240]" />
+            <StatCard title="Alama za Athari"    subtitle="Impact Points"        value={impactPoints} change="Reputation score" changeType="positive" icon={Award} colorClass="bg-[#B03A1E]" />
+            <StatCard title="Tokeni za Huduma"   subtitle="Utility Tokens"       value={utBalance}    change="UT balance"      changeType="neutral"  icon={Zap}   colorClass="bg-[#7A4F1E]" />
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Ward Status row (Proposals · Communities) ────────────
+function WardStatusRow({
   proposalCount,
   groupCount,
-  impactPoints,
-  prBalance,
   isLoading,
 }: {
   proposalCount: number | undefined
   groupCount: number
-  impactPoints: number
-  prBalance: number
   isLoading: boolean
 }) {
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-      {isLoading ? (
-        <><StatSkeleton /><StatSkeleton /><StatSkeleton /><StatSkeleton /></>
-      ) : (
-        <>
-          <StatCard title="Mapendekezo Hai"  subtitle="Active Proposals"     value={proposalCount ?? "—"} change="All submitted"   changeType="positive" icon={Vote}  colorClass="bg-[#C9922A]" />
-          <StatCard title="Makundi Yangu"     subtitle="My Communities"       value={groupCount}          change="Groups joined"   changeType="neutral"  icon={Users} colorClass="bg-[#1E3D2F]" />
-          <StatCard title="Alama za Athari"   subtitle="Impact Points"        value={impactPoints}        change="Reputation score" changeType="positive" icon={Award} colorClass="bg-[#B03A1E]" />
-          <StatCard title="Haki za Ushiriki"  subtitle="Participation Rights" value={prBalance}           change="PR balance"      changeType="neutral"  icon={Coins} colorClass="bg-[#2A5240]" />
-        </>
-      )}
+    <div>
+      <SectionLabel>Ward Status</SectionLabel>
+      <div className="grid grid-cols-2 gap-3 md:gap-4">
+        {isLoading ? (
+          <><StatSkeleton /><StatSkeleton /></>
+        ) : (
+          <>
+            <StatCard title="Mapendekezo Hai" subtitle="Active Proposals" value={proposalCount ?? "—"} change="All submitted"  changeType="positive" icon={Vote}  colorClass="bg-[#C9922A]" />
+            <StatCard title="Makundi Yangu"    subtitle="My Communities"   value={groupCount}           change="Groups joined"  changeType="neutral"  icon={Users} colorClass="bg-[#1E3D2F]" />
+          </>
+        )}
+      </div>
     </div>
   )
 }
@@ -476,17 +512,7 @@ function ActivitySection() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
       <div className="lg:col-span-2">
-        <Card className="border-0 shadow-card">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <TrendingUp className="h-4 w-4" style={{ color: "#C9922A" }} />
-              Recent Activity
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ActivityFeed compact />
-          </CardContent>
-        </Card>
+        <HomeFeed embedded />
       </div>
       <div className="space-y-4">
         <GettingStartedCard />
@@ -559,11 +585,15 @@ export function DashboardContent() {
       {user && <WelcomeHeader user={user} prBalance={prBalance} impactPoints={impactPoints} />}
       {user?.verificationLevel && <VerificationNudge level={user.verificationLevel} />}
       <RolePanels isAdmin={isAdmin} isCompliance={isCompliance} isCoordinator={isCoordinator} />
-      <StatsGrid
+      <ImpactRow
+        prBalance={prBalance}
+        impactPoints={impactPoints}
+        utBalance={user?.utBalance ?? 0}
+        isLoading={prLoading}
+      />
+      <WardStatusRow
         proposalCount={proposalsMeta?.total}
         groupCount={myGroups.length}
-        impactPoints={impactPoints}
-        prBalance={prBalance}
         isLoading={prLoading}
       />
       {needsAction && needsAction.total > 0 && <NeedsActionBanner total={needsAction.total} />}

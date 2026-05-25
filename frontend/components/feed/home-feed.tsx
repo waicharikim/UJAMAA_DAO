@@ -483,7 +483,7 @@ function UnauthenticatedState() {
 
 // ─── Main component ───────────────────────────────────────────
 
-export function HomeFeed() {
+export function HomeFeed({ embedded = false }: { embedded?: boolean }) {
   const { isAuthenticated } = useAuth()
   const [filter, setFilter] = useState<Filter>("all")
   const queryClient = useQueryClient()
@@ -511,7 +511,7 @@ export function HomeFeed() {
 
   return (
     <div className="flex flex-col">
-      <StatsStrip />
+      {!embedded && <StatsStrip />}
       <FilterPills active={filter} onChange={setFilter} />
       <ComposeBox />
 
