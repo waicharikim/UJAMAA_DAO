@@ -102,6 +102,7 @@ model Proposal {
   milestones         ProposalMilestone[] // NEW
   project            Project?            @relation("ProposalToProject") // NEW
   comments           Comment[]           @relation("ProposalComments") // NEW
+  posts              Post[]              @relation("PostProposal")
 
   @@index([groupId, status])
   @@index([creatorId])

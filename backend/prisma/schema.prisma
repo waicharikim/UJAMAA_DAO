@@ -114,7 +114,7 @@ model Ward {
   locationImpacts UserLocationImpact[] @relation("WardLocationImpacts")
 
   // Posts module
-  posts Post[]
+  posts           Post[]               @relation("PostWard")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -317,7 +317,7 @@ model User {
   paymentRecords            PaymentRecord[]
 
   // ---- Posts module ----
-  posts                     Post[]
+  posts                     Post[]          @relation("PostAuthor")
   projectUpdates            ProjectUpdate[] @relation("ProjectUpdateAuthor")
 
   // ---- System ----
@@ -1738,7 +1738,7 @@ model Proposal {
   milestones         ProposalMilestone[] // NEW
   project            Project?            @relation("ProposalToProject") // NEW
   comments           Comment[]           @relation("ProposalComments") // NEW
-  posts              Post[]
+  posts              Post[]              @relation("PostProposal")
 
   @@index([groupId, status])
   @@index([creatorId])
@@ -2142,6 +2142,75 @@ model WorkPresence {
   @@unique([sessionId, userId])
   @@index([sessionId])
   @@index([userId])
+}
+
+
+
+// ============================================================================
+// MODULE: POSTS
+// ============================================================================
+// ============================================================================
+// MODULE: POSTS (Community Feed)
+// ============================================================================
+// Cross-module references (User, Ward, Proposal, Project) are resolved at merge
+// time — back-relations are declared on those models in their own schemas.
+
+enum PostScope {
+  WARD
+  CONSTITUENCY
+  COUNTY
+  NATIONAL
+}
+
+enum PostType {
+  NOTICE          // General community text update
+  ANNOUNCEMENT    // Important announcement (optionally linked to proposal)
+  RESOURCE        // Learning material or link
+}
+
+model Post {
+  id            String    @id @default(uuid()) @db.Uuid
+  type          PostType  @default(NOTICE)
+  content       String    @db.Text
+  scope         PostScope @default(WARD)
+  authorId      String    @db.Uuid
+  wardId        String?   @db.Uuid
+
+  // Structured links
+  proposalId    String?   @db.Uuid
+  resourceUrl   String?
+  resourceTitle String?
+
+  author        User      @relation("PostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  ward          Ward?     @relation("PostWard", fields: [wardId], references: [id], onDelete: SetNull)
+  proposal      Proposal? @relation("PostProposal", fields: [proposalId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([authorId])
+  @@index([wardId])
+  @@index([type])
+  @@index([scope])
+  @@index([createdAt(sort: Desc)])
+  @@map("posts")
+}
+
+model ProjectUpdate {
+  id        String  @id @default(uuid()) @db.Uuid
+  projectId String  @db.Uuid
+  authorId  String  @db.Uuid
+  content   String  @db.Text
+
+  project   Project @relation("ProjectUpdates", fields: [projectId], references: [id], onDelete: Cascade)
+  author    User    @relation("ProjectUpdateAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, createdAt(sort: Desc)])
+  @@index([authorId])
+  @@map("project_updates")
 }
 
 
@@ -2829,67 +2898,4 @@ model PaymentRecord {
   @@index([flwRef])
   @@index([status])
   @@map("payment_records")
-}
-
-
-// ============================================================================
-// MODULE: POSTS (Community Feed)
-// ============================================================================
-
-enum PostScope {
-  WARD
-  CONSTITUENCY
-  COUNTY
-  NATIONAL
-}
-
-enum PostType {
-  NOTICE          // General community text update
-  ANNOUNCEMENT    // Important announcement (optionally linked to proposal)
-  RESOURCE        // Learning material or link
-}
-
-model Post {
-  id            String    @id @default(uuid()) @db.Uuid
-  type          PostType  @default(NOTICE)
-  content       String    @db.Text
-  scope         PostScope @default(WARD)
-  authorId      String    @db.Uuid
-  wardId        String?   @db.Uuid
-
-  // Structured links
-  proposalId    String?   @db.Uuid
-  resourceUrl   String?
-  resourceTitle String?
-
-  author        User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  ward          Ward?     @relation(fields: [wardId], references: [id], onDelete: SetNull)
-  proposal      Proposal? @relation(fields: [proposalId], references: [id], onDelete: SetNull)
-
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-
-  @@index([authorId])
-  @@index([wardId])
-  @@index([type])
-  @@index([scope])
-  @@index([createdAt(sort: Desc)])
-  @@map("posts")
-}
-
-model ProjectUpdate {
-  id        String  @id @default(uuid()) @db.Uuid
-  projectId String  @db.Uuid
-  authorId  String  @db.Uuid
-  content   String  @db.Text
-
-  project   Project @relation("ProjectUpdates", fields: [projectId], references: [id], onDelete: Cascade)
-  author    User    @relation("ProjectUpdateAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([projectId, createdAt(sort: Desc)])
-  @@index([authorId])
-  @@map("project_updates")
 }

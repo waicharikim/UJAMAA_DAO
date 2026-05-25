@@ -113,6 +113,9 @@ model Ward {
   // Reputation module
   locationImpacts UserLocationImpact[] @relation("WardLocationImpacts")
 
+  // Posts module
+  posts           Post[]               @relation("PostWard")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -312,6 +315,10 @@ model User {
 
   // ---- Payments module ----
   paymentRecords            PaymentRecord[]
+
+  // ---- Posts module ----
+  posts                     Post[]          @relation("PostAuthor")
+  projectUpdates            ProjectUpdate[] @relation("ProjectUpdateAuthor")
 
   // ---- System ----
   updatedConfigs            SystemConfiguration[]  @relation("ConfigUpdater")

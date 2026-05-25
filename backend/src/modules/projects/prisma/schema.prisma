@@ -65,6 +65,7 @@ model Project {
   workLogs           PhysicalWorkLog[]
   workSessions       WorkSession[]
   comments           Comment[]           @relation("ProjectComments") // NEW
+  projectUpdates     ProjectUpdate[]     @relation("ProjectUpdates")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

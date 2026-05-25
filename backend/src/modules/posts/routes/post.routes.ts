@@ -4,7 +4,10 @@ import { authenticate } from '../../../core/middleware/auth.middleware.js';
 import { authorize } from '../../../core/middleware/authorize.js';
 import { validateRequest } from '../../../core/middleware/validateRequest.js';
 import { asyncHandler } from '../../../core/utils/response.js';
-import { createPostSchema, getPostsSchema } from '../validators/post.validators.js';
+import {
+  createPostSchema,
+  getPostsSchema,
+} from '../validators/post.validators.js';
 
 const router = Router();
 
