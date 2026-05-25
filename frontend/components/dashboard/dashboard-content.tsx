@@ -3,7 +3,7 @@
 import { Suspense } from "react"
 import Link from "next/link"
 import { useQuery } from "@tanstack/react-query"
-import { Vote, Users, Briefcase, Award, Coins, Zap, AlertCircle, ShieldCheck, MapPin, BarChart3, ArrowRight } from "lucide-react"
+import { Vote, Users, Award, Coins, Zap, AlertCircle, ShieldCheck, MapPin, BarChart3, ArrowRight } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -442,67 +442,6 @@ function NeedsActionBanner({ total }: { total: number }) {
   )
 }
 
-// ─── Quick action cards ────────────────────────────────────
-function QuickActions() {
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-5">
-      <Card
-        className="group border-0 overflow-hidden shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:shadow-gold"
-        style={{ background: "linear-gradient(135deg, #C9922A 0%, #E8B84B 100%)" }}
-      >
-        <CardContent className="p-4 md:p-6">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3 md:mb-4" style={{ background: "rgba(14,11,8,0.15)" }}>
-            <Vote className="h-5 w-5 text-white" />
-          </div>
-          <h3 className="font-display font-bold text-lg md:text-xl text-[#0E0B08] mb-1">Governance</h3>
-          <p className="text-sm text-[#0E0B08]/60 mb-3 md:mb-4">Vote on ward proposals and shape your community&apos;s future.</p>
-          <Link href="/proposals">
-            <Button size="sm" className="w-full font-semibold" style={{ background: "rgba(14,11,8,0.15)", color: "#0E0B08", border: "1px solid rgba(14,11,8,0.15)" }}>
-              View Proposals
-            </Button>
-          </Link>
-        </CardContent>
-      </Card>
-
-      <Card
-        className="group border-0 overflow-hidden shadow-card transition-all duration-300 hover:-translate-y-0.5"
-        style={{ background: "linear-gradient(135deg, #1E3D2F 0%, #2A5240 100%)" }}
-      >
-        <CardContent className="p-4 md:p-6">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3 md:mb-4" style={{ background: "rgba(255,255,255,0.1)" }}>
-            <Briefcase className="h-5 w-5 text-white" />
-          </div>
-          <h3 className="font-display font-bold text-lg md:text-xl text-white mb-1">Projects</h3>
-          <p className="text-sm text-white/60 mb-3 md:mb-4">Join ward projects — boreholes, schools, clean energy.</p>
-          <Link href="/projects">
-            <Button size="sm" className="w-full font-semibold" style={{ background: "rgba(255,255,255,0.1)", color: "#fff", border: "1px solid rgba(255,255,255,0.15)" }}>
-              Browse Projects
-            </Button>
-          </Link>
-        </CardContent>
-      </Card>
-
-      <Card
-        className="group border-0 overflow-hidden shadow-card transition-all duration-300 hover:-translate-y-0.5"
-        style={{ background: "linear-gradient(135deg, #FAF7F2 0%, #F6F0E6 100%)", border: "1px solid rgba(201,146,42,0.2)" }}
-      >
-        <CardContent className="p-4 md:p-6">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3 md:mb-4" style={{ background: "rgba(201,146,42,0.12)" }}>
-            <Users className="h-5 w-5" style={{ color: "#C9922A" }} />
-          </div>
-          <h3 className="font-display font-bold text-lg md:text-xl text-[#0E0B08] mb-1">Community</h3>
-          <p className="text-sm text-[#0E0B08]/60 mb-3 md:mb-4">Connect with ward members and join interest groups.</p>
-          <Link href="/groups">
-            <Button size="sm" className="w-full font-semibold" style={{ background: "rgba(201,146,42,0.1)", color: "#C9922A", border: "1px solid rgba(201,146,42,0.3)" }}>
-              Explore Groups
-            </Button>
-          </Link>
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
-
 // ─── Activity section ──────────────────────────────────────
 function ActivitySection() {
   return (
@@ -593,7 +532,6 @@ export function DashboardContent() {
         isLoading={prLoading}
       />
       {needsAction && needsAction.total > 0 && <NeedsActionBanner total={needsAction.total} />}
-      <QuickActions />
       <ActivitySection />
     </div>
   )
