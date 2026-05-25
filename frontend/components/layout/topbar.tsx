@@ -12,6 +12,7 @@ const WalletButton = dynamic(
   { ssr: false, loading: () => <div className="h-8 w-20 rounded-full bg-[#C9922A]/10 animate-pulse" /> },
 )
 import { NotificationsPopover } from "./notifications-popover"
+import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/contexts/auth-context"
 
 // ── Token stat chip ─────────────────────────────────────────
@@ -57,7 +58,7 @@ interface TopbarProps {
 export function Topbar({ collapsed, onToggle }: TopbarProps) {
   const pathname = usePathname()
   const title = resolveTitle(pathname)
-  const { isAuthenticated, user } = useAuth()
+  const { isAuthenticated, user, isLoading } = useAuth()
 
   return (
     <header
@@ -87,8 +88,8 @@ export function Topbar({ collapsed, onToggle }: TopbarProps) {
         {title}
       </h1>
 
-      {/* Token stats — desktop only */}
-      {isAuthenticated && user && (
+      {/* Token stats — desktop only, gated on auth ready */}
+      {!isLoading && isAuthenticated && user && (
         <div className="hidden md:flex items-center gap-1.5 flex-shrink-0">
           <TokenChip icon={Coins} label="PR" value={user.tokenBalance}        color="#C9922A" />
           <TokenChip icon={Award} label="IP" value={user.impactPoints.global}  color="#1D4731" />
@@ -96,9 +97,14 @@ export function Topbar({ collapsed, onToggle }: TopbarProps) {
         </div>
       )}
 
-      {/* Actions */}
+      {/* Actions — skeleton during auth hydration */}
       <div className="flex items-center gap-2">
-        {isAuthenticated ? (
+        {isLoading ? (
+          <div className="hidden md:flex items-center gap-2">
+            <Skeleton className="h-7 w-16 rounded-full" />
+            <Skeleton className="h-7 w-16 rounded-full" />
+          </div>
+        ) : isAuthenticated ? (
           <>
             <NotificationsPopover />
             <WalletButton />

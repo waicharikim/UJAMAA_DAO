@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation"
 import { Sidebar } from "./sidebar"
 import { Topbar } from "./topbar"
 import { MobileBottomNav } from "./mobile-bottom-nav"
-import { CommunityAuditGate } from "@/components/onboarding/community-audit-gate"
 import { OnboardingWizard } from "@/components/onboarding/onboarding-wizard"
 
 interface AppShellProps {
@@ -41,10 +40,7 @@ export function AppShell({ children }: AppShellProps) {
       {/* Mobile floating pill nav */}
       <MobileBottomNav />
 
-      {/* One-time community audit gate — shown once to newly verified members */}
-      <CommunityAuditGate />
-
-      {/* First-time walkthrough wizard — shown once to new users */}
+      {/* First-time walkthrough wizard — shown once to new users; sets both wizard + audit-gate keys */}
       <OnboardingWizard />
     </div>
   )

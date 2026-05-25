@@ -1,87 +1,156 @@
 "use client"
 
 /**
- * OnboardingWizard
- * A first-time slide-through walkthrough shown to new users.
+ * OnboardingWizard — unified "Karibu" flow (4 slides).
+ *
+ * Merges the former OnboardingWizard (6 slides) and CommunityAuditGate into
+ * one sequential experience:
+ *   1. Karibu — Vision & Values
+ *   2. Your Communities & Data  (transparency disclosure, was CommunityAuditGate)
+ *   3. Verify & Join
+ *   4. You're Ready!
+ *
+ * Sets both `ujamaa_wizard_seen_<id>` and `ca_seen_<id>` on close/complete
+ * so the old standalone CommunityAuditGate never fires.
  *
  * Two modes:
- *  1. Auto-show: mounts globally in AppShell, fires once per user (localStorage).
- *  2. Controlled: pass forceOpen + onClose to re-open from any trigger (e.g. GettingStartedCard).
+ *   1. Auto-show: mounts in AppShell, fires once per user (localStorage).
+ *   2. Controlled: pass forceOpen + onClose to re-open from GettingStartedCard.
  */
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { ChevronRight, X, Users, Vote, Coins, ShieldCheck, Smartphone, Zap } from "lucide-react"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { ChevronRight, X, Users, Vote, Coins, ShieldCheck, Smartphone, Zap, Home, Landmark, MapPin, Globe } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/contexts/auth-context"
-import { onboardingApi } from "@/lib/api"
+import { onboardingApi, communityApi } from "@/lib/api"
 
 const STORAGE_KEY = "ujamaa_wizard_seen"
+const AUDIT_KEY   = "ca_seen"
 
-interface Slide {
+// ─── Slide 2 — Groups list (Audit Gate content) ─────────────
+const GROUP_TIERS = [
+  { scope: "WARD",         label: "Ward",         icon: Home,     color: "#1A6B3C" },
+  { scope: "CONSTITUENCY", label: "Constituency",  icon: Landmark, color: "#7A4F1E" },
+  { scope: "COUNTY",       label: "County",        icon: MapPin,   color: "#B03A1E" },
+  { scope: "NATIONAL",     label: "National",      icon: Globe,    color: "#1D4731" },
+]
+
+function CommunitiesSlide({ userId }: { userId: string }) {
+  const { data: groups = [], isLoading } = useQuery({
+    queryKey: ["wizard-system-groups", userId],
+    queryFn: communityApi.getMyGroups,
+    staleTime: 60_000,
+  })
+
+  const systemGroups = (groups as Array<{ name: string; locationScope?: string; isSystemGroup?: boolean }>)
+    .filter((g) => g.isSystemGroup)
+
+  return (
+    <div className="space-y-3">
+      {isLoading ? (
+        <div className="space-y-2">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-11 w-full rounded-xl" />
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {GROUP_TIERS.map(({ scope, label, icon: Icon, color }) => {
+            const match = systemGroups.find(
+              (g) => (g.locationScope ?? "").toUpperCase() === scope
+            )
+            return (
+              <div
+                key={scope}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
+                style={{ background: `${color}0D`, border: `1px solid ${color}20` }}
+              >
+                <div
+                  className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background: `${color}15` }}
+                >
+                  <Icon className="h-4 w-4" style={{ color }} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12px] font-semibold truncate" style={{ color: "#0E0B08" }}>
+                    {match?.name ?? label}
+                  </p>
+                  <p className="text-[10px]" style={{ color: "rgba(14,11,8,0.45)" }}>{label} group</p>
+                </div>
+                <span
+                  className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                  style={{ background: `${color}15`, color }}
+                >
+                  ✓
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      <div
+        className="px-3 py-2.5 rounded-xl text-[11px] leading-relaxed"
+        style={{ background: "rgba(14,11,8,0.04)", color: "rgba(14,11,8,0.55)" }}
+      >
+        Every connection shown here is permanent in the audit log. Nothing about your participation is hidden from you — ever.
+      </div>
+    </div>
+  )
+}
+
+// ─── Slide definitions ────────────────────────────────────
+
+type Slide = {
   icon: React.ElementType
   iconColor: string
   iconBg: string
   title: string
   body: string
+  customContent?: boolean
 }
 
-function buildSlides(primaryWardName?: string, primaryConstituency?: string, primaryCounty?: string): Slide[] {
-  const ward = primaryWardName ?? "your ward"
-  const constituency = primaryConstituency || "your constituency"
-  const county = primaryCounty || "your county"
-  const hasLocation = !!primaryWardName
+function buildSlides(ward?: string, constituency?: string, county?: string): Slide[] {
+  const w = ward ?? "your ward"
+  const hasLocation = !!ward
 
   return [
     {
       icon: Zap,
       iconColor: "#C9922A",
       iconBg: "rgba(201,146,42,0.12)",
-      title: hasLocation ? `Welcome to ${ward} 🌿` : "Welcome to UjamaaDAO 🌿",
-      body: `UjamaaDAO is built community by community across Kenya${hasLocation ? ` — starting with ${ward}` : ""}. Here you collaborate on local issues, make decisions together, and grow as a community. Every contribution earns you Participation Rights (PR).`,
+      title: hasLocation ? `Karibu ${w} 🌿` : "Karibu UjamaaDAO 🌿",
+      body: `UjamaaDAO is built community by community across Kenya${hasLocation ? ` — starting with ${w}` : ""}. You collaborate on local issues, make decisions together, and earn Participation Rights (PR) for every contribution. PR is non-transferable — it cannot be bought, only earned.`,
     },
     {
-      icon: Coins,
-      iconColor: "#1E3D2F",
-      iconBg: "rgba(30,61,47,0.10)",
-      title: "Participation Rights (PR)",
-      body: "PR is your civic currency — it cannot be bought or sold. You earn it by attending barazas, voting on proposals, completing your profile, and contributing to your community. More PR means more voice in decisions.",
+      icon: ShieldCheck,
+      iconColor: "#1D4731",
+      iconBg: "rgba(29,71,49,0.10)",
+      title: "Your Communities & Data",
+      body: "Based on your registered ward, you were automatically enrolled in these governance groups. You cannot leave them — they are your constitutional participation units.",
+      customContent: true,
     },
     {
       icon: Smartphone,
       iconColor: "#2A6B7C",
       iconBg: "rgba(42,107,124,0.10)",
-      title: "Verify your phone number",
-      body: "Your first step is verifying your phone number via SMS, WhatsApp, or Telegram. This confirms you are a real person — not a bot — and unlocks your community membership.",
-    },
-    {
-      icon: Users,
-      iconColor: "#1D4731",
-      iconBg: "rgba(29,71,49,0.10)",
-      title: hasLocation ? `Join ${ward} community` : "Community Verification",
-      body: hasLocation
-        ? `Get 3 vouches from people already verified in ${ward}. This is community verification — person to person, the way it has always been done. It unlocks governance and the cooperative economy.`
-        : "Get 3 vouches from people in your ward. This is community verification — person to person, the way it has always been done. It unlocks governance participation and the cooperative economy.",
+      title: "Verify & Join",
+      body: `Start by verifying your phone (SMS, WhatsApp, or Telegram) to confirm you are a real person. Then get 3 vouches from verified ${hasLocation ? w : "ward"} members to unlock full governance participation — proposals, voting, and the cooperative economy.`,
     },
     {
       icon: Vote,
-      iconColor: "#B03A1E",
-      iconBg: "rgba(176,58,30,0.10)",
-      title: "Real governance, real power",
-      body: hasLocation
-        ? `Any verified member can submit a proposal for ${ward}, ${constituency}, or ${county}. Every vote is weighted by your PR — not your wealth. No money buys influence here, only participation.`
-        : "Any verified member can submit proposals for their local community, constituency, or county. Every vote is weighted by your PR — not your wealth. No money buys influence here, only participation.",
-    },
-    {
-      icon: ShieldCheck,
       iconColor: "#C9922A",
       iconBg: "rgba(201,146,42,0.12)",
       title: "You are ready — let's begin!",
-      body: `Start by verifying your phone and completing your profile. Once you reach Community Verified status you become a full member of ${hasLocation ? ward : "your ward community"}. Finishing this walkthrough earns you +10 PR 🎉. Heshima na Ujamaa! 🌿`,
+      body: `Any verified member can submit proposals for ${hasLocation ? `${w}, ${constituency ?? "your constituency"}, or ${county ?? "your county"}` : "their local community"}. Every vote is weighted by PR — not wealth. Finishing this walkthrough earns you +10 PR 🎉. Heshima na Ujamaa! 🌿`,
     },
   ]
 }
+
+// ─── Main component ───────────────────────────────────────
 
 interface OnboardingWizardProps {
   forceOpen?: boolean
@@ -122,8 +191,14 @@ export function OnboardingWizard({ forceOpen, onClose }: OnboardingWizardProps) 
     else setVisible(false)
   }, [forceOpen])
 
+  function markSeen() {
+    if (!user?.id) return
+    localStorage.setItem(`${STORAGE_KEY}_${user.id}`, "1")
+    localStorage.setItem(`${AUDIT_KEY}_${user.id}`, "1")
+  }
+
   function close() {
-    if (user?.id) localStorage.setItem(`${STORAGE_KEY}_${user.id}`, "1")
+    markSeen()
     setVisible(false)
     onClose?.()
   }
@@ -133,7 +208,9 @@ export function OnboardingWizard({ forceOpen, onClose }: OnboardingWizardProps) 
       setSlide((s) => s + 1)
     } else {
       completeMutation.mutate()
-      close()
+      markSeen()
+      setVisible(false)
+      onClose?.()
       router.push("/profile")
     }
   }
@@ -182,44 +259,14 @@ export function OnboardingWizard({ forceOpen, onClose }: OnboardingWizardProps) 
           <h2 className="text-lg sm:text-xl font-bold mb-2 sm:mb-3" style={{ color: "#0E0B08" }}>
             {current.title}
           </h2>
-          <p className="text-sm leading-relaxed mb-5 sm:mb-8" style={{ color: "rgba(14,11,8,0.65)" }}>
+          <p className="text-sm leading-relaxed mb-4 sm:mb-5" style={{ color: "rgba(14,11,8,0.65)" }}>
             {current.body}
           </p>
 
-          {/* Community breadcrumb — visible on location slides when we know the user's place */}
-          {(slide === 3 || slide === 4) && user?.primaryWardName && (
-            <div
-              className="flex items-center gap-1.5 text-[11px] font-medium mb-5 sm:mb-8 -mt-3 flex-wrap"
-              style={{ color: "rgba(14,11,8,0.45)" }}
-            >
-              <span
-                className="px-2 py-0.5 rounded-full font-semibold"
-                style={{ background: "rgba(29,71,49,0.10)", color: "#1D4731" }}
-              >
-                {user.primaryWardName}
-              </span>
-              {user.residenceConstituency && (
-                <>
-                  <span>›</span>
-                  <span
-                    className="px-2 py-0.5 rounded-full"
-                    style={{ background: "rgba(42,107,124,0.10)", color: "#2A6B7C" }}
-                  >
-                    {user.residenceConstituency}
-                  </span>
-                </>
-              )}
-              {user.residenceCounty && (
-                <>
-                  <span>›</span>
-                  <span
-                    className="px-2 py-0.5 rounded-full"
-                    style={{ background: "rgba(122,79,30,0.10)", color: "#7A4F1E" }}
-                  >
-                    {user.residenceCounty}
-                  </span>
-                </>
-              )}
+          {/* Slide 2 custom content — communities list */}
+          {current.customContent && user?.id && (
+            <div className="mb-5 sm:mb-6">
+              <CommunitiesSlide userId={user.id} />
             </div>
           )}
 
