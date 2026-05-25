@@ -354,6 +354,64 @@ router.post(
 );
 
 router.post(
+  '/:projectId/members',
+  validateRequest({
+    schema: z.object({ projectId: z.string().uuid() }),
+    target: 'params',
+  }),
+  validateRequest({
+    schema: z.object({
+      userId: z.string().uuid(),
+      role: z.enum(['LEAD', 'MANAGER', 'CONTRIBUTOR', 'VIEWER']).optional(),
+    }),
+    target: 'body',
+  }),
+  authorize({
+    scopeCheck: async (req) =>
+      roleService.isProjectLeader(req.user!.userId, req.params.projectId),
+  }),
+  asyncHandler(ProjectController.addMember)
+);
+
+router.delete(
+  '/:projectId/members/:userId',
+  validateRequest({
+    schema: z.object({
+      projectId: z.string().uuid(),
+      userId: z.string().uuid(),
+    }),
+    target: 'params',
+  }),
+  authorize({
+    scopeCheck: async (req) =>
+      roleService.isProjectLeader(req.user!.userId, req.params.projectId),
+  }),
+  asyncHandler(ProjectController.removeMember)
+);
+
+router.patch(
+  '/:projectId/members/:userId/role',
+  validateRequest({
+    schema: z.object({
+      projectId: z.string().uuid(),
+      userId: z.string().uuid(),
+    }),
+    target: 'params',
+  }),
+  validateRequest({
+    schema: z.object({
+      role: z.enum(['LEAD', 'MANAGER', 'CONTRIBUTOR', 'VIEWER']),
+    }),
+    target: 'body',
+  }),
+  authorize({
+    scopeCheck: async (req) =>
+      roleService.isProjectLeader(req.user!.userId, req.params.projectId),
+  }),
+  asyncHandler(ProjectController.updateMemberRole)
+);
+
+router.post(
   '/:projectId/contribute',
   authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
   validateRequest({

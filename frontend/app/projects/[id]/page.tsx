@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react"
 import Link from "next/link"
 import { use } from "react"
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query"
-import { projectApi, projectUpdatesApi, type ProjectDetailDto, type ProjectMilestoneDto, type WorkLogResponseDto } from "@/lib/api"
+import { projectApi, userApi, projectUpdatesApi, type ProjectDetailDto, type ProjectMilestoneDto, type WorkLogResponseDto } from "@/lib/api"
 import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -733,48 +733,234 @@ function MilestonesTab({
   )
 }
 
-function TeamTab({ projectId, members }: { projectId: string; members: ProjectDetailDto["members"] }) {
+const PROJECT_ROLES = ["LEAD", "MANAGER", "CONTRIBUTOR", "VIEWER"] as const
+type ProjectRole = typeof PROJECT_ROLES[number]
+
+const ROLE_COLORS: Record<ProjectRole, string> = {
+  LEAD:        "#1D4731",
+  MANAGER:     "#2A6B7C",
+  CONTRIBUTOR: "#7A6E60",
+  VIEWER:      "#0E0B08",
+}
+
+function MemberAvatar({ name, avatarUrl }: { name: string | null; avatarUrl: string | null }) {
+  if (avatarUrl) return <img src={avatarUrl} alt="" className="w-8 h-8 rounded-xl object-cover flex-shrink-0" />
+  return (
+    <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style={{ background: "#1D4731" }}>
+      {(name ?? "?")[0].toUpperCase()}
+    </div>
+  )
+}
+
+function TeamTab({
+  projectId,
+  members,
+  isLeader,
+  currentUserId,
+}: {
+  projectId: string
+  members: ProjectDetailDto["members"]
+  isLeader: boolean
+  currentUserId: string | undefined
+}) {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+  const { user } = useAuth()
+
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [searchQ, setSearchQ] = useState("")
+  const [selectedUserId, setSelectedUserId] = useState("")
+  const [newRole, setNewRole] = useState<ProjectRole>("CONTRIBUTOR")
+
+  const wardId = user?.primaryWardId
+  const { data: wardMembers = [] } = useQuery({
+    queryKey: ["ward-members", wardId],
+    queryFn:  () => userApi.getWardMembers(wardId!),
+    enabled:  isLeader && !!wardId && showAddForm,
+    staleTime: 300_000,
+  })
+
+  const candidates = wardMembers.filter((wm) => {
+    if (members.some((m) => m.userId === wm.id)) return false
+    if (!searchQ) return true
+    return wm.name.toLowerCase().includes(searchQ.toLowerCase())
+  })
+
+  const addMut = useMutation({
+    mutationFn: () => projectApi.addMember(projectId, { userId: selectedUserId, role: newRole }),
+    onSuccess: () => {
+      toast({ title: "Member added" })
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] })
+      setShowAddForm(false)
+      setSelectedUserId("")
+      setSearchQ("")
+    },
+    onError: (e: any) => toast({ title: "Failed", description: e?.message, variant: "destructive" }),
+  })
+
+  const removeMut = useMutation({
+    mutationFn: (userId: string) => projectApi.removeMember(projectId, userId),
+    onSuccess: () => {
+      toast({ title: "Member removed" })
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] })
+    },
+    onError: (e: any) => toast({ title: "Failed", description: e?.message, variant: "destructive" }),
+  })
+
+  const roleMut = useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: ProjectRole }) =>
+      projectApi.updateMemberRole(projectId, userId, role),
+    onSuccess: () => {
+      toast({ title: "Role updated" })
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] })
+    },
+    onError: (e: any) => toast({ title: "Failed", description: e?.message, variant: "destructive" }),
+  })
+
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-xs font-bold uppercase tracking-widest text-[#0E0B08]/40 mb-3">
-          Contributions
-        </h2>
+        <h2 className="text-xs font-bold uppercase tracking-widest text-[#0E0B08]/40 mb-3">Contributions</h2>
         <MemberContributions projectId={projectId} />
       </div>
+
       <Card className="border-0 shadow-card">
         <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2 text-sm">
-            <Users className="h-4 w-4" style={{ color: "#C9922A" }} />
-            Members ({members.length})
+          <CardTitle className="flex items-center justify-between text-sm">
+            <span className="flex items-center gap-2">
+              <Users className="h-4 w-4" style={{ color: "#C9922A" }} />
+              Members ({members.length})
+            </span>
+            {isLeader && !showAddForm && (
+              <button
+                onClick={() => setShowAddForm(true)}
+                className="flex items-center gap-1 text-xs font-semibold transition-opacity hover:opacity-80"
+                style={{ color: "#1D4731" }}
+              >
+                <UserPlus className="h-3.5 w-3.5" /> Add
+              </button>
+            )}
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-2.5">
-            {members.map((m) => (
-              <div
-                key={m.userId}
-                className="flex items-center justify-between gap-3 py-2 border-b last:border-0"
-                style={{ borderColor: "rgba(0,0,0,0.05)" }}
-              >
-                <div className="flex items-center gap-2.5">
-                  {m.user.avatarUrl ? (
-                    <img src={m.user.avatarUrl} alt="" className="w-8 h-8 rounded-xl object-cover" />
-                  ) : (
-                    <div
-                      className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-bold"
-                      style={{ background: "#1D4731" }}
+        <CardContent className="space-y-3">
+          {/* Add member form */}
+          {isLeader && showAddForm && (
+            <div
+              className="rounded-xl p-3 space-y-2.5"
+              style={{ background: "rgba(29,71,49,0.04)", border: "1px solid rgba(29,71,49,0.10)" }}
+            >
+              <p className="text-[11px] font-bold text-[#1D4731] uppercase tracking-wider">Add member from your ward</p>
+              <input
+                type="search"
+                placeholder="Search by name…"
+                value={searchQ}
+                onChange={(e) => { setSearchQ(e.target.value); setSelectedUserId("") }}
+                className="w-full h-9 rounded-xl border border-black/10 bg-white px-3 text-xs focus:outline-none focus:ring-2 focus:ring-[#1D4731]/20"
+              />
+              {searchQ && candidates.length > 0 && (
+                <div className="rounded-xl border border-black/08 overflow-hidden divide-y divide-black/05 bg-white max-h-40 overflow-y-auto">
+                  {candidates.slice(0, 6).map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => { setSelectedUserId(c.id); setSearchQ(c.name) }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-black/[0.03] transition-colors text-left"
                     >
-                      {(m.user.name ?? "?")[0].toUpperCase()}
-                    </div>
-                  )}
-                  <p className="text-sm font-semibold text-[#0E0B08]">{m.user.name ?? "Member"}</p>
+                      <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0" style={{ background: "#1D4731" }}>
+                        {c.name[0].toUpperCase()}
+                      </div>
+                      <span className="font-semibold text-[#0E0B08]">{c.name}</span>
+                    </button>
+                  ))}
                 </div>
-                <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#7A6E60" }}>
-                  {m.role.toLowerCase()}
-                </span>
+              )}
+              {searchQ && candidates.length === 0 && (
+                <p className="text-[11px] text-[#0E0B08]/40 px-1">No ward members found.</p>
+              )}
+              <div className="flex gap-2">
+                <select
+                  value={newRole}
+                  onChange={(e) => setNewRole(e.target.value as ProjectRole)}
+                  className="h-9 rounded-xl border border-black/10 bg-white px-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#1D4731]/20"
+                >
+                  {PROJECT_ROLES.map((r) => (
+                    <option key={r} value={r}>{r.charAt(0) + r.slice(1).toLowerCase()}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => addMut.mutate()}
+                  disabled={!selectedUserId || addMut.isPending}
+                  className="flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-bold transition-opacity hover:opacity-90 disabled:opacity-40"
+                  style={{ background: "#1D4731", color: "#fff" }}
+                >
+                  {addMut.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+                  Add to project
+                </button>
+                <button
+                  onClick={() => { setShowAddForm(false); setSelectedUserId(""); setSearchQ("") }}
+                  className="rounded-xl px-3 py-2 text-xs font-semibold transition-opacity hover:opacity-80"
+                  style={{ background: "rgba(0,0,0,0.05)", color: "#0E0B08" }}
+                >
+                  Cancel
+                </button>
               </div>
-            ))}
+            </div>
+          )}
+
+          {/* Member list */}
+          <div className="space-y-2.5">
+            {members.map((m) => {
+              const isCurrentUser = m.userId === currentUserId
+              const role = m.role as ProjectRole
+              return (
+                <div
+                  key={m.userId}
+                  className="flex items-center justify-between gap-3 py-2 border-b last:border-0"
+                  style={{ borderColor: "rgba(0,0,0,0.05)" }}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <MemberAvatar name={m.user.name} avatarUrl={m.user.avatarUrl} />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-[#0E0B08] truncate">{m.user.name ?? "Member"}</p>
+                      {isCurrentUser && <p className="text-[10px] text-[#0E0B08]/35">You</p>}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    {isLeader ? (
+                      <select
+                        value={role}
+                        onChange={(e) =>
+                          roleMut.mutate({ userId: m.userId, role: e.target.value as ProjectRole })
+                        }
+                        disabled={roleMut.isPending}
+                        className="h-7 rounded-lg border-0 text-[10px] font-bold uppercase tracking-wider px-1.5 focus:outline-none cursor-pointer"
+                        style={{ background: `${ROLE_COLORS[role]}12`, color: ROLE_COLORS[role] }}
+                      >
+                        {PROJECT_ROLES.map((r) => (
+                          <option key={r} value={r}>{r}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span
+                        className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
+                        style={{ background: `${ROLE_COLORS[role]}12`, color: ROLE_COLORS[role] }}
+                      >
+                        {role}
+                      </span>
+                    )}
+                    {isLeader && !isCurrentUser && (
+                      <button
+                        onClick={() => removeMut.mutate(m.userId)}
+                        disabled={removeMut.isPending && removeMut.variables === m.userId}
+                        className="p-1 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-40"
+                        title="Remove member"
+                      >
+                        <XIcon className="h-3.5 w-3.5 text-[#B03A1E]/60" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </CardContent>
       </Card>
@@ -981,7 +1167,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   }
 
   const isMember = project.members.some((m) => m.userId === user?.id)
-  const isLeader = project.members.some((m) => m.userId === user?.id && m.role === "LEADER")
+  const isLeader = project.members.some((m) => m.userId === user?.id && m.role === "LEAD")
 
   return (
     <div className="px-4 md:px-8 py-6 max-w-3xl mx-auto space-y-6">
@@ -1010,7 +1196,12 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         <TaskBoard projectId={id} milestones={project.milestones} isLeader={isLeader} />
       )}
       {activeTab === "team" && (
-        <TeamTab projectId={id} members={project.members} />
+        <TeamTab
+          projectId={id}
+          members={project.members}
+          isLeader={isLeader}
+          currentUserId={user?.id}
+        />
       )}
       {activeTab === "updates" && (
         <UpdatesTab projectId={id} isMember={isMember} />

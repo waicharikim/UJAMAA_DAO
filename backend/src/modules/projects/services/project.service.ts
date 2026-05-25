@@ -197,11 +197,18 @@ export class ProjectService {
     if (milestone.status !== MilestoneStatus.AWAITING_VERIFICATION)
       throw ApiError.badRequest('Milestone is not awaiting verification');
     await this.assertMilestoneVerifyAuth(verifierId, milestone.projectId);
-    const newStatus = await this.applyMilestoneVerification(verifierId, dto, milestone);
+    const newStatus = await this.applyMilestoneVerification(
+      verifierId,
+      dto,
+      milestone
+    );
     return { status: newStatus };
   }
 
-  private async assertMilestoneVerifyAuth(verifierId: string, projectId: string): Promise<void> {
+  private async assertMilestoneVerifyAuth(
+    verifierId: string,
+    projectId: string
+  ): Promise<void> {
     const [isLeader, isVerifier] = await Promise.all([
       roleService.isProjectLeader(verifierId, projectId),
       roleService.isVerifier(verifierId),
@@ -213,9 +220,17 @@ export class ProjectService {
   private async applyMilestoneVerification(
     verifierId: string,
     dto: VerifyMilestoneDto,
-    milestone: { id: string; projectId: string; title: string; submittedById: string | null; project: { title: string } }
+    milestone: {
+      id: string;
+      projectId: string;
+      title: string;
+      submittedById: string | null;
+      project: { title: string };
+    }
   ): Promise<MilestoneStatus> {
-    const newStatus = dto.approved ? MilestoneStatus.VERIFIED : MilestoneStatus.REJECTED;
+    const newStatus = dto.approved
+      ? MilestoneStatus.VERIFIED
+      : MilestoneStatus.REJECTED;
 
     await prisma.milestone.update({
       where: { id: dto.milestoneId },
@@ -227,12 +242,18 @@ export class ProjectService {
       },
     });
 
-    await auditService.log(verifierId, AuditAction.MILESTONE_VERIFIED, 'Milestone', dto.milestoneId, {
-      approved: dto.approved,
-      projectId: milestone.projectId,
-      milestoneName: milestone.title,
-      projectTitle: milestone.project.title,
-    });
+    await auditService.log(
+      verifierId,
+      AuditAction.MILESTONE_VERIFIED,
+      'Milestone',
+      dto.milestoneId,
+      {
+        approved: dto.approved,
+        projectId: milestone.projectId,
+        milestoneName: milestone.title,
+        projectTitle: milestone.project.title,
+      }
+    );
 
     if (dto.approved && milestone.submittedById)
       await this.awardMilestoneVerificationRewards(
@@ -387,7 +408,10 @@ export class ProjectService {
     return workLogService.logWork(userId, dto);
   }
 
-  async verifyWork(verifierId: string, dto: VerifyWorkDto): Promise<WorkLogResponseDto> {
+  async verifyWork(
+    verifierId: string,
+    dto: VerifyWorkDto
+  ): Promise<WorkLogResponseDto> {
     return workLogService.verifyWork(verifierId, dto);
   }
 
@@ -429,6 +453,97 @@ export class ProjectService {
         throw ApiError.conflict('Already a member of this project');
       throw err;
     }
+  }
+
+  // ── Member management (leader-only) ──────────────────────────────────────
+
+  async addMember(
+    leaderId: string,
+    projectId: string,
+    dto: { userId: string; role?: string }
+  ) {
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { id: true, status: true },
+    });
+    if (!project) throw ApiError.notFound('Project');
+    if (isProjectClosed(project.status))
+      throw ApiError.badRequest('Cannot add members to a closed project');
+    if (dto.userId === leaderId)
+      throw ApiError.badRequest('You are already a member');
+
+    const role = (dto.role ?? 'CONTRIBUTOR') as any;
+    try {
+      const member = await prisma.projectMember.create({
+        data: { projectId, userId: dto.userId, role },
+        include: {
+          user: { select: { id: true, name: true, avatarUrl: true } },
+        },
+      });
+      await this.awardProjectJoinRewards(dto.userId, projectId);
+      return {
+        projectId: member.projectId,
+        userId: member.userId,
+        role: member.role,
+        joinedAt: member.joinedAt.toISOString(),
+        user: member.user,
+      };
+    } catch (err: any) {
+      if (err?.code === 'P2002')
+        throw ApiError.conflict('User is already a member of this project');
+      if (err?.code === 'P2003') throw ApiError.notFound('User');
+      throw err;
+    }
+  }
+
+  async removeMember(leaderId: string, projectId: string, userId: string) {
+    if (userId === leaderId) {
+      // Ensure there's another LEAD before allowing self-removal
+      const otherLeads = await prisma.projectMember.count({
+        where: { projectId, role: 'LEAD', userId: { not: leaderId } },
+      });
+      if (otherLeads === 0)
+        throw ApiError.badRequest(
+          'Cannot remove yourself — assign another lead first'
+        );
+    }
+
+    const deleted = await prisma.projectMember.deleteMany({
+      where: { projectId, userId },
+    });
+    if (deleted.count === 0)
+      throw ApiError.notFound('Member not found in this project');
+
+    await auditService
+      .log(leaderId, AuditAction.PROJECT_CREATED, 'Project', projectId, {
+        action: 'MEMBER_REMOVED',
+        removedUserId: userId,
+      })
+      .catch(() => {});
+  }
+
+  async updateMemberRole(
+    leaderId: string,
+    projectId: string,
+    userId: string,
+    role: string
+  ) {
+    if (userId === leaderId && role !== 'LEAD') {
+      const otherLeads = await prisma.projectMember.count({
+        where: { projectId, role: 'LEAD', userId: { not: leaderId } },
+      });
+      if (otherLeads === 0)
+        throw ApiError.badRequest(
+          'Cannot demote yourself — assign another lead first'
+        );
+    }
+
+    const updated = await prisma.projectMember.updateMany({
+      where: { projectId, userId },
+      data: { role: role as any },
+    });
+    if (updated.count === 0)
+      throw ApiError.notFound('Member not found in this project');
   }
 
   // ── UT contribution ───────────────────────────────────────────────────────
@@ -681,7 +796,10 @@ export class ProjectService {
 
   // ── QR Work Sessions (delegated to WorkSessionService) ───────────────────
 
-  async createWorkSession(leaderId: string, dto: CreateWorkSessionDto): Promise<WorkSessionDto> {
+  async createWorkSession(
+    leaderId: string,
+    dto: CreateWorkSessionDto
+  ): Promise<WorkSessionDto> {
     return workSessionService.createWorkSession(leaderId, dto);
   }
 
@@ -689,15 +807,25 @@ export class ProjectService {
     return workSessionService.scanQr(userId, qrSecret);
   }
 
-  async attestPresence(attestorId: string, sessionId: string, targetUserId: string): Promise<AttestResponseDto> {
-    return workSessionService.attestPresence(attestorId, sessionId, targetUserId);
+  async attestPresence(
+    attestorId: string,
+    sessionId: string,
+    targetUserId: string
+  ): Promise<AttestResponseDto> {
+    return workSessionService.attestPresence(
+      attestorId,
+      sessionId,
+      targetUserId
+    );
   }
 
   async closeWorkSession(sessionId: string): Promise<WorkSessionDto> {
     return workSessionService.closeWorkSession(sessionId);
   }
 
-  async getWorkSession(sessionId: string): Promise<WorkSessionDto & { presences: WorkPresenceDto[] }> {
+  async getWorkSession(
+    sessionId: string
+  ): Promise<WorkSessionDto & { presences: WorkPresenceDto[] }> {
     return workSessionService.getWorkSession(sessionId);
   }
 
@@ -709,12 +837,19 @@ export class ProjectService {
     if (proposal.status !== 'APPROVED')
       throw ApiError.badRequest('Proposal must be approved');
     if (proposal.creatorId !== userId)
-      throw ApiError.forbidden('Only the proposal creator can create a project');
+      throw ApiError.forbidden(
+        'Only the proposal creator can create a project'
+      );
   }
 
   private async createMilestonesFromProposal(
     projectId: string,
-    milestones: Array<{ id: string; title: string; description: string | null; orderIndex: number }>
+    milestones: Array<{
+      id: string;
+      title: string;
+      description: string | null;
+      orderIndex: number;
+    }>
   ): Promise<void> {
     if (!milestones.length) return;
     await prisma.milestone.createMany({
@@ -734,7 +869,9 @@ export class ProjectService {
     userId: string
   ): void {
     if (task.assignedToId !== userId)
-      throw ApiError.forbidden('Only the assigned member can complete this task');
+      throw ApiError.forbidden(
+        'Only the assigned member can complete this task'
+      );
     if (task.status !== 'IN_PROGRESS')
       throw ApiError.badRequest('Task must be in progress to mark as done');
   }
@@ -973,7 +1110,6 @@ export class ProjectService {
     if (!isMember)
       throw ApiError.forbidden('Join the project before claiming tasks');
   }
-
 }
 
 export const projectService = new ProjectService();

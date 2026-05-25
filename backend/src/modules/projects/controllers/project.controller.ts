@@ -194,4 +194,30 @@ export class ProjectController {
     });
     sendSuccess(res, result, 'Updates fetched');
   }
+
+  static async addMember(req: AuthRequest, res: Response) {
+    const leaderId = req.user!.userId;
+    const { projectId } = req.params;
+    const { userId, role } = req.body as { userId: string; role?: string };
+    const result = await projectService.addMember(leaderId, projectId, {
+      userId,
+      role,
+    });
+    sendCreated(res, result, 'Member added');
+  }
+
+  static async removeMember(req: AuthRequest, res: Response) {
+    const leaderId = req.user!.userId;
+    const { projectId, userId } = req.params;
+    await projectService.removeMember(leaderId, projectId, userId);
+    sendSuccess(res, null, 'Member removed');
+  }
+
+  static async updateMemberRole(req: AuthRequest, res: Response) {
+    const leaderId = req.user!.userId;
+    const { projectId, userId } = req.params;
+    const { role } = req.body as { role: string };
+    await projectService.updateMemberRole(leaderId, projectId, userId, role);
+    sendSuccess(res, null, 'Role updated');
+  }
 }

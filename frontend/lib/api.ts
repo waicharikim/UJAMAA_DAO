@@ -1321,6 +1321,21 @@ export const projectApi = {
   joinProject: (projectId: string): Promise<{ projectId: string; userId: string; role: string }> =>
     apiFetch(`/projects/${projectId}/join`, { method: "POST" }),
 
+  addMember: (projectId: string, dto: { userId: string; role?: "LEAD" | "MANAGER" | "CONTRIBUTOR" | "VIEWER" }) =>
+    apiFetch<{ userId: string; role: string }>(`/projects/${projectId}/members`, {
+      method: "POST",
+      body: JSON.stringify(dto),
+    }),
+
+  removeMember: (projectId: string, userId: string) =>
+    apiFetch<void>(`/projects/${projectId}/members/${userId}`, { method: "DELETE" }),
+
+  updateMemberRole: (projectId: string, userId: string, role: "LEAD" | "MANAGER" | "CONTRIBUTOR" | "VIEWER") =>
+    apiFetch<void>(`/projects/${projectId}/members/${userId}/role`, {
+      method: "PATCH",
+      body: JSON.stringify({ role }),
+    }),
+
   contribute: (projectId: string, amount: number): Promise<{ newBalance: number }> =>
     apiFetch(`/projects/${projectId}/contribute`, {
       method: "POST",
