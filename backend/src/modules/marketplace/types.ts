@@ -21,6 +21,7 @@ export interface CreateListingDto {
 
 export interface SearchListingsDto {
   goodsServiceId?: string;
+  q?: string;
   type?: ListingType;
   wardId?: string;
   page?: number;

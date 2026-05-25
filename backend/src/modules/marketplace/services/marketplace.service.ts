@@ -66,6 +66,13 @@ export class MarketplaceService {
 
     if (dto.wardId) where.wardId = dto.wardId;
     if (dto.type) where.listingType = dto.type;
+    if (dto.q) {
+      const term = dto.q.trim();
+      where.OR = [
+        { title: { contains: term, mode: 'insensitive' } },
+        { description: { contains: term, mode: 'insensitive' } },
+      ];
+    }
 
     const [listings, total] = await Promise.all([
       prisma.marketplaceListing.findMany({

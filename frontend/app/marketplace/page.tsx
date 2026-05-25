@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { Store, Search, Plus, Phone, X, ShieldCheck } from "lucide-react"
+import { Store, Search, Plus, Phone, X, ShieldCheck, MapPin } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -221,12 +221,19 @@ export default function MarketplacePage() {
   const [activeTab, setActiveTab] = useState<"browse" | "mine">("browse")
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("ALL")
   const [showCreate, setShowCreate] = useState(false)
+  const [searchInput, setSearchInput] = useState("")
+  const [committedSearch, setCommittedSearch] = useState("")
+  const [myWardOnly, setMyWardOnly] = useState(false)
+
+  const wardId = myWardOnly ? (user?.primaryWardId ?? undefined) : undefined
 
   const browseQuery = useQuery({
-    queryKey: ["marketplace-browse", typeFilter],
+    queryKey: ["marketplace-browse", typeFilter, committedSearch, wardId],
     queryFn: () =>
       marketplaceApi.searchListings({
         type: typeFilter === "ALL" ? undefined : typeFilter,
+        q: committedSearch || undefined,
+        wardId,
         limit: 30,
       }),
     staleTime: 60_000,
@@ -310,23 +317,67 @@ export default function MarketplacePage() {
         </div>
       )}
 
-      {/* Type filter — browse only */}
+      {/* Search bar + filters — browse only */}
       {activeTab === "browse" && (
-        <div className="flex gap-2 flex-wrap">
-          {(Object.keys(TYPE_LABELS) as TypeFilter[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTypeFilter(t)}
-              className="rounded-full px-4 py-1.5 text-xs font-semibold transition-all"
-              style={
-                typeFilter === t
-                  ? { background: "#C9922A", color: "#fff" }
-                  : { background: "rgba(201,146,42,0.1)", color: "#C9922A" }
-              }
-            >
-              {TYPE_LABELS[t]}
-            </button>
-          ))}
+        <div className="space-y-3">
+          {/* Search input */}
+          <form
+            onSubmit={(e) => { e.preventDefault(); setCommittedSearch(searchInput.trim()) }}
+            className="relative"
+          >
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#0E0B08]/30 pointer-events-none" />
+            <input
+              type="search"
+              value={searchInput}
+              onChange={(e) => {
+                setSearchInput(e.target.value)
+                if (!e.target.value.trim()) setCommittedSearch("")
+              }}
+              placeholder="Search listings…"
+              className="w-full h-10 pl-9 pr-10 rounded-xl border border-black/10 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#C9922A]/30"
+            />
+            {searchInput && (
+              <button
+                type="button"
+                onClick={() => { setSearchInput(""); setCommittedSearch("") }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-black/5 transition-colors"
+              >
+                <X className="h-3.5 w-3.5 text-[#0E0B08]/40" />
+              </button>
+            )}
+          </form>
+
+          {/* Type chips + ward toggle */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {(Object.keys(TYPE_LABELS) as TypeFilter[]).map((t) => (
+              <button
+                key={t}
+                onClick={() => setTypeFilter(t)}
+                className="rounded-full px-4 py-1.5 text-xs font-semibold transition-all"
+                style={
+                  typeFilter === t
+                    ? { background: "#C9922A", color: "#fff" }
+                    : { background: "rgba(201,146,42,0.1)", color: "#C9922A" }
+                }
+              >
+                {TYPE_LABELS[t]}
+              </button>
+            ))}
+            {isAuthenticated && user?.primaryWardId && (
+              <button
+                onClick={() => setMyWardOnly((v) => !v)}
+                className="flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all"
+                style={
+                  myWardOnly
+                    ? { background: "#1D4731", color: "#fff" }
+                    : { background: "rgba(29,71,49,0.08)", color: "#1D4731" }
+                }
+              >
+                <MapPin className="h-3 w-3" />
+                {user.primaryWardName ?? "My ward"}
+              </button>
+            )}
+          </div>
         </div>
       )}
 

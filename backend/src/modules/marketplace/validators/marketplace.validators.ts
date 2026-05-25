@@ -16,6 +16,7 @@ export const createListingSchema = z.object({
 
 export const searchListingsSchema = z.object({
   goodsServiceId: z.string().uuid().optional(),
+  q: z.string().max(100).optional(),
   type: z.enum(['OFFER', 'REQUEST']).optional(),
   wardId: z.string().uuid().optional(),
   page: z.coerce.number().int().min(1).optional(),

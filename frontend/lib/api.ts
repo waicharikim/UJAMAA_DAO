@@ -1777,7 +1777,7 @@ export interface MarketplacePaginatedDto {
 }
 
 export const marketplaceApi = {
-  searchListings: (params?: { type?: "OFFER" | "REQUEST"; wardId?: string; limit?: number; page?: number }) =>
+  searchListings: (params?: { q?: string; type?: "OFFER" | "REQUEST"; wardId?: string; limit?: number; page?: number }) =>
     apiFetch<MarketplacePaginatedDto>(`/marketplace/search${buildQs(params)}`),
 
   getListing: (listingId: string) =>
