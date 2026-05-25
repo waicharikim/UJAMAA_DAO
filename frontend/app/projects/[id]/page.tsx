@@ -31,6 +31,8 @@ import {
   ListTodo,
   MessageSquare,
   Send,
+  Check,
+  X as XIcon,
 } from "lucide-react"
 import { formatDate } from "@/lib/utils"
 
@@ -295,13 +297,25 @@ function MilestoneLogHoursPanel({ milestoneId }: { milestoneId: string }) {
 }
 
 function MilestoneWorkLogs({
-  milestoneId, milestoneStatus, expanded,
-}: { milestoneId: string; milestoneStatus: string; expanded: boolean }) {
+  milestoneId, milestoneStatus, expanded, isLeader,
+}: { milestoneId: string; milestoneStatus: string; expanded: boolean; isLeader: boolean }) {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+  const showLogs = ["IN_PROGRESS", "AWAITING_VERIFICATION", "VERIFIED"].includes(milestoneStatus)
   const { data } = useQuery<{ workLogs: WorkLogResponseDto[]; total: number }>({
     queryKey: ["work-logs", milestoneId],
     queryFn:  () => projectApi.getWorkLogs(milestoneId),
-    enabled:  milestoneStatus === "IN_PROGRESS" && expanded,
+    enabled:  showLogs && expanded,
     staleTime: 30_000,
+  })
+  const verifyMut = useMutation({
+    mutationFn: ({ workLogId, approved, feedback }: { workLogId: string; approved: boolean; feedback?: string }) =>
+      projectApi.verifyWork({ workLogId, approved, feedback }),
+    onSuccess: (_, vars) => {
+      toast({ title: vars.approved ? "Work log approved ✓" : "Work log rejected" })
+      queryClient.invalidateQueries({ queryKey: ["work-logs", milestoneId] })
+    },
+    onError: (e: any) => toast({ title: "Failed", description: e?.message, variant: "destructive" }),
   })
   if (!data || data.workLogs.length === 0) return null
   return (
@@ -311,32 +325,55 @@ function MilestoneWorkLogs({
       </p>
       {data.workLogs.map((log) => {
         const sc = LOG_STATUS_COLORS[log.status] ?? LOG_STATUS_COLORS.PENDING
+        const canVerify = isLeader && log.status === "PENDING"
         return (
           <div
             key={log.id}
-            className="flex items-start justify-between gap-2 rounded-lg p-2.5"
+            className="rounded-lg p-2.5 space-y-2"
             style={{ background: "rgba(0,0,0,0.025)" }}
           >
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-[#0E0B08]">
-                {WORK_TYPE_LABELS[log.workType]} · {log.hours}h
-              </p>
-              <p className="text-[10px] text-[#0E0B08]/50 line-clamp-1 mt-0.5">{log.description}</p>
-              <p className="text-[10px] text-[#0E0B08]/35 mt-0.5">{log.worker.name ?? "Member"}</p>
-            </div>
-            <div className="flex flex-col items-end gap-1 flex-shrink-0">
-              <span
-                className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full"
-                style={{ color: sc.color, background: sc.bg }}
-              >
-                {log.status.toLowerCase()}
-              </span>
-              {log.totalIPEarned > 0 && (
-                <span className="text-[10px] font-bold" style={{ color: "#C9922A" }}>
-                  +{log.totalIPEarned} IP
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-[#0E0B08]">
+                  {WORK_TYPE_LABELS[log.workType]} · {log.hours}h
+                </p>
+                <p className="text-[10px] text-[#0E0B08]/50 line-clamp-2 mt-0.5">{log.description}</p>
+                <p className="text-[10px] text-[#0E0B08]/35 mt-0.5">{log.worker.name ?? "Member"}</p>
+              </div>
+              <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                <span
+                  className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full"
+                  style={{ color: sc.color, background: sc.bg }}
+                >
+                  {log.status.toLowerCase()}
                 </span>
-              )}
+                {log.totalIPEarned > 0 && (
+                  <span className="text-[10px] font-bold" style={{ color: "#C9922A" }}>
+                    +{log.totalIPEarned} IP
+                  </span>
+                )}
+              </div>
             </div>
+            {canVerify && (
+              <div className="flex items-center gap-2 pt-0.5">
+                <button
+                  onClick={() => verifyMut.mutate({ workLogId: log.id, approved: true })}
+                  disabled={verifyMut.isPending}
+                  className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all hover:opacity-90 disabled:opacity-50"
+                  style={{ background: "rgba(29,71,49,0.12)", color: "#1D4731" }}
+                >
+                  <Check className="h-3 w-3" /> Approve
+                </button>
+                <button
+                  onClick={() => verifyMut.mutate({ workLogId: log.id, approved: false })}
+                  disabled={verifyMut.isPending}
+                  className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all hover:opacity-90 disabled:opacity-50"
+                  style={{ background: "rgba(176,58,30,0.10)", color: "#B03A1E" }}
+                >
+                  <XIcon className="h-3 w-3" /> Reject
+                </button>
+              </div>
+            )}
           </div>
         )
       })}
@@ -361,10 +398,11 @@ function MilestoneCard({
 }) {
   const [expanded, setExpanded] = useState(false)
   const cfg = MILESTONE_STATUS[milestone.status] ?? MILESTONE_STATUS.PENDING
-  const canStart   = isMember && milestone.status === "PENDING"
-  const canSubmit  = isMember && milestone.status === "IN_PROGRESS"
-  const canVerify  = isMember && milestone.status === "AWAITING_VERIFICATION"
-  const canLogWork = isMember && milestone.status === "IN_PROGRESS"
+  const canStart    = isMember && milestone.status === "PENDING"
+  const canSubmit   = isMember && milestone.status === "IN_PROGRESS"
+  const canVerify   = isMember && milestone.status === "AWAITING_VERIFICATION"
+  const canLogWork  = isMember && milestone.status === "IN_PROGRESS"
+  const hasWorkLogs = ["IN_PROGRESS", "AWAITING_VERIFICATION", "VERIFIED"].includes(milestone.status)
 
   return (
     <div
@@ -394,7 +432,7 @@ function MilestoneCard({
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             <StatusBadge status={milestone.status} config={MILESTONE_STATUS} />
-            {(canStart || canSubmit || canVerify || canLogWork) && (
+            {(canStart || canSubmit || canVerify || canLogWork || hasWorkLogs) && (
               <button
                 onClick={() => setExpanded(!expanded)}
                 className="p-1 rounded-lg hover:bg-black/5 transition-colors"
@@ -431,7 +469,7 @@ function MilestoneCard({
               isLeader={isLeader}
             />
           )}
-          <MilestoneWorkLogs milestoneId={milestone.id} milestoneStatus={milestone.status} expanded={expanded} />
+          <MilestoneWorkLogs milestoneId={milestone.id} milestoneStatus={milestone.status} expanded={expanded} isLeader={isLeader} />
         </div>
       )}
     </div>

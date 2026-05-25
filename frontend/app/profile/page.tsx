@@ -13,6 +13,8 @@ import { DuesPaymentCard } from "@/components/payments/dues-payment-card"
 import { UtWithdrawalCard } from "@/components/payments/ut-withdrawal-card"
 import { GettingStartedCard } from "@/components/onboarding/getting-started-card"
 import { PasskeyManager } from "@/components/auth/passkey-manager"
+import { ResidenceChangeCard } from "@/components/user/residence-change-card"
+import { SessionManager } from "@/components/auth/session-manager"
 
 // ── Tier config for ward breakdown ────────────────────────
 const TIER_CONFIG: Record<string, { bg: string; color: string }> = {
@@ -247,6 +249,8 @@ export default function ProfilePage() {
           <PasskeyManager />
           {isVerified && <DuesPaymentCard />}
           <UtWithdrawalCard />
+          {isVerified && <ResidenceChangeCard />}
+          <SessionManager />
         </TabsContent>
       </Tabs>
     </div>
