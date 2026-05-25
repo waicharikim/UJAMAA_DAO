@@ -45,29 +45,25 @@ interface StatCardProps {
 function StatCard({ title, subtitle, value, change, changeType, icon: Icon, colorClass }: StatCardProps) {
   return (
     <Card className="border-0 shadow-card overflow-hidden">
-      <CardContent className="p-4 md:p-6">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">{subtitle}</p>
-            <p className="text-xl md:text-[28px] font-bold text-[#0E0B08] leading-none mb-2">{value}</p>
-            <p
-              className="text-xs font-medium"
-              style={{
-                color:
-                  changeType === "positive"
-                    ? "#1E3D2F"
-                    : changeType === "negative"
-                      ? "#B03A1E"
-                      : "rgba(14,11,8,0.4)",
-              }}
-            >
-              {change}
-            </p>
-          </div>
-          <div className={`w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${colorClass}`}>
-            <Icon className="h-4 w-4 md:h-5 md:w-5 text-white" />
-          </div>
+      <CardContent className="p-3 md:p-5">
+        <div className={`w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center mb-2.5 ${colorClass}`}>
+          <Icon className="h-4 w-4 text-white" />
         </div>
+        <p className="text-[9px] md:text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1 leading-snug">{subtitle}</p>
+        <p className="text-xl md:text-[28px] font-bold text-[#0E0B08] leading-none mb-1.5">{value}</p>
+        <p
+          className="text-[10px] md:text-xs font-medium"
+          style={{
+            color:
+              changeType === "positive"
+                ? "#1E3D2F"
+                : changeType === "negative"
+                  ? "#B03A1E"
+                  : "rgba(14,11,8,0.4)",
+          }}
+        >
+          {change}
+        </p>
       </CardContent>
     </Card>
   )
