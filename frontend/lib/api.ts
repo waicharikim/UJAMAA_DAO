@@ -1787,6 +1787,12 @@ export const adminApi = {
   getUserRoles: (userId: string) =>
     apiFetch<{ role: string; description: string | null; grantedBy: string | null }[]>(`/admin/users/${userId}/roles`),
 
+  adjustPR: (dto: { userId: string; amount: number; type: "ADD" | "DEDUCT"; reason: string }) =>
+    apiFetch<{ newBalance: number }>("/admin/pr/adjust", {
+      method: "POST",
+      body: JSON.stringify(dto),
+    }),
+
   generateReport: (
     type: "users" | "governance" | "economy",
     params?: { fromDate?: string; toDate?: string; format?: "json" | "csv" }

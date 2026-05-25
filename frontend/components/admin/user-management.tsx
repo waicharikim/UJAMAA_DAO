@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { formatDate } from "@/lib/utils"
 import { useToast } from "@/components/ui/use-toast"
-import { Search, Shield, Ban, UserCheck, Mail, MapPin, Calendar, Award, Coins, Users, X, Plus } from "lucide-react"
+import { Search, Shield, Ban, UserCheck, Mail, MapPin, Calendar, Award, Coins, Users, X, Plus, PlusCircle, MinusCircle } from "lucide-react"
 import { adminApi, type AdminUserDto } from "@/lib/api"
 
 const AVAILABLE_ROLES = [
@@ -79,6 +79,27 @@ export function UserManagement() {
   const [showUserDialog, setShowUserDialog] = useState(false)
   const [actionType, setActionType] = useState<"suspend" | null>(null)
   const [reason, setReason] = useState("")
+
+  const [showPRDialog, setShowPRDialog] = useState(false)
+  const [prUser, setPRUser] = useState<AdminUserDto | null>(null)
+  const [prAmount, setPRAmount] = useState("")
+  const [prType, setPRType] = useState<"ADD" | "DEDUCT">("ADD")
+  const [prReason, setPRReason] = useState("")
+
+  const prMutation = useMutation({
+    mutationFn: ({ userId, amount, type, reason }: { userId: string; amount: number; type: "ADD" | "DEDUCT"; reason: string }) =>
+      adminApi.adjustPR({ userId, amount, type, reason }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] })
+      queryClient.invalidateQueries({ queryKey: ["admin", "stats"] })
+      toast({ title: "PR balance updated" })
+      setShowPRDialog(false)
+      setPRUser(null)
+      setPRAmount("")
+      setPRReason("")
+    },
+    onError: () => toast({ title: "Failed", description: "Could not adjust PR balance.", variant: "destructive" }),
+  })
 
   const { data: userRolesData, isLoading: rolesLoading } = useQuery({
     queryKey: ["admin", "user-roles", rolesUser?.id],
@@ -229,6 +250,13 @@ export function UserManagement() {
                       </Button>
                       <Button
                         size="sm"
+                        variant="outline"
+                        onClick={() => { setPRUser(user); setPRAmount(""); setPRType("ADD"); setPRReason(""); setShowPRDialog(true) }}
+                      >
+                        <Coins className="h-4 w-4 mr-1" />PR
+                      </Button>
+                      <Button
+                        size="sm"
                         variant={status === "suspended" ? "default" : "destructive"}
                         onClick={() => { setSelectedUser(user); setActionType("suspend"); setReason(""); setShowUserDialog(true) }}
                       >
@@ -363,6 +391,69 @@ export function UserManagement() {
             </div>
             <div className="flex justify-end pt-2">
               <Button variant="outline" onClick={() => setShowRolesDialog(false)}>Done</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* PR Adjustment dialog */}
+      <Dialog open={showPRDialog} onOpenChange={setShowPRDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Adjust PR Balance — {prUser?.name ?? prUser?.email ?? "User"}</DialogTitle>
+            <DialogDescription>
+              Current balance: <strong>{prUser?.participationRights ?? 0} PR</strong>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant={prType === "ADD" ? "default" : "outline"}
+                onClick={() => setPRType("ADD")}
+                className="flex-1"
+              >
+                <PlusCircle className="h-4 w-4 mr-1" />Add
+              </Button>
+              <Button
+                size="sm"
+                variant={prType === "DEDUCT" ? "destructive" : "outline"}
+                onClick={() => setPRType("DEDUCT")}
+                className="flex-1"
+              >
+                <MinusCircle className="h-4 w-4 mr-1" />Deduct
+              </Button>
+            </div>
+            <div>
+              <Label>Amount (PR)</Label>
+              <Input
+                type="number"
+                min={1}
+                value={prAmount}
+                onChange={(e) => setPRAmount(e.target.value)}
+                placeholder="e.g. 10"
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label>Reason (required)</Label>
+              <Textarea
+                value={prReason}
+                onChange={(e) => setPRReason(e.target.value)}
+                placeholder="Why are you adjusting this balance?"
+                rows={2}
+                className="mt-1"
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setShowPRDialog(false)}>Cancel</Button>
+              <Button
+                disabled={!prAmount || Number(prAmount) < 1 || !prReason.trim() || prMutation.isPending}
+                variant={prType === "DEDUCT" ? "destructive" : "default"}
+                onClick={() => prUser && prMutation.mutate({ userId: prUser.id, amount: Number(prAmount), type: prType, reason: prReason.trim() })}
+              >
+                {prMutation.isPending ? "Saving…" : `${prType === "ADD" ? "Add" : "Deduct"} ${prAmount || "?"} PR`}
+              </Button>
             </div>
           </div>
         </DialogContent>
