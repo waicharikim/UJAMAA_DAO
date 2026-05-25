@@ -257,6 +257,25 @@ export const authApi = {
       body: JSON.stringify({ phoneNumber, code }),
     }),
 
+  // ── 2FA ──────────────────────────────────────────────────
+
+  get2FAStatus: () =>
+    apiFetch<{ enabled: boolean; enabledAt?: string; backupCodesRemaining: number; isLockedOut: boolean }>("/auth/2fa/status"),
+
+  enable2FA: () =>
+    apiFetch<{ secret: string; qrCodeUrl: string; backupCodes: string[] }>("/auth/2fa/enable", { method: "POST" }),
+
+  verify2FA: (code: string) =>
+    apiFetch<{ enabled: boolean }>("/auth/2fa/verify", { method: "POST", body: JSON.stringify({ code }) }),
+
+  disable2FA: (code: string) =>
+    apiFetch<{ success: boolean }>("/auth/2fa/disable", { method: "POST", body: JSON.stringify({ code }) }),
+
+  regenerateBackupCodes: (code: string) =>
+    apiFetch<{ backupCodes: string[] }>("/auth/2fa/regenerate-backup-codes", { method: "POST", body: JSON.stringify({ code }) }),
+
+  // ── Sessions ──────────────────────────────────────────────
+
   /**
    * GET /auth/sessions
    * List active sessions. Requires: COMMUNITY_VERIFIED
