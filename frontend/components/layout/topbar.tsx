@@ -31,7 +31,7 @@ function TokenChip({ icon: Icon, label, value, color }: TokenChipProps) {
 }
 
 const PAGE_TITLES: Record<string, string> = {
-  "/dashboard":  "Jamii",
+  "/dashboard":  "Home",
   "/proposals":  "Governance",
   "/projects":   "Projects",
   "/groups":     "Community",
