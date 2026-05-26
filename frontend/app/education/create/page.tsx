@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { educationApi, type CreateModuleDto } from "@/lib/api"
+import { useAuth } from "@/contexts/auth-context"
 
 const CATEGORIES = ["governance", "health", "agriculture", "civic", "economy", "environment", "technology", "other"]
 const DIFFICULTIES = ["BEGINNER", "INTERMEDIATE", "ADVANCED", "EXPERT"] as const
@@ -16,6 +17,11 @@ const DIFFICULTIES = ["BEGINNER", "INTERMEDIATE", "ADVANCED", "EXPERT"] as const
 export default function CreateModulePage() {
   const router = useRouter()
   const queryClient = useQueryClient()
+  const { isAuthenticated, user } = useAuth()
+
+  const isVerified =
+    user?.verificationLevel === "COMMUNITY_VERIFIED" ||
+    user?.verificationLevel === "FULL_VERIFIED"
 
   const [form, setForm] = useState<CreateModuleDto>({
     title: "",
@@ -61,6 +67,35 @@ export default function CreateModulePage() {
     form.title.trim().length >= 5 &&
     form.description.trim().length >= 20 &&
     form.content.trim().length >= 100
+
+  if (isAuthenticated && !isVerified) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-6" style={{ background: "#F7F2E8" }}>
+        <div className="text-center max-w-sm">
+          <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4"
+            style={{ background: "rgba(201,146,42,0.1)" }}>
+            <BookOpen className="h-6 w-6" style={{ color: "#C9922A" }} />
+          </div>
+          <h2 className="font-semibold text-lg text-[#0E0B08] mb-2">Community verification required</h2>
+          <p className="text-sm mb-5" style={{ color: "rgba(14,11,8,0.5)" }}>
+            Only community-verified members can contribute education modules. Complete your verification to get started.
+          </p>
+          <div className="flex gap-3 justify-center">
+            <Link href="/profile#verification"
+              className="rounded-xl px-4 py-2.5 text-sm font-bold text-white transition-all hover:opacity-90"
+              style={{ background: "#1D4731" }}>
+              Get verified
+            </Link>
+            <Link href="/education"
+              className="rounded-xl px-4 py-2.5 text-sm font-semibold transition-all hover:bg-black/5"
+              style={{ color: "rgba(14,11,8,0.5)" }}>
+              Back to Learn
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen" style={{ background: "#F7F2E8" }}>

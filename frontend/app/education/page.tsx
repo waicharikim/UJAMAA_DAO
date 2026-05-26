@@ -518,11 +518,18 @@ function MyModulesSection() {
   )
 }
 
+function isVerified(level?: string) {
+  return level === "COMMUNITY_VERIFIED" || level === "FULL_VERIFIED"
+}
+
 // ─── Main page ─────────────────────────────────────────────
 export default function EducationPage() {
   const [difficulty, setDifficulty] = useState<string | undefined>()
   const [category, setCategory] = useState<string | undefined>()
   const [activeModule, setActiveModule] = useState<string | null>(null)
+
+  const { isAuthenticated, user } = useAuth()
+  const canContribute = isAuthenticated && isVerified(user?.verificationLevel)
 
   const { data, isLoading } = useQuery({
     queryKey: ["education-modules", difficulty, category],
@@ -542,14 +549,25 @@ export default function EducationPage() {
             Earn Impact Points by completing governance and civic education modules.
           </p>
         </div>
-        <Link
-          href="/education/create"
-          className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition-all hover:opacity-90 flex-shrink-0 mt-1"
-          style={{ background: "#1D4731", color: "#fff" }}
-        >
-          <Plus className="h-3.5 w-3.5" />
-          Contribute
-        </Link>
+        {canContribute ? (
+          <Link
+            href="/education/create"
+            className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition-all hover:opacity-90 flex-shrink-0 mt-1"
+            style={{ background: "#1D4731", color: "#fff" }}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Contribute
+          </Link>
+        ) : isAuthenticated ? (
+          <div
+            className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs flex-shrink-0 mt-1"
+            style={{ background: "rgba(14,11,8,0.05)", color: "rgba(14,11,8,0.35)" }}
+            title="Community verification required to contribute modules"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Contribute
+          </div>
+        ) : null}
       </div>
 
       {/* In-progress modules */}

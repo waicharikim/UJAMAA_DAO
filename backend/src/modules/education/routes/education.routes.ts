@@ -11,6 +11,7 @@ import {
   authenticate,
   optionalAuthenticate,
 } from '../../../core/middleware/auth.middleware.js';
+import { authorize } from '../../../core/middleware/authorize.js';
 import { validateRequest } from '../../../core/middleware/validateRequest.js';
 import { asyncHandler } from '../../../core/utils/response.js';
 import {
@@ -49,6 +50,7 @@ router.get(
 router.post(
   '/',
   authenticate,
+  authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
   validateRequest({ schema: createModuleSchema, target: 'body' }),
   asyncHandler(EducationController.createModule)
 );
@@ -88,6 +90,7 @@ router.post(
 router.patch(
   '/:moduleId',
   authenticate,
+  authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
   validateRequest({ schema: moduleIdParamSchema, target: 'params' }),
   validateRequest({ schema: updateModuleSchema, target: 'body' }),
   asyncHandler(EducationController.updateModule)
@@ -96,6 +99,7 @@ router.patch(
 router.delete(
   '/:moduleId',
   authenticate,
+  authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
   validateRequest({ schema: moduleIdParamSchema, target: 'params' }),
   asyncHandler(EducationController.deleteModule)
 );
@@ -103,6 +107,7 @@ router.delete(
 router.post(
   '/:moduleId/submit',
   authenticate,
+  authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
   validateRequest({ schema: moduleIdParamSchema, target: 'params' }),
   asyncHandler(EducationController.submitModule)
 );
