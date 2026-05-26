@@ -204,7 +204,7 @@ async function resolveUserContext(
       ? prisma.election.count({
           where: {
             groupId,
-            status: { in: ['NOMINATIONS_OPEN', 'VOTING_OPEN'] as any },
+            status: { in: ['NOMINATIONS_OPEN', 'VOTING_OPEN'] },
           },
         })
       : Promise.resolve(0),

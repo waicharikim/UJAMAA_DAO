@@ -358,25 +358,25 @@ async function toolGetElectionResults(groupId: string): Promise<string> {
     prisma.election.findMany({
       where: {
         groupId,
-        status: { in: ['NOMINATIONS_OPEN', 'VOTING_OPEN'] as any },
+        status: { in: ['NOMINATIONS_OPEN', 'VOTING_OPEN'] },
       },
       select: {
         id: true,
-        title: true,
+        roleKey: true,
         status: true,
-        nominationsEnd: true,
-        votingEnd: true,
+        nominationsCloseAt: true,
+        votingCloseAt: true,
         _count: { select: { candidates: true } },
       },
       take: 5,
     }),
     prisma.election.findFirst({
-      where: { groupId, status: 'CLOSED' as any },
-      orderBy: { votingEnd: 'desc' },
+      where: { groupId, status: 'CLOSED' },
+      orderBy: { votingCloseAt: 'desc' },
       select: {
-        title: true,
+        roleKey: true,
         status: true,
-        votingEnd: true,
+        votingCloseAt: true,
         candidates: {
           orderBy: { voteCount: 'desc' },
           take: 1,
@@ -393,11 +393,11 @@ async function toolGetElectionResults(groupId: string): Promise<string> {
 
   if (active.length) {
     result.activeElections = active.map((e) => ({
-      title: e.title,
+      role: e.roleKey,
       status: e.status,
       candidates: e._count.candidates,
-      nominationsEnd: e.nominationsEnd?.toISOString().slice(0, 10) ?? null,
-      votingEnd: e.votingEnd?.toISOString().slice(0, 10) ?? null,
+      nominationsCloseAt: e.nominationsCloseAt.toISOString().slice(0, 10),
+      votingCloseAt: e.votingCloseAt.toISOString().slice(0, 10),
     }));
   } else {
     result.activeElections = [];
@@ -406,8 +406,8 @@ async function toolGetElectionResults(groupId: string): Promise<string> {
   if (recent) {
     const winner = recent.candidates[0];
     result.lastElection = {
-      title: recent.title,
-      closedOn: recent.votingEnd?.toISOString().slice(0, 10) ?? null,
+      role: recent.roleKey,
+      closedOn: recent.votingCloseAt.toISOString().slice(0, 10),
       winner: winner
         ? { name: winner.user?.name ?? 'Unknown', votes: winner.voteCount }
         : null,
