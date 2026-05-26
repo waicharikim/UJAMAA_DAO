@@ -2514,13 +2514,15 @@ model EducationalModule {
   category       String
   creatorId      String                  @db.Uuid
   groupId        String?                 @db.Uuid
-  verified       Boolean                 @default(false)
-  expertApproved Boolean                 @default(false)
-  completionIP   Int                     @default(0)
-  views          Int                     @default(0)
-  averageRating  Decimal                 @default(0) @db.Decimal(3, 2)
-  createdAt      DateTime                @default(now())
-  updatedAt      DateTime                @updatedAt
+  verified        Boolean                 @default(false)
+  expertApproved  Boolean                 @default(false)
+  completionIP    Int                     @default(0)
+  views           Int                     @default(0)
+  averageRating   Decimal                 @default(0) @db.Decimal(3, 2)
+  submittedAt     DateTime?
+  rejectionReason String?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
 
   creator     User                      @relation(fields: [creatorId], references: [id], onDelete: Cascade)
   progress    UserEducationalProgress[]

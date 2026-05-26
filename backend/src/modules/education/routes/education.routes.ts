@@ -18,6 +18,8 @@ import {
   moduleIdParamSchema,
   completeModuleSchema,
   submitReviewSchema,
+  createModuleSchema,
+  updateModuleSchema,
 } from '../validators/education.validators.js';
 
 const router = Router();
@@ -36,6 +38,19 @@ router.get(
   '/my-progress',
   authenticate,
   asyncHandler(EducationController.getMyProgress)
+);
+
+router.get(
+  '/my-modules',
+  authenticate,
+  asyncHandler(EducationController.getMyModules)
+);
+
+router.post(
+  '/',
+  authenticate,
+  validateRequest({ schema: createModuleSchema, target: 'body' }),
+  asyncHandler(EducationController.createModule)
 );
 
 router.get(
@@ -68,6 +83,28 @@ router.post(
   validateRequest({ schema: moduleIdParamSchema, target: 'params' }),
   validateRequest({ schema: submitReviewSchema, target: 'body' }),
   asyncHandler(EducationController.submitReview)
+);
+
+router.patch(
+  '/:moduleId',
+  authenticate,
+  validateRequest({ schema: moduleIdParamSchema, target: 'params' }),
+  validateRequest({ schema: updateModuleSchema, target: 'body' }),
+  asyncHandler(EducationController.updateModule)
+);
+
+router.delete(
+  '/:moduleId',
+  authenticate,
+  validateRequest({ schema: moduleIdParamSchema, target: 'params' }),
+  asyncHandler(EducationController.deleteModule)
+);
+
+router.post(
+  '/:moduleId/submit',
+  authenticate,
+  validateRequest({ schema: moduleIdParamSchema, target: 'params' }),
+  asyncHandler(EducationController.submitModule)
 );
 
 export default router;

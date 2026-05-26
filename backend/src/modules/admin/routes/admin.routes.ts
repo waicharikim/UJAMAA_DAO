@@ -55,6 +55,10 @@ import {
   revokeRole,
   listUserRoles,
   generateReport,
+  listPendingModules,
+  adminCreateModule,
+  approveModule,
+  rejectModule,
 } from '../handlers/admin.handlers.js';
 import { adminService } from '../services/admin.service.js';
 
@@ -237,6 +241,41 @@ router.get(
   validateRequest({ schema: reportTypeParamSchema, target: 'params' }),
   validateRequest({ schema: reportQuerySchema, target: 'query' }),
   asyncHandler(generateReport)
+);
+
+// ============================================================================
+// EDUCATION MODULE REVIEW
+// ============================================================================
+
+router.get('/education/pending', asyncHandler(listPendingModules));
+
+router.post(
+  '/education',
+  validateRequest({
+    schema: z.object({
+      title: z.string().trim().min(5).max(120),
+      description: z.string().trim().min(20).max(500),
+      content: z.string().trim().min(100),
+      mediaUrls: z.array(z.string().url()).max(10).optional(),
+      duration: z.number().int().min(1).max(300),
+      difficulty: z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT']),
+      category: z.string().trim().min(1).max(50),
+      completionIP: z.number().int().min(0).max(200).optional(),
+    }),
+    target: 'body',
+  }),
+  asyncHandler(adminCreateModule)
+);
+
+router.post('/education/:moduleId/approve', asyncHandler(approveModule));
+
+router.post(
+  '/education/:moduleId/reject',
+  validateRequest({
+    schema: z.object({ reason: z.string().trim().min(10).max(500) }),
+    target: 'body',
+  }),
+  asyncHandler(rejectModule)
 );
 
 // ============================================================================

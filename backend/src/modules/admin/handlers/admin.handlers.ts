@@ -304,3 +304,35 @@ export async function generateReport(req: AuthRequest, res: Response) {
 
   sendSuccess(res, report, `${type} report generated`);
 }
+
+// ============================================================================
+// EDUCATION MODULE REVIEW HANDLERS
+// ============================================================================
+
+export async function listPendingModules(req: AuthRequest, res: Response) {
+  const { limit, offset } = req.query as any;
+  const result = await adminService.listPendingModules({
+    limit: limit ? Number(limit) : undefined,
+    offset: offset ? Number(offset) : undefined,
+  });
+  sendSuccess(res, result, 'Pending modules retrieved');
+}
+
+export async function adminCreateModule(req: AuthRequest, res: Response) {
+  const adminId = req.user!.userId;
+  const result = await adminService.adminCreateModule(adminId, req.body);
+  sendSuccess(res, result, 'Module created');
+}
+
+export async function approveModule(req: AuthRequest, res: Response) {
+  const { moduleId } = req.params as { moduleId: string };
+  const result = await adminService.approveModule(moduleId);
+  sendSuccess(res, result, 'Module approved');
+}
+
+export async function rejectModule(req: AuthRequest, res: Response) {
+  const { moduleId } = req.params as { moduleId: string };
+  const { reason } = req.body as { reason: string };
+  const result = await adminService.rejectModule(moduleId, reason);
+  sendSuccess(res, result, 'Module rejected');
+}

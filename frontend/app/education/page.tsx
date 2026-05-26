@@ -16,7 +16,13 @@ import {
   X,
   BarChart2,
   ArrowRight,
+  Plus,
+  FileText,
+  AlertCircle,
+  Send,
+  Trash2,
 } from "lucide-react"
+import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -415,6 +421,103 @@ function ContinueLearningStrip({ onOpen }: { onOpen: (id: string) => void }) {
   )
 }
 
+const STATUS_META: Record<string, { label: string; color: string; bg: string; icon: any }> = {
+  DRAFT:     { label: "Draft",     color: "rgba(14,11,8,0.45)", bg: "rgba(14,11,8,0.05)", icon: FileText },
+  SUBMITTED: { label: "In review", color: "#C9922A",            bg: "rgba(201,146,42,0.08)", icon: Send },
+  REJECTED:  { label: "Rejected",  color: "#B03A1E",            bg: "rgba(176,58,30,0.07)", icon: AlertCircle },
+  APPROVED:  { label: "Live",      color: "#2A5240",            bg: "rgba(42,82,64,0.07)", icon: CheckCircle },
+}
+
+function MyModulesSection() {
+  const { isAuthenticated } = useAuth()
+  const queryClient = useQueryClient()
+
+  const { data: myModules, isLoading } = useQuery<EducationModuleDto[]>({
+    queryKey: ["education-my-modules"],
+    queryFn: educationApi.getMyModules,
+    enabled: isAuthenticated,
+    staleTime: 60_000,
+  })
+
+  const submitMutation = useMutation({
+    mutationFn: (id: string) => educationApi.submitModule(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["education-my-modules"] }),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => educationApi.deleteModule(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["education-my-modules"] }),
+  })
+
+  if (!isAuthenticated || isLoading) return null
+  if (!myModules || myModules.length === 0) return null
+
+  return (
+    <div>
+      <p className="text-[10px] font-bold uppercase tracking-widest mb-3" style={{ color: "rgba(14,11,8,0.40)" }}>
+        My Contributions
+      </p>
+      <div className="space-y-2">
+        {myModules.map((m) => {
+          const meta = STATUS_META[m.status] ?? STATUS_META.DRAFT
+          const Icon = meta.icon
+          return (
+            <div
+              key={m.id}
+              className="flex items-center gap-3 rounded-xl px-4 py-3"
+              style={{ background: meta.bg, border: `1px solid ${meta.color}22` }}
+            >
+              <Icon className="h-4 w-4 flex-shrink-0" style={{ color: meta.color }} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-[#0E0B08] truncate">{m.title}</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: meta.color }}>
+                    {meta.label}
+                  </span>
+                  {m.status === "REJECTED" && m.rejectionReason && (
+                    <span className="text-[10px]" style={{ color: "rgba(176,58,30,0.7)" }}>
+                      · {m.rejectionReason}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {(m.status === "DRAFT" || m.status === "REJECTED") && (
+                  <>
+                    <Link
+                      href={`/education/${m.id}/edit`}
+                      className="p-1.5 rounded-lg hover:bg-black/8 transition-colors text-xs font-medium"
+                      style={{ color: "rgba(14,11,8,0.5)" }}
+                    >
+                      Edit
+                    </Link>
+                    <button
+                      onClick={() => submitMutation.mutate(m.id)}
+                      disabled={submitMutation.isPending}
+                      className="p-1.5 rounded-lg text-xs font-medium hover:opacity-80 transition-opacity"
+                      style={{ color: "#C9922A" }}
+                    >
+                      Submit
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (confirm("Delete this draft?")) deleteMutation.mutate(m.id)
+                      }}
+                      className="p-1.5 rounded-lg hover:bg-black/8 transition-colors"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" style={{ color: "rgba(176,58,30,0.6)" }} />
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ─── Main page ─────────────────────────────────────────────
 export default function EducationPage() {
   const [difficulty, setDifficulty] = useState<string | undefined>()
@@ -432,15 +535,28 @@ export default function EducationPage() {
   return (
     <div className="px-4 md:px-8 py-6 max-w-4xl mx-auto space-y-6">
       {/* Header */}
-      <div>
-        <h2 className="font-display font-bold text-3xl text-[#0E0B08]">Learn</h2>
-        <p className="text-sm text-[#0E0B08]/50 mt-1">
-          Earn Impact Points by completing governance and civic education modules.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-display font-bold text-3xl text-[#0E0B08]">Learn</h2>
+          <p className="text-sm text-[#0E0B08]/50 mt-1">
+            Earn Impact Points by completing governance and civic education modules.
+          </p>
+        </div>
+        <Link
+          href="/education/create"
+          className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition-all hover:opacity-90 flex-shrink-0 mt-1"
+          style={{ background: "#1D4731", color: "#fff" }}
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Contribute
+        </Link>
       </div>
 
       {/* In-progress modules */}
       <ContinueLearningStrip onOpen={setActiveModule} />
+
+      {/* My contributed modules */}
+      <MyModulesSection />
 
       {/* Difficulty filter */}
       <div className="flex gap-2 flex-wrap">

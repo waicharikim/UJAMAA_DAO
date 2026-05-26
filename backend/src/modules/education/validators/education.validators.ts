@@ -26,3 +26,18 @@ export const submitReviewSchema = z.object({
   rating: z.number().int().min(1).max(5),
   comment: z.string().trim().max(1000).optional(),
 });
+
+const moduleBodyBase = z.object({
+  title: z.string().trim().min(5).max(120),
+  description: z.string().trim().min(20).max(500),
+  content: z.string().trim().min(100),
+  mediaUrls: z.array(z.string().url()).max(10).optional(),
+  duration: z.number().int().min(1).max(300), // minutes
+  difficulty: z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT']),
+  category: z.string().trim().min(1).max(50),
+  completionIP: z.number().int().min(0).max(200).optional(),
+});
+
+export const createModuleSchema = moduleBodyBase;
+
+export const updateModuleSchema = moduleBodyBase.partial();

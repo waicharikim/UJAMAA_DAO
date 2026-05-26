@@ -62,4 +62,41 @@ export class EducationController {
     );
     sendCreated(res, result, 'Review submitted');
   }
+
+  static async createModule(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const result = await educationService.createModule(userId, req.body);
+    sendCreated(res, result, 'Module draft created');
+  }
+
+  static async updateModule(req: AuthRequest, res: Response) {
+    const { moduleId } = req.params;
+    const userId = req.user!.userId;
+    const result = await educationService.updateModule(
+      userId,
+      moduleId,
+      req.body
+    );
+    sendSuccess(res, result, 'Module updated');
+  }
+
+  static async submitModule(req: AuthRequest, res: Response) {
+    const { moduleId } = req.params;
+    const userId = req.user!.userId;
+    const result = await educationService.submitModule(userId, moduleId);
+    sendSuccess(res, result, 'Module submitted for review');
+  }
+
+  static async deleteModule(req: AuthRequest, res: Response) {
+    const { moduleId } = req.params;
+    const userId = req.user!.userId;
+    await educationService.deleteModule(userId, moduleId);
+    sendSuccess(res, null, 'Module deleted');
+  }
+
+  static async getMyModules(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const result = await educationService.getMyModules(userId);
+    sendSuccess(res, result, 'My modules retrieved');
+  }
 }

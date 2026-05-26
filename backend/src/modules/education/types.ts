@@ -29,6 +29,8 @@ export interface SubmitReviewDto {
 
 // ─── Response DTOs ────────────────────────────────────────────────────────────
 
+export type ModuleStatus = 'DRAFT' | 'SUBMITTED' | 'REJECTED' | 'APPROVED';
+
 export interface EducationModuleDto {
   id: string;
   title: string;
@@ -42,6 +44,9 @@ export interface EducationModuleDto {
   completionIP: number;
   views: number;
   averageRating: number;
+  status: ModuleStatus;
+  rejectionReason?: string | null;
+  submittedAt?: string | null;
   createdAt: string;
   creator: {
     id: string;
@@ -51,6 +56,32 @@ export interface EducationModuleDto {
     progress: number;
     reviews: number;
   };
+}
+
+export interface CreateModuleDto {
+  title: string;
+  description: string;
+  content: string;
+  mediaUrls?: string[];
+  duration: number;
+  difficulty: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' | 'EXPERT';
+  category: string;
+  completionIP?: number;
+}
+
+export interface UpdateModuleDto {
+  title?: string;
+  description?: string;
+  content?: string;
+  mediaUrls?: string[];
+  duration?: number;
+  difficulty?: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' | 'EXPERT';
+  category?: string;
+  completionIP?: number;
+}
+
+export interface RejectModuleDto {
+  reason: string;
 }
 
 export interface EducationModuleDetailDto extends EducationModuleDto {

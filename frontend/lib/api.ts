@@ -1406,6 +1406,8 @@ export const projectApi = {
 // Education API  — /api/v1/education
 // ─────────────────────────────────────────────────────────
 
+export type ModuleStatus = "DRAFT" | "SUBMITTED" | "REJECTED" | "APPROVED"
+
 export interface EducationModuleDto {
   id: string
   title: string
@@ -1419,9 +1421,23 @@ export interface EducationModuleDto {
   completionIP: number
   views: number
   averageRating: number
+  status: ModuleStatus
+  rejectionReason?: string | null
+  submittedAt?: string | null
   createdAt: string
   creator: { id: string; name: string | null }
   _count?: { progress: number; reviews: number }
+}
+
+export interface CreateModuleDto {
+  title: string
+  description: string
+  content: string
+  mediaUrls?: string[]
+  duration: number
+  difficulty: "BEGINNER" | "INTERMEDIATE" | "ADVANCED" | "EXPERT"
+  category: string
+  completionIP?: number
 }
 
 export interface EducationModuleDetailDto extends EducationModuleDto {
@@ -1491,6 +1507,35 @@ export const educationApi = {
       method: "POST",
       body: JSON.stringify(dto),
     }),
+
+  getMyModules: (): Promise<EducationModuleDto[]> =>
+    apiFetch(`/education/my-modules`),
+
+  createModule: (dto: CreateModuleDto): Promise<EducationModuleDto> =>
+    apiFetch(`/education`, { method: "POST", body: JSON.stringify(dto) }),
+
+  updateModule: (moduleId: string, dto: Partial<CreateModuleDto>): Promise<EducationModuleDto> =>
+    apiFetch(`/education/${moduleId}`, { method: "PATCH", body: JSON.stringify(dto) }),
+
+  submitModule: (moduleId: string): Promise<EducationModuleDto> =>
+    apiFetch(`/education/${moduleId}/submit`, { method: "POST" }),
+
+  deleteModule: (moduleId: string): Promise<void> =>
+    apiFetch(`/education/${moduleId}`, { method: "DELETE" }),
+}
+
+export const adminEducationApi = {
+  getPending: (params?: { limit?: number; offset?: number }): Promise<{ modules: EducationModuleDto[]; total: number }> =>
+    apiFetch(`/admin/education/pending${buildQs(params)}`),
+
+  createModule: (dto: CreateModuleDto): Promise<EducationModuleDto> =>
+    apiFetch(`/admin/education`, { method: "POST", body: JSON.stringify(dto) }),
+
+  approve: (moduleId: string): Promise<EducationModuleDto> =>
+    apiFetch(`/admin/education/${moduleId}/approve`, { method: "POST" }),
+
+  reject: (moduleId: string, reason: string): Promise<EducationModuleDto> =>
+    apiFetch(`/admin/education/${moduleId}/reject`, { method: "POST", body: JSON.stringify({ reason }) }),
 }
 
 // ─────────────────────────────────────────────────────────

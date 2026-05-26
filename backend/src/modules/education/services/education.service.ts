@@ -19,9 +19,23 @@ import type {
   EducationModuleDetailDto,
   ProgressDto,
   ReviewDto,
+  CreateModuleDto,
+  UpdateModuleDto,
+  ModuleStatus,
 } from '../types.js';
 
 const ipService = new GlobalImpactPointService();
+
+function deriveStatus(m: {
+  verified: boolean;
+  submittedAt: Date | null;
+  rejectionReason: string | null;
+}): ModuleStatus {
+  if (m.verified) return 'APPROVED';
+  if (m.rejectionReason) return 'REJECTED';
+  if (m.submittedAt) return 'SUBMITTED';
+  return 'DRAFT';
+}
 
 function mapModule(m: any): EducationModuleDto {
   return {
@@ -37,6 +51,9 @@ function mapModule(m: any): EducationModuleDto {
     completionIP: m.completionIP,
     views: m.views,
     averageRating: Number(m.averageRating),
+    status: deriveStatus(m),
+    rejectionReason: m.rejectionReason ?? null,
+    submittedAt: m.submittedAt?.toISOString() ?? null,
     createdAt: m.createdAt.toISOString(),
     creator: { id: m.creator.id, name: m.creator.name },
     _count: m._count,
@@ -255,6 +272,140 @@ export class EducationService {
     }
 
     return { inProgress, completed };
+  }
+
+  // ── Community: create draft module ─────────────────────────────────────────
+
+  async createModule(
+    userId: string,
+    dto: CreateModuleDto
+  ): Promise<EducationModuleDto> {
+    const module = await prisma.educationalModule.create({
+      data: {
+        title: dto.title,
+        description: dto.description,
+        content: dto.content,
+        mediaUrls: dto.mediaUrls ?? [],
+        duration: dto.duration,
+        difficulty: dto.difficulty as any,
+        category: dto.category,
+        completionIP: dto.completionIP ?? 0,
+        creatorId: userId,
+        verified: false,
+      },
+      include: {
+        creator: { select: { id: true, name: true } },
+        _count: { select: { progress: true, reviews: true } },
+      },
+    });
+    return mapModule(module);
+  }
+
+  // ── Community: update own draft ─────────────────────────────────────────────
+
+  async updateModule(
+    userId: string,
+    moduleId: string,
+    dto: UpdateModuleDto
+  ): Promise<EducationModuleDto> {
+    const module = await prisma.educationalModule.findUnique({
+      where: { id: moduleId },
+      select: { id: true, creatorId: true, verified: true, submittedAt: true },
+    });
+    if (!module) throw ApiError.notFound('Module not found');
+    if (module.creatorId !== userId)
+      throw ApiError.forbidden('Not your module');
+    if (module.verified || module.submittedAt)
+      throw ApiError.badRequest('Only DRAFT modules can be edited');
+
+    const updated = await prisma.educationalModule.update({
+      where: { id: moduleId },
+      data: {
+        ...(dto.title !== undefined && { title: dto.title }),
+        ...(dto.description !== undefined && { description: dto.description }),
+        ...(dto.content !== undefined && { content: dto.content }),
+        ...(dto.mediaUrls !== undefined && { mediaUrls: dto.mediaUrls }),
+        ...(dto.duration !== undefined && { duration: dto.duration }),
+        ...(dto.difficulty !== undefined && {
+          difficulty: dto.difficulty as any,
+        }),
+        ...(dto.category !== undefined && { category: dto.category }),
+        ...(dto.completionIP !== undefined && {
+          completionIP: dto.completionIP,
+        }),
+        rejectionReason: null, // clear rejection on re-edit
+      },
+      include: {
+        creator: { select: { id: true, name: true } },
+        _count: { select: { progress: true, reviews: true } },
+      },
+    });
+    return mapModule(updated);
+  }
+
+  // ── Community: submit draft for review ──────────────────────────────────────
+
+  async submitModule(
+    userId: string,
+    moduleId: string
+  ): Promise<EducationModuleDto> {
+    const module = await prisma.educationalModule.findUnique({
+      where: { id: moduleId },
+      select: {
+        id: true,
+        creatorId: true,
+        verified: true,
+        submittedAt: true,
+        rejectionReason: true,
+      },
+    });
+    if (!module) throw ApiError.notFound('Module not found');
+    if (module.creatorId !== userId)
+      throw ApiError.forbidden('Not your module');
+    if (module.verified)
+      throw ApiError.badRequest('Module is already approved');
+    if (module.submittedAt && !module.rejectionReason)
+      throw ApiError.badRequest('Module already submitted for review');
+
+    const updated = await prisma.educationalModule.update({
+      where: { id: moduleId },
+      data: { submittedAt: new Date(), rejectionReason: null },
+      include: {
+        creator: { select: { id: true, name: true } },
+        _count: { select: { progress: true, reviews: true } },
+      },
+    });
+    return mapModule(updated);
+  }
+
+  // ── Community: delete own draft ─────────────────────────────────────────────
+
+  async deleteModule(userId: string, moduleId: string): Promise<void> {
+    const module = await prisma.educationalModule.findUnique({
+      where: { id: moduleId },
+      select: { id: true, creatorId: true, verified: true },
+    });
+    if (!module) throw ApiError.notFound('Module not found');
+    if (module.creatorId !== userId)
+      throw ApiError.forbidden('Not your module');
+    if (module.verified)
+      throw ApiError.badRequest('Cannot delete an approved module');
+
+    await prisma.educationalModule.delete({ where: { id: moduleId } });
+  }
+
+  // ── Community: list own modules ─────────────────────────────────────────────
+
+  async getMyModules(userId: string): Promise<EducationModuleDto[]> {
+    const modules = await prisma.educationalModule.findMany({
+      where: { creatorId: userId },
+      include: {
+        creator: { select: { id: true, name: true } },
+        _count: { select: { progress: true, reviews: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    return modules.map(mapModule);
   }
 
   // ── Submit review ───────────────────────────────────────────────────────────

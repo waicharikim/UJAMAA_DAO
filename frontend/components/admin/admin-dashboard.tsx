@@ -14,6 +14,7 @@ import { PendingApprovals } from "./pending-approvals"
 import { Settings, FileText, DollarSign, Shield, AlertTriangle, CheckCircle, Clock, Coins, Vote } from "lucide-react"
 import { adminApi, auditApi, governanceApi, type AdminStatsDto } from "@/lib/api"
 import { BarazaManagement } from "./baraza-management"
+import { EducationReview } from "./education-review"
 import { formatRelativeTime } from "@/lib/utils"
 
 interface Props {
@@ -102,7 +103,7 @@ export function AdminDashboard({ stats, isLocationAdmin = false }: Props) {
   }
 
   // Tab layout: location admins get overview/governance/financial/barazas/logs (5 cols)
-  const tabCols = isLocationAdmin ? "grid-cols-5" : "grid-cols-8"
+  const tabCols = isLocationAdmin ? "grid-cols-5" : "grid-cols-9"
 
   return (
     <div className="space-y-6">
@@ -114,6 +115,7 @@ export function AdminDashboard({ stats, isLocationAdmin = false }: Props) {
           {!isLocationAdmin && <TabsTrigger value="approvals">Approvals</TabsTrigger>}
           <TabsTrigger value="financial">Financial</TabsTrigger>
           <TabsTrigger value="barazas">Barazas</TabsTrigger>
+          {!isLocationAdmin && <TabsTrigger value="education">Education</TabsTrigger>}
           {!isLocationAdmin && <TabsTrigger value="settings">Settings</TabsTrigger>}
           <TabsTrigger value="logs">Audit Logs</TabsTrigger>
         </TabsList>
@@ -323,6 +325,7 @@ export function AdminDashboard({ stats, isLocationAdmin = false }: Props) {
           {isLocationAdmin ? <LocationTreasury /> : <FinancialOverview stats={stats} />}
         </TabsContent>
         <TabsContent value="barazas"><BarazaManagement /></TabsContent>
+        {!isLocationAdmin && <TabsContent value="education"><EducationReview /></TabsContent>}
         {!isLocationAdmin && <TabsContent value="settings"><SystemSettings /></TabsContent>}
         <TabsContent value="logs"><AuditLogs /></TabsContent>
       </Tabs>

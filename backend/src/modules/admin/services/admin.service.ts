@@ -861,6 +861,109 @@ class AdminService {
       data: { value, updatedById: adminId },
     });
   }
+
+  // ============================================================================
+  // EDUCATION MODULE REVIEW
+  // ============================================================================
+
+  async listPendingModules(opts: { limit?: number; offset?: number }) {
+    const limit = opts.limit ?? 20;
+    const offset = opts.offset ?? 0;
+    const where = {
+      verified: false,
+      submittedAt: { not: null },
+      rejectionReason: null,
+    };
+    const [modules, total] = await Promise.all([
+      prisma.educationalModule.findMany({
+        where,
+        include: {
+          creator: { select: { id: true, name: true } },
+          _count: { select: { progress: true, reviews: true } },
+        },
+        orderBy: { submittedAt: 'asc' },
+        take: limit,
+        skip: offset,
+      }),
+      prisma.educationalModule.count({ where }),
+    ]);
+    return { modules, total, limit, offset };
+  }
+
+  async adminCreateModule(
+    adminId: string,
+    dto: {
+      title: string;
+      description: string;
+      content: string;
+      mediaUrls?: string[];
+      duration: number;
+      difficulty: string;
+      category: string;
+      completionIP?: number;
+    }
+  ) {
+    return prisma.educationalModule.create({
+      data: {
+        title: dto.title,
+        description: dto.description,
+        content: dto.content,
+        mediaUrls: dto.mediaUrls ?? [],
+        duration: dto.duration,
+        difficulty: dto.difficulty as any,
+        category: dto.category,
+        completionIP: dto.completionIP ?? 0,
+        creatorId: adminId,
+        verified: true,
+        expertApproved: true,
+        submittedAt: new Date(),
+      },
+      include: {
+        creator: { select: { id: true, name: true } },
+        _count: { select: { progress: true, reviews: true } },
+      },
+    });
+  }
+
+  async approveModule(moduleId: string) {
+    const module = await prisma.educationalModule.findUnique({
+      where: { id: moduleId },
+      select: { id: true, verified: true, submittedAt: true },
+    });
+    if (!module) throw new ApiError('Module not found', 404);
+    if (module.verified) throw new ApiError('Module already approved', 400);
+    if (!module.submittedAt)
+      throw new ApiError('Module has not been submitted for review', 400);
+
+    return prisma.educationalModule.update({
+      where: { id: moduleId },
+      data: { verified: true, expertApproved: true, rejectionReason: null },
+      include: {
+        creator: { select: { id: true, name: true } },
+        _count: { select: { progress: true, reviews: true } },
+      },
+    });
+  }
+
+  async rejectModule(moduleId: string, reason: string) {
+    const module = await prisma.educationalModule.findUnique({
+      where: { id: moduleId },
+      select: { id: true, verified: true, submittedAt: true },
+    });
+    if (!module) throw new ApiError('Module not found', 404);
+    if (module.verified) throw new ApiError('Module already approved', 400);
+    if (!module.submittedAt)
+      throw new ApiError('Module has not been submitted for review', 400);
+
+    return prisma.educationalModule.update({
+      where: { id: moduleId },
+      data: { rejectionReason: reason, submittedAt: null },
+      include: {
+        creator: { select: { id: true, name: true } },
+        _count: { select: { progress: true, reviews: true } },
+      },
+    });
+  }
 }
 
 export const adminService = new AdminService();
