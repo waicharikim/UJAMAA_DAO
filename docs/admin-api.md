@@ -1,6 +1,6 @@
 # Admin API Documentation
 
-> **Module status:** `partial` — key endpoints live; comprehensive testing pending.
+> **Module status:** `tested` — 84 green tests (45 service + 39 routes).
 > Base URL: `http://localhost:4000/api/v1/admin`
 
 ---
@@ -200,6 +200,85 @@ List proposals including DRAFT and PENDING_REVIEW (not visible to regular users)
 **Auth:** WARD_ADMIN or SUPER_ADMIN (with location-scope check)
 
 Override-approve a proposal for voting.
+
+---
+
+## Education Module Review
+
+Admins review and approve or reject education modules submitted by community contributors. Only `COMMUNITY_VERIFIED` users who meet the tiered IP gate can submit modules — see `docs/education-api.md` for eligibility rules.
+
+### `GET /admin/education/pending`
+
+**Auth:** SUPER_ADMIN or COMPLIANCE_OFFICER
+
+List all modules awaiting review (submitted but not yet approved or rejected), ordered by `submittedAt` ascending (oldest first).
+
+**Query params:** `limit` (default 20), `page` (default 1)
+
+**Response `200`:**
+```json
+{
+  "success": true,
+  "modules": [
+    {
+      "id": "uuid",
+      "title": "Ward Budget Fundamentals",
+      "submittedAt": "2026-05-20T10:00:00.000Z",
+      "creator": {
+        "id": "uuid",
+        "name": "Amina Wanjiku",
+        "verificationLevel": "COMMUNITY_VERIFIED"
+      }
+    }
+  ],
+  "total": 4
+}
+```
+
+---
+
+### `POST /admin/education`
+
+**Auth:** SUPER_ADMIN or COMPLIANCE_OFFICER
+
+Create a module directly as admin. Module is auto-approved (`verified: true`, `expertApproved: true`) — no review step required.
+
+**Body:** Same fields as `POST /education` (title, description, content, duration, difficulty, category, completionIP).
+
+**Response `200`:** `{ "success": true, "module": { ..., "verified": true } }`
+
+---
+
+### `POST /admin/education/:moduleId/approve`
+
+**Auth:** SUPER_ADMIN or COMPLIANCE_OFFICER
+
+Approve a submitted module. Sets `verified: true`.
+
+**Errors:**
+- `400` — module is a DRAFT (not yet submitted)
+- `400` — module is already approved
+- `404` — module not found
+
+**Response `200`:** `{ "success": true }`
+
+---
+
+### `POST /admin/education/:moduleId/reject`
+
+**Auth:** SUPER_ADMIN or COMPLIANCE_OFFICER
+
+Reject a submitted module with a mandatory reason. Sets `rejectionReason`, clears `submittedAt` (so it returns to an editable state for the creator).
+
+**Body:** `{ "reason": "Content is too brief and lacks depth." }` (minimum 10 characters)
+
+**Errors:**
+- `400` — module is a DRAFT (not submitted)
+- `400` — module is already approved
+- `400` — reason is fewer than 10 characters
+- `404` — module not found
+
+**Response `200`:** `{ "success": true }`
 
 ---
 
