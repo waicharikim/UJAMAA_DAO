@@ -28,6 +28,7 @@ import {
   Coins,
   Briefcase,
   Users2,
+  Bell,
 } from "lucide-react"
 
 // ─── Hub definitions ──────────────────────────────────────
@@ -48,6 +49,7 @@ const HUBS = [
     icon: Coins,
     href: "/treasury",
     items: [
+      { label: "Economy",     href: "/economy",     icon: Coins     },
       { label: "Treasury",    href: "/treasury",    icon: Landmark  },
       { label: "Marketplace", href: "/marketplace", icon: Store     },
       { label: "Projects",    href: "/projects",    icon: Briefcase },
@@ -69,8 +71,9 @@ const HUBS = [
     icon: User,
     href: "/profile",
     items: [
-      { label: "Profile",    href: "/profile",    icon: User          },
-      { label: "Emergency",  href: "/emergency",  icon: AlertTriangle },
+      { label: "Profile",        href: "/profile",        icon: User          },
+      { label: "Notifications",  href: "/notifications",  icon: Bell          },
+      { label: "Emergency",      href: "/emergency",      icon: AlertTriangle },
     ],
   },
 ] as const

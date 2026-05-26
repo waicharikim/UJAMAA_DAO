@@ -15,6 +15,7 @@ import {
   projectApi,
   electionsApi,
   postsApi,
+  integrationApi,
   type GroupDetailDto,
   type PostDto,
   type PostScope,
@@ -78,7 +79,7 @@ function groupScope(group: GroupDetailDto): PostScope {
 
 // ── Hub tab types ────────────────────────────────────────────
 
-type HubTab = "feed" | "proposals" | "elections" | "projects" | "treasury" | "members" | "admin"
+type HubTab = "feed" | "proposals" | "elections" | "projects" | "treasury" | "members" | "sessions" | "admin"
 
 // ── Breadcrumb ───────────────────────────────────────────────
 
@@ -544,6 +545,103 @@ function ListSkeleton() {
   )
 }
 
+// ── Sessions tab ──────────────────────────────────────────────
+function SessionsTab({ groupId }: { groupId: string }) {
+  const { data: barazaGroups = [] } = useQuery({
+    queryKey: ["baraza-groups"],
+    queryFn: () => integrationApi.getBarazaGroups(),
+    staleTime: 60_000,
+  })
+
+  const barazaGroup = barazaGroups.find((bg) => bg.groupId === groupId)
+
+  const { data: sessions = [], isLoading } = useQuery({
+    queryKey: ["baraza-sessions", barazaGroup?.id],
+    queryFn: () => integrationApi.getSessions(barazaGroup!.id),
+    enabled: !!barazaGroup,
+    staleTime: 60_000,
+  })
+
+  if (!barazaGroup) {
+    return (
+      <div className="py-12 text-center space-y-2">
+        <CalendarDays className="h-8 w-8 mx-auto" style={{ color: "rgba(14,11,8,0.2)" }} />
+        <p className="text-sm" style={{ color: "#7A6E60" }}>
+          No Telegram baraza registered for this group yet.
+        </p>
+      </div>
+    )
+  }
+
+  if (isLoading) return <ListSkeleton />
+
+  if (sessions.length === 0) {
+    return (
+      <div className="py-12 text-center space-y-2">
+        <CalendarDays className="h-8 w-8 mx-auto" style={{ color: "rgba(14,11,8,0.2)" }} />
+        <p className="text-sm" style={{ color: "#7A6E60" }}>No sessions recorded yet.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      {sessions.map((session) => {
+        const status = session.closedAt ? "closed" : session.openedAt ? "open" : "scheduled"
+        const statusColor =
+          status === "closed" ? "#1D4731" : status === "open" ? "#C9922A" : "#7A6E60"
+        const statusBg =
+          status === "closed"
+            ? "rgba(29,71,49,0.10)"
+            : status === "open"
+              ? "rgba(201,146,42,0.12)"
+              : "rgba(0,0,0,0.06)"
+        return (
+          <div
+            key={session.id}
+            className="rounded-xl px-4 py-3 flex items-start gap-3"
+            style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.05)" }}
+          >
+            <div
+              className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
+              style={{ background: statusBg, color: statusColor }}
+            >
+              <CalendarDays className="h-4 w-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold" style={{ color: "#1A120B" }}>
+                  {new Date(session.scheduledAt).toLocaleDateString("en-KE", {
+                    weekday: "short",
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })}
+                </p>
+                <span
+                  className="text-[11px] font-semibold px-2 py-0.5 rounded-full capitalize"
+                  style={{ background: statusBg, color: statusColor }}
+                >
+                  {status}
+                </span>
+              </div>
+              {session.closedAt && (
+                <p className="text-xs mt-0.5" style={{ color: "#7A6E60" }}>
+                  Closed at{" "}
+                  {new Date(session.closedAt).toLocaleTimeString("en-KE", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </p>
+              )}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ── Proposals tab ─────────────────────────────────────────────
 
 function ProposalsTab({ groupId, canCreate }: { groupId: string; canCreate: boolean }) {
@@ -751,7 +849,8 @@ function GroupHub({ groupId }: { groupId: string }) {
     { id: "elections", label: "Elections", Icon: ScrollText },
     { id: "projects",  label: "Projects",  Icon: Briefcase  },
     { id: "treasury",  label: "Treasury",  Icon: Landmark   },
-    { id: "members",   label: "Members",   Icon: Users      },
+    { id: "members",   label: "Members",   Icon: Users        },
+    { id: "sessions",  label: "Sessions",  Icon: CalendarDays },
     ...(isLeader && !group?.isSystem ? [{ id: "admin" as HubTab, label: "Admin", Icon: Settings }] : []),
   ]
 
@@ -826,6 +925,7 @@ function GroupHub({ groupId }: { groupId: string }) {
               </div>
         )}
         {activeTab === "members"   && <GroupMembers groupId={groupId} />}
+        {activeTab === "sessions"  && <SessionsTab groupId={groupId} />}
         {activeTab === "admin"     && isLeader && !group.isSystem && (
           <LeaderAdminPanel group={group} />
         )}

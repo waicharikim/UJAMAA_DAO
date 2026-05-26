@@ -20,6 +20,8 @@ import {
   Briefcase,
   Plus,
   ChevronRight,
+  Coins,
+  Bell,
 } from "lucide-react"
 import {
   Drawer,
@@ -48,6 +50,7 @@ const drawerGroups = [
     label: "Economy",
     color: "#C9922A",
     items: [
+      { label: "Economy",     href: "/economy",     icon: Coins     },
       { label: "Treasury",    href: "/treasury",    icon: Landmark  },
       { label: "Marketplace", href: "/marketplace", icon: Store     },
       { label: "Projects",    href: "/projects",    icon: Briefcase },
