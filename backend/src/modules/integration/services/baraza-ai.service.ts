@@ -73,6 +73,8 @@ export interface BarazaUserContext {
   displayName: string;
   ward?: string;
   verificationLevel?: string;
+  participationRights?: number;
+  activeElectionCount?: number;
 }
 
 const UNAVAILABLE_MSG =
@@ -105,13 +107,23 @@ export class BarazaAiService {
       { role: 'user', content: `${contextHeader}\n\n${text}` },
     ];
 
+    // System prompt is static — eligible for prompt caching (5-min TTL, saves ~1200 input tokens per call)
+    const systemWithCache = [
+      {
+        type: 'text' as const,
+        text: SYSTEM_PROMPT,
+        cache_control: { type: 'ephemeral' as const },
+      },
+    ];
+
     try {
-      let response = await this.client.messages.create({
+      let response = await (this.client as any).messages.create({
         model: MODEL,
         max_tokens: MAX_TOKENS,
-        system: SYSTEM_PROMPT,
+        system: systemWithCache,
         tools,
         messages,
+        betas: ['prompt-caching-2024-07-31'],
       });
 
       let round = 0;
@@ -137,12 +149,13 @@ export class BarazaAiService {
         );
 
         messages.push({ role: 'user', content: results });
-        response = await this.client!.messages.create({
+        response = await (this.client! as any).messages.create({
           model: MODEL,
           max_tokens: MAX_TOKENS,
-          system: SYSTEM_PROMPT,
+          system: systemWithCache,
           tools,
           messages,
+          betas: ['prompt-caching-2024-07-31'],
         });
       }
 
@@ -191,6 +204,34 @@ function buildTools(): Anthropic.Tool[] {
       description: 'Get the KES and UT treasury balance for the group.',
       input_schema: { type: 'object', properties: {}, required: [] },
     },
+    {
+      name: 'get_election_results',
+      description:
+        'Get elections for this group. Returns active elections (open for nominations or voting) and the most recent completed election with winner.',
+      input_schema: { type: 'object', properties: {}, required: [] },
+    },
+    {
+      name: 'get_ward_stats',
+      description:
+        'Get ward-level community statistics: member count, total PR issued, active members (participated in last 30 days), and recent M-Pesa contributions.',
+      input_schema: { type: 'object', properties: {}, required: [] },
+    },
+    {
+      name: 'search_past_decisions',
+      description:
+        'Search past proposals and decisions for this group by keyword. Use when a member asks about a previous vote, decision, or initiative.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description:
+              'Keyword or phrase to search in proposal titles and descriptions',
+          },
+        },
+        required: ['query'],
+      },
+    },
   ];
 }
 
@@ -215,6 +256,15 @@ async function executeToolCall(
         );
       case 'get_group_treasury':
         return await toolGetGroupTreasury(groupId);
+      case 'get_election_results':
+        return await toolGetElectionResults(groupId);
+      case 'get_ward_stats':
+        return await toolGetWardStats(groupId);
+      case 'search_past_decisions':
+        return await toolSearchPastDecisions(
+          groupId,
+          (input.query as string) ?? ''
+        );
       default:
         return `Unknown tool: ${name}`;
     }
@@ -303,6 +353,146 @@ async function toolGetGroupTreasury(groupId: string): Promise<string> {
   });
 }
 
+async function toolGetElectionResults(groupId: string): Promise<string> {
+  const [active, recent] = await Promise.all([
+    prisma.election.findMany({
+      where: {
+        groupId,
+        status: { in: ['NOMINATIONS_OPEN', 'VOTING_OPEN'] as any },
+      },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        nominationsEnd: true,
+        votingEnd: true,
+        _count: { select: { candidates: true } },
+      },
+      take: 5,
+    }),
+    prisma.election.findFirst({
+      where: { groupId, status: 'CLOSED' as any },
+      orderBy: { votingEnd: 'desc' },
+      select: {
+        title: true,
+        status: true,
+        votingEnd: true,
+        candidates: {
+          orderBy: { voteCount: 'desc' },
+          take: 1,
+          select: {
+            voteCount: true,
+            user: { select: { name: true } },
+          },
+        },
+      },
+    }),
+  ]);
+
+  const result: Record<string, unknown> = {};
+
+  if (active.length) {
+    result.activeElections = active.map((e) => ({
+      title: e.title,
+      status: e.status,
+      candidates: e._count.candidates,
+      nominationsEnd: e.nominationsEnd?.toISOString().slice(0, 10) ?? null,
+      votingEnd: e.votingEnd?.toISOString().slice(0, 10) ?? null,
+    }));
+  } else {
+    result.activeElections = [];
+  }
+
+  if (recent) {
+    const winner = recent.candidates[0];
+    result.lastElection = {
+      title: recent.title,
+      closedOn: recent.votingEnd?.toISOString().slice(0, 10) ?? null,
+      winner: winner
+        ? { name: winner.user?.name ?? 'Unknown', votes: winner.voteCount }
+        : null,
+    };
+  }
+
+  return JSON.stringify(result);
+}
+
+async function toolGetWardStats(groupId: string): Promise<string> {
+  const group = await prisma.group.findUnique({
+    where: { id: groupId },
+    select: { wardId: true, constituencyId: true, countyId: true },
+  });
+
+  const wardId = group?.wardId;
+
+  const [memberCount, recentActive, totalPR] = await Promise.all([
+    prisma.groupMember.count({ where: { groupId, active: true } }),
+    wardId
+      ? prisma.barazaAttendance.count({
+          where: {
+            barazaGroup: { groupId },
+            sessionDate: {
+              gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+                .toISOString()
+                .slice(0, 10),
+            },
+          },
+        })
+      : Promise.resolve(0),
+    prisma.user.aggregate({
+      where: {
+        groupMemberships: { some: { groupId, active: true } },
+      },
+      _sum: { participationRights: true },
+    }),
+  ]);
+
+  return JSON.stringify({
+    members: memberCount,
+    activeParticipantsLast30Days: recentActive,
+    totalPRHeld: totalPR._sum.participationRights ?? 0,
+  });
+}
+
+async function toolSearchPastDecisions(
+  groupId: string,
+  query: string
+): Promise<string> {
+  if (!query.trim()) return 'Please provide a search term.';
+
+  const proposals = await prisma.proposal.findMany({
+    where: {
+      groupId,
+      status: { in: ['APPROVED', 'REJECTED', 'COMPLETED', 'CANCELLED'] as any },
+      OR: [
+        { title: { contains: query, mode: 'insensitive' } },
+        { description: { contains: query, mode: 'insensitive' } },
+      ],
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 5,
+    select: {
+      title: true,
+      status: true,
+      createdAt: true,
+      _count: { select: { votes: true } },
+    },
+  });
+
+  if (!proposals.length) {
+    return `No past decisions found matching "${query}".`;
+  }
+
+  return JSON.stringify(
+    proposals.map((p) => ({
+      title: p.title,
+      outcome: p.status,
+      votes: p._count.votes,
+      date: p.createdAt.toISOString().slice(0, 10),
+    }))
+  );
+}
+
 // ─────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────
@@ -311,7 +501,11 @@ function buildContextHeader(ctx: BarazaUserContext): string {
   const parts = [`Member: ${ctx.displayName}`];
   if (ctx.ward) parts.push(`Ward: ${ctx.ward}`);
   if (ctx.verificationLevel) parts.push(`Level: ${ctx.verificationLevel}`);
-  return `[${parts.join(' | ')}]`;
+  if (ctx.participationRights !== undefined)
+    parts.push(`PR: ${ctx.participationRights}`);
+  if (ctx.activeElectionCount !== undefined && ctx.activeElectionCount > 0)
+    parts.push(`Active elections: ${ctx.activeElectionCount}`);
+  return `[Context: ${parts.join(' | ')}]`;
 }
 
 export const barazaAiService = new BarazaAiService();

@@ -172,12 +172,15 @@ async function fetchBarazaGroup(
 }
 
 async function resolveUserContext(
-  from: TelegramFrom | undefined
+  from: TelegramFrom | undefined,
+  groupId?: string
 ): Promise<{
   userId: string | null;
   displayName: string;
   ward?: string;
   verificationLevel?: string;
+  participationRights?: number;
+  activeElectionCount?: number;
 }> {
   const displayName = from?.first_name ?? from?.username ?? 'Member';
   if (!from?.id) return { userId: null, displayName };
@@ -188,19 +191,32 @@ async function resolveUserContext(
   });
   if (!profile) return { userId: null, displayName };
 
-  const user = await prisma.user.findUnique({
-    where: { id: profile.userId },
-    select: {
-      verificationLevel: true,
-      primaryWard: { select: { name: true } },
-    },
-  });
+  const [user, activeElectionCount] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: profile.userId },
+      select: {
+        verificationLevel: true,
+        participationRights: true,
+        primaryWard: { select: { name: true } },
+      },
+    }),
+    groupId
+      ? prisma.election.count({
+          where: {
+            groupId,
+            status: { in: ['NOMINATIONS_OPEN', 'VOTING_OPEN'] as any },
+          },
+        })
+      : Promise.resolve(0),
+  ]);
 
   return {
     userId: profile.userId,
     displayName,
     ward: user?.primaryWard?.name,
     verificationLevel: user?.verificationLevel ?? undefined,
+    participationRights: user?.participationRights ?? undefined,
+    activeElectionCount,
   };
 }
 
@@ -233,7 +249,7 @@ async function dispatchCommand(
   if (!text || text.startsWith('/')) return;
   if (!barazaAiService.isAvailable) return;
 
-  const userContext = await resolveUserContext(from);
+  const userContext = await resolveUserContext(from, barazaGroup.groupId);
   const reply = await barazaAiService.reply(
     text,
     userContext,
