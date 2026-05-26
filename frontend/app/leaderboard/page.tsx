@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
+import Link from "next/link"
 import { Trophy, Star, Zap, BarChart3, Medal } from "lucide-react"
 import { leaderboardApi, LeaderboardEntryDto } from "@/lib/api"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -54,9 +55,9 @@ function EntryRow({
   metric: Metric
   isMe: boolean
 }) {
-  return (
+  const inner = (
     <div
-      className="flex items-center gap-3 px-4 py-3 rounded-xl transition-all"
+      className="flex items-center gap-3 px-4 py-3 rounded-xl transition-all hover:shadow-sm"
       style={{
         background: isMe
           ? "rgba(201,146,42,0.07)"
@@ -68,20 +69,15 @@ function EntryRow({
           : "1px solid rgba(29,71,49,0.07)",
       }}
     >
-      {/* Rank */}
       <div className="w-7 flex items-center justify-center flex-shrink-0">
         {rankMedal(entry.rank)}
       </div>
-
-      {/* Avatar */}
       <Avatar className="h-9 w-9 rounded-xl flex-shrink-0">
         <AvatarImage src={entry.avatarUrl} />
         <AvatarFallback className="rounded-xl bg-[#1D4731] text-white text-sm font-semibold">
           {(entry.name || "U")[0].toUpperCase()}
         </AvatarFallback>
       </Avatar>
-
-      {/* Name + location */}
       <div className="flex-1 min-w-0">
         <p className="text-[13.5px] font-semibold text-gray-800 truncate">
           {entry.name}
@@ -93,21 +89,18 @@ function EntryRow({
         </p>
         {entry.ward && (
           <p className="text-[11px] text-gray-400 truncate">
-            {entry.ward.name}
-            {entry.county ? `, ${entry.county.name}` : ""}
+            {entry.ward.name}{entry.county ? `, ${entry.county.name}` : ""}
           </p>
         )}
       </div>
-
-      {/* Score */}
       <div className="text-right flex-shrink-0">
-        <p className="text-[14px] font-bold text-gray-800">
-          {scoreValue(entry, metric).toLocaleString()}
-        </p>
+        <p className="text-[14px] font-bold text-gray-800">{scoreValue(entry, metric).toLocaleString()}</p>
         <p className="text-[10px] text-gray-400">{scoreLabel(metric)}</p>
       </div>
     </div>
   )
+
+  return isMe ? inner : <Link href={`/profile/${entry.userId}`}>{inner}</Link>
 }
 
 function SkeletonRow() {
@@ -133,6 +126,9 @@ export default function LeaderboardPage() {
     queryKey: ["leaderboard", metric, scope],
     queryFn: () => leaderboardApi.getLeaderboard({ metric, scope, limit: 50 }),
   })
+
+  const myEntry = data?.entries.find((e) => e.userId === user?.id)
+  const myEntryInList = myEntry !== undefined
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
@@ -235,6 +231,45 @@ export default function LeaderboardPage() {
               isMe={user?.id === entry.userId}
             />
           ))}
+        </div>
+      )}
+
+      {/* Your position — pinned if you're outside the visible list */}
+      {!isLoading && user && !myEntryInList && data && data.total > 0 && (
+        <div className="pt-1 border-t border-dashed border-gray-200">
+          <p className="text-[10px] text-gray-400 uppercase tracking-wide font-bold mb-2 px-1">
+            Your Position
+          </p>
+          <div
+            className="flex items-center gap-3 px-4 py-3 rounded-xl"
+            style={{
+              background: "rgba(201,146,42,0.07)",
+              border: "1px solid rgba(201,146,42,0.25)",
+            }}
+          >
+            <div className="w-7 flex items-center justify-center flex-shrink-0">
+              <span className="text-[13px] font-bold" style={{ color: "#999" }}>—</span>
+            </div>
+            <Avatar className="h-9 w-9 rounded-xl flex-shrink-0">
+              <AvatarImage src={user.avatar} />
+              <AvatarFallback className="rounded-xl bg-[#1D4731] text-white text-sm font-semibold">
+                {(user.username || "U")[0].toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0">
+              <p className="text-[13.5px] font-semibold text-gray-800 truncate">
+                {user.username}
+                <span className="ml-2 text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">
+                  You
+                </span>
+              </p>
+              <p className="text-[11px] text-gray-400">Not in top {data.entries.length}</p>
+            </div>
+            <div className="text-right flex-shrink-0">
+              <p className="text-[13px] text-gray-500">—</p>
+              <p className="text-[10px] text-gray-400">{scoreLabel(metric)}</p>
+            </div>
+          </div>
         </div>
       )}
 
