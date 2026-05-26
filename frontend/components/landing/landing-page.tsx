@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { useAuth } from "@/contexts/auth-context"
 import { cn } from "@/lib/utils"
 import {
@@ -708,9 +709,33 @@ function VisionSection() {
           </p>
         </div>
 
+        {/* Community photo break */}
+        <div className="mt-16 relative h-64 md:h-80 w-full overflow-hidden rounded-2xl">
+          <Image
+            src="https://images.unsplash.com/photo-1578662996442-48f60103fc96?auto=format&fit=crop&w=1200&q=75"
+            alt="African community members collaborating"
+            fill
+            sizes="(max-width: 768px) 100vw, 1200px"
+            className="object-cover"
+            priority={false}
+          />
+          <div
+            className="absolute inset-0"
+            style={{
+              background: "linear-gradient(to right, rgba(20,47,34,0.82) 0%, rgba(20,47,34,0.35) 60%, rgba(20,47,34,0.20) 100%)",
+            }}
+          />
+          <div className="absolute inset-0 flex items-center px-8 md:px-12">
+            <blockquote className="max-w-lg font-serif text-xl md:text-2xl font-medium italic leading-relaxed text-cream/90">
+              &ldquo;A people without the knowledge of their past history, origin and culture is like a tree without roots.&rdquo;
+              <footer className="mt-3 text-sm not-italic font-normal text-amber/70">— Marcus Garvey</footer>
+            </blockquote>
+          </div>
+        </div>
+
         {/* Three philosophy pillars */}
         <div
-          className="mt-20 grid gap-px md:grid-cols-3"
+          className="mt-12 grid gap-px md:grid-cols-3"
           style={{ background: "rgba(247,242,232,0.05)" }}
         >
           {[
@@ -891,6 +916,8 @@ const showcases = [
     metricLabel: "pooled across active communities",
     accent: "#C8851A",
     span: "md:col-span-2",
+    photo: "https://images.unsplash.com/photo-1509099836639-18ba1795216d?auto=format&fit=crop&w=900&q=75",
+    photoAlt: "Community gathering around a water source",
   },
   {
     icon: Landmark,
@@ -902,6 +929,8 @@ const showcases = [
     metricLabel: "proposals passed",
     accent: "#2E7D4F",
     span: "md:col-span-1",
+    photo: "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=600&q=75",
+    photoAlt: "Community members in a meeting",
   },
   {
     icon: Wrench,
@@ -913,6 +942,8 @@ const showcases = [
     metricLabel: "skills listed",
     accent: "#A83220",
     span: "md:col-span-1",
+    photo: "https://images.unsplash.com/photo-1531685250784-7569952593d2?auto=format&fit=crop&w=600&q=75",
+    photoAlt: "Artisan craftworker at work",
   },
 ]
 
@@ -920,38 +951,60 @@ function UseCaseCard({ item }: { item: (typeof showcases)[number] }) {
   const [hovered, setHovered] = useState(false)
   return (
     <div
-      className={`group relative flex flex-col justify-between overflow-hidden rounded-2xl border p-6 transition-all duration-300 lg:p-8 ${item.span}`}
+      className={`group relative flex flex-col justify-between overflow-hidden rounded-2xl border transition-all duration-300 ${item.span}`}
       style={{
         borderColor: hovered ? `${item.accent}40` : "rgba(247,242,232,0.06)",
-        backgroundColor: hovered ? `${item.accent}08` : "rgba(20,47,34,0.6)",
+        backgroundColor: "rgba(14,30,20,0.90)",
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <div>
-        <div className="flex items-center justify-between">
+      {/* Photo header */}
+      <div className="relative h-44 w-full overflow-hidden">
+        <Image
+          src={item.photo}
+          alt={item.photoAlt}
+          fill
+          sizes="(max-width: 768px) 100vw, 50vw"
+          className="object-cover transition-transform duration-700 group-hover:scale-105"
+        />
+        {/* Gradient overlay so text beneath is readable */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background: `linear-gradient(to bottom, rgba(14,30,20,0.25) 0%, rgba(14,30,20,0.85) 100%)`,
+          }}
+        />
+        {/* Label badge on the photo */}
+        <div className="absolute bottom-3 left-4">
           <span
-            className="rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[1.5px]"
-            style={{ borderColor: `${item.accent}25`, color: item.accent }}
+            className="rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[1.5px] backdrop-blur-sm"
+            style={{ borderColor: `${item.accent}50`, color: item.accent, background: "rgba(0,0,0,0.35)" }}
           >
             {item.label}
           </span>
-          <div
-            className="flex h-10 w-10 items-center justify-center rounded-xl"
-            style={{ backgroundColor: `${item.accent}12`, color: item.accent }}
-          >
-            <item.icon size={20} strokeWidth={1.5} />
-          </div>
         </div>
-        <h3 className="mt-6 font-serif text-2xl font-bold text-cream lg:text-3xl">{item.title}</h3>
-        <p className="mt-3 text-sm leading-relaxed text-cream/45">{item.description}</p>
+        <div
+          className="absolute bottom-3 right-4 flex h-9 w-9 items-center justify-center rounded-xl backdrop-blur-sm"
+          style={{ backgroundColor: `${item.accent}25`, color: item.accent }}
+        >
+          <item.icon size={18} strokeWidth={1.5} />
+        </div>
       </div>
-      <div className="mt-8 border-t pt-5" style={{ borderColor: `${item.accent}12` }}>
-        <div className="flex items-baseline gap-2">
-          <span className="font-mono text-2xl font-bold tabular-nums" style={{ color: item.accent }}>
-            {item.metric}
-          </span>
-          <span className="text-xs text-cream/30">{item.metricLabel}</span>
+
+      {/* Text body */}
+      <div className="flex flex-col justify-between flex-1 p-6 lg:p-7">
+        <div>
+          <h3 className="font-serif text-xl font-bold text-cream lg:text-2xl">{item.title}</h3>
+          <p className="mt-2.5 text-sm leading-relaxed text-cream/45">{item.description}</p>
+        </div>
+        <div className="mt-6 border-t pt-4" style={{ borderColor: `${item.accent}12` }}>
+          <div className="flex items-baseline gap-2">
+            <span className="font-mono text-2xl font-bold tabular-nums" style={{ color: item.accent }}>
+              {item.metric}
+            </span>
+            <span className="text-xs text-cream/30">{item.metricLabel}</span>
+          </div>
         </div>
       </div>
     </div>

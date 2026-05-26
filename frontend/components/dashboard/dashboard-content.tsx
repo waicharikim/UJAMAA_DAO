@@ -318,33 +318,86 @@ function WelcomeHeader({
   prBalance,
   impactPoints,
 }: {
-  user: { username?: string; email?: string; utBalance?: number }
+  user: { username?: string; email?: string; utBalance?: number; primaryWardName?: string; verificationLevel?: string }
   prBalance: number
   impactPoints: number
 }) {
-  const tokens = [
-    { label: "PR", value: prBalance,         color: "#C9922A" },
-    { label: "IP", value: impactPoints,       color: "#1D4731" },
-    { label: "UT", value: user.utBalance ?? 0, color: "#7A4F1E" },
-  ]
+  const name = user.username || user.email?.split("@")[0] || "Mwanachama"
+  const wardName = (user as any).primaryWardName ?? "Your Ward"
+  const hour = new Date().getHours()
+  const greeting = hour < 12 ? "Habari za asubuhi" : hour < 17 ? "Habari za mchana" : "Habari za jioni"
+
   return (
-    <div>
-      <h2 className="font-display font-bold text-2xl md:text-3xl text-[#0E0B08] leading-tight">
-        Karibu,{" "}
-        <span style={{ color: "#C9922A" }}>{user.username || user.email?.split("@")[0] || "Mwanachama"}</span>
-      </h2>
-      <p className="text-sm text-[#0E0B08]/50 mt-1">Ward Sovereignty Platform — making every ward count</p>
-      <div className="flex items-center gap-2 mt-3 overflow-x-auto scrollbar-none md:hidden pb-0.5">
-        {tokens.map(({ label, value, color }) => (
-          <div
-            key={label}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold flex-shrink-0"
-            style={{ background: `${color}15`, color }}
-          >
-            <span>{typeof value === "number" ? value.toLocaleString() : value}</span>
-            <span className="opacity-60">{label}</span>
+    <div
+      className="relative overflow-hidden rounded-2xl"
+      style={{
+        background: "linear-gradient(135deg, #1D4731 0%, #2A5E42 40%, #1E3D2F 100%)",
+        minHeight: "160px",
+      }}
+    >
+      {/* Ambient rings */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        aria-hidden="true"
+        style={{
+          background: [
+            "radial-gradient(ellipse 70% 80% at 95% 10%, rgba(212,145,30,0.18) 0%, transparent 60%)",
+            "radial-gradient(ellipse 50% 60% at 5% 90%, rgba(56,160,99,0.15) 0%, transparent 55%)",
+          ].join(", "),
+        }}
+      />
+      {/* Decorative circles */}
+      <div className="pointer-events-none absolute -top-10 -right-10 w-44 h-44 rounded-full border border-white/[0.07]" aria-hidden="true" />
+      <div className="pointer-events-none absolute top-4 right-4 w-28 h-28 rounded-full border border-white/[0.05]" aria-hidden="true" />
+      {/* Grid pattern */}
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.04]"
+        aria-hidden="true"
+        style={{
+          backgroundImage: "linear-gradient(rgba(247,242,232,1) 1px, transparent 1px), linear-gradient(90deg, rgba(247,242,232,1) 1px, transparent 1px)",
+          backgroundSize: "32px 32px",
+        }}
+      />
+
+      {/* Content */}
+      <div className="relative z-10 px-5 py-5 flex flex-col gap-3">
+        <div>
+          <p className="text-xs font-medium text-white/50 mb-0.5">{greeting}</p>
+          <h2 className="font-serif font-bold text-2xl md:text-3xl text-white leading-tight">
+            {name}
+          </h2>
+          <div className="flex items-center gap-1.5 mt-1.5">
+            <MapPin className="h-3 w-3 text-white/40" />
+            <span className="text-xs text-white/50 font-medium">{wardName}</span>
           </div>
-        ))}
+        </div>
+
+        {/* Token stat chips */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {[
+            { label: "PR",  value: prBalance,              color: "#E9A52E", bg: "rgba(233,165,46,0.18)" },
+            { label: "IP",  value: impactPoints,           color: "#7DCCA0", bg: "rgba(125,204,160,0.18)" },
+            { label: "UT",  value: user.utBalance ?? 0,   color: "#D4A88C", bg: "rgba(212,168,140,0.18)" },
+          ].map(({ label, value, color, bg }) => (
+            <div
+              key={label}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold"
+              style={{ background: bg, color }}
+            >
+              <span className="text-sm font-bold">{typeof value === "number" ? value.toLocaleString() : value}</span>
+              <span className="opacity-70 text-[11px]">{label}</span>
+            </div>
+          ))}
+          {user.verificationLevel && (
+            <div
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[10px] font-bold ml-auto"
+              style={{ background: "rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.7)" }}
+            >
+              <ShieldCheck className="h-3 w-3" />
+              {user.verificationLevel.replace(/_/g, " ")}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

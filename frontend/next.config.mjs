@@ -18,6 +18,11 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "images.unsplash.com" },
+    ],
+  },
   // Prevent @privy-io/react-auth (browser-only) from being bundled server-side.
   // Components that use it are all "use client" + ssr:false, so this package
   // is never actually executed on the server — but Turbopack's static analysis

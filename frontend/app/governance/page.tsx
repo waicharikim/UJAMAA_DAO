@@ -60,39 +60,79 @@ const PROPOSAL_STATUS_META: Record<string, { label: string; Icon: React.ElementT
   CANCELLED:           { label: "Cancelled",       Icon: XCircle,      color: "#7A6E60", bg: "rgba(122,110,96,0.10)" },
 }
 
+function VotingBar({ yesWeight, noWeight }: { yesWeight: number; noWeight: number }) {
+  const total = yesWeight + noWeight
+  if (total === 0) return null
+  const yesPct = Math.round((yesWeight / total) * 100)
+  const noPct  = 100 - yesPct
+  return (
+    <div className="space-y-2">
+      {/* Segmented bar */}
+      <div className="h-2.5 rounded-full overflow-hidden flex gap-px" style={{ background: "rgba(14,11,8,0.06)" }}>
+        <div
+          className="h-full rounded-l-full transition-all duration-500"
+          style={{ width: `${yesPct}%`, background: "linear-gradient(90deg, #1D4731, #2E6B4F)" }}
+        />
+        <div
+          className="h-full rounded-r-full transition-all duration-500"
+          style={{ width: `${noPct}%`, background: "linear-gradient(90deg, #C0452A, #A03020)" }}
+        />
+      </div>
+      {/* Chips */}
+      <div className="flex items-center gap-2">
+        <span
+          className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold"
+          style={{ background: "rgba(29,71,49,0.10)", color: "#1D4731" }}
+        >
+          ✓ {yesPct}% For
+        </span>
+        <span
+          className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold"
+          style={{ background: "rgba(176,58,30,0.10)", color: "#B03A1E" }}
+        >
+          ✕ {noPct}% Against
+        </span>
+        <span className="ml-auto text-[10px] text-[#7A6E60]">{total} vote{total !== 1 ? "s" : ""}</span>
+      </div>
+    </div>
+  )
+}
+
 function PlatformProposalCard({ proposal }: { proposal: ProposalDto }) {
   const meta = PROPOSAL_STATUS_META[proposal.status] ?? PROPOSAL_STATUS_META.DRAFT
   const { Icon, color, bg, label } = meta
-  const yesWeight = proposal.votesSummary?.yesWeight ?? 0
-  const noWeight  = proposal.votesSummary?.noWeight  ?? 0
-  const totalWeight = yesWeight + noWeight
-  const yesPct = totalWeight > 0 ? Math.round((yesWeight / totalWeight) * 100) : 0
+  const isVoting = proposal.status === "VOTING" || proposal.status === "APPROVED_FOR_VOTING"
 
   return (
     <Link href={`/proposals/${proposal.id}`}>
-      <Card className="border-0 shadow-card transition-shadow hover:shadow-md cursor-pointer">
+      <Card
+        className="border-0 shadow-card transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer overflow-hidden"
+        style={isVoting ? { borderLeft: `3px solid ${color}` } : {}}
+      >
         <CardContent className="p-5 space-y-3">
+          {/* Header row */}
           <div className="flex items-start justify-between gap-3">
-            <h3 className="text-sm font-bold text-[#0A1F14] leading-snug flex-1">{proposal.title}</h3>
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full flex-shrink-0" style={{ background: bg }}>
+            <h3 className="text-sm font-bold text-[#0A1F14] leading-snug flex-1 line-clamp-2">{proposal.title}</h3>
+            <div
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full flex-shrink-0"
+              style={{ background: bg }}
+            >
               <Icon className="h-3 w-3" style={{ color }} />
               <span className="text-[10px] font-bold" style={{ color }}>{label}</span>
             </div>
           </div>
+
+          {/* Description */}
           <p className="text-xs text-[#7A6E60] line-clamp-2 leading-relaxed">{proposal.description}</p>
-          {totalWeight > 0 && (
-            <div className="space-y-1">
-              <div className="h-1.5 rounded-full overflow-hidden flex bg-cream">
-                <div className="bg-tea-green transition-all" style={{ width: `${yesPct}%` }} />
-                <div className="bg-red-400 transition-all" style={{ width: `${100 - yesPct}%` }} />
-              </div>
-              <div className="flex justify-between text-[10px] text-[#7A6E60]">
-                <span>For: {yesPct}%</span>
-                <span>{proposal.votesSummary?.total ?? 0} votes</span>
-              </div>
-            </div>
-          )}
-          <div className="flex items-center justify-between text-[11px] text-[#7A6E60]">
+
+          {/* Voting bar — only when votes exist */}
+          <VotingBar
+            yesWeight={proposal.votesSummary?.yesWeight ?? 0}
+            noWeight={proposal.votesSummary?.noWeight ?? 0}
+          />
+
+          {/* Footer */}
+          <div className="flex items-center justify-between text-[11px] text-[#7A6E60] pt-0.5">
             <span>by <span className="font-medium text-[#0A1F14]">{proposal.creator?.name ?? "Member"}</span></span>
             <span>{formatDate(proposal.createdAt)}</span>
           </div>

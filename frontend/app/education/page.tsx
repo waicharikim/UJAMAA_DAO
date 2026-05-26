@@ -66,6 +66,73 @@ function StarRating({ value }: { value: number }) {
   )
 }
 
+// ─── Category cover config ─────────────────────────────────
+const CATEGORY_COVER: Record<string, { gradient: string; pattern: string; iconColor: string }> = {
+  governance: {
+    gradient: "linear-gradient(135deg, #1D4731 0%, #2E6B4F 60%, #3A8060 100%)",
+    pattern: "radial-gradient(circle at 80% 50%, rgba(212,145,30,0.18) 0%, transparent 55%), radial-gradient(circle at 20% 80%, rgba(56,160,99,0.15) 0%, transparent 40%)",
+    iconColor: "rgba(212,145,30,0.35)",
+  },
+  economy: {
+    gradient: "linear-gradient(135deg, #6B3A0E 0%, #A0600A 60%, #C9922A 100%)",
+    pattern: "radial-gradient(circle at 75% 40%, rgba(255,200,80,0.20) 0%, transparent 55%), radial-gradient(circle at 25% 75%, rgba(180,100,20,0.20) 0%, transparent 40%)",
+    iconColor: "rgba(255,220,100,0.35)",
+  },
+  community: {
+    gradient: "linear-gradient(135deg, #1A3A6B 0%, #2A5A9E 60%, #3A72C0 100%)",
+    pattern: "radial-gradient(circle at 80% 50%, rgba(100,180,255,0.18) 0%, transparent 55%), radial-gradient(circle at 20% 80%, rgba(60,120,200,0.15) 0%, transparent 40%)",
+    iconColor: "rgba(150,200,255,0.35)",
+  },
+  health: {
+    gradient: "linear-gradient(135deg, #1A5050 0%, #2A7878 60%, #3A9090 100%)",
+    pattern: "radial-gradient(circle at 75% 45%, rgba(80,220,180,0.18) 0%, transparent 55%)",
+    iconColor: "rgba(120,240,200,0.35)",
+  },
+  environment: {
+    gradient: "linear-gradient(135deg, #1E3A10 0%, #2E5C1A 60%, #3E7A22 100%)",
+    pattern: "radial-gradient(circle at 80% 50%, rgba(120,220,80,0.18) 0%, transparent 55%)",
+    iconColor: "rgba(160,240,100,0.35)",
+  },
+}
+
+const CATEGORY_ICONS: Record<string, React.ElementType> = {
+  governance: BarChart2,
+  economy:    Award,
+  community:  Users,
+  health:     CheckCircle,
+  environment: BookOpen,
+}
+
+function CategoryCover({ category, title }: { category: string; title: string }) {
+  const key = category?.toLowerCase() ?? "governance"
+  const cfg = CATEGORY_COVER[key] ?? CATEGORY_COVER.governance
+  const Icon = CATEGORY_ICONS[key] ?? BookOpen
+  return (
+    <div
+      className="relative h-[120px] w-full overflow-hidden flex items-end"
+      style={{ background: cfg.gradient }}
+    >
+      {/* Layered ambient glow */}
+      <div className="absolute inset-0" style={{ background: cfg.pattern }} />
+      {/* Decorative circles */}
+      <div className="absolute top-[-28px] right-[-28px] w-36 h-36 rounded-full border border-white/[0.08]" />
+      <div className="absolute top-[10px] right-[10px] w-20 h-20 rounded-full border border-white/[0.06]" />
+      {/* Large background icon */}
+      <Icon
+        className="absolute right-4 top-1/2 -translate-y-1/2 w-20 h-20"
+        style={{ color: cfg.iconColor }}
+        strokeWidth={1}
+      />
+      {/* Category pill */}
+      <div className="relative z-10 px-4 pb-3">
+        <span className="text-[10px] font-bold uppercase tracking-[2.5px] text-white/60">
+          {category}
+        </span>
+      </div>
+    </div>
+  )
+}
+
 // ─── Module card ───────────────────────────────────────────
 function ModuleCard({
   module,
@@ -79,24 +146,20 @@ function ModuleCard({
       className="border-0 shadow-card overflow-hidden cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5"
       onClick={() => onClick(module)}
     >
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-              <DifficultyBadge level={module.difficulty} />
-              <span className="text-[10px] text-[#0E0B08]/40 uppercase tracking-wide font-medium">
-                {module.category}
-              </span>
-            </div>
-            <h3 className="font-semibold text-[#0E0B08] text-base leading-snug line-clamp-2">{module.title}</h3>
+      <CategoryCover category={module.category} title={module.title} />
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between gap-2 mb-2">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <DifficultyBadge level={module.difficulty} />
           </div>
-          <ChevronRight className="h-4 w-4 text-[#0E0B08]/30 flex-shrink-0 mt-1" />
+          <ChevronRight className="h-4 w-4 text-[#0E0B08]/30 flex-shrink-0" />
         </div>
 
-        <p className="text-xs text-[#0E0B08]/55 leading-relaxed line-clamp-2 mb-4">{module.description}</p>
+        <h3 className="font-semibold text-[#0E0B08] text-sm leading-snug line-clamp-2 mb-1.5">{module.title}</h3>
+        <p className="text-xs text-[#0E0B08]/55 leading-relaxed line-clamp-2 mb-3">{module.description}</p>
 
         <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2.5 flex-wrap">
             <span className="flex items-center gap-1 text-xs text-[#0E0B08]/45">
               <Clock className="h-3 w-3" />
               {module.duration}m
