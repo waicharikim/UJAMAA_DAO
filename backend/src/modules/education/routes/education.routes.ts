@@ -30,6 +30,14 @@ router.get(
   asyncHandler(EducationController.listModules)
 );
 
+// ── Authenticated routes (static paths before /:moduleId) ─────────────────────
+
+router.get(
+  '/my-progress',
+  authenticate,
+  asyncHandler(EducationController.getMyProgress)
+);
+
 router.get(
   '/:moduleId',
   optionalAuthenticate,
@@ -37,7 +45,7 @@ router.get(
   asyncHandler(EducationController.getModule)
 );
 
-// ── Authenticated routes ──────────────────────────────────────────────────────
+// ── Authenticated module actions ──────────────────────────────────────────────
 
 router.post(
   '/:moduleId/start',

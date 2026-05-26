@@ -15,11 +15,12 @@ import {
   Play,
   X,
   BarChart2,
+  ArrowRight,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { educationApi, type EducationModuleDto, type EducationModuleDetailDto } from "@/lib/api"
+import { educationApi, onboardingApi, type EducationModuleDto, type EducationModuleDetailDto } from "@/lib/api"
 import { useAuth } from "@/contexts/auth-context"
 
 // ─── Difficulty badge ──────────────────────────────────────
@@ -147,8 +148,11 @@ function ModuleDrawer({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["education-module", moduleId] })
       queryClient.invalidateQueries({ queryKey: ["education-modules"] })
-      // Re-fetch /users/me so topbar IP counter and profile page update immediately
+      queryClient.invalidateQueries({ queryKey: ["education-my-progress"] })
+      queryClient.invalidateQueries({ queryKey: ["onboarding-progress"] })
       refreshUser()
+      // Mark learn_basics tutorial complete (fire-and-forget)
+      onboardingApi.completeTutorial("learn_basics").catch(() => {})
     },
   })
 
@@ -367,6 +371,50 @@ function ModuleDrawer({
 const DIFFICULTIES = ["BEGINNER", "INTERMEDIATE", "ADVANCED", "EXPERT"] as const
 const CATEGORIES = ["governance", "economy", "health", "agriculture", "technology", "civic", "environment"]
 
+// ─── Continue learning strip ────────────────────────────────
+function ContinueLearningStrip({ onOpen }: { onOpen: (id: string) => void }) {
+  const { isAuthenticated } = useAuth()
+  const { data } = useQuery({
+    queryKey: ["education-my-progress"],
+    queryFn: educationApi.getMyProgress,
+    enabled: isAuthenticated,
+    staleTime: 60_000,
+  })
+
+  const inProgress = data?.inProgress ?? []
+  if (inProgress.length === 0) return null
+
+  return (
+    <div>
+      <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "rgba(14,11,8,0.40)" }}>
+        Continue Learning
+      </p>
+      <div className="flex gap-3 overflow-x-auto scrollbar-none pb-1">
+        {inProgress.map((m) => (
+          <button
+            key={m.id}
+            onClick={() => onOpen(m.id)}
+            className="flex items-center gap-3 px-4 py-3 rounded-xl flex-shrink-0 text-left transition-all hover:shadow-sm"
+            style={{ background: "rgba(201,146,42,0.08)", border: "1px solid rgba(201,146,42,0.2)", minWidth: 240, maxWidth: 300 }}
+          >
+            <div
+              className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+              style={{ background: "rgba(201,146,42,0.15)" }}
+            >
+              <BarChart2 className="h-4 w-4" style={{ color: "#C9922A" }} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-semibold text-[#0E0B08] truncate">{m.title}</p>
+              <p className="text-[11px]" style={{ color: "#C9922A" }}>In progress · {m.duration}m</p>
+            </div>
+            <ArrowRight className="h-4 w-4 flex-shrink-0" style={{ color: "rgba(201,146,42,0.5)" }} />
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ─── Main page ─────────────────────────────────────────────
 export default function EducationPage() {
   const [difficulty, setDifficulty] = useState<string | undefined>()
@@ -390,6 +438,9 @@ export default function EducationPage() {
           Earn Impact Points by completing governance and civic education modules.
         </p>
       </div>
+
+      {/* In-progress modules */}
+      <ContinueLearningStrip onOpen={setActiveModule} />
 
       {/* Difficulty filter */}
       <div className="flex gap-2 flex-wrap">

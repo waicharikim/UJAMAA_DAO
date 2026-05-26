@@ -18,6 +18,7 @@ const TUTORIAL_LINK: Record<string, string> = {
   connect_wallet:         "/profile#verification",
   community_verification: "/profile#verification",
   governance_basics:      "/governance",
+  learn_basics:           "/education",
   attend_baraza:          "/dashboard",
   explore_marketplace:    "/marketplace",
 }

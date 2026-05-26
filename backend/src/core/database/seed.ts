@@ -644,12 +644,37 @@ const ONBOARDING_TUTORIALS_DATA = [
     },
   },
   {
+    key: 'learn_basics',
+    title: 'Complete a learning module',
+    description:
+      'Earn Impact Points by completing your first civic education module on the Learn page.',
+    category: 'BASICS',
+    order: 7,
+    ipReward: 0,
+    prReward: 5,
+    estimatedMinutes: 15,
+    requiredFor: null,
+    isOptional: true,
+    content: {
+      steps: [
+        {
+          title: 'Learn and earn',
+          body: 'The Learn section has modules covering governance, the economy system, civic rights, and more. Completing a module earns you Impact Points (IP) and strengthens your civic knowledge.',
+        },
+        {
+          title: 'Start with the basics',
+          body: 'Head to the Learn page, pick any module that interests you, click "Start Module", read through it, then click "Mark as Complete". Your IP balance updates immediately.',
+        },
+      ],
+    },
+  },
+  {
     key: 'explore_marketplace',
     title: 'Explore the marketplace',
     description:
       'Browse skills and goods offered by community members in your ward and beyond.',
     category: 'MARKETPLACE',
-    order: 7,
+    order: 8,
     ipReward: 20,
     prReward: 10,
     estimatedMinutes: 3,

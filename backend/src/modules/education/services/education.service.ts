@@ -225,6 +225,38 @@ export class EducationService {
     };
   }
 
+  // ── My progress ────────────────────────────────────────────────────────────
+
+  async getMyProgress(userId: string): Promise<{
+    inProgress: EducationModuleDto[];
+    completed: EducationModuleDto[];
+  }> {
+    const records = await prisma.userEducationalProgress.findMany({
+      where: { userId },
+      include: {
+        module: {
+          include: {
+            creator: { select: { id: true, name: true } },
+            _count: { select: { progress: true, reviews: true } },
+          },
+        },
+      },
+      orderBy: { startedAt: 'desc' },
+    });
+
+    const inProgress: EducationModuleDto[] = [];
+    const completed: EducationModuleDto[] = [];
+
+    for (const r of records) {
+      if (!r.module.verified) continue;
+      const dto = mapModule(r.module);
+      if (r.status === 'COMPLETED') completed.push(dto);
+      else inProgress.push(dto);
+    }
+
+    return { inProgress, completed };
+  }
+
   // ── Submit review ───────────────────────────────────────────────────────────
 
   async submitReview(

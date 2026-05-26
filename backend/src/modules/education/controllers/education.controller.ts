@@ -46,6 +46,12 @@ export class EducationController {
     sendSuccess(res, result, 'Module completed');
   }
 
+  static async getMyProgress(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const result = await educationService.getMyProgress(userId);
+    sendSuccess(res, result, 'Progress retrieved');
+  }
+
   static async submitReview(req: AuthRequest, res: Response) {
     const { moduleId } = req.params;
     const userId = req.user!.userId;

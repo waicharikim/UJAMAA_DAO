@@ -1474,6 +1474,9 @@ export const educationApi = {
   getModule: (moduleId: string): Promise<EducationModuleDetailDto> =>
     apiFetch<EducationModuleDetailDto>(`/education/${moduleId}`),
 
+  getMyProgress: (): Promise<{ inProgress: EducationModuleDto[]; completed: EducationModuleDto[] }> =>
+    apiFetch(`/education/my-progress`),
+
   startModule: (moduleId: string): Promise<EducationProgressDto> =>
     apiFetch<EducationProgressDto>(`/education/${moduleId}/start`, { method: "POST" }),
 
