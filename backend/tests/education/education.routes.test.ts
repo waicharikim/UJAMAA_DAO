@@ -73,9 +73,14 @@ import request from 'supertest';
 import app, { servicesReady } from '../../src/app.js';
 import {
   createEducationUser,
+  createEligibleAuthor,
   makeEducationToken,
+  makeEmailVerifiedToken,
   seedModule,
   seedProgress,
+  seedDraftModule,
+  seedSubmittedModule,
+  VALID_MODULE_DTO,
 } from './helpers.js';
 
 beforeAll(async () => {
@@ -326,5 +331,322 @@ describe('POST /education/:moduleId/review', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ rating: 4 });
     expect(res.status).toBe(400);
+  });
+});
+
+// ─────────────────────────────────────────────
+// GET /education/my-progress
+// ─────────────────────────────────────────────
+
+describe('GET /education/my-progress', () => {
+  it('401 without token', async () => {
+    const res = await request(app).get('/api/v1/education/my-progress');
+    expect(res.status).toBe(401);
+  });
+
+  it('200 returns inProgress/completed shape', async () => {
+    const creator = await createEducationUser('rt-myprog-c@test.com');
+    const user = await createEducationUser('rt-myprog-u@test.com');
+    const modA = await seedModule(creator.id, { title: 'Progress A' });
+    const modB = await seedModule(creator.id, { title: 'Progress B' });
+    await seedProgress(user.id, modA.id, 'IN_PROGRESS');
+    await seedProgress(user.id, modB.id, 'COMPLETED');
+    const token = makeEducationToken(user.id);
+
+    const res = await request(app)
+      .get('/api/v1/education/my-progress')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.inProgress).toHaveLength(1);
+    expect(res.body.data.completed).toHaveLength(1);
+  });
+});
+
+// ─────────────────────────────────────────────
+// GET /education/my-modules
+// ─────────────────────────────────────────────
+
+describe('GET /education/my-modules', () => {
+  it('401 without token', async () => {
+    const res = await request(app).get('/api/v1/education/my-modules');
+    expect(res.status).toBe(401);
+  });
+
+  it('200 returns authored modules with status field', async () => {
+    const author = await createEligibleAuthor('rt-mymod@test.com');
+    await seedDraftModule(author.id, 'My Test Draft');
+    const token = makeEducationToken(author.id);
+
+    const res = await request(app)
+      .get('/api/v1/education/my-modules')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.data)).toBe(true);
+    expect(res.body.data).toHaveLength(4); // 3 prereq modules from createEligibleAuthor + 1 new draft
+    const draft = res.body.data.find((m: any) => m.title === 'My Test Draft');
+    expect(draft.status).toBe('DRAFT');
+  });
+});
+
+// ─────────────────────────────────────────────
+// GET /education/authorship-eligibility
+// ─────────────────────────────────────────────
+
+describe('GET /education/authorship-eligibility', () => {
+  it('401 without token', async () => {
+    const res = await request(app).get('/api/v1/education/authorship-eligibility');
+    expect(res.status).toBe(401);
+  });
+
+  it('200 returns not-eligible for user with no IP or modules', async () => {
+    const user = await createEducationUser('rt-elig-no@test.com');
+    const token = makeEducationToken(user.id);
+
+    const res = await request(app)
+      .get('/api/v1/education/authorship-eligibility')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.eligible).toBe(false);
+    expect(res.body.data.completedModules).toBe(0);
+    expect(res.body.data.currentIP).toBe(0);
+  });
+
+  it('200 returns eligible for user who meets all criteria', async () => {
+    const author = await createEligibleAuthor('rt-elig-yes@test.com');
+    const token = makeEducationToken(author.id);
+
+    const res = await request(app)
+      .get('/api/v1/education/authorship-eligibility')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.eligible).toBe(true);
+    expect(res.body.data.completedModules).toBeGreaterThanOrEqual(3);
+  });
+});
+
+// ─────────────────────────────────────────────
+// POST /education  (create module)
+// ─────────────────────────────────────────────
+
+describe('POST /education', () => {
+  it('401 without token', async () => {
+    const res = await request(app)
+      .post('/api/v1/education')
+      .send(VALID_MODULE_DTO);
+    expect(res.status).toBe(401);
+  });
+
+  it('403 for EMAIL_VERIFIED user (route-level auth guard)', async () => {
+    const user = await createEducationUser('rt-create-ev@test.com');
+    const token = makeEmailVerifiedToken(user.id);
+
+    const res = await request(app)
+      .post('/api/v1/education')
+      .set('Authorization', `Bearer ${token}`)
+      .send(VALID_MODULE_DTO);
+    expect(res.status).toBe(403);
+  });
+
+  it('403 for COMMUNITY_VERIFIED user who does not meet IP/module threshold', async () => {
+    const user = await createEducationUser('rt-create-inelig@test.com');
+    const token = makeEducationToken(user.id);
+
+    const res = await request(app)
+      .post('/api/v1/education')
+      .set('Authorization', `Bearer ${token}`)
+      .send(VALID_MODULE_DTO);
+    expect(res.status).toBe(403);
+  });
+
+  it('400 for invalid body (title too short)', async () => {
+    const author = await createEligibleAuthor('rt-create-bad@test.com');
+    const token = makeEducationToken(author.id);
+
+    const res = await request(app)
+      .post('/api/v1/education')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ ...VALID_MODULE_DTO, title: 'Hi' });
+    expect(res.status).toBe(400);
+  });
+
+  it('201 creates DRAFT module for eligible user', async () => {
+    const author = await createEligibleAuthor('rt-create-ok@test.com');
+    const token = makeEducationToken(author.id);
+
+    const res = await request(app)
+      .post('/api/v1/education')
+      .set('Authorization', `Bearer ${token}`)
+      .send(VALID_MODULE_DTO);
+    expect(res.status).toBe(201);
+    expect(res.body.data.status).toBe('DRAFT');
+    expect(res.body.data.title).toBe(VALID_MODULE_DTO.title);
+    expect(res.body.data.creator.id).toBe(author.id);
+  });
+});
+
+// ─────────────────────────────────────────────
+// PATCH /education/:moduleId  (update)
+// ─────────────────────────────────────────────
+
+describe('PATCH /education/:moduleId', () => {
+  it('401 without token', async () => {
+    const res = await request(app)
+      .patch('/api/v1/education/00000000-0000-0000-0000-000000000001');
+    expect(res.status).toBe(401);
+  });
+
+  it('403 for EMAIL_VERIFIED user', async () => {
+    const creator = await createEducationUser('rt-upd-ev-c@test.com');
+    const mod = await seedDraftModule(creator.id);
+    const token = makeEmailVerifiedToken(creator.id);
+
+    const res = await request(app)
+      .patch(`/api/v1/education/${mod.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Edited Title Here' });
+    expect(res.status).toBe(403);
+  });
+
+  it('403 for ineligible COMMUNITY_VERIFIED user', async () => {
+    const user = await createEducationUser('rt-upd-inelig@test.com');
+    const mod = await seedDraftModule(user.id);
+    const token = makeEducationToken(user.id);
+
+    const res = await request(app)
+      .patch(`/api/v1/education/${mod.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Edited Title Here' });
+    expect(res.status).toBe(403);
+  });
+
+  it('403 when editing another user\'s module', async () => {
+    const authorA = await createEligibleAuthor('rt-upd-owner-a@test.com');
+    const authorB = await createEligibleAuthor('rt-upd-owner-b@test.com');
+    const mod = await seedDraftModule(authorB.id);
+    const token = makeEducationToken(authorA.id);
+
+    const res = await request(app)
+      .patch(`/api/v1/education/${mod.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Hijacked Title!!' });
+    expect(res.status).toBe(403);
+  });
+
+  it('200 updates own DRAFT and returns updated fields', async () => {
+    const author = await createEligibleAuthor('rt-upd-ok@test.com');
+    const mod = await seedDraftModule(author.id);
+    const token = makeEducationToken(author.id);
+
+    const res = await request(app)
+      .patch(`/api/v1/education/${mod.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Updated Title Here' });
+    expect(res.status).toBe(200);
+    expect(res.body.data.title).toBe('Updated Title Here');
+    expect(res.body.data.status).toBe('DRAFT');
+  });
+});
+
+// ─────────────────────────────────────────────
+// POST /education/:moduleId/submit
+// ─────────────────────────────────────────────
+
+describe('POST /education/:moduleId/submit', () => {
+  it('401 without token', async () => {
+    const res = await request(app)
+      .post('/api/v1/education/00000000-0000-0000-0000-000000000001/submit');
+    expect(res.status).toBe(401);
+  });
+
+  it('403 for EMAIL_VERIFIED user', async () => {
+    const creator = await createEducationUser('rt-submit-ev@test.com');
+    const mod = await seedDraftModule(creator.id);
+    const token = makeEmailVerifiedToken(creator.id);
+
+    const res = await request(app)
+      .post(`/api/v1/education/${mod.id}/submit`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('400 if module is already submitted', async () => {
+    const author = await createEligibleAuthor('rt-submit-dup@test.com');
+    const mod = await seedSubmittedModule(author.id);
+    const token = makeEducationToken(author.id);
+
+    const res = await request(app)
+      .post(`/api/v1/education/${mod.id}/submit`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(400);
+  });
+
+  it('200 transitions DRAFT → SUBMITTED', async () => {
+    const author = await createEligibleAuthor('rt-submit-ok@test.com');
+    const mod = await seedDraftModule(author.id);
+    const token = makeEducationToken(author.id);
+
+    const res = await request(app)
+      .post(`/api/v1/education/${mod.id}/submit`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('SUBMITTED');
+    expect(res.body.data.submittedAt).not.toBeNull();
+  });
+});
+
+// ─────────────────────────────────────────────
+// DELETE /education/:moduleId
+// ─────────────────────────────────────────────
+
+describe('DELETE /education/:moduleId', () => {
+  it('401 without token', async () => {
+    const res = await request(app)
+      .delete('/api/v1/education/00000000-0000-0000-0000-000000000001');
+    expect(res.status).toBe(401);
+  });
+
+  it('403 for EMAIL_VERIFIED user', async () => {
+    const creator = await createEducationUser('rt-del-ev@test.com');
+    const mod = await seedDraftModule(creator.id);
+    const token = makeEmailVerifiedToken(creator.id);
+
+    const res = await request(app)
+      .delete(`/api/v1/education/${mod.id}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('403 when deleting another user\'s module', async () => {
+    const userA = await createEducationUser('rt-del-owner-a@test.com');
+    const userB = await createEducationUser('rt-del-owner-b@test.com');
+    const mod = await seedDraftModule(userB.id);
+    const token = makeEducationToken(userA.id);
+
+    const res = await request(app)
+      .delete(`/api/v1/education/${mod.id}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('400 for an approved module', async () => {
+    const user = await createEducationUser('rt-del-approved@test.com');
+    const mod = await seedModule(user.id, { verified: true });
+    const token = makeEducationToken(user.id);
+
+    const res = await request(app)
+      .delete(`/api/v1/education/${mod.id}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(400);
+  });
+
+  it('200 deletes own DRAFT module', async () => {
+    const user = await createEducationUser('rt-del-ok@test.com');
+    const mod = await seedDraftModule(user.id);
+    const token = makeEducationToken(user.id);
+
+    const res = await request(app)
+      .delete(`/api/v1/education/${mod.id}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
   });
 });
