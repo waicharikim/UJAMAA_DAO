@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/layout/page-header"
 import { StatsGrid } from "@/components/layout/stats-grid"
 import { communityApi, leaderboardApi, GroupDiscoveryDto, GroupMembershipDto, LeaderboardEntryDto } from "@/lib/api"
 import { FindCommunity } from "@/components/community/find-community"
-import { Plus, Users, Crown, Shield, Network, Search, Globe, ChevronRight, Trophy, Star, Zap, BarChart3, Medal, MapPin } from "lucide-react"
+import { Plus, Users, Crown, Shield, Network, Search, Globe, ChevronRight, Trophy, Star, Zap, BarChart3, Medal } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -36,7 +36,7 @@ function MyGroupsList() {
       <div className="flex flex-col items-center justify-center py-16 text-[#6B5E4E]">
         <Users className="h-10 w-10 mb-3 opacity-40" />
         <p className="text-sm">You haven&apos;t joined any groups yet.</p>
-        <p className="text-xs mt-1 opacity-70">Explore the Explore tab to find and join groups.</p>
+        <p className="text-xs mt-1 opacity-70">Use "Discover nearby groups" below to find and join groups.</p>
       </div>
     )
   }
@@ -427,10 +427,6 @@ export default function GroupsPage() {
           <TabsTrigger value="my-groups" className="data-[state=active]:bg-[#1E3D2F] data-[state=active]:text-[#F7F2E8]">
             My Groups
           </TabsTrigger>
-          <TabsTrigger value="find" className="data-[state=active]:bg-[#1E3D2F] data-[state=active]:text-[#F7F2E8]">
-            <MapPin className="h-3.5 w-3.5 mr-1.5" />
-            Find Community
-          </TabsTrigger>
           <TabsTrigger value="explore" className="data-[state=active]:bg-[#1E3D2F] data-[state=active]:text-[#F7F2E8]">
             Explore
           </TabsTrigger>
@@ -441,11 +437,12 @@ export default function GroupsPage() {
         </TabsList>
 
         <TabsContent value="my-groups" className="mt-6">
-          <MyGroupsList />
-        </TabsContent>
-
-        <TabsContent value="find" className="mt-6">
-          <FindCommunity />
+          <div className="space-y-6">
+            <MyGroupsList />
+            <div className="border-t border-[#C9922A]/15 pt-4">
+              <FindCommunity />
+            </div>
+          </div>
         </TabsContent>
 
         <TabsContent value="explore" className="mt-6">
