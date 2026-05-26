@@ -84,6 +84,15 @@ export interface RejectModuleDto {
   reason: string;
 }
 
+export interface AuthorshipEligibilityDto {
+  eligible: boolean;
+  completedModules: number;
+  requiredModules: number;
+  currentIP: number;
+  requiredIP: number;
+  daysOnPlatform: number;
+}
+
 export interface EducationModuleDetailDto extends EducationModuleDto {
   assessment: {
     id: string;

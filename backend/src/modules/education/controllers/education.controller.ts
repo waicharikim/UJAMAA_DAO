@@ -99,4 +99,10 @@ export class EducationController {
     const result = await educationService.getMyModules(userId);
     sendSuccess(res, result, 'My modules retrieved');
   }
+
+  static async getAuthorshipEligibility(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const result = await educationService.getAuthorshipEligibility(userId);
+    sendSuccess(res, result, 'Eligibility retrieved');
+  }
 }

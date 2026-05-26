@@ -1511,6 +1511,15 @@ export const educationApi = {
   getMyModules: (): Promise<EducationModuleDto[]> =>
     apiFetch(`/education/my-modules`),
 
+  getAuthorshipEligibility: (): Promise<{
+    eligible: boolean
+    completedModules: number
+    requiredModules: number
+    currentIP: number
+    requiredIP: number
+    daysOnPlatform: number
+  }> => apiFetch(`/education/authorship-eligibility`),
+
   createModule: (dto: CreateModuleDto): Promise<EducationModuleDto> =>
     apiFetch(`/education`, { method: "POST", body: JSON.stringify(dto) }),
 

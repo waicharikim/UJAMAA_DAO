@@ -47,6 +47,12 @@ router.get(
   asyncHandler(EducationController.getMyModules)
 );
 
+router.get(
+  '/authorship-eligibility',
+  authenticate,
+  asyncHandler(EducationController.getAuthorshipEligibility)
+);
+
 router.post(
   '/',
   authenticate,

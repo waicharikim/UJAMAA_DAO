@@ -22,7 +22,22 @@ import type {
   CreateModuleDto,
   UpdateModuleDto,
   ModuleStatus,
+  AuthorshipEligibilityDto,
 } from '../types.js';
+
+// IP required to author modules, tiered by days on platform
+const IP_TIERS: Array<{ maxDays: number; minIP: number }> = [
+  { maxDays: 30, minIP: 150 },
+  { maxDays: 90, minIP: 200 },
+  { maxDays: 180, minIP: 300 },
+  { maxDays: 365, minIP: 400 },
+  { maxDays: Infinity, minIP: 500 },
+];
+const REQUIRED_COMPLETED_MODULES = 3;
+
+function requiredIPForDays(days: number): number {
+  return IP_TIERS.find((t) => days <= t.maxDays)!.minIP;
+}
 
 const ipService = new GlobalImpactPointService();
 
@@ -274,12 +289,70 @@ export class EducationService {
     return { inProgress, completed };
   }
 
+  // ── Authorship eligibility ──────────────────────────────────────────────────
+
+  async getAuthorshipEligibility(
+    userId: string
+  ): Promise<AuthorshipEligibilityDto> {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        createdAt: true,
+        globalImpactPoints: true,
+        educationalProgress: {
+          where: { status: 'COMPLETED' },
+          select: { id: true },
+        },
+      },
+    });
+    if (!user) throw ApiError.notFound('User not found');
+
+    const daysOnPlatform = Math.floor(
+      (Date.now() - user.createdAt.getTime()) / (1000 * 60 * 60 * 24)
+    );
+    const requiredIP = requiredIPForDays(daysOnPlatform);
+    const completedModules = user.educationalProgress.length;
+
+    return {
+      eligible:
+        completedModules >= REQUIRED_COMPLETED_MODULES &&
+        user.globalImpactPoints >= requiredIP,
+      completedModules,
+      requiredModules: REQUIRED_COMPLETED_MODULES,
+      currentIP: user.globalImpactPoints,
+      requiredIP,
+      daysOnPlatform,
+    };
+  }
+
+  private async assertAuthorshipEligibility(userId: string): Promise<void> {
+    const e = await this.getAuthorshipEligibility(userId);
+    if (e.eligible) return;
+
+    const parts: string[] = [];
+    if (e.completedModules < e.requiredModules) {
+      parts.push(
+        `complete ${e.requiredModules - e.completedModules} more module(s) (${e.completedModules}/${e.requiredModules})`
+      );
+    }
+    if (e.currentIP < e.requiredIP) {
+      parts.push(
+        `earn ${e.requiredIP - e.currentIP} more IP (${e.currentIP}/${e.requiredIP} required for your account age)`
+      );
+    }
+    throw ApiError.forbidden(
+      `To contribute modules you need to: ${parts.join(' and ')}.`
+    );
+  }
+
   // ── Community: create draft module ─────────────────────────────────────────
 
   async createModule(
     userId: string,
     dto: CreateModuleDto
   ): Promise<EducationModuleDto> {
+    await this.assertAuthorshipEligibility(userId);
+
     const module = await prisma.educationalModule.create({
       data: {
         title: dto.title,
@@ -308,6 +381,8 @@ export class EducationService {
     moduleId: string,
     dto: UpdateModuleDto
   ): Promise<EducationModuleDto> {
+    await this.assertAuthorshipEligibility(userId);
+
     const module = await prisma.educationalModule.findUnique({
       where: { id: moduleId },
       select: { id: true, creatorId: true, verified: true, submittedAt: true },
@@ -349,6 +424,8 @@ export class EducationService {
     userId: string,
     moduleId: string
   ): Promise<EducationModuleDto> {
+    await this.assertAuthorshipEligibility(userId);
+
     const module = await prisma.educationalModule.findUnique({
       where: { id: moduleId },
       select: {

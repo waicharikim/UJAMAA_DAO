@@ -529,7 +529,16 @@ export default function EducationPage() {
   const [activeModule, setActiveModule] = useState<string | null>(null)
 
   const { isAuthenticated, user } = useAuth()
-  const canContribute = isAuthenticated && isVerified(user?.verificationLevel)
+  const verified = isAuthenticated && isVerified(user?.verificationLevel)
+
+  const { data: eligibility } = useQuery({
+    queryKey: ["education-authorship-eligibility"],
+    queryFn: educationApi.getAuthorshipEligibility,
+    enabled: verified,
+    staleTime: 120_000,
+  })
+
+  const canContribute = verified && (eligibility?.eligible ?? false)
 
   const { data, isLoading } = useQuery({
     queryKey: ["education-modules", difficulty, category],
@@ -538,6 +547,21 @@ export default function EducationPage() {
   })
 
   const modules = data?.modules ?? []
+
+  // Build a short hint for why the button is disabled
+  function contributeHint(): string {
+    if (!isAuthenticated) return ""
+    if (!verified) return "Community verification required"
+    if (!eligibility) return ""
+    const parts: string[] = []
+    if (eligibility.completedModules < eligibility.requiredModules)
+      parts.push(`${eligibility.requiredModules - eligibility.completedModules} more module${eligibility.requiredModules - eligibility.completedModules > 1 ? "s" : ""} to complete`)
+    if (eligibility.currentIP < eligibility.requiredIP)
+      parts.push(`${eligibility.requiredIP - eligibility.currentIP} more IP needed`)
+    return parts.length ? parts.join(" · ") : ""
+  }
+
+  const hint = contributeHint()
 
   return (
     <div className="px-4 md:px-8 py-6 max-w-4xl mx-auto space-y-6">
@@ -559,14 +583,23 @@ export default function EducationPage() {
             Contribute
           </Link>
         ) : isAuthenticated ? (
-          <div
-            className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs flex-shrink-0 mt-1"
-            style={{ background: "rgba(14,11,8,0.05)", color: "rgba(14,11,8,0.35)" }}
-            title="Community verification required to contribute modules"
+          <Link
+            href="/education/create"
+            className="flex flex-col items-end gap-0.5 flex-shrink-0 mt-1"
           >
-            <Plus className="h-3.5 w-3.5" />
-            Contribute
-          </div>
+            <div
+              className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs opacity-50 cursor-not-allowed"
+              style={{ background: "rgba(14,11,8,0.06)", color: "rgba(14,11,8,0.5)" }}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Contribute
+            </div>
+            {hint && (
+              <span className="text-[10px] text-right" style={{ color: "rgba(14,11,8,0.35)", maxWidth: 140 }}>
+                {hint}
+              </span>
+            )}
+          </Link>
         ) : null}
       </div>
 
