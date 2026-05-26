@@ -501,6 +501,15 @@ class GroupMembershipService {
       offset = 0,
     } = filters;
 
+    // Build OR clause so selecting a ward also surfaces constituency/county/national groups
+    const locationClauses: Prisma.GroupWhereInput[] = [];
+    if (wardId) locationClauses.push({ wardId });
+    if (constituencyId) locationClauses.push({ constituencyId });
+    if (countyId) locationClauses.push({ countyId });
+    if (locationClauses.length > 0) {
+      locationClauses.push({ locationScope: LocationScope.NATIONAL });
+    }
+
     const where: Prisma.GroupWhereInput = {
       status: GroupStatus.ACTIVE,
       ...(isSystem !== undefined && { isSystemGroup: isSystem }),
@@ -509,9 +518,7 @@ class GroupMembershipService {
       ...(search && {
         name: { contains: search, mode: 'insensitive' as const },
       }),
-      ...(wardId && { wardId }),
-      ...(constituencyId && !wardId && { constituencyId }),
-      ...(countyId && !constituencyId && !wardId && { countyId }),
+      ...(locationClauses.length > 0 && { OR: locationClauses }),
     };
 
     const [groups, total] = await Promise.all([

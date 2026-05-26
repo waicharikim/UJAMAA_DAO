@@ -159,10 +159,13 @@ function ExploreGroups() {
     staleTime: Infinity,
   })
 
-  const locationFilter = wardId ? { wardId }
-    : constituencyId ? { constituencyId }
-    : countyId ? { countyId }
-    : {}
+  // Pass all selected levels — backend ORs them so a ward selection also returns
+  // constituency + county + national groups covering that ward.
+  const locationFilter = {
+    ...(countyId && { countyId }),
+    ...(constituencyId && { constituencyId }),
+    ...(wardId && { wardId }),
+  }
 
   const { data, isLoading } = useQuery({
     queryKey: ["groups-explore", locationFilter, search],
