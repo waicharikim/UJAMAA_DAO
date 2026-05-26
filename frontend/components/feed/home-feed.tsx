@@ -15,6 +15,10 @@ import {
   BookOpen,
   FileText,
   Check,
+  Vote,
+  Users,
+  Trophy,
+  ArrowRight,
 } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { postsApi, type PostScope, type PostType } from "@/lib/api"
@@ -481,6 +485,82 @@ function UnauthenticatedState() {
   )
 }
 
+// ─── Empty feed state ─────────────────────────────────────────
+
+function EmptyFeedState() {
+  const { user } = useAuth()
+  const wardName = user?.primaryWardName ?? "your ward"
+
+  const actions = [
+    {
+      icon: Vote,
+      label: "Create a Proposal",
+      description: "Raise an issue or initiative for your ward",
+      href: "/proposals/create",
+      color: "#C9922A",
+      bg: "rgba(201,146,42,0.08)",
+    },
+    {
+      icon: Users,
+      label: "Explore Groups",
+      description: "Find community groups in your area",
+      href: "/groups",
+      color: "#1D4731",
+      bg: "rgba(29,71,49,0.07)",
+    },
+    {
+      icon: Trophy,
+      label: "View Leaderboard",
+      description: "See top contributors in your community",
+      href: "/leaderboard",
+      color: "#7A4F1E",
+      bg: "rgba(122,79,30,0.07)",
+    },
+  ]
+
+  return (
+    <div className="px-4 py-8">
+      <div className="text-center mb-6">
+        <div
+          className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3"
+          style={{ background: "rgba(29,71,49,0.07)" }}
+        >
+          <span className="text-2xl">🌿</span>
+        </div>
+        <p className="text-[14px] font-semibold" style={{ color: "rgba(14,11,8,0.65)" }}>
+          {wardName} is quiet right now
+        </p>
+        <p className="text-[12px] mt-1" style={{ color: "rgba(14,11,8,0.35)" }}>
+          Be the first to post — or take action below
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        {actions.map(({ icon: Icon, label, description, href, color, bg }) => (
+          <Link key={href} href={href}>
+            <div
+              className="flex items-center gap-3 p-3 rounded-xl transition-all hover:shadow-sm cursor-pointer"
+              style={{ background: bg, border: `1px solid ${color}22` }}
+            >
+              <div
+                className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: `${color}18` }}
+              >
+                <Icon className="h-4 w-4" style={{ color }} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] font-semibold" style={{ color: "#0E0B08" }}>{label}</p>
+                <p className="text-[11px]" style={{ color: "rgba(14,11,8,0.45)" }}>{description}</p>
+              </div>
+              <ArrowRight className="h-4 w-4 flex-shrink-0" style={{ color: `${color}80` }} />
+            </div>
+          </Link>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────
 
 export function HomeFeed({ embedded = false }: { embedded?: boolean }) {
@@ -539,14 +619,7 @@ export function HomeFeed({ embedded = false }: { embedded?: boolean }) {
         {isLoading ? (
           <PostSkeleton />
         ) : allPosts.length === 0 ? (
-          <div className="px-4 py-10 text-center">
-            <p className="text-[13px]" style={{ color: "rgba(14,11,8,0.40)" }}>
-              No posts yet in this community.
-            </p>
-            <p className="text-[12px] mt-1" style={{ color: "rgba(14,11,8,0.28)" }}>
-              Be the first to share something.
-            </p>
-          </div>
+          <EmptyFeedState />
         ) : (
           <div>
             {allPosts.map((post) => (
