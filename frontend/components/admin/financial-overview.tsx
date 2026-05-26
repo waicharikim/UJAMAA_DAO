@@ -32,11 +32,11 @@ export function FinancialOverview({ stats }: Props) {
   async function handleGenerateReport() {
     setGeneratingReport(true)
     try {
-      const report = await adminApi.generateReport(reportType, { format: "json" })
+      const report = await adminApi.generateReport(reportType, { format: "json" }) as { columns: string[]; rows: Record<string, unknown>[] }
       const csv = [
-        report.data.columns.join(","),
-        ...report.data.rows.map((row: Record<string, unknown>) =>
-          report.data.columns.map((col: string) => JSON.stringify(row[col] ?? "")).join(",")
+        report.columns.join(","),
+        ...report.rows.map((row: Record<string, unknown>) =>
+          report.columns.map((col: string) => JSON.stringify(row[col] ?? "")).join(",")
         ),
       ].join("\n")
       const blob = new Blob([csv], { type: "text/csv" })
