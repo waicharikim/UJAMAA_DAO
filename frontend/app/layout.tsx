@@ -29,10 +29,34 @@ export const viewport: Viewport = {
   themeColor: "#1D4731",
 }
 
+const SITE_URL = "https://ujamaadao.org"
+const OG_TITLE = "UjamaaDAO — Ward Sovereignty Platform"
+const OG_DESC  = "Cooperative governance, community projects, and economic sovereignty for Kenyan wards."
+
 export const metadata: Metadata = {
-  title: "UjamaaDAO — Ward Sovereignty Platform",
-  description: "Cooperative governance, community projects, and economic sovereignty for Kenyan wards.",
+  title: {
+    default: OG_TITLE,
+    template: "%s | UjamaaDAO",
+  },
+  description: OG_DESC,
+  metadataBase: new URL(SITE_URL),
   manifest: "/manifest.json",
+  robots: { index: true, follow: true },
+  openGraph: {
+    type: "website",
+    locale: "en_KE",
+    url: SITE_URL,
+    siteName: "UjamaaDAO",
+    title: OG_TITLE,
+    description: OG_DESC,
+    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: OG_TITLE }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: OG_TITLE,
+    description: OG_DESC,
+    images: ["/opengraph-image"],
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
