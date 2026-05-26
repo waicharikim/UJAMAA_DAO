@@ -14,6 +14,10 @@ export interface User {
   // Dual location system (populated from geographic hierarchy in getMe response)
   primaryWardId?: string
   primaryWardName?: string
+  primaryConstituencyId?: string
+  primaryConstituencyName?: string
+  primaryCountyId?: string
+  primaryCountyName?: string
   secondaryWardId?: string
   secondaryWardName?: string
   residenceCounty: string

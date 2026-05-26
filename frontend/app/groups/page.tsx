@@ -6,7 +6,8 @@ import Link from "next/link"
 import { PageHeader } from "@/components/layout/page-header"
 import { StatsGrid } from "@/components/layout/stats-grid"
 import { communityApi, leaderboardApi, GroupDiscoveryDto, GroupMembershipDto, LeaderboardEntryDto } from "@/lib/api"
-import { Plus, Users, Crown, Shield, Network, Search, Globe, ChevronRight, Trophy, Star, Zap, BarChart3, Medal } from "lucide-react"
+import { FindCommunity } from "@/components/community/find-community"
+import { Plus, Users, Crown, Shield, Network, Search, Globe, ChevronRight, Trophy, Star, Zap, BarChart3, Medal, MapPin } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -426,6 +427,10 @@ export default function GroupsPage() {
           <TabsTrigger value="my-groups" className="data-[state=active]:bg-[#1E3D2F] data-[state=active]:text-[#F7F2E8]">
             My Groups
           </TabsTrigger>
+          <TabsTrigger value="find" className="data-[state=active]:bg-[#1E3D2F] data-[state=active]:text-[#F7F2E8]">
+            <MapPin className="h-3.5 w-3.5 mr-1.5" />
+            Find Community
+          </TabsTrigger>
           <TabsTrigger value="explore" className="data-[state=active]:bg-[#1E3D2F] data-[state=active]:text-[#F7F2E8]">
             Explore
           </TabsTrigger>
@@ -437,6 +442,10 @@ export default function GroupsPage() {
 
         <TabsContent value="my-groups" className="mt-6">
           <MyGroupsList />
+        </TabsContent>
+
+        <TabsContent value="find" className="mt-6">
+          <FindCommunity />
         </TabsContent>
 
         <TabsContent value="explore" className="mt-6">

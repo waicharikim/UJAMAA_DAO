@@ -482,6 +482,9 @@ class GroupMembershipService {
       voluntaryType?: string;
       systemType?: string;
       search?: string;
+      wardId?: string;
+      constituencyId?: string;
+      countyId?: string;
       limit?: number;
       offset?: number;
     } = {}
@@ -491,6 +494,9 @@ class GroupMembershipService {
       voluntaryType,
       systemType,
       search,
+      wardId,
+      constituencyId,
+      countyId,
       limit = 20,
       offset = 0,
     } = filters;
@@ -503,6 +509,9 @@ class GroupMembershipService {
       ...(search && {
         name: { contains: search, mode: 'insensitive' as const },
       }),
+      ...(wardId && { wardId }),
+      ...(constituencyId && !wardId && { constituencyId }),
+      ...(countyId && !constituencyId && !wardId && { countyId }),
     };
 
     const [groups, total] = await Promise.all([

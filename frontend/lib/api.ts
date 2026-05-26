@@ -954,6 +954,9 @@ export const communityApi = {
     voluntaryType?: string
     systemType?: string
     search?: string
+    wardId?: string
+    constituencyId?: string
+    countyId?: string
     limit?: number
     offset?: number
   }): Promise<{ groups: GroupDiscoveryDto[]; total: number }> =>
