@@ -71,8 +71,17 @@ export class GroupController {
 
   static async getGroups(req: AuthRequest, res: Response) {
     const userId = req.user!.userId;
-    const { isSystem, voluntaryType, systemType, search, wardId, constituencyId, countyId, limit, offset } =
-      req.query as Record<string, string>;
+    const {
+      isSystem,
+      voluntaryType,
+      systemType,
+      search,
+      wardId,
+      constituencyId,
+      countyId,
+      limit,
+      offset,
+    } = req.query as Record<string, string>;
     const result = await groupMembershipService.getGroups(userId, {
       isSystem:
         isSystem === 'true' ? true : isSystem === 'false' ? false : undefined,

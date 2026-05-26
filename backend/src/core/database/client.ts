@@ -17,10 +17,12 @@ declare global {
 const isFirstInit = !global.dbPool;
 
 // Create connection pool (or reuse cached one)
-const pool = global.dbPool ?? new Pool({
-  connectionString: env.DATABASE_URL,
-  max: 10,
-});
+const pool =
+  global.dbPool ??
+  new Pool({
+    connectionString: env.DATABASE_URL,
+    max: 10,
+  });
 
 // Create adapter
 const adapter = new PrismaPg(pool);

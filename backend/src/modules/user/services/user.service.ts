@@ -233,7 +233,11 @@ class UserService {
     primaryWard: {
       id: string;
       name: string;
-      constituency: { id: string; name: string; county: { id: string; name: string } };
+      constituency: {
+        id: string;
+        name: string;
+        county: { id: string; name: string };
+      };
     } | null;
     secondaryWard: { id: string; name: string } | null;
     currentLocationId: string | null;
@@ -271,13 +275,17 @@ class UserService {
     };
   }
 
-  private assertResidenceCooldown(user: { lastResidenceChangeAt: Date | null }): void {
+  private assertResidenceCooldown(user: {
+    lastResidenceChangeAt: Date | null;
+  }): void {
     if (!user.lastResidenceChangeAt) return;
     const monthsSince =
       (Date.now() - user.lastResidenceChangeAt.getTime()) /
       (30 * 24 * 60 * 60 * 1000);
     if (monthsSince < RESIDENCE_CHANGE_COOLDOWN_MONTHS) {
-      const remaining = Math.ceil(RESIDENCE_CHANGE_COOLDOWN_MONTHS - monthsSince);
+      const remaining = Math.ceil(
+        RESIDENCE_CHANGE_COOLDOWN_MONTHS - monthsSince
+      );
       throw ApiError.forbidden(
         `Residence change on cooldown. ${remaining} month(s) remaining.`
       );
@@ -291,7 +299,10 @@ class UserService {
     try {
       const result = await fn();
       if (result.count > 0)
-        logger.info({ operationType: 'CLEANUP', task, count: result.count }, `${task} cleaned up`);
+        logger.info(
+          { operationType: 'CLEANUP', task, count: result.count },
+          `${task} cleaned up`
+        );
       return result.count;
     } catch (err) {
       logger.error(
@@ -1161,7 +1172,11 @@ class UserService {
   async checkVouchingTimeouts(): Promise<number> {
     return this.safeCleanupJob('vouching-timeouts', () =>
       prisma.verificationRequest.updateMany({
-        where: { type: 'COMMUNITY', status: 'VOUCHING', expiresAt: { lt: new Date() } },
+        where: {
+          type: 'COMMUNITY',
+          status: 'VOUCHING',
+          expiresAt: { lt: new Date() },
+        },
         data: { status: 'PAYMENT_PENDING', reviewedAt: new Date() },
       })
     );

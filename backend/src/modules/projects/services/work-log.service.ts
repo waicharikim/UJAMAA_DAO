@@ -21,7 +21,9 @@ export class WorkLogService {
     });
     if (!milestone) throw ApiError.notFound('Milestone');
     if (milestone.status !== 'IN_PROGRESS')
-      throw ApiError.badRequest('Can only log work on an in-progress milestone');
+      throw ApiError.badRequest(
+        'Can only log work on an in-progress milestone'
+      );
 
     const member = await prisma.projectMember.findFirst({
       where: { projectId: milestone.projectId, userId },
@@ -73,7 +75,8 @@ export class WorkLogService {
       include: { user: { select: { id: true, name: true, avatarUrl: true } } },
     });
     if (!workLog) throw ApiError.notFound('Work log');
-    if (workLog.verifiedAt) throw ApiError.conflict('Work log already verified');
+    if (workLog.verifiedAt)
+      throw ApiError.conflict('Work log already verified');
 
     const isLeader = await roleService.isProjectLeader(
       verifierId,

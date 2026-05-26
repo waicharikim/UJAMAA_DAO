@@ -160,7 +160,13 @@ class ProposalVotingService {
       'Proposal tallied'
     );
 
-    await this.executeTallyPost(proposal, proposalId, newStatus, quorum, approved);
+    await this.executeTallyPost(
+      proposal,
+      proposalId,
+      newStatus,
+      quorum,
+      approved
+    );
 
     return { newStatus, quorum, approved };
   }
@@ -286,13 +292,27 @@ class ProposalVotingService {
   ): Promise<void> {
     if (proposal.creatorId) {
       await auditService
-        .log(proposal.creatorId, AuditAction.PROPOSAL_STATUS_CHANGED, 'Proposal', proposalId, {
-          newStatus, quorum, approved, tallySource: 'auto', title: proposal.title,
-        })
+        .log(
+          proposal.creatorId,
+          AuditAction.PROPOSAL_STATUS_CHANGED,
+          'Proposal',
+          proposalId,
+          {
+            newStatus,
+            quorum,
+            approved,
+            tallySource: 'auto',
+            title: proposal.title,
+          }
+        )
         .catch(() => {});
     }
     if (proposal.creatorId && newStatus === ProposalStatus.APPROVED)
-      await this.awardTallyCreatorRewards(proposal.creatorId, proposalId, proposal.title);
+      await this.awardTallyCreatorRewards(
+        proposal.creatorId,
+        proposalId,
+        proposal.title
+      );
     await this.anchorResultOnChain(proposalId, newStatus);
     if (proposal.creatorId)
       await this.notifyTallyOutcome({

@@ -22,29 +22,31 @@ export class GlobalImpactPointService {
   ) {
     if (amount <= 0) return;
 
-    const log = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const entry = await tx.impactPointLog.create({
-        data: {
-          userId,
-          amount,
-          reason,
-          scope: 'GLOBAL',
-          metadata,
-        },
-      });
+    const log = await prisma.$transaction(
+      async (tx: Prisma.TransactionClient) => {
+        const entry = await tx.impactPointLog.create({
+          data: {
+            userId,
+            amount,
+            reason,
+            scope: 'GLOBAL',
+            metadata,
+          },
+        });
 
-      await tx.user.update({
-        where: { id: userId },
-        data: { globalImpactPoints: { increment: amount } },
-      });
+        await tx.user.update({
+          where: { id: userId },
+          data: { globalImpactPoints: { increment: amount } },
+        });
 
-      logger.info(
-        { userId, amount, reason },
-        '[IP] Global Impact Points awarded'
-      );
+        logger.info(
+          { userId, amount, reason },
+          '[IP] Global Impact Points awarded'
+        );
 
-      return entry;
-    });
+        return entry;
+      }
+    );
 
     await auditService
       .log(userId, AuditAction.IP_AWARDED, 'User', userId, {

@@ -107,7 +107,9 @@ export async function assertStartVotingAuth(
 class ProposalLifecycleService {
   private assertProposalCreatorEligibility(
     userId: string,
-    group: { members: Array<{ userId: string; user: { globalImpactPoints: number } }> },
+    group: {
+      members: Array<{ userId: string; user: { globalImpactPoints: number } }>;
+    },
     scope: string
   ): void {
     const membership = group.members.find((m) => m.userId === userId);
@@ -115,9 +117,11 @@ class ProposalLifecycleService {
       throw ApiError.forbidden('You are not a member of this group');
 
     const requiredPercentile =
-      IP_PERCENTILE_THRESHOLD[scope as keyof typeof IP_PERCENTILE_THRESHOLD] || 1.0;
+      IP_PERCENTILE_THRESHOLD[scope as keyof typeof IP_PERCENTILE_THRESHOLD] ||
+      1.0;
     const ips = group.members.map((m) => m.user.globalImpactPoints);
-    const userRank = ips.filter((ip) => ip > membership.user.globalImpactPoints).length + 1;
+    const userRank =
+      ips.filter((ip) => ip > membership.user.globalImpactPoints).length + 1;
     const allowedRank = Math.ceil(requiredPercentile * ips.length);
 
     if (userRank > allowedRank)
@@ -431,7 +435,13 @@ class ProposalLifecycleService {
       { newStatus, stage: 2, title: proposal.title }
     );
     if (proposal.creatorId)
-      this.notifyReviewOutcome(proposal.creatorId, proposalId, proposal.title, newStatus, dto.note);
+      this.notifyReviewOutcome(
+        proposal.creatorId,
+        proposalId,
+        proposal.title,
+        newStatus,
+        dto.note
+      );
     return updated;
   }
 
@@ -446,7 +456,9 @@ class ProposalLifecycleService {
     notificationService
       .send({
         userId: creatorId,
-        type: approved ? NotificationType.PROPOSAL_APPROVED : NotificationType.PROPOSAL_REJECTED,
+        type: approved
+          ? NotificationType.PROPOSAL_APPROVED
+          : NotificationType.PROPOSAL_REJECTED,
         title: approved ? 'Proposal approved for voting' : 'Proposal rejected',
         message: approved
           ? `"${title}" has been approved by the administrator — you can now open voting.`
@@ -671,7 +683,12 @@ class ProposalLifecycleService {
       { newStatus, title: proposal.title }
     );
     if (proposal.creatorId)
-      this.notifyProgressUpdate(proposal.creatorId, proposalId, proposal.title, newStatus);
+      this.notifyProgressUpdate(
+        proposal.creatorId,
+        proposalId,
+        proposal.title,
+        newStatus
+      );
     return updated;
   }
 

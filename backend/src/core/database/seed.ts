@@ -891,7 +891,7 @@ All votes, proposal texts, and results are stored immutably. No administrator ca
   {
     title: 'Reading Your Ward Budget',
     description:
-      'Learn how to find, read, and interrogate your ward\'s annual development budget — where money comes from, where it goes, and how citizens can hold leaders accountable.',
+      "Learn how to find, read, and interrogate your ward's annual development budget — where money comes from, where it goes, and how citizens can hold leaders accountable.",
     content: `# Reading Your Ward Budget
 
 Every ward in Kenya receives an allocation from the County Government and the national government through the Ward Development Fund (WDF). Understanding where this money comes from and how it is spent is a fundamental civic right.
@@ -1276,7 +1276,7 @@ Use this mechanism to raise issues that the ward administration has not acted on
   {
     title: 'The Community Economy: Utility Tokens and the Ward Treasury',
     description:
-      'How UjamaaDAO\'s internal economy works — Utility Tokens, the ward treasury, dues allocation, and how community funds become real projects.',
+      "How UjamaaDAO's internal economy works — Utility Tokens, the ward treasury, dues allocation, and how community funds become real projects.",
     content: `# The Community Economy: Utility Tokens and the Ward Treasury
 
 UjamaaDAO runs a parallel community economy alongside the formal Kenyan economy. This module explains how money and tokens flow through the system, from a member paying dues to a funded borehole.
