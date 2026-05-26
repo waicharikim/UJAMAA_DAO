@@ -888,6 +888,481 @@ All votes, proposal texts, and results are stored immutably. No administrator ca
     verified: true,
     expertApproved: true,
   },
+  {
+    title: 'Reading Your Ward Budget',
+    description:
+      'Learn how to find, read, and interrogate your ward\'s annual development budget — where money comes from, where it goes, and how citizens can hold leaders accountable.',
+    content: `# Reading Your Ward Budget
+
+Every ward in Kenya receives an allocation from the County Government and the national government through the Ward Development Fund (WDF). Understanding where this money comes from and how it is spent is a fundamental civic right.
+
+## Where ward money comes from
+
+| Source | Description |
+|--------|-------------|
+| Ward Development Fund (WDF) | National CDF allocation per ward — roughly KES 7–12 million per year |
+| County Equitable Share | County decides how much reaches each ward based on population and needs |
+| Own-source revenue | Local market fees, parking charges, land rates in some wards |
+
+## How to find your ward's budget
+
+1. **County assembly website** — Most counties publish their annual budgets and ward development fund allocations online.
+2. **Ward administrator's office** — You can request a printed copy. This is your right under the Access to Information Act 2016.
+3. **Public participation meetings** — County budgets must go through public participation. Attend to influence priorities before funds are allocated.
+
+## What to look for in a budget
+
+When you see a ward budget document, check these five things:
+
+### 1. Allocation vs. actual spending
+The budget shows what was *planned*. Check if there is an "actual expenditure" column. A large gap means funds were not spent — or not spent on what was budgeted.
+
+### 2. Line items that benefit the most people
+Water, health, roads, and schools typically affect the most residents. How much of the budget goes to these vs. administrative costs?
+
+### 3. Pending projects from previous years
+Many wards carry forward unfinished projects year after year. If a borehole was budgeted three years ago and is still incomplete, ask why.
+
+### 4. Single-source procurement
+Large contracts awarded to one supplier without competitive tendering are a red flag. Under the Public Procurement and Asset Disposal Act 2015, contracts above KES 500,000 must be openly tendered.
+
+### 5. Travel and allowances
+These are often inflated. Compare them to the budget of the most important service delivery item.
+
+## How to ask hard questions
+
+Use public participation forums, ward barazas, or UjamaaDAO proposals to raise concerns. Frame your questions around data:
+
+> "The 2023/24 budget allocated KES 2.3 million for the Kamuthe road. The road is still not tarmacked. Can the ward administrator account for the expenditure?"
+
+A question backed by budget numbers is harder to dismiss than a general complaint.
+
+## Your rights
+
+- You have the right to request any public financial document under the Access to Information Act 2016.
+- County governments are required to hold at least two public participation forums per budget cycle.
+- The Controller of Budget publishes quarterly reports on all county expenditure at controller.go.ke.`,
+    duration: 18,
+    difficulty: 'INTERMEDIATE' as const,
+    category: 'governance',
+    completionIP: 35,
+    verified: true,
+    expertApproved: true,
+  },
+  {
+    title: 'Community Health: Prevention Over Cure',
+    description:
+      'How wards can reduce the burden of preventable disease through collective action — clean water, sanitation, immunisation, and maternal health.',
+    content: `# Community Health: Prevention Over Cure
+
+Kenya's public health system is under pressure. But the most common causes of illness and death in most wards are *preventable*. This module covers how communities can act together to reduce preventable disease before it starts.
+
+## The leading preventable killers
+
+According to Kenya's national health data, the top causes of death and hospitalisation in rural and peri-urban areas include:
+
+- **Malaria** — entirely preventable with nets, drainage, and indoor spraying
+- **Waterborne diarrheal diseases** — caused by contaminated water and poor sanitation
+- **Respiratory infections** — worsened by indoor smoke from cooking fires
+- **Maternal mortality** — most deaths occur from complications during delivery that are manageable with skilled attendance
+- **Malnutrition** — especially in children under 5
+
+Each of these is a *community problem* before it is an individual problem.
+
+## Water and sanitation
+
+The single highest-impact intervention any community can make is improving access to clean water. A contaminated water source affects every person, every meal, every child.
+
+**What your ward can do:**
+- Propose a borehole or rainwater harvesting project through UjamaaDAO
+- Organise a community clean-up of drainage channels before the rains
+- Lobby the ward administrator to chlorinate community water sources regularly
+
+**What you can do personally:**
+- Boil drinking water if you are not sure of the source
+- Wash hands at critical times: after the toilet, before handling food, after handling a baby
+- Keep latrines covered and at least 30 metres from any water source
+
+## Immunisation
+
+Kenya has a strong national immunisation programme. Every child under 1 should receive:
+
+| Vaccine | Disease prevented | Age |
+|---------|------------------|-----|
+| BCG | Tuberculosis | At birth |
+| OPV | Polio | 6, 10, 14 weeks |
+| DTP-HepB-Hib | Diphtheria, pertussis, tetanus, hepatitis B, Hib | 6, 10, 14 weeks |
+| Rotavirus | Severe diarrhoea | 6, 10 weeks |
+| PCV | Pneumonia | 6, 10, 14 weeks |
+| Measles/Rubella | Measles, rubella | 9 months, 18 months |
+
+If a child misses a vaccine, they can still be caught up at any government health facility. **Vaccination is free.**
+
+## Maternal health
+
+A woman who delivers at a health facility with a skilled attendant is dramatically less likely to die from birth complications. In Kenya, facility deliveries have increased significantly — but in some wards, many women still deliver at home.
+
+**How communities can support maternal health:**
+- Organise community health volunteers to escort pregnant women to antenatal clinics
+- Propose a community ambulance or motorbike transport fund for emergencies
+- Use UjamaaDAO to fund a maternity waiting room near the local health facility
+
+## Community health workers
+
+Kenya's Community Health Volunteers (CHVs) are trained health workers who operate at the household level. They conduct home visits, refer sick patients, track nutrition, and run health education sessions.
+
+If your ward has active CHVs, support them. If not, approach the sub-county health office to request CHV training for community members.
+
+## Turning health into a proposal
+
+Any of the above can become a UjamaaDAO proposal:
+- Borehole or piped water scheme
+- Community ambulance fund
+- Sanitation facility construction
+- CHV support fund for consumables
+
+Use the governance module to propose, and the treasury to track funds.`,
+    duration: 20,
+    difficulty: 'BEGINNER' as const,
+    category: 'health',
+    completionIP: 30,
+    verified: true,
+    expertApproved: true,
+  },
+  {
+    title: 'Smallholder Farming: Soil, Water, and Markets',
+    description:
+      'Practical knowledge for small-scale farmers — soil health, water harvesting, common crop diseases, and how to get better prices at the market.',
+    content: `# Smallholder Farming: Soil, Water, and Markets
+
+Over 70% of Kenyans depend on agriculture for food and income. Most are smallholder farmers working plots of less than 2 acres. This module covers three areas where small changes deliver the biggest results.
+
+## 1. Soil health
+
+Soil is the foundation of farming. Degraded soil produces poor yields no matter how much seed or fertiliser you add.
+
+### Signs of degraded soil
+- Hard crust that forms after rain
+- Poor water infiltration — water runs off instead of soaking in
+- Yellowing crops despite adequate rain
+- Low yields year after year on the same plot
+
+### Restoring soil health
+
+**Compost** is the most cost-effective intervention. A simple compost pile — crop residues, kitchen waste, animal manure, left to decompose for 6–8 weeks — creates a soil amendment that feeds crops and improves water retention. One bag of good compost can treat 5–10 square metres.
+
+**Crop rotation** prevents nutrient depletion. Alternate between cereals (maize, sorghum) and legumes (beans, groundnuts). Legumes fix nitrogen from the air into the soil, reducing the need for artificial fertiliser.
+
+**Minimum tillage** — rather than deep ploughing every season, loosen only the top 5–10cm. Deep ploughing destroys the soil structure and releases stored carbon.
+
+**Mulching** — covering the soil surface with dry grass or crop residue reduces moisture loss by 30–50% and suppresses weeds. In low-rainfall areas this can be the difference between crop failure and success.
+
+### Soil testing
+
+The Kenya Agricultural and Livestock Research Organisation (KALRO) offers affordable soil testing at regional centres. A soil test tells you exactly which nutrients your soil lacks, so you buy only the fertiliser you actually need — saving money and avoiding over-application.
+
+## 2. Water harvesting
+
+In most Kenyan agroecological zones, rainfall is adequate for crops — but it falls unevenly. The challenge is capturing and holding water when it rains.
+
+### Zai pits
+A zai pit is a small planting hole (30cm diameter, 10cm deep) dug before the rains. Filled with a handful of compost, zai pits concentrate water and nutrients directly at the root zone. They were developed in the Sahel but are highly effective in semi-arid Kenya.
+
+### Tied ridges
+Instead of making continuous furrows, block them every metre with a small ridge of soil. This creates a series of small water-holding basins that stop water from running off.
+
+### Rainwater harvesting tanks
+A 5,000-litre tank can be fed by a single iron-sheet roof and a simple gutter. Even two months of stored water can bridge a dry spell. A community can propose a shared water harvesting scheme through UjamaaDAO.
+
+## 3. Getting better prices
+
+Post-harvest loss and poor market access cost Kenyan smallholders billions of shillings every year. Here are four practical strategies:
+
+### Form a group
+Buyers pay higher per-unit prices for bulk supply. A group of 20 farmers selling 20 bags each can negotiate collectively and reduce transport costs.
+
+### Time your sales
+Prices are lowest immediately after harvest when everyone is selling. If you have storage, wait 4–6 weeks before selling. A simple hermetically sealed bag (PICS bag) can store grain safely for 6 months with no chemicals.
+
+### Know the price
+Check prices at the nearest market and through your County Kilimo office before accepting a price from a middleman. The e-Granary platform also lists current grain prices.
+
+### Reduce post-harvest loss
+- Dry grain to below 13% moisture before storage (test by biting — if it shatters cleanly, it is dry enough)
+- Store in a clean, dry location off the ground
+- Use metal bins or PICS bags to prevent weevil damage`,
+    duration: 22,
+    difficulty: 'BEGINNER' as const,
+    category: 'agriculture',
+    completionIP: 30,
+    verified: true,
+    expertApproved: true,
+  },
+  {
+    title: 'Emergency Preparedness at the Ward Level',
+    description:
+      'How communities can prepare for floods, fires, droughts, and other emergencies before they happen — early warning, response plans, and mutual aid.',
+    content: `# Emergency Preparedness at the Ward Level
+
+Emergencies don't wait for government. When a flood arrives, a fire starts, or a drought deepens, the first responders are always community members — neighbours, local leaders, anyone who is present. This module covers how wards can prepare *before* disaster strikes.
+
+## Why preparation matters
+
+Research consistently shows that communities with pre-existing preparedness plans suffer fewer deaths and recover faster than those that improvise. The difference is not resources — it is *organisation*.
+
+A community that knows:
+- Who to call
+- Where to go
+- What to bring
+- Who needs help first
+
+...will always outperform a community that is trying to figure these things out during a crisis.
+
+## Know your local hazards
+
+Every ward has a different risk profile. Before you can prepare, you need to identify what you are preparing for.
+
+| Hazard type | Common in | Warning signs |
+|-------------|-----------|---------------|
+| Flash floods | Riverine wards, urban valleys | Heavy upstream rain, rapid river rise |
+| Drought | ASAL regions, dry highlands | Late onset rains, failed short rains |
+| Fire (grass/bush) | Dry grasslands, informal settlements | Dry season + wind + ignition source |
+| Disease outbreak | Dense populations, poor sanitation | Sudden cluster of similar illness |
+| Landslides | Steep slopes, deforested hillsides | Heavy sustained rain |
+
+Discuss with ward elders and the ward administrator: what emergencies have affected your ward in the last 10 years?
+
+## Building a ward emergency plan
+
+A ward emergency plan does not need to be a formal document. It needs to answer five questions:
+
+### 1. Early warning
+Who monitors for signs of an emergency? This might be the sub-county weather station, a river level gauge, or a community volunteer who lives near a flood-prone area. How do they communicate warnings to the rest of the community?
+
+### 2. Evacuation routes
+If people need to leave their homes, where do they go? Which routes are passable in heavy rain? Are there bridges that flood? Where is the designated meeting point?
+
+### 3. Vulnerable persons register
+Who in your ward cannot self-evacuate? Elderly people living alone, people with disabilities, households with very young children, pregnant women. A community volunteer keeping this list can save lives.
+
+### 4. First response roles
+Who does what in the first hour? This doesn't require training — it requires agreement. Examples:
+- Community health volunteers: triage and first aid
+- Bodaboda riders: rapid transport of injured
+- Church/school: temporary shelter
+- Community store owners: emergency food supplies
+
+### 5. Communication tree
+In an emergency, phone networks may be congested. A simple communication tree — each person calls two others — ensures information spreads even when direct communication fails.
+
+## Reporting emergencies on UjamaaDAO
+
+UjamaaDAO has a built-in emergency reporting system. When you report an emergency on the platform:
+
+1. Your ward and sub-county administrators are immediately notified
+2. The alert is visible to all ward members
+3. The emergency is logged for future review and planning
+
+To report: go to the Emergency section from your dashboard or press the emergency button in the navigation.
+
+## Mutual aid networks
+
+The most resilient communities are those where members look after each other. Consider organising:
+
+- A neighbourhood watch for fire season
+- A food sharing network for drought periods
+- A transport mutual aid arrangement for medical emergencies
+
+These informal networks cost nothing and save lives.`,
+    duration: 18,
+    difficulty: 'BEGINNER' as const,
+    category: 'civic',
+    completionIP: 25,
+    verified: true,
+    expertApproved: true,
+  },
+  {
+    title: 'Know Your Rights: Land, Labour, and Local Governance',
+    description:
+      'A practical guide to the rights Kenyan citizens hold regarding land ownership, employment, and participation in local government decisions.',
+    content: `# Know Your Rights: Land, Labour, and Local Governance
+
+Kenya's constitution is one of the most progressive in Africa. It guarantees broad rights — but rights only protect you if you know them and can invoke them. This module covers three areas most relevant to ward communities.
+
+## Land rights
+
+Land is the most contested resource in Kenya. Here is what the law says.
+
+### Community land
+
+Under the Community Land Act 2016, land that is held, managed, or used by a community is community land. This includes ancestral lands, grazing land, forests used collectively, and land that families have occupied for generations without formal title.
+
+Community land cannot be sold by individuals. It can only be transferred by a registered community with the consent of members.
+
+**What this means for you:** If your community has been using land collectively and someone claims private title to it, you can challenge that claim. Contact the National Land Commission (NLC) or a legal aid organisation.
+
+### Squatter rights
+
+If you have occupied and continuously used land for **12 years or more** without the owner taking action, you may have a claim to adverse possession (squatter's rights). This is a legal process — you would need to apply to the Land Court.
+
+### Land grabbing
+
+Land grabbing — the illegal allocation of public or community land to individuals — is common in Kenya. If public land (a school compound, a forest reserve, a road reserve) is being fenced or developed without a community process, you have the right to:
+
+1. Report to the county lands office
+2. File a complaint with the National Land Commission (0800 723 656 — free)
+3. Raise a UjamaaDAO proposal to fund legal assistance
+
+### Searching land records
+
+You can search land records at the nearest land registry. The search fee is KES 500. Bring the plot number (from a title deed, survey map, or rate demand notice). The search will tell you who is registered as the owner.
+
+## Labour rights
+
+Whether you are formally employed or working informally, you have rights.
+
+### Minimum wage
+
+Kenya sets minimum wages by sector and region each year through the Labour (General) (Minimum Wage) Order. As of 2024, the minimum wage for general labourers in major towns is approximately KES 16,000–19,000 per month. Agricultural workers have lower minimums.
+
+**Your employer cannot legally pay below the minimum wage for your job category.**
+
+### Working conditions
+
+Under the Employment Act 2007:
+- You are entitled to a written contract for any employment over one month
+- Maximum working hours are 52 per week (excluding overtime)
+- Overtime must be paid at 1.5× normal rate
+- You are entitled to 21 working days of annual leave after 12 months
+- Female employees are entitled to 3 months' maternity leave on full pay
+
+### Reporting labour violations
+
+Report to the nearest County Labour Office. You can also call the Ministry of Labour hotline or contact the Federation of Kenya Employers (FKE) for guidance.
+
+Informal workers — casual labourers, domestic workers, agricultural workers — are often unaware they have the same protections. A verbal contract is still a contract.
+
+## Rights in local governance
+
+### Public participation
+
+The Constitution (Article 174) and the County Governments Act require that residents are *meaningfully consulted* before decisions that affect them. This applies to:
+
+- County budgets (you must be given a real opportunity to comment)
+- Development projects (EIA processes require community input)
+- Land use changes
+- By-laws that affect communities
+
+If public participation is being conducted as a rubber stamp — short notice, inaccessible venues, no translation — you can challenge the validity of the decision.
+
+### Access to information
+
+Under the Access to Information Act 2016, any person can request any document held by a public body. The body must respond within **21 days**. Documents that affect public health, safety, the environment, or land cannot be withheld even if they contain some confidential information.
+
+Requests can be made in writing, by email, or at the public body's office.
+
+### Petitions to the county assembly
+
+Any resident can petition the County Assembly on any matter within county jurisdiction. A petition must be signed by at least 10 residents and submitted to the County Assembly Clerk. The Assembly must respond within 60 days.
+
+Use this mechanism to raise issues that the ward administration has not acted on.`,
+    duration: 25,
+    difficulty: 'INTERMEDIATE' as const,
+    category: 'civic',
+    completionIP: 40,
+    verified: true,
+    expertApproved: true,
+  },
+  {
+    title: 'The Community Economy: Utility Tokens and the Ward Treasury',
+    description:
+      'How UjamaaDAO\'s internal economy works — Utility Tokens, the ward treasury, dues allocation, and how community funds become real projects.',
+    content: `# The Community Economy: Utility Tokens and the Ward Treasury
+
+UjamaaDAO runs a parallel community economy alongside the formal Kenyan economy. This module explains how money and tokens flow through the system, from a member paying dues to a funded borehole.
+
+## Two types of value
+
+UjamaaDAO tracks two distinct types of value:
+
+### Participation Rights (PR)
+Already covered in another module. PR measures your democratic engagement. It is non-transferable and cannot be bought.
+
+### Utility Tokens (UT)
+UT is the economic token. It comes in two forms:
+
+| Type | Source | Can it be withdrawn? |
+|------|--------|---------------------|
+| **Fiat-backed UT** | Depositing KES via M-Pesa | Yes — back to M-Pesa at 1 UT = 1 KES |
+| **Earned UT** | Platform rewards (contributing, learning, completing tasks) | No — for in-platform use only |
+
+This distinction is permanent. Fiat-backed UT and earned UT are tracked separately and can never be merged.
+
+## How dues work
+
+When a member pays monthly dues via M-Pesa, the payment goes to a platform-controlled account (never peer-to-peer). The KES amount is then split across four treasury levels:
+
+| Level | Share | Purpose |
+|-------|-------|---------|
+| Ward treasury | 70% | Directly funds local projects |
+| Constituency treasury | 15% | Cross-ward projects |
+| County treasury | 10% | County-level initiatives |
+| National treasury | 5% | Platform operations and national projects |
+
+This split is configurable by platform administrators and can be adjusted to reflect community priorities.
+
+## The ward treasury
+
+Your ward's treasury is visible to all members on the Treasury page. It shows:
+
+- Current balance
+- Incoming contributions (dues, direct deposits)
+- Outgoing disbursements (approved projects)
+- Transaction history
+
+Funds in the treasury can only be disbursed through an approved governance proposal. No individual — including platform administrators — can unilaterally withdraw from a ward treasury.
+
+## From treasury to project
+
+Here is the full flow from a proposal passing to money being spent:
+
+1. A proposal is submitted and passes the voting threshold
+2. The proposal enters the **APPROVED** state
+3. A project manager launches the project from the approved proposal
+4. The project is broken into milestones with deliverables
+5. Treasury funds are locked (not yet disbursed) when the project enters **EXECUTING** state
+6. As milestones are verified, proportional funds are released
+7. Milestone completion is recorded on-chain — tamper-proof
+
+This milestone-based disbursement ensures money is only released when real work is done.
+
+## Earning UT through contribution
+
+Beyond dues, members can earn UT by:
+
+- Contributing to verified project milestones
+- Attending barazas (recorded on-chain via the /present command)
+- Completing education modules
+- Having work sessions verified by witnesses (QR-code based)
+
+Earned UT cannot be withdrawn to M-Pesa, but it can be used for in-platform actions such as boosting marketplace listings or contributing to community funds.
+
+## Transparency
+
+All treasury transactions are logged in the audit trail. The blockchain layer provides a second, immutable record of key transactions. This means:
+
+- No one can hide money that entered the treasury
+- No one can claim a milestone was completed if it wasn't verified
+- Every member can trace every shilling from contribution to project delivery
+
+This transparency is the core promise of the community economy. It transforms "trust me" into "check the record".`,
+    duration: 16,
+    difficulty: 'INTERMEDIATE' as const,
+    category: 'economy',
+    completionIP: 35,
+    verified: true,
+    expertApproved: true,
+  },
 ];
 
 const ROLE_COVERAGE_USERS_DATA: TestUser[] = [
