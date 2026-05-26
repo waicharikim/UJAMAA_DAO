@@ -23,6 +23,7 @@ import {
   Coins,
   Bell,
   MapPin,
+  Flag,
 } from "lucide-react"
 import {
   Drawer,
@@ -43,9 +44,10 @@ const drawerGroups = [
     label: "Community",
     color: "#2A6B7C",
     items: [
-      { label: "My Ward", href: "/ward",      icon: MapPin   },
-      { label: "Groups",  href: "/groups",    icon: Users    },
-      { label: "Learn",   href: "/education", icon: BookOpen },
+      { label: "My Ward",   href: "/ward",      icon: MapPin   },
+      { label: "Groups",    href: "/groups",    icon: Users    },
+      { label: "Learn",     href: "/education", icon: BookOpen },
+      { label: "Conflicts", href: "/conflicts", icon: Flag     },
     ],
   },
   {

@@ -30,6 +30,7 @@ import {
   Users2,
   Bell,
   MapPin,
+  Flag,
 } from "lucide-react"
 
 // ─── Hub definitions ──────────────────────────────────────
@@ -62,9 +63,10 @@ const HUBS = [
     icon: Users,
     href: "/groups",
     items: [
-      { label: "My Ward", href: "/ward",      icon: MapPin   },
-      { label: "Groups",  href: "/groups",    icon: Users    },
-      { label: "Learn",   href: "/education", icon: BookOpen },
+      { label: "My Ward",   href: "/ward",      icon: MapPin   },
+      { label: "Groups",    href: "/groups",    icon: Users    },
+      { label: "Learn",     href: "/education", icon: BookOpen },
+      { label: "Conflicts", href: "/conflicts", icon: Flag     },
     ],
   },
   {
