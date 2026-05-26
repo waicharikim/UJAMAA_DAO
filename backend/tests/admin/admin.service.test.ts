@@ -446,3 +446,283 @@ describe('AdminService.suspendUser', () => {
     ).rejects.toMatchObject({ statusCode: 404 });
   });
 });
+
+// ─── Education module seeding helpers ─────────────────────────────────────────
+
+async function seedModuleCreator() {
+  return prisma.user.create({
+    data: {
+      email: `module-creator-${Date.now()}@ujamaa.test`,
+      name: 'Module Creator',
+      verificationLevel: 'COMMUNITY_VERIFIED',
+      emailVerified: true,
+      phoneVerified: true,
+      communityVerified: true,
+      primaryWardId: TEST_WARD_ID,
+    },
+  });
+}
+
+async function seedSubmittedModule(creatorId: string, title = 'Submitted Module') {
+  return prisma.educationalModule.create({
+    data: {
+      creatorId,
+      title,
+      description: 'A submitted module for admin review.',
+      content: 'Introduction to the topic. ' + 'x'.repeat(80),
+      mediaUrls: [],
+      duration: 20,
+      difficulty: 'BEGINNER',
+      category: 'governance',
+      verified: false,
+      completionIP: 10,
+      submittedAt: new Date(),
+      rejectionReason: null,
+    },
+  });
+}
+
+async function seedDraftModule(creatorId: string) {
+  return prisma.educationalModule.create({
+    data: {
+      creatorId,
+      title: 'Draft Module',
+      description: 'A draft module not yet submitted.',
+      content: 'Introduction to the topic. ' + 'x'.repeat(80),
+      mediaUrls: [],
+      duration: 20,
+      difficulty: 'BEGINNER',
+      category: 'governance',
+      verified: false,
+      completionIP: 10,
+    },
+  });
+}
+
+async function seedApprovedModule(creatorId: string) {
+  return prisma.educationalModule.create({
+    data: {
+      creatorId,
+      title: 'Approved Module',
+      description: 'An already approved module.',
+      content: 'Introduction to the topic. ' + 'x'.repeat(80),
+      mediaUrls: [],
+      duration: 20,
+      difficulty: 'BEGINNER',
+      category: 'governance',
+      verified: true,
+      expertApproved: true,
+      completionIP: 10,
+      submittedAt: new Date(),
+    },
+  });
+}
+
+const VALID_ADMIN_MODULE_DTO = {
+  title: 'Ward Budget Fundamentals',
+  description: 'Learn how ward development funds are allocated and tracked by county governments.',
+  content:
+    'Ward development funds are allocated annually by county governments. This module explains the allocation formula, how to access expenditure reports, and how community members can participate in budget review meetings.',
+  duration: 25,
+  difficulty: 'BEGINNER',
+  category: 'governance',
+  completionIP: 15,
+};
+
+// ─────────────────────────────────────────────
+// AdminService.listPendingModules
+// ─────────────────────────────────────────────
+
+describe('AdminService.listPendingModules', () => {
+  beforeEach(async () => {
+    await seedLocation();
+  });
+
+  it('returns empty when no modules are pending', async () => {
+    const result = await adminService.listPendingModules({});
+    expect(result.modules).toHaveLength(0);
+    expect(result.total).toBe(0);
+  });
+
+  it('returns only submitted modules (not drafts, not approved)', async () => {
+    const creator = await seedModuleCreator();
+    await seedDraftModule(creator.id);
+    await seedApprovedModule(creator.id);
+    const submitted = await seedSubmittedModule(creator.id, 'Pending Review');
+
+    const result = await adminService.listPendingModules({});
+    expect(result.modules).toHaveLength(1);
+    expect(result.modules[0].title).toBe('Pending Review');
+    expect(result.total).toBe(1);
+  });
+
+  it('excludes rejected modules (rejectionReason set)', async () => {
+    const creator = await seedModuleCreator();
+    await prisma.educationalModule.create({
+      data: {
+        creatorId: creator.id,
+        title: 'Rejected One',
+        description: 'Was rejected before.',
+        content: 'Content ' + 'x'.repeat(80),
+        mediaUrls: [],
+        duration: 15,
+        difficulty: 'BEGINNER',
+        category: 'governance',
+        verified: false,
+        completionIP: 5,
+        submittedAt: new Date(Date.now() - 86_400_000),
+        rejectionReason: 'Too short.',
+      },
+    });
+    const result = await adminService.listPendingModules({});
+    expect(result.modules).toHaveLength(0);
+  });
+
+  it('orders by submittedAt ascending (oldest first)', async () => {
+    const creator = await seedModuleCreator();
+    await prisma.educationalModule.create({
+      data: {
+        creatorId: creator.id, title: 'Later Module',
+        description: 'Desc', content: 'Content ' + 'x'.repeat(80), mediaUrls: [],
+        duration: 10, difficulty: 'BEGINNER', category: 'governance',
+        verified: false, completionIP: 0,
+        submittedAt: new Date(Date.now() - 1_000),
+      },
+    });
+    await prisma.educationalModule.create({
+      data: {
+        creatorId: creator.id, title: 'Earlier Module',
+        description: 'Desc', content: 'Content ' + 'x'.repeat(80), mediaUrls: [],
+        duration: 10, difficulty: 'BEGINNER', category: 'governance',
+        verified: false, completionIP: 0,
+        submittedAt: new Date(Date.now() - 86_400_000),
+      },
+    });
+
+    const result = await adminService.listPendingModules({});
+    expect(result.modules[0].title).toBe('Earlier Module');
+    expect(result.modules[1].title).toBe('Later Module');
+  });
+
+  it('paginates correctly', async () => {
+    const creator = await seedModuleCreator();
+    for (let i = 0; i < 5; i++) {
+      await seedSubmittedModule(creator.id, `Module ${i}`);
+    }
+    const page1 = await adminService.listPendingModules({ limit: 3, offset: 0 });
+    const page2 = await adminService.listPendingModules({ limit: 3, offset: 3 });
+    expect(page1.modules).toHaveLength(3);
+    expect(page2.modules).toHaveLength(2);
+    expect(page1.total).toBe(5);
+  });
+});
+
+// ─────────────────────────────────────────────
+// AdminService.adminCreateModule
+// ─────────────────────────────────────────────
+
+describe('AdminService.adminCreateModule', () => {
+  beforeEach(async () => {
+    await seedLocation();
+  });
+
+  it('creates a module that is immediately verified and expert-approved', async () => {
+    const admin = await seedAdminUser();
+    const result = await adminService.adminCreateModule(admin.id, VALID_ADMIN_MODULE_DTO);
+    expect(result.verified).toBe(true);
+    expect(result.expertApproved).toBe(true);
+    expect(result.submittedAt).not.toBeNull();
+  });
+
+  it('sets the admin as the creator', async () => {
+    const admin = await seedAdminUser();
+    const result = await adminService.adminCreateModule(admin.id, VALID_ADMIN_MODULE_DTO);
+    expect(result.creatorId).toBe(admin.id);
+  });
+
+  it('persists all DTO fields to the database', async () => {
+    const admin = await seedAdminUser();
+    const result = await adminService.adminCreateModule(admin.id, VALID_ADMIN_MODULE_DTO);
+    const inDb = await prisma.educationalModule.findUnique({ where: { id: result.id } });
+    expect(inDb!.title).toBe(VALID_ADMIN_MODULE_DTO.title);
+    expect(inDb!.completionIP).toBe(VALID_ADMIN_MODULE_DTO.completionIP);
+  });
+});
+
+// ─────────────────────────────────────────────
+// AdminService.approveModule
+// ─────────────────────────────────────────────
+
+describe('AdminService.approveModule', () => {
+  beforeEach(async () => {
+    await seedLocation();
+  });
+
+  it('sets verified=true and clears rejectionReason', async () => {
+    const creator = await seedModuleCreator();
+    const mod = await seedSubmittedModule(creator.id);
+    const result = await adminService.approveModule(mod.id);
+    expect(result.verified).toBe(true);
+    expect(result.expertApproved).toBe(true);
+    expect(result.rejectionReason).toBeNull();
+  });
+
+  it('throws 400 for a module that has not been submitted (draft)', async () => {
+    const creator = await seedModuleCreator();
+    const mod = await seedDraftModule(creator.id);
+    await expect(adminService.approveModule(mod.id)).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it('throws 400 if module is already approved', async () => {
+    const creator = await seedModuleCreator();
+    const mod = await seedApprovedModule(creator.id);
+    await expect(adminService.approveModule(mod.id)).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it('throws 404 for an unknown moduleId', async () => {
+    await expect(
+      adminService.approveModule('00000000-0000-0000-0000-000000000000')
+    ).rejects.toMatchObject({ statusCode: 404 });
+  });
+});
+
+// ─────────────────────────────────────────────
+// AdminService.rejectModule
+// ─────────────────────────────────────────────
+
+describe('AdminService.rejectModule', () => {
+  beforeEach(async () => {
+    await seedLocation();
+  });
+
+  it('sets rejectionReason and clears submittedAt', async () => {
+    const creator = await seedModuleCreator();
+    const mod = await seedSubmittedModule(creator.id);
+    const result = await adminService.rejectModule(mod.id, 'Content is too brief.');
+    expect(result.rejectionReason).toBe('Content is too brief.');
+    expect(result.submittedAt).toBeNull();
+    expect(result.verified).toBe(false);
+  });
+
+  it('throws 400 for a draft module (not submitted)', async () => {
+    const creator = await seedModuleCreator();
+    const mod = await seedDraftModule(creator.id);
+    await expect(
+      adminService.rejectModule(mod.id, 'Some reason here.')
+    ).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it('throws 400 if module is already approved', async () => {
+    const creator = await seedModuleCreator();
+    const mod = await seedApprovedModule(creator.id);
+    await expect(
+      adminService.rejectModule(mod.id, 'Too late to reject.')
+    ).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it('throws 404 for an unknown moduleId', async () => {
+    await expect(
+      adminService.rejectModule('00000000-0000-0000-0000-000000000000', 'No such module.')
+    ).rejects.toMatchObject({ statusCode: 404 });
+  });
+});

@@ -395,3 +395,294 @@ describe('Admin PR Adjust and Suspend Routes', () => {
     expect(res.status).toBe(401);
   });
 });
+
+// ─── Education module seeding helpers ─────────────────────────────────────────
+
+async function seedModuleCreatorUser() {
+  return prisma.user.create({
+    data: {
+      email: `mod-creator-${Date.now()}@ujamaa.test`,
+      name: 'Module Creator',
+      verificationLevel: 'COMMUNITY_VERIFIED',
+      emailVerified: true,
+      phoneVerified: true,
+      communityVerified: true,
+      primaryWardId: TEST_WARD_ID,
+    },
+  });
+}
+
+async function seedSubmittedModuleForAdmin(creatorId: string, title = 'Submitted Module') {
+  return prisma.educationalModule.create({
+    data: {
+      creatorId,
+      title,
+      description: 'A submitted module awaiting admin review.',
+      content: 'Introduction to the topic. ' + 'x'.repeat(80),
+      mediaUrls: [],
+      duration: 20,
+      difficulty: 'BEGINNER',
+      category: 'governance',
+      verified: false,
+      completionIP: 10,
+      submittedAt: new Date(),
+      rejectionReason: null,
+    },
+  });
+}
+
+async function seedDraftModuleForAdmin(creatorId: string) {
+  return prisma.educationalModule.create({
+    data: {
+      creatorId,
+      title: 'Draft Module',
+      description: 'Unsubmitted draft.',
+      content: 'Introduction to the topic. ' + 'x'.repeat(80),
+      mediaUrls: [],
+      duration: 20,
+      difficulty: 'BEGINNER',
+      category: 'governance',
+      verified: false,
+      completionIP: 5,
+    },
+  });
+}
+
+async function seedNonAdminToken() {
+  const user = await prisma.user.create({
+    data: {
+      email: `non-admin-${Date.now()}@ujamaa.test`,
+      name: 'Non Admin',
+      verificationLevel: 'COMMUNITY_VERIFIED',
+      emailVerified: true,
+      phoneVerified: true,
+      communityVerified: true,
+      primaryWardId: TEST_WARD_ID,
+    },
+  });
+  return makeAccessToken(user.id, 'COMMUNITY_VERIFIED', { roles: [] });
+}
+
+const VALID_ADMIN_MODULE = {
+  title: 'Ward Budget Fundamentals',
+  description: 'Learn how ward development funds are allocated and tracked by county governments.',
+  content:
+    'Ward development funds are allocated annually by county governments. This module explains the allocation formula, how to access expenditure reports, and how community members can participate in budget review meetings.',
+  duration: 25,
+  difficulty: 'BEGINNER',
+  category: 'governance',
+  completionIP: 15,
+};
+
+// ─────────────────────────────────────────────
+// GET /admin/education/pending
+// ─────────────────────────────────────────────
+
+describe('GET /admin/education/pending', () => {
+  it('401 without token', async () => {
+    await seedLocation();
+    const res = await request(app).get('/api/v1/admin/education/pending');
+    expect(res.status).toBe(401);
+  });
+
+  it('403 for non-admin user', async () => {
+    await seedLocation();
+    const token = await seedNonAdminToken();
+    const res = await request(app)
+      .get('/api/v1/admin/education/pending')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('200 returns pending modules with creator info', async () => {
+    await seedLocation();
+    const { token } = await seedAdminAndToken();
+    const creator = await seedModuleCreatorUser();
+    await seedSubmittedModuleForAdmin(creator.id, 'Awaiting Review');
+
+    const res = await request(app)
+      .get('/api/v1/admin/education/pending')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.modules).toHaveLength(1);
+    expect(res.body.data.modules[0].title).toBe('Awaiting Review');
+    expect(res.body.data.modules[0].creator).toBeDefined();
+    expect(res.body.data.total).toBe(1);
+  });
+
+  it('200 returns empty list when no modules are pending', async () => {
+    await seedLocation();
+    const { token } = await seedAdminAndToken();
+    const res = await request(app)
+      .get('/api/v1/admin/education/pending')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.modules).toHaveLength(0);
+  });
+});
+
+// ─────────────────────────────────────────────
+// POST /admin/education  (admin create)
+// ─────────────────────────────────────────────
+
+describe('POST /admin/education', () => {
+  it('401 without token', async () => {
+    await seedLocation();
+    const res = await request(app).post('/api/v1/admin/education').send(VALID_ADMIN_MODULE);
+    expect(res.status).toBe(401);
+  });
+
+  it('403 for non-admin user', async () => {
+    await seedLocation();
+    const token = await seedNonAdminToken();
+    const res = await request(app)
+      .post('/api/v1/admin/education')
+      .set('Authorization', `Bearer ${token}`)
+      .send(VALID_ADMIN_MODULE);
+    expect(res.status).toBe(403);
+  });
+
+  it('400 for invalid body (title too short)', async () => {
+    await seedLocation();
+    const { token } = await seedAdminAndToken();
+    const res = await request(app)
+      .post('/api/v1/admin/education')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ ...VALID_ADMIN_MODULE, title: 'Hi' });
+    expect(res.status).toBe(400);
+  });
+
+  it('400 for content under 100 chars', async () => {
+    await seedLocation();
+    const { token } = await seedAdminAndToken();
+    const res = await request(app)
+      .post('/api/v1/admin/education')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ ...VALID_ADMIN_MODULE, content: 'Too short.' });
+    expect(res.status).toBe(400);
+  });
+
+  it('200 creates auto-approved module', async () => {
+    await seedLocation();
+    const { token } = await seedAdminAndToken();
+    const res = await request(app)
+      .post('/api/v1/admin/education')
+      .set('Authorization', `Bearer ${token}`)
+      .send(VALID_ADMIN_MODULE);
+    expect(res.status).toBe(200);
+    expect(res.body.data.verified).toBe(true);
+    expect(res.body.data.expertApproved).toBe(true);
+    expect(res.body.data.title).toBe(VALID_ADMIN_MODULE.title);
+  });
+});
+
+// ─────────────────────────────────────────────
+// POST /admin/education/:moduleId/approve
+// ─────────────────────────────────────────────
+
+describe('POST /admin/education/:moduleId/approve', () => {
+  it('401 without token', async () => {
+    await seedLocation();
+    const res = await request(app).post(
+      '/api/v1/admin/education/00000000-0000-0000-0000-000000000001/approve'
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it('403 for non-admin user', async () => {
+    await seedLocation();
+    const token = await seedNonAdminToken();
+    const res = await request(app)
+      .post('/api/v1/admin/education/00000000-0000-0000-0000-000000000001/approve')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('400 for a draft module (not submitted)', async () => {
+    await seedLocation();
+    const { token } = await seedAdminAndToken();
+    const creator = await seedModuleCreatorUser();
+    const draft = await seedDraftModuleForAdmin(creator.id);
+
+    const res = await request(app)
+      .post(`/api/v1/admin/education/${draft.id}/approve`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(400);
+  });
+
+  it('200 approves a submitted module', async () => {
+    await seedLocation();
+    const { token } = await seedAdminAndToken();
+    const creator = await seedModuleCreatorUser();
+    const mod = await seedSubmittedModuleForAdmin(creator.id);
+
+    const res = await request(app)
+      .post(`/api/v1/admin/education/${mod.id}/approve`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.verified).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────
+// POST /admin/education/:moduleId/reject
+// ─────────────────────────────────────────────
+
+describe('POST /admin/education/:moduleId/reject', () => {
+  it('401 without token', async () => {
+    await seedLocation();
+    const res = await request(app)
+      .post('/api/v1/admin/education/00000000-0000-0000-0000-000000000001/reject')
+      .send({ reason: 'This module needs more depth and detail.' });
+    expect(res.status).toBe(401);
+  });
+
+  it('403 for non-admin user', async () => {
+    await seedLocation();
+    const token = await seedNonAdminToken();
+    const res = await request(app)
+      .post('/api/v1/admin/education/00000000-0000-0000-0000-000000000001/reject')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ reason: 'This module needs more depth and detail.' });
+    expect(res.status).toBe(403);
+  });
+
+  it('400 for reason under 10 chars', async () => {
+    await seedLocation();
+    const { token } = await seedAdminAndToken();
+    const creator = await seedModuleCreatorUser();
+    const mod = await seedSubmittedModuleForAdmin(creator.id);
+    const res = await request(app)
+      .post(`/api/v1/admin/education/${mod.id}/reject`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ reason: 'Short' });
+    expect(res.status).toBe(400);
+  });
+
+  it('400 for a draft module (not submitted)', async () => {
+    await seedLocation();
+    const { token } = await seedAdminAndToken();
+    const creator = await seedModuleCreatorUser();
+    const draft = await seedDraftModuleForAdmin(creator.id);
+    const res = await request(app)
+      .post(`/api/v1/admin/education/${draft.id}/reject`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ reason: 'This module needs more depth and detail.' });
+    expect(res.status).toBe(400);
+  });
+
+  it('200 rejects a submitted module and sets rejectionReason', async () => {
+    await seedLocation();
+    const { token } = await seedAdminAndToken();
+    const creator = await seedModuleCreatorUser();
+    const mod = await seedSubmittedModuleForAdmin(creator.id);
+
+    const res = await request(app)
+      .post(`/api/v1/admin/education/${mod.id}/reject`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ reason: 'Content is too brief and lacks references.' });
+    expect(res.status).toBe(200);
+    expect(res.body.data.rejectionReason).toBe('Content is too brief and lacks references.');
+    expect(res.body.data.verified).toBe(false);
+  });
+});
