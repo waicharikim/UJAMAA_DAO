@@ -3,7 +3,7 @@
 # Compose file location (relative to backend/)
 COMPOSE_FILE := ../docker/docker-compose.yml
 COMPOSE_PROD := ../docker/docker-compose.prod.yml
-ENV_FILE     := ../docker/.env
+ENV_FILE     := ../docker/.env.prod
 
 # Default target
 help:

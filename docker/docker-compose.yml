@@ -74,17 +74,17 @@ services:
       - REDIS_URL=redis://redis:6379
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - JWT_SECRET=${JWT_SECRET:-6e603cfa9affb7677020ad6a930bd3f076867ff38d100586dc5d985bed845ad0}
-      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
-      - DASHBOARD_PASSWORD=${DASHBOARD_PASSWORD:-admin123}
-      - BASE_URL=${BASE_URL:-http://localhost:4000}
-      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3001}
-      - SMTP_HOST=${SMTP_HOST:-mailhog}
-      - SMTP_PORT=${SMTP_PORT:-1025}
-      - SMTP_USER=${SMTP_USER:-}
-      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
-      - SMTP_FROM=${SMTP_FROM:-noreply@ujamaadao.org}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
+      - JWT_SECRET=6e603cfa9affb7677020ad6a930bd3f076867ff38d100586dc5d985bed845ad0
+      - FRONTEND_URL=http://localhost:3000
+      - DASHBOARD_PASSWORD=admin123
+      - BASE_URL=http://localhost:4000
+      - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
+      - SMTP_HOST=mailhog
+      - SMTP_PORT=1025
+      - SMTP_USER=
+      - SMTP_PASSWORD=
+      - SMTP_FROM=noreply@ujamaadao.org
+      - ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000
       - ENABLE_SMS=${ENABLE_SMS:-false}
       - SMS_PROVIDER=${SMS_PROVIDER:-africastalking}
       - AT_API_KEY=${AT_API_KEY:-}
@@ -213,7 +213,7 @@ services:
       - REDIS_URL=redis://redis:6379
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - JWT_SECRET=${JWT_SECRET:-6e603cfa9affb7677020ad6a930bd3f076867ff38d100586dc5d985bed845ad0}
+      - JWT_SECRET=6e603cfa9affb7677020ad6a930bd3f076867ff38d100586dc5d985bed845ad0
       # M-Pesa B2C (outbound payout) — worker only
       - BUNI_B2C_SHORTCODE=${BUNI_B2C_SHORTCODE:-}
       - BUNI_B2C_INITIATOR_NAME=${BUNI_B2C_INITIATOR_NAME:-}
