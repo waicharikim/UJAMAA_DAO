@@ -66,7 +66,7 @@ COPY --from=builder /usr/src/app/prisma ./prisma
 COPY --from=builder /usr/src/app/docker ./docker
 
 # Install only production dependencies
-RUN npm install --omit=dev && npm cache clean --force
+RUN npm install --omit=dev --ignore-scripts && npm cache clean --force
 
 # Make scripts executable
 RUN chmod +x ./docker/*.sh
@@ -88,7 +88,7 @@ COPY --from=builder /usr/src/app/prisma ./prisma
 COPY --from=builder /usr/src/app/docker ./docker
 
 # Install only production dependencies
-RUN npm install --omit=dev && npm cache clean --force
+RUN npm install --omit=dev --ignore-scripts && npm cache clean --force
 
 # Make scripts executable
 RUN chmod +x ./docker/*.sh
