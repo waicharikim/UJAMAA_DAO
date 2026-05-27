@@ -1,0 +1,235 @@
+version: '3.9'
+
+# ═══════════════════════════════════════════════════════════════════════════
+# UJAMAA DAO - PRODUCTION DOCKER COMPOSE
+# ═══════════════════════════════════════════════════════════════════════════
+# Usage (from backend/):
+#   make prod-build   — build all production images
+#   make prod         — start production stack
+#
+# Required env vars in docker/.env (no defaults — these must be set):
+#   POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB
+#   JWT_SECRET, ENCRYPTION_KEY
+#   FRONTEND_URL, BASE_URL, ALLOWED_ORIGINS
+#   NEXT_PUBLIC_API_URL, NEXT_PUBLIC_PRIVY_APP_ID
+#   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM
+#   TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET
+#   BUNI_CLIENT_ID, BUNI_CLIENT_SECRET, BUNI_BASE_URL
+#
+# DNS required before first start (Traefik needs A records to resolve for
+# Let's Encrypt HTTP challenge):
+#   ujamaadao.org      → droplet IP
+#   api.ujamaadao.org  → droplet IP
+#   www.ujamaadao.org  → droplet IP (CNAME or A)
+#
+# acme.json must be chmod 600 on the host before starting Traefik.
+# ═══════════════════════════════════════════════════════════════════════════
+
+services:
+  # ─────────────────────────────────────────────────────────────────────────
+  # TRAEFIK — SSL termination + automatic Let's Encrypt certificates
+  # ─────────────────────────────────────────────────────────────────────────
+  traefik:
+    image: traefik:v2.11
+    container_name: ujamaa_traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ../traefik/acme.json:/letsencrypt/acme.json
+      - ../traefik/traefik.prod.yml:/etc/traefik/traefik.yml:ro
+    networks:
+      - backend
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # WEB — API server (prod-web Dockerfile target)
+  # ─────────────────────────────────────────────────────────────────────────
+  web:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+      target: prod-web
+    container_name: ujamaa_web
+    restart: unless-stopped
+    expose:
+      - "4000"
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      - RUNNING_IN_DOCKER=true
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://redis:6379
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=${JWT_SECRET}
+      - FRONTEND_URL=${FRONTEND_URL}
+      - BASE_URL=${BASE_URL}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_FROM=${SMTP_FROM}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - ENABLE_SMS=${ENABLE_SMS:-false}
+      - AT_API_KEY=${AT_API_KEY:-}
+      - AT_USERNAME=${AT_USERNAME:-sandbox}
+      - AT_SENDER_ID=${AT_SENDER_ID:-}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET}
+      - BUNI_CLIENT_ID=${BUNI_CLIENT_ID}
+      - BUNI_CLIENT_SECRET=${BUNI_CLIENT_SECRET}
+      - BUNI_BASE_URL=${BUNI_BASE_URL}
+      - DD_API_KEY=${DD_API_KEY:-}
+      - SENTRY_DSN=${SENTRY_DSN:-}
+    labels:
+      - "traefik.enable=true"
+      # HTTPS
+      - "traefik.http.routers.api.rule=Host(`api.ujamaadao.org`)"
+      - "traefik.http.routers.api.entrypoints=websecure"
+      - "traefik.http.routers.api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.api.loadbalancer.server.port=4000"
+      # HTTP → HTTPS redirect
+      - "traefik.http.routers.api-http.rule=Host(`api.ujamaadao.org`)"
+      - "traefik.http.routers.api-http.entrypoints=web"
+      - "traefik.http.routers.api-http.middlewares=redirect-to-https@docker"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - backend
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # WORKER — BullMQ job processor (prod-worker Dockerfile target)
+  # ─────────────────────────────────────────────────────────────────────────
+  worker:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+      target: prod-worker
+    container_name: ujamaa_worker
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - RUNNING_IN_DOCKER=true
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://redis:6379
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=${JWT_SECRET}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - FRONTEND_URL=${FRONTEND_URL}
+      - BASE_URL=${BASE_URL}
+      - MINTER_PRIVATE_KEY=${MINTER_PRIVATE_KEY:-}
+      - BASE_RPC_URL=${BASE_RPC_URL:-https://sepolia.base.org}
+      - PR_TOKEN_ADDRESS=${PR_TOKEN_ADDRESS:-}
+      - UT_TOKEN_ADDRESS=${UT_TOKEN_ADDRESS:-}
+      - GOVERNANCE_VOTING_ADDRESS=${GOVERNANCE_VOTING_ADDRESS:-}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
+      - BARAZA_AI_MODEL=${BARAZA_AI_MODEL:-claude-haiku-4-5-20251001}
+      - BUNI_CLIENT_ID=${BUNI_CLIENT_ID}
+      - BUNI_CLIENT_SECRET=${BUNI_CLIENT_SECRET}
+      - BUNI_BASE_URL=${BUNI_BASE_URL}
+      - BUNI_B2C_SHORTCODE=${BUNI_B2C_SHORTCODE:-}
+      - BUNI_B2C_INITIATOR_NAME=${BUNI_B2C_INITIATOR_NAME:-}
+      - BUNI_B2C_SECURITY_CREDENTIAL=${BUNI_B2C_SECURITY_CREDENTIAL:-}
+      - DD_API_KEY=${DD_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - backend
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # FRONTEND — Next.js standalone production build
+  # NEXT_PUBLIC_* vars are inlined at build time — must be in args:
+  # ─────────────────────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      target: prod
+      args:
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+        - NEXT_PUBLIC_PRIVY_APP_ID=${NEXT_PUBLIC_PRIVY_APP_ID}
+        - NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN:-}
+        - SENTRY_AUTH_TOKEN=${SENTRY_AUTH_TOKEN:-}
+    container_name: ujamaa_frontend
+    restart: unless-stopped
+    expose:
+      - "3000"
+    labels:
+      - "traefik.enable=true"
+      # HTTPS
+      - "traefik.http.routers.frontend.rule=Host(`ujamaadao.org`) || Host(`www.ujamaadao.org`)"
+      - "traefik.http.routers.frontend.entrypoints=websecure"
+      - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.frontend.loadbalancer.server.port=3000"
+      # HTTP → HTTPS redirect
+      - "traefik.http.routers.frontend-http.rule=Host(`ujamaadao.org`) || Host(`www.ujamaadao.org`)"
+      - "traefik.http.routers.frontend-http.entrypoints=web"
+      - "traefik.http.routers.frontend-http.middlewares=redirect-to-https@docker"
+      # Shared redirect middleware (defined once — both routers reference it)
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true"
+    networks:
+      - backend
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # POSTGRES
+  # ─────────────────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: ujamaa_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+      start_period: 10s
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # REDIS
+  # ─────────────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: ujamaa_redis
+    restart: unless-stopped
+    command: redis-server --save 60 1 --loglevel warning --maxmemory 256mb --maxmemory-policy noeviction
+    volumes:
+      - redis_data:/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+networks:
+  backend:
+    driver: bridge
+
+volumes:
+  pgdata:
+    driver: local
+  redis_data:
+    driver: local

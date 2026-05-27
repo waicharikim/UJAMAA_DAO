@@ -28,4 +28,4 @@ npx prisma generate
 echo "ℹ️  Skipping migrations (handled by web container)"
 
 echo "🚀 Starting worker process (production)..."
-exec node dist/worker.js
+exec node dist/workers.js

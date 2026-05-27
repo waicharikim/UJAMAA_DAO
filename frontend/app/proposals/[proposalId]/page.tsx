@@ -1,6 +1,6 @@
 "use client"
 
-import { use, useState } from "react"
+import { use, useState, useEffect } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
@@ -106,11 +106,13 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
     queryFn: () => governanceApi.getProposal(proposalId),
     enabled: isAuthenticated,
     staleTime: 15_000,
-    select: (data) => {
-      setAnnotations(data.annotations ?? [])
-      return data
-    },
   })
+
+  useEffect(() => {
+    if (proposal?.annotations) {
+      setAnnotations(proposal.annotations)
+    }
+  }, [proposal?.id])
 
   const canAnnotate =
     isAuthenticated &&

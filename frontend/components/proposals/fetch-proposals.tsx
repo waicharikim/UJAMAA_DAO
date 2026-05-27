@@ -132,11 +132,11 @@ function ProposalCard({
 }) {
   const meta = STATUS_META[proposal.status] ?? STATUS_META.DRAFT
   const total = proposal._count?.votes ?? proposal.votesSummary?.total ?? 0
-  const isVoting = proposal.status === "VOTING" || proposal.status === "APPROVED_FOR_VOTING"
 
   return (
-    <div
-      className="rounded-xl overflow-hidden transition-all hover:shadow-md group flex flex-col h-full"
+    <Link
+      href={`/proposals/${proposal.id}`}
+      className="rounded-xl overflow-hidden transition-all hover:shadow-md hover:-translate-y-0.5 group flex flex-col h-full"
       style={{
         background: "white",
         border: "1px solid rgba(29,71,49,0.08)",
@@ -151,12 +151,10 @@ function ProposalCard({
           className="object-cover transition-transform duration-500 group-hover:scale-105"
           sizes="(max-width: 640px) 100vw, 340px"
         />
-        {/* Thin scrim only at bottom for badge legibility */}
         <div
           className="absolute inset-x-0 bottom-0 h-14"
           style={{ background: "linear-gradient(to top, rgba(0,0,0,0.45) 0%, transparent 100%)" }}
         />
-        {/* Status badge — bottom-left */}
         <div className="absolute bottom-2.5 left-3 flex items-center gap-2">
           <span
             className="px-2 py-0.5 rounded-full text-[10px] font-bold backdrop-blur-sm"
@@ -173,7 +171,6 @@ function ProposalCard({
             </span>
           )}
         </div>
-        {/* Group badge — top-right */}
         {proposal.group && (
           <div className="absolute top-2.5 right-3">
             <span
@@ -190,22 +187,16 @@ function ProposalCard({
         {/* Title + arrow */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
-            <Link
-              href={`/proposals/${proposal.id}`}
-              className="text-sm font-bold leading-snug line-clamp-2 hover:underline"
-              style={{ color: "#0A1F14" }}
-            >
+            <p className="text-sm font-bold leading-snug line-clamp-2" style={{ color: "#0A1F14" }}>
               {proposal.title}
-            </Link>
+            </p>
             {proposal.description && (
               <p className="mt-1 text-xs leading-relaxed line-clamp-2 flex-1" style={{ color: "#7A6E60" }}>
                 {proposal.description}
               </p>
             )}
           </div>
-          <Link href={`/proposals/${proposal.id}`} className="shrink-0 mt-0.5">
-            <ChevronRight className="h-4 w-4" style={{ color: "rgba(201,146,42,0.5)" }} />
-          </Link>
+          <ChevronRight className="h-4 w-4 shrink-0 mt-0.5" style={{ color: "rgba(201,146,42,0.5)" }} />
         </div>
 
         {/* Voting bar */}
@@ -236,9 +227,13 @@ function ProposalCard({
           )}
         </div>
 
-        {/* Vote buttons */}
+        {/* Vote buttons — stopPropagation so clicks don't navigate */}
         {proposal.status === "VOTING" && (
-          <div className="flex gap-2 pt-3" style={{ borderTop: "1px solid rgba(14,11,8,0.06)" }}>
+          <div
+            className="flex gap-2 pt-3"
+            style={{ borderTop: "1px solid rgba(14,11,8,0.06)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
               onClick={() => onVote(proposal.id, "YES")}
               disabled={voting}
@@ -269,7 +264,7 @@ function ProposalCard({
           </div>
         )}
       </div>
-    </div>
+    </Link>
   )
 }
 
