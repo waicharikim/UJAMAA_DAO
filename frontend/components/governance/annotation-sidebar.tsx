@@ -1,6 +1,5 @@
 "use client"
 
-import { useState } from "react"
 import { useMutation } from "@tanstack/react-query"
 import { governanceApi, type ProposalAnnotationDto } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
@@ -30,10 +29,6 @@ export function AnnotationSidebar({
   onReacted,
 }: AnnotationSidebarProps) {
   const { toast } = useToast()
-  const [localAnnotations, setLocalAnnotations] = useState(annotations)
-
-  // Keep local state in sync with parent
-  if (localAnnotations !== annotations) setLocalAnnotations(annotations)
 
   const { mutate: deleteAnnotation } = useMutation({
     mutationFn: (annotationId: string) =>

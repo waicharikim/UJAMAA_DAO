@@ -116,7 +116,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
 
   const canAnnotate =
     isAuthenticated &&
-    (user?.verificationLevel === "COMMUNITY_VERIFIED") &&
+    ["COMMUNITY_VERIFIED", "FULL_VERIFIED"].includes(user?.verificationLevel ?? "") &&
     ["PENDING_REVIEW", "APPROVED_FOR_VOTING"].includes(proposal?.status ?? "")
 
   const handleAnnotationCreated = (ann: ProposalAnnotationDto) =>
