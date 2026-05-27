@@ -3,6 +3,7 @@
 # Compose file location (relative to backend/)
 COMPOSE_FILE := ../docker/docker-compose.yml
 COMPOSE_PROD := ../docker/docker-compose.prod.yml
+ENV_FILE     := ../docker/.env
 
 # Default target
 help:
@@ -58,11 +59,20 @@ dev:
 # Production
 prod:
 	@echo "Starting production environment..."
-	@docker compose -f $(COMPOSE_PROD) up -d
+	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) up -d
+
+prod-down:
+	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) down
+
+prod-logs:
+	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) logs -f
+
+prod-logs-web:
+	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) logs -f web
 
 prod-build:
 	@echo "Building production images..."
-	@docker compose -f $(COMPOSE_PROD) build --no-cache
+	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) build --no-cache
 
 # Common operations
 up:
