@@ -1036,6 +1036,23 @@ export type ProposalStatus =
 
 export type ProposalScope = "GROUP" | "COMMUNITY"
 
+export interface ProposalAnnotationDto {
+  id: string
+  proposalId: string
+  authorId: string
+  fieldKey: string
+  startOffset: number
+  endOffset: number
+  quotedText: string
+  comment: string
+  color: string
+  createdAt: string
+  upvotes: number
+  downvotes: number
+  myReaction: "UP" | "DOWN" | null
+  author: { id: string; name: string } | null
+}
+
 export interface ProposalDto {
   id: string
   title: string
@@ -1071,6 +1088,8 @@ export interface ProposalDto {
   alternatives?: string | null
   outcome?: string | null
   outcomeRecordedAt?: string | null
+  // Inline annotations
+  annotations?: ProposalAnnotationDto[]
 }
 
 export const governanceApi = {
@@ -1147,6 +1166,33 @@ export const governanceApi = {
     apiFetch<unknown>(`/governance/${proposalId}/progress`, {
       method: "PATCH",
       body: JSON.stringify({ status, note }),
+    }),
+
+  createAnnotation: (
+    proposalId: string,
+    dto: { fieldKey: string; startOffset: number; endOffset: number; quotedText: string; comment: string }
+  ): Promise<ProposalAnnotationDto> =>
+    apiFetch<ProposalAnnotationDto>(`/governance/${proposalId}/annotations`, {
+      method: "POST",
+      body: JSON.stringify(dto),
+    }),
+
+  listAnnotations: (proposalId: string): Promise<ProposalAnnotationDto[]> =>
+    apiFetch<ProposalAnnotationDto[]>(`/governance/${proposalId}/annotations`),
+
+  deleteAnnotation: (proposalId: string, annotationId: string): Promise<{ id: string; deleted: boolean }> =>
+    apiFetch<{ id: string; deleted: boolean }>(`/governance/${proposalId}/annotations/${annotationId}`, {
+      method: "DELETE",
+    }),
+
+  reactToAnnotation: (
+    proposalId: string,
+    annotationId: string,
+    type: "UP" | "DOWN" | null
+  ): Promise<{ upvotes: number; downvotes: number; myReaction: "UP" | "DOWN" | null }> =>
+    apiFetch(`/governance/${proposalId}/annotations/${annotationId}/react`, {
+      method: "POST",
+      body: JSON.stringify({ type }),
     }),
 
 }

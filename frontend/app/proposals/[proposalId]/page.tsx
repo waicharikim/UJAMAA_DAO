@@ -7,7 +7,9 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/auth-context"
-import { governanceApi, communityApi, projectApi, onboardingApi } from "@/lib/api"
+import { governanceApi, communityApi, projectApi, onboardingApi, type ProposalAnnotationDto } from "@/lib/api"
+import { AnnotatableText } from "@/components/governance/annotatable-text"
+import { AnnotationSidebar } from "@/components/governance/annotation-sidebar"
 import {
   ArrowLeft,
   Loader2,
@@ -97,13 +99,39 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
   const [memoryAlternatives, setMemoryAlternatives] = useState("")
   const [outcomeText, setOutcomeText] = useState("")
   const [showOutcomeForm, setShowOutcomeForm] = useState(false)
+  const [annotations, setAnnotations] = useState<ProposalAnnotationDto[]>([])
 
   const { data: proposal, isLoading, isError } = useQuery({
     queryKey: ["proposal", proposalId],
     queryFn: () => governanceApi.getProposal(proposalId),
     enabled: isAuthenticated,
     staleTime: 15_000,
+    select: (data) => {
+      setAnnotations(data.annotations ?? [])
+      return data
+    },
   })
+
+  const canAnnotate =
+    isAuthenticated &&
+    (user?.verificationLevel === "COMMUNITY_VERIFIED") &&
+    ["PENDING_REVIEW", "APPROVED_FOR_VOTING"].includes(proposal?.status ?? "")
+
+  const handleAnnotationCreated = (ann: ProposalAnnotationDto) =>
+    setAnnotations((prev) => [...prev, ann])
+
+  const handleAnnotationDeleted = (id: string) =>
+    setAnnotations((prev) => prev.filter((a) => a.id !== id))
+
+  const handleAnnotationReacted = (
+    id: string,
+    upvotes: number,
+    downvotes: number,
+    myReaction: "UP" | "DOWN" | null
+  ) =>
+    setAnnotations((prev) =>
+      prev.map((a) => (a.id === id ? { ...a, upvotes, downvotes, myReaction } : a))
+    )
 
   const { data: myMembership } = useQuery({
     queryKey: ["group-my-role", proposal?.groupId],
@@ -302,9 +330,17 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
           </h1>
 
           {proposal.description && (
-            <p className="text-sm text-warm-gray leading-relaxed whitespace-pre-line">
-              {proposal.description}
-            </p>
+            <AnnotatableText
+              text={proposal.description}
+              fieldKey="description"
+              proposalId={proposal.id}
+              annotations={annotations}
+              currentUserId={user?.id ?? null}
+              canAnnotate={canAnnotate}
+              onCreated={handleAnnotationCreated}
+              onDeleted={handleAnnotationDeleted}
+              onReacted={handleAnnotationReacted}
+            />
           )}
 
           {/* Rejection note */}
@@ -693,7 +729,17 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
                   <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#7A6E60" }}>
                     Why this approach
                   </p>
-                  <p className="text-sm text-[#0A1F14]/80 leading-relaxed">{proposal.rationale}</p>
+                  <AnnotatableText
+                    text={proposal.rationale}
+                    fieldKey="rationale"
+                    proposalId={proposal.id}
+                    annotations={annotations}
+                    currentUserId={user?.id ?? null}
+                    canAnnotate={canAnnotate}
+                    onCreated={handleAnnotationCreated}
+                    onDeleted={handleAnnotationDeleted}
+                    onReacted={handleAnnotationReacted}
+                  />
                 </div>
               )}
               {proposal.alternatives && (
@@ -701,7 +747,17 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
                   <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: "#7A6E60" }}>
                     Alternatives considered
                   </p>
-                  <p className="text-sm text-[#0A1F14]/80 leading-relaxed">{proposal.alternatives}</p>
+                  <AnnotatableText
+                    text={proposal.alternatives}
+                    fieldKey="alternatives"
+                    proposalId={proposal.id}
+                    annotations={annotations}
+                    currentUserId={user?.id ?? null}
+                    canAnnotate={canAnnotate}
+                    onCreated={handleAnnotationCreated}
+                    onDeleted={handleAnnotationDeleted}
+                    onReacted={handleAnnotationReacted}
+                  />
                 </div>
               )}
             </div>
@@ -808,6 +864,18 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
           )}
         </CardContent>
       </Card>
+
+      {/* ── Community Opinions ───────────────────────────── */}
+      {annotations.length > 0 && proposal && (
+        <AnnotationSidebar
+          annotations={annotations}
+          proposalId={proposal.id}
+          currentUserId={user?.id ?? null}
+          canReact={canAnnotate}
+          onDeleted={handleAnnotationDeleted}
+          onReacted={handleAnnotationReacted}
+        />
+      )}
 
       {/* ── Failure Protocol: What next? ─────────────────── */}
       {proposal?.status === "REJECTED" && (

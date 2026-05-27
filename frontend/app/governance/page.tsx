@@ -49,25 +49,43 @@ function formatDate(iso: string) {
 
 // ── Proposal cover photos ──────────────────────────────────────────────────
 
-// Verified Kenyan community photos — real CDN base URLs confirmed from Unsplash
-const PROPOSAL_PHOTOS = [
-  "https://images.unsplash.com/photo-1515657241610-a6b33f0f6c5a", // community gathering, Kargi, Kenya
-  "https://images.unsplash.com/photo-1515657834497-26509e295154", // woman dancing, Kargi, Kenya
-  "https://images.unsplash.com/photo-1547496727-11c450fe4e7f", // traditional Kenyan attire group
-  "https://images.unsplash.com/photo-1515658323406-25d61c141a6e", // people gathered, Kargi, Kenya
-  "https://images.unsplash.com/photo-1603703182693-51a19941fa59", // Samburu women, Kenya
-  "https://images.unsplash.com/photo-1601071733462-d0bbb6ee7a02", // Masai family, Masai Village, Kenya
-  "https://images.unsplash.com/photo-1704495669300-216e12543f9f", // Masai Mara, Kenya
-  "https://images.unsplash.com/photo-1610982330184-b26f7ea46541", // Masai in traditional clothing, Masai Mara
-  "https://images.unsplash.com/photo-1741706538015-ddc358873090", // outdoor market, Karen, Nairobi
-  "https://images.unsplash.com/photo-1709427327748-a6ebaf65a691", // Maasai village, Naboisho, Narok
-  "https://images.unsplash.com/photo-1623519364070-effe59a1c4d7", // rural Kenya, Massi village
-  "https://images.unsplash.com/photo-1709427249173-85111186e52a", // Maasai dwelling, Kenya
-]
+// Kenyan photos per proposal type — CDN base URLs verified from Unsplash
+const PROPOSAL_PHOTOS: Record<string, string[]> = {
+  COMMUNITY_INITIATIVE: [
+    "https://images.unsplash.com/photo-1515657241610-a6b33f0f6c5a", // community gathering, Kargi
+    "https://images.unsplash.com/photo-1515657834497-26509e295154", // woman dancing, Kargi
+    "https://images.unsplash.com/photo-1515658323406-25d61c141a6e", // people gathered, Kargi
+    "https://images.unsplash.com/photo-1520254553641-2eed4cf2ef26", // children, northern Kenya
+    "https://images.unsplash.com/photo-1576830886922-02b61aee42ad", // learning/sewing, Korogocho Nairobi
+    "https://images.unsplash.com/photo-1547496614-54ff387d650a", // children playing, Kenya
+    "https://images.unsplash.com/photo-1656068218535-85db26125e13", // Nairobi street scene
+    "https://images.unsplash.com/photo-1741706538015-ddc358873090", // outdoor market, Karen, Nairobi
+  ],
+  MAJOR_PROJECT: [
+    "https://images.unsplash.com/photo-1741706527174-ebd2768ffc49", // stadium construction, Nairobi
+    "https://images.unsplash.com/photo-1747854828989-5c8408a8f0bc", // Konza Technopolis, Kenya
+    "https://images.unsplash.com/photo-1758875168808-72bc8dd1c5bf", // construction crane, Nairobi
+    "https://images.unsplash.com/photo-1673902205653-98d0c3cd3ae0", // building, Kenya coast
+  ],
+  STRATEGIC_DECISION: [
+    "https://images.unsplash.com/photo-1655028183177-f941088a84aa", // community meeting, Karen Nairobi
+    "https://images.unsplash.com/photo-1776039325163-f45315a484f3", // panel discussion, Nairobi
+    "https://images.unsplash.com/photo-1548522904-e5ab6cf5e09b", // group at Masai Mara
+    "https://images.unsplash.com/photo-1709427327748-a6ebaf65a691", // Maasai village, Narok
+    "https://images.unsplash.com/photo-1547496727-11c450fe4e7f", // traditional Kenyan attire group
+  ],
+  EMERGENCY: [
+    "https://images.unsplash.com/photo-1638628982284-77a437c37089", // mother and baby, Kenya
+    "https://images.unsplash.com/photo-1664990594725-552201db8079", // kids in Nairobi
+    "https://images.unsplash.com/photo-1603703182693-51a19941fa59", // Samburu women, Kenya
+    "https://images.unsplash.com/photo-1601071733462-d0bbb6ee7a02", // Masai family, Kenya
+  ],
+}
 
-function proposalCoverUrl(id: string): string {
+function proposalCoverUrl(id: string, type?: string | null): string {
+  const pool = PROPOSAL_PHOTOS[type ?? ""] ?? PROPOSAL_PHOTOS.COMMUNITY_INITIATIVE
   const seed = id.split("").slice(0, 4).reduce((acc, c) => acc + c.charCodeAt(0), 0)
-  return `${PROPOSAL_PHOTOS[seed % PROPOSAL_PHOTOS.length]}?w=800&q=75`
+  return `${pool[seed % pool.length]}?w=800&q=75`
 }
 
 // ── Platform Governance section ────────────────────────────────────────────
@@ -136,7 +154,7 @@ function PlatformProposalCard({ proposal }: { proposal: ProposalDto }) {
         {/* Photo */}
         <div className="relative h-44 overflow-hidden flex-shrink-0">
           <Image
-            src={proposalCoverUrl(proposal.id)}
+            src={proposalCoverUrl(proposal.id, proposal.proposalType)}
             alt=""
             fill
             className="object-cover transition-transform duration-500 group-hover:scale-105"

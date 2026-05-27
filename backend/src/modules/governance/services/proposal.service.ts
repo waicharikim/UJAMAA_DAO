@@ -6,7 +6,7 @@ import { proposalVotingService } from './proposal-voting.service.js';
 
 // ─── Query layer ──────────────────────────────────────────────────────────────
 
-async function getProposal(proposalId: string) {
+async function getProposal(proposalId: string, currentUserId?: string) {
   const proposal = await prisma.proposal.findUnique({
     where: { id: proposalId },
     include: {
@@ -23,6 +23,13 @@ async function getProposal(proposalId: string) {
         },
       },
       votes: { select: { vote: true, voteWeight: true } },
+      annotations: {
+        include: {
+          author: { select: { id: true, name: true } },
+          reactions: { select: { userId: true, type: true } },
+        },
+        orderBy: { createdAt: 'asc' },
+      },
     },
   });
   if (!proposal) throw ApiError.notFound('Proposal');
@@ -34,10 +41,21 @@ async function getProposal(proposalId: string) {
     .filter((v) => !v.vote)
     .reduce((s, v) => s + v.voteWeight, 0);
 
-  const { votes, ...rest } = proposal;
+  const annotations = proposal.annotations.map((a) => {
+    const upvotes = a.reactions.filter((r) => r.type === 'UP').length;
+    const downvotes = a.reactions.filter((r) => r.type === 'DOWN').length;
+    const myReaction = currentUserId
+      ? (a.reactions.find((r) => r.userId === currentUserId)?.type ?? null)
+      : null;
+    const { reactions, ...annotationRest } = a;
+    return { ...annotationRest, upvotes, downvotes, myReaction };
+  });
+
+  const { votes, annotations: _annotations, ...rest } = proposal;
   return {
     ...rest,
     votesSummary: { total: votes.length, yesWeight, noWeight },
+    annotations,
   };
 }
 

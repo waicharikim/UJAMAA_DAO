@@ -255,6 +255,8 @@ model User {
   proposals                 Proposal[]             @relation("UserProposals")
   reviewedProposals         Proposal[]             @relation("ProposalReviewer")
   votes                     GroupMemberVote[]      @relation("UserVotes")
+  proposalAnnotations       ProposalAnnotation[]   @relation("UserAnnotations")
+  annotationReactions       ProposalAnnotationReaction[] @relation("UserAnnotationReactions")
 
   // ---- Projects module ----
   ownedProjects             Project[]              @relation("UserProjects")
@@ -1740,6 +1742,7 @@ model Proposal {
   project            Project?            @relation("ProposalToProject") // NEW
   comments           Comment[]           @relation("ProposalComments") // NEW
   posts              Post[]              @relation("PostProposal")
+  annotations        ProposalAnnotation[] @relation("ProposalAnnotations")
 
   @@index([groupId, status])
   @@index([creatorId])
@@ -1806,6 +1809,47 @@ model GroupMemberVote {
  @@unique([groupId, memberId, proposalId])
  @@index([proposalId])
  @@index([memberId])
+}
+
+// ============================================================================
+// PROPOSAL ANNOTATIONS — inline public participation comments
+// ============================================================================
+
+model ProposalAnnotation {
+  id           String   @id @default(uuid()) @db.Uuid
+  proposalId   String   @db.Uuid
+  authorId     String   @db.Uuid
+  fieldKey     String   @db.VarChar(50)   // "description"|"rationale"|"alternatives"
+  startOffset  Int
+  endOffset    Int
+  quotedText   String   @db.Text          // snapshot of highlighted text
+  comment      String   @db.Text
+  color        String   @db.VarChar(20)   // hex, deterministically assigned per annotator
+  anchorTxHash String?  @db.VarChar(66)   // on-chain tx hash when anchored
+  createdAt    DateTime @default(now())
+
+  proposal  Proposal                     @relation("ProposalAnnotations", fields: [proposalId], references: [id], onDelete: Cascade)
+  author    User                         @relation("UserAnnotations",     fields: [authorId],   references: [id], onDelete: Cascade)
+  reactions ProposalAnnotationReaction[]
+
+  @@index([proposalId, fieldKey])
+  @@index([proposalId, createdAt])
+  @@map("proposal_annotations")
+}
+
+model ProposalAnnotationReaction {
+  id           String   @id @default(uuid()) @db.Uuid
+  annotationId String   @db.Uuid
+  userId       String   @db.Uuid
+  type         String   @db.VarChar(4)    // "UP" | "DOWN"
+  createdAt    DateTime @default(now())
+
+  annotation ProposalAnnotation @relation(fields: [annotationId], references: [id], onDelete: Cascade)
+  user       User               @relation("UserAnnotationReactions", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([annotationId, userId])
+  @@index([annotationId])
+  @@map("proposal_annotation_reactions")
 }
 
 

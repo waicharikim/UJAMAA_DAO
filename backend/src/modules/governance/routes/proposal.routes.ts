@@ -7,7 +7,9 @@
 
 import { Router } from 'express';
 import { ProposalController } from '../controllers/proposal.controller.js';
+import { ProposalAnnotationController } from '../controllers/proposal-annotation.controller.js';
 import { authenticate } from '../../../core/middleware/auth.middleware.js';
+import { authorize } from '../../../core/middleware/authorize.js';
 import { validateRequest } from '../../../core/middleware/validateRequest.js';
 import { z } from 'zod';
 import { asyncHandler } from '../../../core/utils/response.js';
@@ -91,6 +93,53 @@ router.post(
 );
 
 router.post('/:proposalId/tally', asyncHandler(ProposalController.tallyVotes));
+
+// ── Annotations (inline public participation) ─────────────────────────────
+const createAnnotationSchema = z
+  .object({
+    fieldKey: z.enum(['description', 'rationale', 'alternatives']),
+    startOffset: z.number().int().min(0),
+    endOffset: z.number().int().min(1),
+    quotedText: z.string().min(1).max(500),
+    comment: z.string().min(1).max(2000),
+  })
+  .superRefine((data, ctx) => {
+    if (data.endOffset <= data.startOffset) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['endOffset'],
+        message: 'endOffset must be greater than startOffset',
+      });
+    }
+  });
+
+const reactSchema = z.object({
+  type: z.enum(['UP', 'DOWN']).nullable(),
+});
+
+router.post(
+  '/:proposalId/annotations',
+  authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
+  validateRequest({ schema: createAnnotationSchema, target: 'body' }),
+  asyncHandler(ProposalAnnotationController.createAnnotation)
+);
+
+router.get(
+  '/:proposalId/annotations',
+  asyncHandler(ProposalAnnotationController.listAnnotations)
+);
+
+router.delete(
+  '/:proposalId/annotations/:annotationId',
+  asyncHandler(ProposalAnnotationController.deleteAnnotation)
+);
+
+router.post(
+  '/:proposalId/annotations/:annotationId/react',
+  authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
+  validateRequest({ schema: reactSchema, target: 'body' }),
+  asyncHandler(ProposalAnnotationController.reactToAnnotation)
+);
 
 router.patch(
   '/:proposalId/memory',

@@ -109,6 +109,30 @@ contract GovernanceVoting is AccessControl {
         emit ProposalResultRecorded(proposalId, outcome, block.timestamp);
     }
 
+    // annotationHash => proposalId (non-zero means anchored)
+    mapping(bytes32 => bytes32) public opinions;
+
+    event OpinionAnchored(
+        bytes32 indexed proposalId,
+        bytes32 indexed annotationHash,
+        address indexed author,
+        uint256 timestamp
+    );
+
+    /**
+     * @notice Anchor a community opinion hash on-chain.
+     * @param proposalId     UUID of the proposal (packed as bytes32).
+     * @param annotationHash keccak256 of (annotationId + proposalId + authorAddress + quotedText).
+     */
+    function recordOpinion(
+        bytes32 proposalId,
+        bytes32 annotationHash
+    ) external onlyRole(RECORDER_ROLE) {
+        require(opinions[annotationHash] == bytes32(0), "Opinion already anchored");
+        opinions[annotationHash] = proposalId;
+        emit OpinionAnchored(proposalId, annotationHash, msg.sender, block.timestamp);
+    }
+
     /**
      * @notice Get the tally result for a proposal.
      */

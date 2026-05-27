@@ -34,12 +34,40 @@ const STATUS_META: Record<string, { color: string; bg: string; label: string; Ic
   CANCELLED: { color: "#B03A1E", bg: "rgba(176,58,30,0.12)",   label: "Cancelled", Icon: AlertCircle  },
 }
 
-const STATUS_PHOTOS: Record<string, string> = {
-  PLANNING:  "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=600&q=70",
-  ACTIVE:    "https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=600&q=70",
-  COMPLETED: "https://images.unsplash.com/photo-1560179707-f14e90ef3623?auto=format&fit=crop&w=600&q=70",
-  ON_HOLD:   "https://images.unsplash.com/photo-1486175060817-5663ccc2ab84?auto=format&fit=crop&w=600&q=70",
-  CANCELLED: "https://images.unsplash.com/photo-1486175060817-5663ccc2ab84?auto=format&fit=crop&w=600&q=70",
+// Kenyan photos per project status — CDN base URLs verified from Unsplash
+const STATUS_PHOTOS: Record<string, string[]> = {
+  PLANNING: [
+    "https://images.unsplash.com/photo-1724383091797-472328956993", // person drawing plans, Nairobi
+    "https://images.unsplash.com/photo-1655028183177-f941088a84aa", // community meeting, Karen Nairobi
+    "https://images.unsplash.com/photo-1776039325163-f45315a484f3", // panel discussion, Nairobi
+  ],
+  ACTIVE: [
+    "https://images.unsplash.com/photo-1741706527174-ebd2768ffc49", // stadium construction, Nairobi
+    "https://images.unsplash.com/photo-1758875168808-72bc8dd1c5bf", // construction crane, Nairobi
+    "https://images.unsplash.com/photo-1576830886922-02b61aee42ad", // learning/sewing, Korogocho
+    "https://images.unsplash.com/photo-1741706538015-ddc358873090", // outdoor market, Karen
+  ],
+  COMPLETED: [
+    "https://images.unsplash.com/photo-1747854828989-5c8408a8f0bc", // Konza Technopolis, Kenya
+    "https://images.unsplash.com/photo-1673902205653-98d0c3cd3ae0", // building, Kenya coast
+    "https://images.unsplash.com/photo-1515657241610-a6b33f0f6c5a", // community gathering, Kargi
+  ],
+  ON_HOLD: [
+    "https://images.unsplash.com/photo-1724383091797-472328956993", // person drawing plans, Nairobi
+    "https://images.unsplash.com/photo-1548522904-e5ab6cf5e09b", // group at Masai Mara
+    "https://images.unsplash.com/photo-1709427327748-a6ebaf65a691", // Maasai village, Narok
+  ],
+  CANCELLED: [
+    "https://images.unsplash.com/photo-1603703182693-51a19941fa59", // Samburu women, Kenya
+    "https://images.unsplash.com/photo-1601071733462-d0bbb6ee7a02", // Masai family, Kenya
+    "https://images.unsplash.com/photo-1623519364070-effe59a1c4d7", // rural Kenya
+  ],
+}
+
+function projectCoverUrl(id: string, status: string): string {
+  const pool = STATUS_PHOTOS[status] ?? STATUS_PHOTOS.ACTIVE
+  const seed = id.split("").slice(0, 4).reduce((acc, c) => acc + c.charCodeAt(0), 0)
+  return `${pool[seed % pool.length]}?w=800&q=75`
 }
 
 interface ProjectDashboardProps {
@@ -96,7 +124,7 @@ export function ProjectDashboard({ projects = [], onCreateProject, onViewProject
   // ── Project card ─────────────────────────────────────────
   function ProjectCard({ project }: { project: Project }) {
     const meta        = STATUS_META[project.status] ?? STATUS_META.PLANNING
-    const photo       = STATUS_PHOTOS[project.status] ?? STATUS_PHOTOS.PLANNING
+    const photo       = projectCoverUrl(project.id, project.status)
     const { Icon }    = meta
     const participant = project.participants.find((p) => p.userId === user?.id)
     const isManager   = participant?.role === "MANAGER"

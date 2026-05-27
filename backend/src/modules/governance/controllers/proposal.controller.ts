@@ -153,7 +153,8 @@ export class ProposalController {
 
   static async getProposal(req: AuthRequest, res: Response) {
     const { proposalId } = req.params;
-    const result = await proposalService.getProposal(proposalId);
+    const userId = req.user?.userId;
+    const result = await proposalService.getProposal(proposalId, userId);
     sendSuccess(res, result, 'Proposal retrieved');
   }
 

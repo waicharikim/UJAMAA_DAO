@@ -479,18 +479,46 @@ async function toolSearchPastDecisions(
     },
   });
 
-  if (!proposals.length) {
-    return `No past decisions found matching "${query}".`;
+  const opinions = await prisma.proposalAnnotation.findMany({
+    where: {
+      proposal: { groupId },
+      OR: [
+        { quotedText: { contains: query, mode: 'insensitive' } },
+        { comment: { contains: query, mode: 'insensitive' } },
+      ],
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 5,
+    select: {
+      comment: true,
+      quotedText: true,
+      fieldKey: true,
+      createdAt: true,
+      proposal: { select: { title: true } },
+      author: { select: { name: true } },
+    },
+  });
+
+  if (!proposals.length && !opinions.length) {
+    return `No past decisions or community opinions found matching "${query}".`;
   }
 
-  return JSON.stringify(
-    proposals.map((p) => ({
+  return JSON.stringify({
+    decisions: proposals.map((p) => ({
       title: p.title,
       outcome: p.status,
       votes: p._count.votes,
       date: p.createdAt.toISOString().slice(0, 10),
-    }))
-  );
+    })),
+    opinions: opinions.map((o) => ({
+      proposal: o.proposal.title,
+      author: o.author.name,
+      on: o.fieldKey,
+      quoted: o.quotedText.slice(0, 100),
+      opinion: o.comment,
+      date: o.createdAt.toISOString().slice(0, 10),
+    })),
+  });
 }
 
 // ─────────────────────────────────────────────

@@ -255,6 +255,8 @@ model User {
   proposals                 Proposal[]             @relation("UserProposals")
   reviewedProposals         Proposal[]             @relation("ProposalReviewer")
   votes                     GroupMemberVote[]      @relation("UserVotes")
+  proposalAnnotations       ProposalAnnotation[]   @relation("UserAnnotations")
+  annotationReactions       ProposalAnnotationReaction[] @relation("UserAnnotationReactions")
 
   // ---- Projects module ----
   ownedProjects             Project[]              @relation("UserProjects")
