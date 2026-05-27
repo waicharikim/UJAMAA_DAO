@@ -1,6 +1,6 @@
 # Governance / Proposals API Documentation
 
-> **Module status:** `tested` — 121 green tests across 4 files.
+> **Module status:** `tested` — 148 green tests across 5 files.
 > Base URL: `http://localhost:4000/api/v1/governance`
 
 ---
@@ -256,6 +256,100 @@ Record the real-world outcome of a passed proposal. Used for community accountab
 - `400 Bad Request` — proposal has not reached `APPROVED`, `EXECUTING`, or `COMPLETED` status.
 - `403 Forbidden` — caller is neither the creator nor the group leader.
 - `404 Not Found` — proposal not found.
+
+---
+
+## Annotations (Inline Public Participation)
+
+> **Annotation window:** PENDING_REVIEW and APPROVED_FOR_VOTING only — pre-vote deliberation phase.
+> **Auth required for writes:** `COMMUNITY_VERIFIED` verification level.
+
+Community members can highlight any passage in a proposal's `description`, `rationale`, or `alternatives` and attach a comment. Each annotator is assigned a consistent colour (7-colour deterministic palette ordered by first annotation per user per proposal). A keccak256 hash of every annotation is anchored on-chain via `GovernanceVoting.recordOpinion()` — providing a tamper-evident timestamp without storing full text on-chain. Annotations and reactions feed into the Baraza AI `search_past_decisions` tool.
+
+### `POST /governance/:proposalId/annotations`
+Create an annotation on a highlighted passage. Returns **201**.
+**Auth:** required · **Verification:** `COMMUNITY_VERIFIED`
+
+**Body:**
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `fieldKey` | `"description"` \| `"rationale"` \| `"alternatives"` | Yes | Which field the highlight is in |
+| `startOffset` | integer ≥ 0 | Yes | Character offset of highlight start |
+| `endOffset` | integer ≥ 1 | Yes | Character offset of highlight end — must exceed `startOffset` |
+| `quotedText` | string (max 500) | Yes | The highlighted text (stored as snapshot) |
+| `comment` | string (max 2000) | Yes | The annotator's opinion |
+
+**Response `201`:**
+```json
+{
+  "id": "uuid",
+  "proposalId": "uuid",
+  "authorId": "uuid",
+  "fieldKey": "description",
+  "startOffset": 2,
+  "endOffset": 40,
+  "quotedText": "the highlighted passage",
+  "comment": "This needs more detail on funding sources.",
+  "color": "#C9922A",
+  "createdAt": "ISO8601",
+  "upvotes": 0,
+  "downvotes": 0,
+  "myReaction": null,
+  "author": { "id": "uuid", "name": "Jane Wanjiku" }
+}
+```
+
+**Responses:** `201 Created` · `400 Bad Request` (endOffset ≤ startOffset, invalid fieldKey) · `403 Forbidden` (below COMMUNITY_VERIFIED, or proposal outside annotation window) · `404 Not Found`
+
+---
+
+### `GET /governance/:proposalId/annotations`
+List all annotations for a proposal, sorted by `createdAt` ascending. `myReaction` is computed for the authenticated caller.
+**Auth:** required
+
+**Response `200`:** array of annotation objects (same shape as POST 201 response above).
+
+**Responses:** `200 OK` · `404 Not Found`
+
+---
+
+### `DELETE /governance/:proposalId/annotations/:annotationId`
+Delete an annotation. Only the annotation author may delete their own annotations.
+**Auth:** required
+
+**Response `200`:**
+```json
+{ "id": "uuid", "deleted": true }
+```
+
+**Responses:** `200 OK` · `403 Forbidden` (not the author) · `404 Not Found`
+
+---
+
+### `POST /governance/:proposalId/annotations/:annotationId/react`
+Add, switch, or remove a reaction on an annotation. Upserts — one call switches UP↔DOWN. Send `type: null` to remove any existing reaction.
+**Auth:** required · **Verification:** `COMMUNITY_VERIFIED`
+
+**Body:**
+| Field | Type | Values |
+|---|---|---|
+| `type` | string or null | `"UP"` \| `"DOWN"` \| `null` |
+
+**Response `200`:**
+```json
+{ "upvotes": 1, "downvotes": 0, "myReaction": "UP" }
+```
+
+**Responses:** `200 OK` · `403 Forbidden` (below COMMUNITY_VERIFIED, or proposal outside annotation window) · `404 Not Found`
+
+---
+
+### Annotation notes
+
+- `GET /governance/:proposalId` includes `annotations[]` with `upvotes`, `downvotes`, `myReaction` pre-computed. Raw reactions are never exposed to clients.
+- If the proposal text is edited after an annotation was created, the stored `quotedText` snapshot is used as a fallback. The frontend checks `text.slice(startOffset, endOffset) === quotedText` and renders orphaned annotations below the text body instead of as inline highlights.
+- On-chain anchoring uses a triple-guard: `NODE_ENV !== 'test'`, user has a `walletAddress`, and `GovernanceVoting` contract is configured. If any guard fails the off-chain record is still created and `anchorTxHash` is left null.
+- Annotator colour palette (in assignment order): `#C9922A` · `#1D4731` · `#2A6B7C` · `#8B3A2A` · `#2A4A7F` · `#6B4F9E` · `#1A6B3C`. The same user always gets the same colour on a given proposal.
 
 ---
 
