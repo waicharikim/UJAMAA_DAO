@@ -178,7 +178,7 @@ export default function ElectionsPage() {
       {/* Photo hero banner */}
       <div className="relative h-36 rounded-2xl overflow-hidden">
         <Image
-          src="https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=800&q=80"
+          src="https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=800&q=80"
           alt="Elections"
           fill
           className="object-cover"

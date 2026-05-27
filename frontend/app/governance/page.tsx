@@ -394,8 +394,7 @@ function ElectionCard({ election }: { election: ElectionSummaryDto }) {
             <Badge variant="outline" className="text-[10px] py-0" style={{ borderColor: "rgba(29,71,49,0.4)", color: "#1D4731" }}>Voted</Badge>
           )}
         </div>
-        <div className="rounded-lg px-3 py-2 text-[11px] flex items-center gap-1.5" style={{ color: "#7A6E60" }}
-          style={{ background: "rgba(29,71,49,0.04)" }}>
+        <div className="rounded-lg px-3 py-2 text-[11px] flex items-center gap-1.5" style={{ color: "#7A6E60", background: "rgba(29,71,49,0.04)" }}>
           <CalendarDays className="h-3 w-3 flex-shrink-0" />
           {election.status === "NOMINATIONS_OPEN" && <>Nominations close {formatDate(election.nominationsCloseAt)}</>}
           {election.status === "VOTING_OPEN" && <>Voting closes {formatDate(election.votingCloseAt)}</>}
@@ -433,12 +432,13 @@ function ElectionsSection() {
           style={{ background: "rgba(201,146,42,0.08)", border: "1px solid rgba(201,146,42,0.20)" }}>
           <Clock className="h-5 w-5 flex-shrink-0" style={{ color: "#C9922A" }} />
           <div className="flex-1">
-            <p className="text-sm font-semibold text-amber-800">
+            <p className="text-sm font-semibold" style={{ color: "#7A4F0A" }}>
               {myPending.length} election{myPending.length !== 1 ? "s" : ""} need your attention
             </p>
-            <p className="text-xs text-amber-700 mt-0.5">You have active nominations or open votes</p>
+            <p className="text-xs mt-0.5" style={{ color: "#A06A1A" }}>You have active nominations or open votes</p>
           </div>
-          <Button size="sm" variant="outline" className="text-amber-700 border-amber-400 hover:bg-amber-50 text-xs"
+          <Button size="sm" variant="outline" className="text-xs"
+            style={{ color: "#C9922A", borderColor: "rgba(201,146,42,0.5)" }}
             onClick={() => setElectionTab("VOTING_OPEN")}>
             View
           </Button>
@@ -499,7 +499,7 @@ export default function GovernancePage() {
       {/* Hero banner */}
       <div className="relative h-36 rounded-2xl overflow-hidden">
         <Image
-          src="https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?auto=format&fit=crop&w=900&q=75"
+          src="https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=900&q=75"
           alt="Community governance"
           fill
           sizes="(max-width: 768px) 100vw, 768px"
