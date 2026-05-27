@@ -128,24 +128,24 @@ function PlatformProposalCard({ proposal }: { proposal: ProposalDto }) {
         className="rounded-xl overflow-hidden transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer group flex flex-col h-full"
         style={{ background: "white", border: "1px solid rgba(29,71,49,0.08)" }}
       >
-        {/* Photo strip */}
-        <div className="relative h-28 overflow-hidden flex-shrink-0">
+        {/* Photo */}
+        <div className="relative h-44 overflow-hidden flex-shrink-0">
           <Image
             src={proposalCoverUrl(proposal.id)}
             alt=""
             fill
             className="object-cover transition-transform duration-500 group-hover:scale-105"
-            sizes="(max-width: 768px) 100vw, 600px"
+            sizes="(max-width: 640px) 100vw, 340px"
           />
+          {/* Thin scrim at bottom only */}
           <div
-            className="absolute inset-0"
-            style={{ background: "linear-gradient(180deg, rgba(0,0,0,0.06) 0%, rgba(0,0,0,0.55) 100%)" }}
+            className="absolute inset-x-0 bottom-0 h-14"
+            style={{ background: "linear-gradient(to top, rgba(0,0,0,0.45) 0%, transparent 100%)" }}
           />
-          {/* Status badge bottom-left */}
           <div className="absolute bottom-2.5 left-3">
             <span
               className="px-2 py-0.5 rounded-full text-[10px] font-bold backdrop-blur-sm"
-              style={{ background: `${color}cc`, color: "white" }}
+              style={{ background: `${color}dd`, color: "white" }}
             >
               {label}
             </span>
