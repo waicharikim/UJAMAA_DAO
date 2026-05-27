@@ -27,7 +27,7 @@ FROM base AS builder
 COPY --from=deps /usr/src/app/node_modules ./node_modules
 COPY . .
 
-RUN DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" npm run db:generate && NODE_OPTIONS="--max-old-space-size=3072" npm run build
+RUN DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" npm run db:generate && NODE_OPTIONS="--max-old-space-size=3072" npm run build && npm prune --omit=dev --ignore-scripts
 
 # ──────────────────────── 
 # DEVELOPMENT IMAGE (hot reload)
@@ -56,21 +56,12 @@ CMD ["sh", "./docker/start-web.sh"]
 # PRODUCTION WEB IMAGE
 # ────────────────────────
 FROM base AS prod-web
-# Copy built artifacts
 COPY --from=builder /usr/src/app/dist ./dist
-COPY --from=builder /usr/src/app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /usr/src/app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder /usr/src/app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /usr/src/app/node_modules ./node_modules
 COPY --from=builder /usr/src/app/package*.json ./
 COPY --from=builder /usr/src/app/prisma ./prisma
 COPY --from=builder /usr/src/app/docker ./docker
-
-# Install only production dependencies
-RUN npm install --omit=dev --ignore-scripts && npm cache clean --force
-
-# Make scripts executable
 RUN chmod +x ./docker/*.sh
-
 EXPOSE 4000
 CMD ["sh", "./docker/start-web.prod.sh"]
 
@@ -78,20 +69,10 @@ CMD ["sh", "./docker/start-web.prod.sh"]
 # PRODUCTION WORKER IMAGE
 # ────────────────────────
 FROM base AS prod-worker
-# Copy built artifacts
 COPY --from=builder /usr/src/app/dist ./dist
-COPY --from=builder /usr/src/app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /usr/src/app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder /usr/src/app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /usr/src/app/node_modules ./node_modules
 COPY --from=builder /usr/src/app/package*.json ./
 COPY --from=builder /usr/src/app/prisma ./prisma
 COPY --from=builder /usr/src/app/docker ./docker
-
-# Install only production dependencies
-RUN npm install --omit=dev --ignore-scripts && npm cache clean --force
-
-# Make scripts executable
 RUN chmod +x ./docker/*.sh
-
-# No port exposure (worker doesn't serve HTTP)
 CMD ["sh", "./docker/start-worker.prod.sh"]
