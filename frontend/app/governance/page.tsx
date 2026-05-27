@@ -49,15 +49,21 @@ function formatDate(iso: string) {
 
 // ── Proposal cover photos ──────────────────────────────────────────────────
 
+// Verified Kenyan community photos sourced from Unsplash
 const PROPOSAL_PHOTOS = [
-  "photo-1529156069898-49953e39b3ac",
-  "photo-1521737604893-d14cc237f11d",
-  "photo-1488521787991-ed7bbaae773c",
-  "photo-1542601906897-2a11d42a2c1b",
-  "photo-1494459940152-9e1b60d558db",
-  "photo-1500382017468-9049fed747ef",
-  "photo-1551836022-d5d88e9218df",
-  "photo-1573164574572-cb89e39749b4",
+  "photo-NRv8BsouFBQ", // community gathering, Kargi, Kenya
+  "photo-gogGhbvHrYw", // woman dancing in community celebration, Kargi, Kenya
+  "photo-Tt_X-AHU3tg", // traditional Kenyan attire group
+  "photo-7k91OUDYAQ0", // people gathered in Kargi, Kenya
+  "photo-9pForwRXkA4", // Samburu women, Kenya
+  "photo-tz_69tIevHM", // Masai family, Masai Village, Kenya
+  "photo-Xeyas5qNg3U", // Masai community welcoming, Masai Mara, Kenya
+  "photo-nayS2zjJpGw", // Masai people in traditional clothing, Masai Mara
+  "photo-4KdywRnTbzE", // mother and child, East African savanna
+  "photo-J3gL9NqiElY", // outdoor market, Karen, Nairobi, Kenya
+  "photo-FjxcMHOgAfY", // Maasai village, Naboisho, Narok, Kenya
+  "photo-3LPSs5MvBl0", // rural Kenya, Massi village
+  "photo-SmEPrG0mGI4", // Maasai dwelling, Kenya
 ]
 
 function proposalCoverUrl(id: string): string {
