@@ -47,6 +47,24 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })
 }
 
+// ── Proposal cover photos ──────────────────────────────────────────────────
+
+const PROPOSAL_PHOTOS = [
+  "photo-1529156069898-49953e39b3ac",
+  "photo-1521737604893-d14cc237f11d",
+  "photo-1488521787991-ed7bbaae773c",
+  "photo-1542601906897-2a11d42a2c1b",
+  "photo-1494459940152-9e1b60d558db",
+  "photo-1500382017468-9049fed747ef",
+  "photo-1551836022-d5d88e9218df",
+  "photo-1573164574572-cb89e39749b4",
+]
+
+function proposalCoverUrl(id: string): string {
+  const seed = id.split("").slice(0, 4).reduce((acc, c) => acc + c.charCodeAt(0), 0)
+  return `https://images.unsplash.com/${PROPOSAL_PHOTOS[seed % PROPOSAL_PHOTOS.length]}?w=600&q=70`
+}
+
 // ── Platform Governance section ────────────────────────────────────────────
 
 const PROPOSAL_STATUS_META: Record<string, { label: string; Icon: React.ElementType; color: string; bg: string }> = {
@@ -106,33 +124,43 @@ function PlatformProposalCard({ proposal }: { proposal: ProposalDto }) {
 
   return (
     <Link href={`/proposals/${proposal.id}`}>
-      <Card
-        className="border-0 shadow-card transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer overflow-hidden"
-        style={isVoting ? { borderLeft: `3px solid ${color}` } : {}}
+      <div
+        className="rounded-xl overflow-hidden transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer group"
+        style={{ background: "white", border: "1px solid rgba(29,71,49,0.08)" }}
       >
-        <CardContent className="p-5 space-y-3">
-          {/* Header row */}
-          <div className="flex items-start justify-between gap-3">
-            <h3 className="text-sm font-bold text-[#0A1F14] leading-snug flex-1 line-clamp-2">{proposal.title}</h3>
-            <div
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full flex-shrink-0"
-              style={{ background: bg }}
+        {/* Photo strip */}
+        <div className="relative h-24 overflow-hidden">
+          <Image
+            src={proposalCoverUrl(proposal.id)}
+            alt=""
+            fill
+            className="object-cover transition-transform duration-500 group-hover:scale-105"
+            sizes="(max-width: 768px) 100vw, 600px"
+          />
+          <div
+            className="absolute inset-0"
+            style={{ background: "linear-gradient(180deg, rgba(0,0,0,0.06) 0%, rgba(0,0,0,0.55) 100%)" }}
+          />
+          {/* Status badge bottom-left */}
+          <div className="absolute bottom-2.5 left-3">
+            <span
+              className="px-2 py-0.5 rounded-full text-[10px] font-bold backdrop-blur-sm"
+              style={{ background: `${color}cc`, color: "white" }}
             >
-              <Icon className="h-3 w-3" style={{ color }} />
-              <span className="text-[10px] font-bold" style={{ color }}>{label}</span>
-            </div>
+              {label}
+            </span>
           </div>
+        </div>
 
-          {/* Description */}
+        <div className="p-4 space-y-3">
+          <h3 className="text-sm font-bold text-[#0A1F14] leading-snug line-clamp-2">{proposal.title}</h3>
           <p className="text-xs text-[#7A6E60] line-clamp-2 leading-relaxed">{proposal.description}</p>
 
-          {/* Voting bar — only when votes exist */}
           <VotingBar
             yesWeight={proposal.votesSummary?.yesWeight ?? 0}
             noWeight={proposal.votesSummary?.noWeight ?? 0}
           />
 
-          {/* Footer */}
           <div className="flex items-center justify-between text-[11px] text-[#7A6E60] pt-0.5">
             <div className="flex items-center gap-1.5">
               {proposal.creator?.avatarUrl ? (
@@ -148,8 +176,8 @@ function PlatformProposalCard({ proposal }: { proposal: ProposalDto }) {
             </div>
             <span>{formatDate(proposal.createdAt)}</span>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </Link>
   )
 }

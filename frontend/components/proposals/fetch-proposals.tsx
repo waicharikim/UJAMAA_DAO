@@ -2,9 +2,8 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
+import Image from "next/image"
 import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/auth-context"
@@ -43,6 +42,25 @@ const TYPE_LABEL: Record<string, string> = {
   STANDARD:  "Standard",
   EMERGENCY: "Emergency",
   BUDGET:    "Budget",
+}
+
+// Curated community-themed photos — deterministically assigned per proposal
+const PROPOSAL_PHOTOS = [
+  "photo-1529156069898-49953e39b3ac", // community discussion circle
+  "photo-1521737604893-d14cc237f11d", // team planning workshop
+  "photo-1488521787991-ed7bbaae773c", // community development / construction
+  "photo-1542601906897-2a11d42a2c1b", // sustainability / green community
+  "photo-1494459940152-9e1b60d558db", // open-air market
+  "photo-1500382017468-9049fed747ef", // agricultural land
+  "photo-1551836022-d5d88e9218df",    // people working around a table
+  "photo-1573164574572-cb89e39749b4", // hands raised in agreement
+]
+
+function proposalCoverUrl(id: string): string {
+  // Use char codes of first 4 chars of the UUID for a stable index
+  const seed = id.split("").slice(0, 4).reduce((acc, c) => acc + c.charCodeAt(0), 0)
+  const photo = PROPOSAL_PHOTOS[seed % PROPOSAL_PHOTOS.length]
+  return `https://images.unsplash.com/${photo}?w=600&q=70`
 }
 
 function relativeTime(iso: string | null): string {
@@ -97,41 +115,59 @@ function ProposalCard({
 
   return (
     <div
-      className="rounded-xl overflow-hidden transition-all hover:shadow-md"
+      className="rounded-xl overflow-hidden transition-all hover:shadow-md group"
       style={{
         background: "white",
         border: "1px solid rgba(29,71,49,0.08)",
-        borderLeft: isVoting ? `3px solid ${meta.color}` : undefined,
       }}
     >
+      {/* Photo strip */}
+      <div className="relative h-24 overflow-hidden">
+        <Image
+          src={proposalCoverUrl(proposal.id)}
+          alt=""
+          fill
+          className="object-cover transition-transform duration-500 group-hover:scale-105"
+          sizes="(max-width: 768px) 100vw, 600px"
+        />
+        <div
+          className="absolute inset-0"
+          style={{ background: "linear-gradient(180deg, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.52) 100%)" }}
+        />
+        {/* Status badge — bottom-left of photo */}
+        <div className="absolute bottom-2.5 left-3 flex items-center gap-2">
+          <span
+            className="px-2 py-0.5 rounded-full text-[10px] font-bold backdrop-blur-sm"
+            style={{ background: `${meta.color}cc`, color: "white" }}
+          >
+            {meta.label}
+          </span>
+          {proposal.proposalType && (
+            <span
+              className="px-2 py-0.5 rounded-full text-[10px] font-medium backdrop-blur-sm"
+              style={{ background: "rgba(0,0,0,0.35)", color: "rgba(255,255,255,0.85)" }}
+            >
+              {TYPE_LABEL[proposal.proposalType] ?? proposal.proposalType}
+            </span>
+          )}
+        </div>
+        {/* Group badge — top-right */}
+        {proposal.group && (
+          <div className="absolute top-2.5 right-3">
+            <span
+              className="px-2 py-0.5 rounded-full text-[10px] font-medium backdrop-blur-sm"
+              style={{ background: "rgba(29,71,49,0.70)", color: "rgba(255,255,255,0.90)" }}
+            >
+              {proposal.group.name}
+            </span>
+          </div>
+        )}
+      </div>
+
       <div className="p-4 space-y-3">
-        {/* Header */}
+        {/* Title + arrow */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
-            <div className="flex flex-wrap items-center gap-2 mb-1.5">
-              <span
-                className="px-2 py-0.5 rounded-full text-[10px] font-bold"
-                style={{ background: meta.bg, color: meta.color }}
-              >
-                {meta.label}
-              </span>
-              {proposal.proposalType && (
-                <span
-                  className="px-2 py-0.5 rounded-full text-[10px] font-medium"
-                  style={{ background: "rgba(14,11,8,0.05)", color: "#7A6E60" }}
-                >
-                  {TYPE_LABEL[proposal.proposalType] ?? proposal.proposalType}
-                </span>
-              )}
-              {proposal.group && (
-                <span
-                  className="px-2 py-0.5 rounded-full text-[10px] font-medium"
-                  style={{ background: "rgba(29,71,49,0.07)", color: "#1D4731" }}
-                >
-                  {proposal.group.name}
-                </span>
-              )}
-            </div>
             <Link
               href={`/proposals/${proposal.id}`}
               className="text-sm font-bold leading-snug line-clamp-2 hover:underline"
@@ -272,13 +308,13 @@ export function FetchProposals({ onCreateProposal: _onCreateProposal }: FetchPro
       {isLoading ? (
         <div className="space-y-3">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="rounded-xl p-4 space-y-3" style={{ border: "1px solid rgba(29,71,49,0.08)" }}>
-              <div className="flex justify-between gap-3">
-                <Skeleton className="h-4 w-48 flex-1" />
-                <Skeleton className="h-5 w-20 rounded-full flex-shrink-0" />
+            <div key={i} className="rounded-xl overflow-hidden" style={{ border: "1px solid rgba(29,71,49,0.08)" }}>
+              <Skeleton className="h-24 w-full rounded-none" />
+              <div className="p-4 space-y-3">
+                <Skeleton className="h-4 w-48" />
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-2/3" />
               </div>
-              <Skeleton className="h-3 w-full" />
-              <Skeleton className="h-3 w-2/3" />
             </div>
           ))}
         </div>
