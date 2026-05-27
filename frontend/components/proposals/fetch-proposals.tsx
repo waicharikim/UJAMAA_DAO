@@ -115,14 +115,14 @@ function ProposalCard({
 
   return (
     <div
-      className="rounded-xl overflow-hidden transition-all hover:shadow-md group"
+      className="rounded-xl overflow-hidden transition-all hover:shadow-md group flex flex-col h-full"
       style={{
         background: "white",
         border: "1px solid rgba(29,71,49,0.08)",
       }}
     >
       {/* Photo strip */}
-      <div className="relative h-24 overflow-hidden">
+      <div className="relative h-28 overflow-hidden flex-shrink-0">
         <Image
           src={proposalCoverUrl(proposal.id)}
           alt=""
@@ -164,7 +164,7 @@ function ProposalCard({
         )}
       </div>
 
-      <div className="p-4 space-y-3">
+      <div className="p-4 space-y-3 flex flex-col flex-1">
         {/* Title + arrow */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
@@ -176,7 +176,7 @@ function ProposalCard({
               {proposal.title}
             </Link>
             {proposal.description && (
-              <p className="mt-1 text-xs leading-relaxed line-clamp-2" style={{ color: "#7A6E60" }}>
+              <p className="mt-1 text-xs leading-relaxed line-clamp-2 flex-1" style={{ color: "#7A6E60" }}>
                 {proposal.description}
               </p>
             )}
@@ -306,8 +306,8 @@ export function FetchProposals({ onCreateProposal: _onCreateProposal }: FetchPro
       </div>
 
       {isLoading ? (
-        <div className="space-y-3">
-          {[...Array(3)].map((_, i) => (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {[...Array(4)].map((_, i) => (
             <div key={i} className="rounded-xl overflow-hidden" style={{ border: "1px solid rgba(29,71,49,0.08)" }}>
               <Skeleton className="h-24 w-full rounded-none" />
               <div className="p-4 space-y-3">
@@ -328,7 +328,7 @@ export function FetchProposals({ onCreateProposal: _onCreateProposal }: FetchPro
           <p className="text-sm" style={{ color: "#7A6E60" }}>No proposals yet.</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {proposals.map((p) => (
             <ProposalCard
               key={p.id}

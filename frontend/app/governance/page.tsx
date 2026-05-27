@@ -125,11 +125,11 @@ function PlatformProposalCard({ proposal }: { proposal: ProposalDto }) {
   return (
     <Link href={`/proposals/${proposal.id}`}>
       <div
-        className="rounded-xl overflow-hidden transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer group"
+        className="rounded-xl overflow-hidden transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer group flex flex-col h-full"
         style={{ background: "white", border: "1px solid rgba(29,71,49,0.08)" }}
       >
         {/* Photo strip */}
-        <div className="relative h-24 overflow-hidden">
+        <div className="relative h-28 overflow-hidden flex-shrink-0">
           <Image
             src={proposalCoverUrl(proposal.id)}
             alt=""
@@ -152,9 +152,9 @@ function PlatformProposalCard({ proposal }: { proposal: ProposalDto }) {
           </div>
         </div>
 
-        <div className="p-4 space-y-3">
+        <div className="p-4 space-y-3 flex flex-col flex-1">
           <h3 className="text-sm font-bold text-[#0A1F14] leading-snug line-clamp-2">{proposal.title}</h3>
-          <p className="text-xs text-[#7A6E60] line-clamp-2 leading-relaxed">{proposal.description}</p>
+          <p className="text-xs text-[#7A6E60] line-clamp-2 leading-relaxed flex-1">{proposal.description}</p>
 
           <VotingBar
             yesWeight={proposal.votesSummary?.yesWeight ?? 0}
@@ -283,7 +283,7 @@ function PlatformGovernSection() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {proposals.map((p: ProposalDto) => <PlatformProposalCard key={p.id} proposal={p} />)}
         </div>
       )}
