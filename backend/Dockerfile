@@ -27,7 +27,7 @@ FROM base AS builder
 COPY --from=deps /usr/src/app/node_modules ./node_modules
 COPY . .
 
-RUN DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" npm run db:generate && npm run build
+RUN DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" npm run db:generate && NODE_OPTIONS="--max-old-space-size=3072" npm run build
 
 # ──────────────────────── 
 # DEVELOPMENT IMAGE (hot reload)
