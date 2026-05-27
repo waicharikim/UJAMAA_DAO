@@ -49,26 +49,25 @@ function formatDate(iso: string) {
 
 // ── Proposal cover photos ──────────────────────────────────────────────────
 
-// Verified Kenyan community photos sourced from Unsplash
+// Verified Kenyan community photos — real CDN base URLs confirmed from Unsplash
 const PROPOSAL_PHOTOS = [
-  "photo-NRv8BsouFBQ", // community gathering, Kargi, Kenya
-  "photo-gogGhbvHrYw", // woman dancing in community celebration, Kargi, Kenya
-  "photo-Tt_X-AHU3tg", // traditional Kenyan attire group
-  "photo-7k91OUDYAQ0", // people gathered in Kargi, Kenya
-  "photo-9pForwRXkA4", // Samburu women, Kenya
-  "photo-tz_69tIevHM", // Masai family, Masai Village, Kenya
-  "photo-Xeyas5qNg3U", // Masai community welcoming, Masai Mara, Kenya
-  "photo-nayS2zjJpGw", // Masai people in traditional clothing, Masai Mara
-  "photo-4KdywRnTbzE", // mother and child, East African savanna
-  "photo-J3gL9NqiElY", // outdoor market, Karen, Nairobi, Kenya
-  "photo-FjxcMHOgAfY", // Maasai village, Naboisho, Narok, Kenya
-  "photo-3LPSs5MvBl0", // rural Kenya, Massi village
-  "photo-SmEPrG0mGI4", // Maasai dwelling, Kenya
+  "https://images.unsplash.com/photo-1515657241610-a6b33f0f6c5a", // community gathering, Kargi, Kenya
+  "https://images.unsplash.com/photo-1515657834497-26509e295154", // woman dancing, Kargi, Kenya
+  "https://images.unsplash.com/photo-1547496727-11c450fe4e7f", // traditional Kenyan attire group
+  "https://images.unsplash.com/photo-1515658323406-25d61c141a6e", // people gathered, Kargi, Kenya
+  "https://images.unsplash.com/photo-1603703182693-51a19941fa59", // Samburu women, Kenya
+  "https://images.unsplash.com/photo-1601071733462-d0bbb6ee7a02", // Masai family, Masai Village, Kenya
+  "https://images.unsplash.com/photo-1704495669300-216e12543f9f", // Masai Mara, Kenya
+  "https://images.unsplash.com/photo-1610982330184-b26f7ea46541", // Masai in traditional clothing, Masai Mara
+  "https://images.unsplash.com/photo-1741706538015-ddc358873090", // outdoor market, Karen, Nairobi
+  "https://images.unsplash.com/photo-1709427327748-a6ebaf65a691", // Maasai village, Naboisho, Narok
+  "https://images.unsplash.com/photo-1623519364070-effe59a1c4d7", // rural Kenya, Massi village
+  "https://images.unsplash.com/photo-1709427249173-85111186e52a", // Maasai dwelling, Kenya
 ]
 
 function proposalCoverUrl(id: string): string {
   const seed = id.split("").slice(0, 4).reduce((acc, c) => acc + c.charCodeAt(0), 0)
-  return `https://images.unsplash.com/${PROPOSAL_PHOTOS[seed % PROPOSAL_PHOTOS.length]}?w=600&q=70`
+  return `${PROPOSAL_PHOTOS[seed % PROPOSAL_PHOTOS.length]}?w=800&q=75`
 }
 
 // ── Platform Governance section ────────────────────────────────────────────
