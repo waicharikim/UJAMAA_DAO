@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
+import Image from "next/image"
 import { PageHeader } from "@/components/layout/page-header"
 import { StatsGrid } from "@/components/layout/stats-grid"
 import { communityApi, leaderboardApi, userApi, GroupDiscoveryDto, GroupMembershipDto, LeaderboardEntryDto } from "@/lib/api"
@@ -190,45 +191,68 @@ function ExploreGroups() {
   const system     = allGroups.filter((g) => g.isSystemGroup)
   const voluntary  = allGroups.filter((g) => !g.isSystemGroup)
 
+  const GROUP_PHOTOS: Record<string, string> = {
+    WARD:          "https://images.unsplash.com/photo-1578662996442-48f60103fc96?auto=format&fit=crop&w=400&q=70",
+    CONSTITUENCY:  "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=400&q=70",
+    COUNTY:        "https://images.unsplash.com/photo-1521295121783-8a321d551ad2?auto=format&fit=crop&w=400&q=70",
+    voluntary:     "https://images.unsplash.com/photo-1559027615-cd4628902d4a?auto=format&fit=crop&w=400&q=70",
+  }
+
   function GroupCard({ g }: { g: GroupDiscoveryDto }) {
     const Icon = g.isSystemGroup
       ? g.locationScope === "WARD" ? Home
         : g.locationScope === "CONSTITUENCY" ? Building2 : Landmark
       : Users
 
+    const photo = g.isSystemGroup
+      ? GROUP_PHOTOS[g.locationScope ?? "WARD"]
+      : GROUP_PHOTOS.voluntary
+
     return (
       <div
-        className="rounded-xl p-4 space-y-3 hover:shadow-md transition-shadow"
+        className="group rounded-xl overflow-hidden hover:shadow-md transition-shadow"
         style={{
           background: g.isSystemGroup ? "rgba(29,71,49,0.03)" : "#fff",
           border: `1px solid ${g.isSystemGroup ? "rgba(29,71,49,0.12)" : "rgba(201,146,42,0.20)"}`,
         }}
       >
-        <Link href={`/groups/${g.id}`} className="block">
-          <div className="flex items-start gap-3">
-            <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
-              style={{
-                background: g.isSystemGroup ? "rgba(29,71,49,0.10)" : "rgba(201,146,42,0.10)",
-                color: g.isSystemGroup ? "#1D4731" : "#C9922A",
-              }}>
-              <Icon className="h-4 w-4" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-[#0A1F14] leading-tight hover:text-[#C9922A] transition-colors truncate">
-                {g.name}
-              </p>
-              <p className="text-xs text-[#6B5E4E] mt-0.5">
-                {g.isSystemGroup
-                  ? `${(g.locationScope ?? "Ward").toLowerCase()} group`
-                  : (g.voluntaryType ?? "Voluntary").replace(/_/g, " ")}
-                {" · "}{g.memberCount} members
-              </p>
+        {/* Photo cover */}
+        <Link href={`/groups/${g.id}`} className="block relative h-24 overflow-hidden">
+          <Image
+            src={photo}
+            alt={g.name}
+            fill
+            sizes="(max-width: 768px) 50vw, 33vw"
+            className="object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+          <div
+            className="absolute inset-0"
+            style={{ background: g.isSystemGroup
+              ? "linear-gradient(160deg, rgba(29,71,49,0.70) 0%, transparent 100%)"
+              : "linear-gradient(160deg, rgba(107,58,14,0.65) 0%, transparent 100%)" }}
+          />
+          <div className="absolute top-2 left-2 flex items-center gap-1.5">
+            <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: "rgba(255,255,255,0.20)" }}>
+              <Icon className="h-3.5 w-3.5 text-white" />
             </div>
           </div>
-          {g.description && (
-            <p className="text-xs text-[#6B5E4E] line-clamp-2 mt-2">{g.description}</p>
-          )}
+          <div className="absolute bottom-0 left-0 right-0 px-3 pb-2">
+            <p className="font-semibold text-white text-sm leading-tight truncate">{g.name}</p>
+          </div>
         </Link>
+
+        <div className="p-3 space-y-2.5">
+          <Link href={`/groups/${g.id}`} className="block">
+            <p className="text-xs text-[#6B5E4E]">
+              {g.isSystemGroup
+                ? `${(g.locationScope ?? "Ward").toLowerCase()} group`
+                : (g.voluntaryType ?? "Voluntary").replace(/_/g, " ")}
+              {" · "}{g.memberCount} members
+            </p>
+            {g.description && (
+              <p className="text-xs text-[#6B5E4E] line-clamp-2 mt-1">{g.description}</p>
+            )}
+          </Link>
 
         {g.isMember ? (
           <span className="inline-block text-xs font-medium text-[#1E3D2F] bg-[#1E3D2F]/10 rounded-full px-3 py-1">
@@ -249,6 +273,7 @@ function ExploreGroups() {
             {joiningId === g.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Join"}
           </button>
         )}
+        </div>
       </div>
     )
   }
@@ -412,7 +437,7 @@ function LeaderboardContent() {
       {isLoading ? (
         <div className="space-y-2">
           {[...Array(8)].map((_, i) => (
-            <div key={i} className="flex items-center gap-3 px-4 py-3 rounded-xl border border-gray-100">
+            <div key={i} className="flex items-center gap-3 px-4 py-3 rounded-xl" style={{ border: "1px solid rgba(29,71,49,0.08)" }}>
               <Skeleton className="h-5 w-5 rounded" />
               <Skeleton className="h-9 w-9 rounded-xl" />
               <div className="flex-1 space-y-1.5"><Skeleton className="h-3.5 w-32" /><Skeleton className="h-2.5 w-20" /></div>
@@ -421,7 +446,7 @@ function LeaderboardContent() {
           ))}
         </div>
       ) : !data?.entries.length ? (
-        <div className="text-center py-16 text-gray-400">
+        <div className="text-center py-16" style={{ color: "#7A6E60" }}>
           <Medal className="h-10 w-10 mx-auto mb-3 opacity-30" />
           <p className="text-sm">No data yet for this scope</p>
         </div>
@@ -447,19 +472,19 @@ function LeaderboardContent() {
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[13.5px] font-semibold text-gray-800 truncate">
+                  <p className="text-[13.5px] font-semibold truncate" style={{ color: "#1A120B" }}>
                     {entry.name}
-                    {isMe && <span className="ml-2 text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">You</span>}
+                    {isMe && <span className="ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ color: "#C9922A", background: "rgba(201,146,42,0.1)" }}>You</span>}
                   </p>
                   {entry.ward && (
-                    <p className="text-[11px] text-gray-400 truncate">
+                    <p className="text-[11px] truncate" style={{ color: "#7A6E60" }}>
                       {entry.ward.name}{entry.county ? `, ${entry.county.name}` : ""}
                     </p>
                   )}
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <p className="text-[14px] font-bold text-gray-800">{lbScore(entry, metric).toLocaleString()}</p>
-                  <p className="text-[10px] text-gray-400">{lbLabel(metric)}</p>
+                  <p className="text-[14px] font-bold" style={{ color: "#1A120B" }}>{lbScore(entry, metric).toLocaleString()}</p>
+                  <p className="text-[10px]" style={{ color: "#7A6E60" }}>{lbLabel(metric)}</p>
                 </div>
               </div>
             )

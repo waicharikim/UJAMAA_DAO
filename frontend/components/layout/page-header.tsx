@@ -55,7 +55,7 @@ export function PageHeader({
             )}
 
             <div className="flex items-center gap-3 mb-2">
-              <h1 className="font-display font-bold text-3xl text-[#1A120B]">{title}</h1>
+              <h1 className="font-serif font-bold text-3xl text-[#1A120B]">{title}</h1>
               {badge && (
                 <span
                   className="text-xs font-semibold px-2.5 py-1 rounded-full"

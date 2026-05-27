@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import Image from "next/image"
 import { Store, Search, Plus, Phone, X, ShieldCheck, MapPin } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -195,7 +196,7 @@ function CreateListingModal({ onClose }: { onClose: () => void }) {
             </div>
           )}
 
-          {error && <p className="text-xs text-red-500">{error}</p>}
+          {error && <p className="text-xs" style={{ color: "#B03A1E" }}>{error}</p>}
 
           <Button
             className="w-full font-semibold"
@@ -259,25 +260,39 @@ export default function MarketplacePage() {
 
   return (
     <div className="px-4 md:px-8 py-6 max-w-4xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="font-display font-bold text-3xl text-[#0E0B08]">Marketplace</h2>
-          <p className="text-sm text-[#0E0B08]/50 mt-1">
-            Discover goods and services offered by ward members. No payments processed here.
-          </p>
+      {/* Photo hero */}
+      <div className="relative h-36 rounded-2xl overflow-hidden">
+        <Image
+          src="https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&q=80"
+          alt="Marketplace"
+          fill
+          className="object-cover"
+        />
+        <div
+          className="absolute inset-0"
+          style={{ background: "linear-gradient(135deg, rgba(29,71,49,0.82) 0%, rgba(29,71,49,0.50) 100%)" }}
+        />
+        <div className="absolute inset-0 flex items-end justify-between p-5">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <Store className="h-4 w-4 text-white/70" />
+              <span className="text-white/70 text-xs font-medium uppercase tracking-wide">Discovery Only</span>
+            </div>
+            <h1 className="text-2xl font-serif font-bold text-white">Marketplace</h1>
+            <p className="text-white/70 text-sm mt-0.5">Goods &amp; services by ward members</p>
+          </div>
+          {isAuthenticated && isCommunityVerified && (
+            <Button
+              size="sm"
+              className="flex-shrink-0 font-semibold gap-1.5 self-end"
+              style={{ background: "rgba(255,255,255,0.15)", color: "#fff", border: "1px solid rgba(255,255,255,0.3)" }}
+              onClick={() => setShowCreate(true)}
+            >
+              <Plus className="h-4 w-4" />
+              List
+            </Button>
+          )}
         </div>
-        {isAuthenticated && isCommunityVerified && (
-          <Button
-            size="sm"
-            className="flex-shrink-0 font-semibold gap-1.5"
-            style={{ background: "#1E3D2F", color: "#fff" }}
-            onClick={() => setShowCreate(true)}
-          >
-            <Plus className="h-4 w-4" />
-            List
-          </Button>
-        )}
       </div>
 
       {/* Verification gate banner */}

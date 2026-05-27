@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import Link from "next/link"
+import Image from "next/image"
 import { ScrollText, Clock, Vote, CheckCircle, Users, ChevronRight, CalendarDays } from "lucide-react"
 import { electionsApi, ElectionSummaryDto, ElectionStatus } from "@/lib/api"
 import { Badge } from "@/components/ui/badge"
@@ -20,12 +21,12 @@ const STATUS_TABS: { label: string; value: ElectionStatus | "ALL" }[] = [
 
 function statusBadge(status: ElectionStatus) {
   const map: Record<ElectionStatus, { label: string; color: string }> = {
-    PENDING:          { label: "Pending",     color: "#888" },
-    NOMINATIONS_OPEN: { label: "Nominations", color: "#2A7A4B" },
+    PENDING:          { label: "Pending",     color: "#7A6E60" },
+    NOMINATIONS_OPEN: { label: "Nominations", color: "#1D4731" },
     VOTING_OPEN:      { label: "Voting Open", color: "#C9922A" },
-    CLOSED:           { label: "Closed",      color: "#555" },
+    CLOSED:           { label: "Closed",      color: "#7A6E60" },
   }
-  const { label, color } = map[status] ?? { label: status, color: "#888" }
+  const { label, color } = map[status] ?? { label: status, color: "#7A6E60" }
   return (
     <span
       className="px-2 py-0.5 rounded-full text-[11px] font-semibold"
@@ -66,20 +67,23 @@ function ElectionCard({ election }: { election: ElectionSummaryDto }) {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               {statusBadge(election.status)}
-              <span className="text-[11px] text-gray-400">{election.scope}</span>
+              <span className="text-[11px]" style={{ color: "#7A6E60" }}>{election.scope}</span>
             </div>
-            <h3 className="mt-1.5 text-[15px] font-semibold text-gray-800 leading-snug">
+            <h3 className="mt-1.5 text-[15px] font-semibold leading-snug" style={{ color: "#1A120B" }}>
               {roleLabel(election.roleKey)}
               {election.groupName && (
-                <span className="text-gray-400 font-normal"> — {election.groupName}</span>
+                <span className="font-normal" style={{ color: "#7A6E60" }}> — {election.groupName}</span>
               )}
             </h3>
           </div>
-          <ChevronRight className="h-4 w-4 text-gray-300 flex-shrink-0 mt-1 group-hover:text-amber-500 transition-colors" />
+          <ChevronRight
+            className="h-4 w-4 flex-shrink-0 mt-1 transition-colors"
+            style={{ color: "rgba(201,146,42,0.4)" }}
+          />
         </div>
 
         {/* Stats row */}
-        <div className="flex items-center gap-4 text-[12px] text-gray-500">
+        <div className="flex items-center gap-4 text-[12px]" style={{ color: "#7A6E60" }}>
           <span className="flex items-center gap-1">
             <Users className="h-3.5 w-3.5" />
             {election.candidateCount} candidate{election.candidateCount !== 1 ? "s" : ""}
@@ -89,12 +93,20 @@ function ElectionCard({ election }: { election: ElectionSummaryDto }) {
             {election.totalVoteWeight} weight
           </span>
           {election.myNominationId && (
-            <Badge variant="outline" className="text-[10px] border-amber-400 text-amber-600 py-0">
+            <Badge
+              variant="outline"
+              className="text-[10px] py-0"
+              style={{ borderColor: "rgba(201,146,42,0.5)", color: "#C9922A" }}
+            >
               You&apos;re nominated
             </Badge>
           )}
           {election.myVotedCandidateId && (
-            <Badge variant="outline" className="text-[10px] border-green-500 text-green-600 py-0">
+            <Badge
+              variant="outline"
+              className="text-[10px] py-0"
+              style={{ borderColor: "rgba(29,71,49,0.4)", color: "#1D4731" }}
+            >
               Voted
             </Badge>
           )}
@@ -102,8 +114,8 @@ function ElectionCard({ election }: { election: ElectionSummaryDto }) {
 
         {/* Timeline */}
         <div
-          className="rounded-lg px-3 py-2 text-[11px] text-gray-500 flex items-center gap-1.5"
-          style={{ background: "rgba(29,71,49,0.04)" }}
+          className="rounded-lg px-3 py-2 text-[11px] flex items-center gap-1.5"
+          style={{ background: "rgba(29,71,49,0.04)", color: "#7A6E60" }}
         >
           <CalendarDays className="h-3 w-3 flex-shrink-0" />
           {election.status === "NOMINATIONS_OPEN" && (
@@ -130,7 +142,7 @@ function ElectionCard({ election }: { election: ElectionSummaryDto }) {
 
 function SkeletonCard() {
   return (
-    <div className="rounded-xl p-4 border border-gray-100 flex flex-col gap-3">
+    <div className="rounded-xl p-4 flex flex-col gap-3" style={{ border: "1px solid rgba(29,71,49,0.08)" }}>
       <Skeleton className="h-4 w-28" />
       <Skeleton className="h-5 w-2/3" />
       <Skeleton className="h-3 w-40" />
@@ -163,17 +175,27 @@ export default function ElectionsPage() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3">
+      {/* Photo hero banner */}
+      <div className="relative h-36 rounded-2xl overflow-hidden">
+        <Image
+          src="https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=800&q=80"
+          alt="Elections"
+          fill
+          className="object-cover"
+        />
         <div
-          className="w-10 h-10 rounded-xl flex items-center justify-center"
-          style={{ background: "rgba(29,71,49,0.10)" }}
-        >
-          <ScrollText className="h-5 w-5" style={{ color: "#1D4731" }} />
-        </div>
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">Elections</h1>
-          <p className="text-sm text-gray-500">Community leadership elections</p>
+          className="absolute inset-0"
+          style={{ background: "linear-gradient(135deg, rgba(29,71,49,0.82) 0%, rgba(29,71,49,0.50) 100%)" }}
+        />
+        <div className="absolute inset-0 flex items-end p-5">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <ScrollText className="h-4 w-4 text-white/70" />
+              <span className="text-white/70 text-xs font-medium uppercase tracking-wide">Democratic Process</span>
+            </div>
+            <h1 className="text-2xl font-serif font-bold text-white">Elections</h1>
+            <p className="text-white/70 text-sm mt-0.5">Elect community leadership</p>
+          </div>
         </div>
       </div>
 
@@ -185,17 +207,18 @@ export default function ElectionsPage() {
         >
           <Clock className="h-5 w-5 flex-shrink-0" style={{ color: "#C9922A" }} />
           <div className="flex-1">
-            <p className="text-sm font-semibold text-amber-800">
+            <p className="text-sm font-semibold" style={{ color: "#7A4F0A" }}>
               {myPending.length} election{myPending.length !== 1 ? "s" : ""} need your attention
             </p>
-            <p className="text-xs text-amber-700 mt-0.5">
+            <p className="text-xs mt-0.5" style={{ color: "#A06A1A" }}>
               You have active nominations or open votes
             </p>
           </div>
           <Button
             size="sm"
             variant="outline"
-            className="text-amber-700 border-amber-400 hover:bg-amber-50 text-xs"
+            className="text-xs"
+            style={{ color: "#C9922A", borderColor: "rgba(201,146,42,0.5)" }}
             onClick={() => setTab("VOTING_OPEN")}
           >
             View
@@ -213,7 +236,7 @@ export default function ElectionsPage() {
             style={
               tab === t.value
                 ? { background: "#1D4731", color: "white" }
-                : { background: "rgba(29,71,49,0.06)", color: "#555" }
+                : { background: "rgba(29,71,49,0.06)", color: "#7A6E60" }
             }
           >
             {t.label}
@@ -227,7 +250,7 @@ export default function ElectionsPage() {
           {[...Array(4)].map((_, i) => <SkeletonCard key={i} />)}
         </div>
       ) : !data?.elections.length ? (
-        <div className="text-center py-16 text-gray-400">
+        <div className="text-center py-16" style={{ color: "#7A6E60" }}>
           <CheckCircle className="h-10 w-10 mx-auto mb-3 opacity-30" />
           <p className="text-sm">No elections in this category</p>
         </div>

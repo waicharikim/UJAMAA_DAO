@@ -17,6 +17,7 @@ import {
   type ElectionSummaryDto,
   type ElectionStatus,
 } from "@/lib/api"
+import Image from "next/image"
 import { useAuth } from "@/contexts/auth-context"
 import { FetchProposals } from "@/components/proposals/fetch-proposals"
 import { VotingProvider } from "@/contexts/voting-context"
@@ -133,7 +134,18 @@ function PlatformProposalCard({ proposal }: { proposal: ProposalDto }) {
 
           {/* Footer */}
           <div className="flex items-center justify-between text-[11px] text-[#7A6E60] pt-0.5">
-            <span>by <span className="font-medium text-[#0A1F14]">{proposal.creator?.name ?? "Member"}</span></span>
+            <div className="flex items-center gap-1.5">
+              {proposal.creator?.avatarUrl ? (
+                <div className="relative w-4 h-4 rounded-full overflow-hidden flex-shrink-0">
+                  <Image src={proposal.creator.avatarUrl} alt="" fill sizes="16px" className="object-cover" />
+                </div>
+              ) : (
+                <div className="w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center text-[8px] font-bold text-white" style={{ background: "#1D4731" }}>
+                  {(proposal.creator?.name ?? "M")[0].toUpperCase()}
+                </div>
+              )}
+              <span className="font-medium text-[#0A1F14]">{proposal.creator?.name ?? "Member"}</span>
+            </div>
             <span>{formatDate(proposal.createdAt)}</span>
           </div>
         </CardContent>
@@ -359,16 +371,16 @@ function ElectionCard({ election }: { election: ElectionSummaryDto }) {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               {electionStatusBadge(election.status)}
-              <span className="text-[11px] text-gray-400">{election.scope}</span>
+              <span className="text-[11px]" style={{ color: "#7A6E60" }}>{election.scope}</span>
             </div>
-            <h3 className="mt-1.5 text-[15px] font-semibold text-gray-800 leading-snug">
+            <h3 className="mt-1.5 text-[15px] font-semibold leading-snug" style={{ color: "#1A120B" }}>
               {election.roleKey.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, c => c.toUpperCase())}
-              {election.groupName && <span className="text-gray-400 font-normal"> — {election.groupName}</span>}
+              {election.groupName && <span className="font-normal" style={{ color: "#7A6E60" }}> — {election.groupName}</span>}
             </h3>
           </div>
-          <ChevronRight className="h-4 w-4 text-gray-300 flex-shrink-0 mt-1 group-hover:text-amber-500 transition-colors" />
+          <ChevronRight className="h-4 w-4 flex-shrink-0 mt-1 transition-colors" style={{ color: "rgba(201,146,42,0.4)" }} />
         </div>
-        <div className="flex items-center gap-4 text-[12px] text-gray-500">
+        <div className="flex items-center gap-4 text-[12px]" style={{ color: "#7A6E60" }}>
           <span className="flex items-center gap-1">
             <Users className="h-3.5 w-3.5" />{election.candidateCount} candidate{election.candidateCount !== 1 ? "s" : ""}
           </span>
@@ -376,13 +388,13 @@ function ElectionCard({ election }: { election: ElectionSummaryDto }) {
             <Vote className="h-3.5 w-3.5" />{election.totalVoteWeight} weight
           </span>
           {election.myNominationId && (
-            <Badge variant="outline" className="text-[10px] border-amber-400 text-amber-600 py-0">You&apos;re nominated</Badge>
+            <Badge variant="outline" className="text-[10px] py-0" style={{ borderColor: "rgba(201,146,42,0.5)", color: "#C9922A" }}>You&apos;re nominated</Badge>
           )}
           {election.myVotedCandidateId && (
-            <Badge variant="outline" className="text-[10px] border-green-500 text-green-600 py-0">Voted</Badge>
+            <Badge variant="outline" className="text-[10px] py-0" style={{ borderColor: "rgba(29,71,49,0.4)", color: "#1D4731" }}>Voted</Badge>
           )}
         </div>
-        <div className="rounded-lg px-3 py-2 text-[11px] text-gray-500 flex items-center gap-1.5"
+        <div className="rounded-lg px-3 py-2 text-[11px] flex items-center gap-1.5" style={{ color: "#7A6E60" }}
           style={{ background: "rgba(29,71,49,0.04)" }}>
           <CalendarDays className="h-3 w-3 flex-shrink-0" />
           {election.status === "NOMINATIONS_OPEN" && <>Nominations close {formatDate(election.nominationsCloseAt)}</>}
@@ -448,7 +460,7 @@ function ElectionsSection() {
       {isLoading ? (
         <div className="space-y-3">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="rounded-xl p-4 border border-gray-100 flex flex-col gap-3">
+            <div key={i} className="rounded-xl p-4 flex flex-col gap-3" style={{ border: "1px solid rgba(29,71,49,0.08)" }}>
               <Skeleton className="h-4 w-28" />
               <Skeleton className="h-5 w-2/3" />
               <Skeleton className="h-3 w-40" />
@@ -456,7 +468,7 @@ function ElectionsSection() {
           ))}
         </div>
       ) : !data?.elections.length ? (
-        <div className="text-center py-16 text-gray-400">
+        <div className="text-center py-16" style={{ color: "#7A6E60" }}>
           <CheckCircle className="h-10 w-10 mx-auto mb-3 opacity-30" />
           <p className="text-sm">No elections in this category</p>
         </div>
@@ -484,16 +496,26 @@ export default function GovernancePage() {
 
   return (
     <div className="container mx-auto px-4 py-4 md:py-8 max-w-3xl space-y-5">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "rgba(29,71,49,0.10)" }}>
-          <Scale className="h-5 w-5" style={{ color: "#1D4731" }} />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold text-[#0A1F14]" style={{ fontFamily: "var(--font-cormorant, serif)" }}>
-            Govern
-          </h1>
-          <p className="text-sm text-[#7A6E60]">Proposals, elections, and platform governance</p>
+      {/* Hero banner */}
+      <div className="relative h-36 rounded-2xl overflow-hidden">
+        <Image
+          src="https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?auto=format&fit=crop&w=900&q=75"
+          alt="Community governance"
+          fill
+          sizes="(max-width: 768px) 100vw, 768px"
+          className="object-cover object-center"
+          priority
+        />
+        {/* Overlay */}
+        <div
+          className="absolute inset-0"
+          style={{ background: "linear-gradient(120deg, rgba(29,71,49,0.88) 0%, rgba(29,71,49,0.50) 60%, transparent 100%)" }}
+        />
+        <div className="absolute inset-0 flex items-center px-6 gap-3">
+          <div>
+            <h1 className="font-serif font-bold text-2xl md:text-3xl text-white leading-tight">Govern</h1>
+            <p className="text-sm text-white/65 mt-0.5">Proposals, elections, and platform governance</p>
+          </div>
         </div>
       </div>
 

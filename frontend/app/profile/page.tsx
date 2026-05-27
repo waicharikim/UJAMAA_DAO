@@ -6,6 +6,7 @@ import { UserProfile } from "@/components/user/user-profile"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import Image from "next/image"
 import { Award, Coins, MapPin, History, ShieldCheck, LayoutGrid, Settings } from "lucide-react"
 import { reputationApi, type WardReputationBreakdownDto, type ImpactPointLogDto, type ReputationHierarchyDto } from "@/lib/api"
 import { VerificationCard } from "@/components/profile/verification-card"
@@ -129,38 +130,54 @@ export default function ProfilePage() {
   return (
     <div className="px-4 md:px-8 py-6 max-w-2xl mx-auto space-y-5">
 
-      {/* ── Header — compact stat strip ─────────────────────── */}
-      <div className="flex items-center gap-4">
-        <div className="flex-1 min-w-0">
-          <h2 className="font-serif font-bold text-2xl text-[#0E0B08] leading-tight truncate">
-            {user?.username ?? user?.email ?? "My Profile"}
-          </h2>
-          <p className="text-xs text-[#0E0B08]/40 mt-0.5 truncate">
-            {user?.verificationLevel?.replace(/_/g, " ") ?? ""}
-          </p>
-        </div>
-
-        {/* Inline stats */}
-        {isLoading ? (
-          <Skeleton className="h-10 w-40 rounded-xl" />
-        ) : (
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg" style={{ background: "rgba(201,146,42,0.1)" }}>
-              <Award className="h-3.5 w-3.5" style={{ color: "#C9922A" }} />
-              <span className="text-sm font-bold" style={{ color: "#C9922A" }}>
-                {(reputation?.globalImpactPoints ?? user?.impactPoints?.global ?? 0).toLocaleString()}
-              </span>
-              <span className="text-[10px] font-medium opacity-60" style={{ color: "#C9922A" }}>IP</span>
-            </div>
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg" style={{ background: "rgba(30,61,47,0.08)" }}>
-              <Coins className="h-3.5 w-3.5" style={{ color: "#1E3D2F" }} />
-              <span className="text-sm font-bold" style={{ color: "#1E3D2F" }}>
-                {(user?.tokenBalance ?? 0).toLocaleString()}
-              </span>
-              <span className="text-[10px] font-medium opacity-60" style={{ color: "#1E3D2F" }}>PR</span>
-            </div>
+      {/* ── Photo hero with avatar + stats overlay ─────────── */}
+      <div className="relative h-40 rounded-2xl overflow-hidden">
+        <Image
+          src="https://images.unsplash.com/photo-1528360983277-13d401cdc186?w=800&q=80"
+          alt="Profile"
+          fill
+          className="object-cover"
+        />
+        <div
+          className="absolute inset-0"
+          style={{ background: "linear-gradient(180deg, rgba(29,71,49,0.55) 0%, rgba(29,71,49,0.88) 100%)" }}
+        />
+        <div className="absolute inset-0 flex items-end p-5 gap-4">
+          {/* Avatar */}
+          <div
+            className="w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold text-white flex-shrink-0 ring-2 ring-white/30"
+            style={{ background: "rgba(255,255,255,0.18)" }}
+          >
+            {(user?.username ?? user?.email ?? "?")[0].toUpperCase()}
           </div>
-        )}
+          <div className="flex-1 min-w-0">
+            <h2 className="font-serif font-bold text-xl text-white leading-tight truncate">
+              {user?.username ?? user?.email ?? "My Profile"}
+            </h2>
+            <p className="text-white/60 text-xs mt-0.5 truncate">
+              {user?.verificationLevel?.replace(/_/g, " ") ?? ""}
+            </p>
+          </div>
+          {/* Inline stats */}
+          {!isLoading && (
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg" style={{ background: "rgba(201,146,42,0.25)" }}>
+                <Award className="h-3 w-3 text-amber-300" />
+                <span className="text-sm font-bold text-amber-200">
+                  {(reputation?.globalImpactPoints ?? user?.impactPoints?.global ?? 0).toLocaleString()}
+                </span>
+                <span className="text-[10px] text-amber-300/70">IP</span>
+              </div>
+              <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg" style={{ background: "rgba(255,255,255,0.15)" }}>
+                <Coins className="h-3 w-3 text-white/70" />
+                <span className="text-sm font-bold text-white">
+                  {(user?.tokenBalance ?? 0).toLocaleString()}
+                </span>
+                <span className="text-[10px] text-white/50">PR</span>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Tabs ────────────────────────────────────────────── */}

@@ -3,6 +3,7 @@
 import { Suspense } from "react"
 import Link from "next/link"
 import { useQuery } from "@tanstack/react-query"
+import Image from "next/image"
 import { Vote, Users, Award, Coins, Zap, AlertCircle, ShieldCheck, MapPin, BarChart3, ArrowRight } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -315,86 +316,65 @@ function VerificationNudge({ level }: { level: string }) {
 // ─── Welcome header ───────────────────────────────────────
 function WelcomeHeader({
   user,
-  prBalance,
-  impactPoints,
 }: {
-  user: { username?: string; email?: string; utBalance?: number; primaryWardName?: string; verificationLevel?: string }
-  prBalance: number
-  impactPoints: number
+  user: { username?: string; email?: string; avatarUrl?: string; primaryWardName?: string; verificationLevel?: string }
 }) {
   const name = user.username || user.email?.split("@")[0] || "Mwanachama"
   const wardName = (user as any).primaryWardName ?? "Your Ward"
   const hour = new Date().getHours()
   const greeting = hour < 12 ? "Habari za asubuhi" : hour < 17 ? "Habari za mchana" : "Habari za jioni"
+  const initials = name.slice(0, 2).toUpperCase()
 
   return (
     <div
       className="relative overflow-hidden rounded-2xl"
-      style={{
-        background: "linear-gradient(135deg, #1D4731 0%, #2A5E42 40%, #1E3D2F 100%)",
-        minHeight: "160px",
-      }}
+      style={{ background: "linear-gradient(135deg, #1D4731 0%, #2A5E42 40%, #1E3D2F 100%)" }}
     >
-      {/* Ambient rings */}
+      {/* Ward landscape photo — right edge */}
+      <div className="absolute inset-0 opacity-20">
+        <Image
+          src="https://images.unsplash.com/photo-1578662996442-48f60103fc96?auto=format&fit=crop&w=900&q=60"
+          alt=""
+          fill
+          sizes="900px"
+          className="object-cover object-center"
+          aria-hidden="true"
+        />
+      </div>
+      {/* Overlay to keep text sharp */}
       <div
         className="pointer-events-none absolute inset-0"
-        aria-hidden="true"
-        style={{
-          background: [
-            "radial-gradient(ellipse 70% 80% at 95% 10%, rgba(212,145,30,0.18) 0%, transparent 60%)",
-            "radial-gradient(ellipse 50% 60% at 5% 90%, rgba(56,160,99,0.15) 0%, transparent 55%)",
-          ].join(", "),
-        }}
-      />
-      {/* Decorative circles */}
-      <div className="pointer-events-none absolute -top-10 -right-10 w-44 h-44 rounded-full border border-white/[0.07]" aria-hidden="true" />
-      <div className="pointer-events-none absolute top-4 right-4 w-28 h-28 rounded-full border border-white/[0.05]" aria-hidden="true" />
-      {/* Grid pattern */}
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.04]"
-        aria-hidden="true"
-        style={{
-          backgroundImage: "linear-gradient(rgba(247,242,232,1) 1px, transparent 1px), linear-gradient(90deg, rgba(247,242,232,1) 1px, transparent 1px)",
-          backgroundSize: "32px 32px",
-        }}
+        style={{ background: "linear-gradient(90deg, rgba(29,71,49,0.95) 0%, rgba(29,71,49,0.70) 60%, rgba(29,71,49,0.30) 100%)" }}
       />
 
-      {/* Content */}
-      <div className="relative z-10 px-5 py-5 flex flex-col gap-3">
-        <div>
-          <p className="text-xs font-medium text-white/50 mb-0.5">{greeting}</p>
-          <h2 className="font-serif font-bold text-2xl md:text-3xl text-white leading-tight">
-            {name}
-          </h2>
-          <div className="flex items-center gap-1.5 mt-1.5">
-            <MapPin className="h-3 w-3 text-white/40" />
-            <span className="text-xs text-white/50 font-medium">{wardName}</span>
+      {/* Content — single horizontal row */}
+      <div className="relative z-10 px-5 py-4 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          {/* Avatar */}
+          <div className="relative w-10 h-10 rounded-full overflow-hidden flex-shrink-0 border-2 border-white/20">
+            {user.avatarUrl ? (
+              <Image src={user.avatarUrl} alt={name} fill sizes="40px" className="object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-sm font-bold text-white" style={{ background: "rgba(212,145,30,0.40)" }}>
+                {initials}
+              </div>
+            )}
+          </div>
+          <div>
+            <p className="text-[11px] font-medium text-white/50 mb-0.5">{greeting}</p>
+            <h2 className="font-serif font-bold text-xl md:text-2xl text-white leading-tight">{name}</h2>
           </div>
         </div>
-
-        {/* Token stat chips */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {[
-            { label: "PR",  value: prBalance,              color: "#E9A52E", bg: "rgba(233,165,46,0.18)" },
-            { label: "IP",  value: impactPoints,           color: "#7DCCA0", bg: "rgba(125,204,160,0.18)" },
-            { label: "UT",  value: user.utBalance ?? 0,   color: "#D4A88C", bg: "rgba(212,168,140,0.18)" },
-          ].map(({ label, value, color, bg }) => (
-            <div
-              key={label}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold"
-              style={{ background: bg, color }}
-            >
-              <span className="text-sm font-bold">{typeof value === "number" ? value.toLocaleString() : value}</span>
-              <span className="opacity-70 text-[11px]">{label}</span>
-            </div>
-          ))}
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <MapPin className="h-3 w-3 text-white/40" />
+          <span className="text-xs text-white/50 font-medium">{wardName}</span>
           {user.verificationLevel && (
             <div
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[10px] font-bold ml-auto"
-              style={{ background: "rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.7)" }}
+              className="ml-2 flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold"
+              style={{ background: "rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.65)" }}
             >
               <ShieldCheck className="h-3 w-3" />
-              {user.verificationLevel.replace(/_/g, " ")}
+              <span className="hidden sm:inline">{user.verificationLevel.replace(/_/g, " ")}</span>
             </div>
           )}
         </div>
@@ -403,68 +383,35 @@ function WelcomeHeader({
   )
 }
 
-// ─── Section label ─────────────────────────────────────────
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="text-[10px] font-semibold uppercase tracking-widest mb-2" style={{ color: "rgba(14,11,8,0.40)" }}>
-      {children}
-    </p>
-  )
-}
-
-// ─── Your Impact row (PR · IP · UT) ───────────────────────
-function ImpactRow({
+// ─── Stats grid (PR · IP · UT · Proposals · Communities) ─
+function StatsGrid({
   prBalance,
   impactPoints,
   utBalance,
+  proposalCount,
+  groupCount,
   isLoading,
 }: {
   prBalance: number
   impactPoints: number
   utBalance: number
-  isLoading: boolean
-}) {
-  return (
-    <div>
-      <SectionLabel>Your Impact</SectionLabel>
-      <div className="grid grid-cols-3 gap-3 md:gap-4">
-        {isLoading ? (
-          <><StatSkeleton /><StatSkeleton /><StatSkeleton /></>
-        ) : (
-          <>
-            <StatCard title="Haki za Ushiriki"  subtitle="Participation Rights" value={prBalance}    change="PR balance"      changeType="neutral"  icon={Coins} colorClass="bg-[#2A5240]" />
-            <StatCard title="Alama za Athari"    subtitle="Impact Points"        value={impactPoints} change="Reputation score" changeType="positive" icon={Award} colorClass="bg-[#B03A1E]" />
-            <StatCard title="Tokeni za Huduma"   subtitle="Utility Tokens"       value={utBalance}    change="UT balance"      changeType="neutral"  icon={Zap}   colorClass="bg-[#7A4F1E]" />
-          </>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ─── Ward Status row (Proposals · Communities) ────────────
-function WardStatusRow({
-  proposalCount,
-  groupCount,
-  isLoading,
-}: {
   proposalCount: number | undefined
   groupCount: number
   isLoading: boolean
 }) {
   return (
-    <div>
-      <SectionLabel>Ward Status</SectionLabel>
-      <div className="grid grid-cols-2 gap-3 md:gap-4">
-        {isLoading ? (
-          <><StatSkeleton /><StatSkeleton /></>
-        ) : (
-          <>
-            <StatCard title="Mapendekezo Hai" subtitle="Active Proposals" value={proposalCount ?? "—"} change="All submitted"  changeType="positive" icon={Vote}  colorClass="bg-[#C9922A]" />
-            <StatCard title="Makundi Yangu"    subtitle="My Communities"   value={groupCount}           change="Groups joined"  changeType="neutral"  icon={Users} colorClass="bg-[#1E3D2F]" />
-          </>
-        )}
-      </div>
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      {isLoading ? (
+        Array.from({ length: 5 }).map((_, i) => <StatSkeleton key={i} />)
+      ) : (
+        <>
+          <StatCard title="Haki za Ushiriki"  subtitle="Participation Rights" value={prBalance}          change="PR balance"      changeType="neutral"  icon={Coins} colorClass="bg-[#2A5240]" />
+          <StatCard title="Alama za Athari"    subtitle="Impact Points"        value={impactPoints}       change="Reputation score" changeType="positive" icon={Award} colorClass="bg-[#B03A1E]" />
+          <StatCard title="Tokeni za Huduma"   subtitle="Utility Tokens"       value={utBalance}          change="UT balance"      changeType="neutral"  icon={Zap}   colorClass="bg-[#7A4F1E]" />
+          <StatCard title="Mapendekezo Hai"    subtitle="Active Proposals"     value={proposalCount ?? "—"} change="All submitted"  changeType="positive" icon={Vote}  colorClass="bg-[#C9922A]" />
+          <StatCard title="Makundi Yangu"      subtitle="My Communities"       value={groupCount}         change="Groups joined"   changeType="neutral"  icon={Users} colorClass="bg-[#1E3D2F]" />
+        </>
+      )}
     </div>
   )
 }
@@ -570,16 +517,13 @@ export function DashboardContent() {
 
   return (
     <div className="px-4 md:px-8 py-4 md:py-6 space-y-4 md:space-y-8 max-w-6xl mx-auto">
-      {user && <WelcomeHeader user={user} prBalance={prBalance} impactPoints={impactPoints} />}
+      {user && <WelcomeHeader user={user} />}
       {user?.verificationLevel && <VerificationNudge level={user.verificationLevel} />}
       <RolePanels isAdmin={isAdmin} isCompliance={isCompliance} isCoordinator={isCoordinator} />
-      <ImpactRow
+      <StatsGrid
         prBalance={prBalance}
         impactPoints={impactPoints}
         utBalance={user?.utBalance ?? 0}
-        isLoading={prLoading}
-      />
-      <WardStatusRow
         proposalCount={proposalsMeta?.total}
         groupCount={myGroups.length}
         isLoading={prLoading}

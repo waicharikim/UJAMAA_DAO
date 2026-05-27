@@ -8,6 +8,7 @@ import {
 import { notificationsApi, type NotificationDto } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import Image from "next/image"
 import { PushNotificationBanner } from "@/components/notifications/push-banner"
 
 // ── Helpers ────────────────────────────────────────────────────
@@ -107,33 +108,42 @@ export default function NotificationsPage() {
 
   return (
     <div className="container mx-auto max-w-2xl py-8 px-4 space-y-5">
-      <PushNotificationBanner />
-
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-serif text-2xl font-semibold" style={{ color: "#1A120B" }}>
-            Notifications
-          </h1>
+      {/* Photo hero */}
+      <div className="relative h-32 rounded-2xl overflow-hidden">
+        <Image
+          src="https://images.unsplash.com/photo-1611532736597-de2d4265fba3?w=800&q=80"
+          alt="Notifications"
+          fill
+          className="object-cover"
+        />
+        <div
+          className="absolute inset-0"
+          style={{ background: "linear-gradient(135deg, rgba(29,71,49,0.82) 0%, rgba(29,71,49,0.50) 100%)" }}
+        />
+        <div className="absolute inset-0 flex items-end justify-between p-5">
+          <div>
+            <h1 className="text-2xl font-serif font-bold text-white">Notifications</h1>
+            {unreadCount > 0 && (
+              <p className="text-white/70 text-sm mt-0.5">{unreadCount} unread</p>
+            )}
+          </div>
           {unreadCount > 0 && (
-            <p className="text-sm mt-0.5" style={{ color: "#7A6E60" }}>
-              {unreadCount} unread
-            </p>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => markAllMutation.mutate()}
+              disabled={markAllMutation.isPending}
+              className="text-xs font-semibold gap-1.5 rounded-full px-3 self-end"
+              style={{ color: "white", background: "rgba(255,255,255,0.15)" }}
+            >
+              <CheckCheck className="h-3.5 w-3.5" />
+              Mark all read
+            </Button>
           )}
         </div>
-        {unreadCount > 0 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => markAllMutation.mutate()}
-            disabled={markAllMutation.isPending}
-            className="text-xs font-semibold gap-1.5 rounded-full px-3"
-            style={{ color: "#1D4731" }}
-          >
-            <CheckCheck className="h-3.5 w-3.5" />
-            Mark all read
-          </Button>
-        )}
       </div>
+
+      <PushNotificationBanner />
 
       <div
         className="flex gap-1 p-1 rounded-xl w-fit"

@@ -11,6 +11,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
+import Image from "next/image"
 
 const TABS = ["pr", "dues", "ut"] as const
 type Tab = typeof TABS[number]
@@ -368,13 +369,28 @@ export default function EconomyPage() {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-2xl space-y-6">
-      <div>
-        <h1 className="font-serif text-2xl font-semibold" style={{ color: "#1A120B" }}>
-          Your Economy
-        </h1>
-        <p className="text-sm mt-1" style={{ color: "#7A6E60" }}>
-          Participation Rights, dues history, and Utility Tokens.
-        </p>
+      {/* Photo hero */}
+      <div className="relative h-36 rounded-2xl overflow-hidden">
+        <Image
+          src="https://images.unsplash.com/photo-1559526324-4b87b5e36e44?w=800&q=80"
+          alt="Economy"
+          fill
+          className="object-cover"
+        />
+        <div
+          className="absolute inset-0"
+          style={{ background: "linear-gradient(135deg, rgba(29,71,49,0.82) 0%, rgba(29,71,49,0.50) 100%)" }}
+        />
+        <div className="absolute inset-0 flex items-end p-5">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <Coins className="h-4 w-4 text-white/70" />
+              <span className="text-white/70 text-xs font-medium uppercase tracking-wide">Token Economy</span>
+            </div>
+            <h1 className="text-2xl font-serif font-bold text-white">Your Economy</h1>
+            <p className="text-white/70 text-sm mt-0.5">Participation Rights, dues &amp; Utility Tokens</p>
+          </div>
+        </div>
       </div>
 
       {!isCommunityVerified ? (

@@ -12,6 +12,7 @@ import { validateRequest } from '../../../core/middleware/validateRequest.js';
 import { z } from 'zod';
 import { asyncHandler, sendSuccess } from '../../../core/utils/response.js';
 import { pushService } from '../services/push.service.js';
+import { AuthRequest } from '../../../core/types/Ujamaadao.types.js';
 
 const router = Router();
 
@@ -71,7 +72,7 @@ router.post(
     target: 'body',
   }),
   asyncHandler(async (req, res) => {
-    const userId = req.user!.userId;
+    const userId = (req as AuthRequest).user!.userId;
     const userAgent = req.headers['user-agent'];
     const sub = await pushService.subscribe(userId, req.body, userAgent);
     sendSuccess(res, { id: sub.id }, 'Push subscription registered');
@@ -85,7 +86,7 @@ router.delete(
     target: 'body',
   }),
   asyncHandler(async (req, res) => {
-    const userId = req.user!.userId;
+    const userId = (req as AuthRequest).user!.userId;
     await pushService.unsubscribe(userId, req.body.endpoint);
     sendSuccess(res, null, 'Unsubscribed');
   })

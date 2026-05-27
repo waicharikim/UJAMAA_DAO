@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import Image from "next/image"
 import { MapPin, Users, Trophy, Vote, Award, ShieldCheck, ChevronRight } from "lucide-react"
 
 // ─── Verification level badge colours ──────────────────────
@@ -149,17 +150,27 @@ export default function WardPage() {
   return (
     <div className="px-4 md:px-8 py-6 max-w-2xl mx-auto space-y-5">
 
-      {/* Header */}
-      <div className="flex items-start gap-3">
+      {/* Photo hero */}
+      <div className="relative h-36 rounded-2xl overflow-hidden">
+        <Image
+          src="https://images.unsplash.com/photo-1494389945381-0c69f0f3e5a1?w=800&q=80"
+          alt={wardName}
+          fill
+          className="object-cover"
+        />
         <div
-          className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0"
-          style={{ background: "rgba(30,61,47,0.1)" }}
-        >
-          <MapPin className="h-5 w-5" style={{ color: "#1E3D2F" }} />
-        </div>
-        <div>
-          <h2 className="font-serif font-bold text-2xl text-[#0E0B08] leading-tight">{wardName}</h2>
-          <p className="text-xs mt-0.5" style={{ color: "rgba(14,11,8,0.4)" }}>Ward · Local stats and activity</p>
+          className="absolute inset-0"
+          style={{ background: "linear-gradient(135deg, rgba(29,71,49,0.82) 0%, rgba(29,71,49,0.50) 100%)" }}
+        />
+        <div className="absolute inset-0 flex items-end p-5">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <MapPin className="h-4 w-4 text-white/70" />
+              <span className="text-white/70 text-xs font-medium uppercase tracking-wide">My Ward</span>
+            </div>
+            <h1 className="text-2xl font-serif font-bold text-white">{wardName}</h1>
+            <p className="text-white/70 text-sm mt-0.5">Local stats and activity</p>
+          </div>
         </div>
       </div>
 

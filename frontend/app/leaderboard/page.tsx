@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import Link from "next/link"
+import Image from "next/image"
 import { Trophy, Star, Zap, BarChart3, Medal } from "lucide-react"
 import { leaderboardApi, LeaderboardEntryDto } from "@/lib/api"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -79,23 +80,23 @@ function EntryRow({
         </AvatarFallback>
       </Avatar>
       <div className="flex-1 min-w-0">
-        <p className="text-[13.5px] font-semibold text-gray-800 truncate">
+        <p className="text-[13.5px] font-semibold truncate" style={{ color: "#1A120B" }}>
           {entry.name}
           {isMe && (
-            <span className="ml-2 text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">
+            <span className="ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ color: "#C9922A", background: "rgba(201,146,42,0.1)" }}>
               You
             </span>
           )}
         </p>
         {entry.ward && (
-          <p className="text-[11px] text-gray-400 truncate">
+          <p className="text-[11px] truncate" style={{ color: "#7A6E60" }}>
             {entry.ward.name}{entry.county ? `, ${entry.county.name}` : ""}
           </p>
         )}
       </div>
       <div className="text-right flex-shrink-0">
-        <p className="text-[14px] font-bold text-gray-800">{scoreValue(entry, metric).toLocaleString()}</p>
-        <p className="text-[10px] text-gray-400">{scoreLabel(metric)}</p>
+        <p className="text-[14px] font-bold" style={{ color: "#1A120B" }}>{scoreValue(entry, metric).toLocaleString()}</p>
+        <p className="text-[10px]" style={{ color: "#7A6E60" }}>{scoreLabel(metric)}</p>
       </div>
     </div>
   )
@@ -105,7 +106,7 @@ function EntryRow({
 
 function SkeletonRow() {
   return (
-    <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-gray-100">
+    <div className="flex items-center gap-3 px-4 py-3 rounded-xl" style={{ border: "1px solid rgba(29,71,49,0.08)" }}>
       <Skeleton className="h-5 w-5 rounded" />
       <Skeleton className="h-9 w-9 rounded-xl" />
       <div className="flex-1 space-y-1.5">
@@ -132,17 +133,26 @@ export default function LeaderboardPage() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
-      {/* Header */}
-      <div className="flex items-center gap-3">
+      {/* Photo hero */}
+      <div className="relative h-32 rounded-2xl overflow-hidden">
+        <Image
+          src="https://images.unsplash.com/photo-1546519638405-a4f490f6afde?w=800&q=80"
+          alt="Leaderboard"
+          fill
+          className="object-cover"
+        />
         <div
-          className="w-10 h-10 rounded-xl flex items-center justify-center"
-          style={{ background: "rgba(201,146,42,0.12)" }}
-        >
-          <Trophy className="h-5 w-5 text-amber-600" />
-        </div>
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">Leaderboard</h1>
-          <p className="text-sm text-gray-500">Top contributors in the community</p>
+          className="absolute inset-0"
+          style={{ background: "linear-gradient(135deg, rgba(201,146,42,0.85) 0%, rgba(29,71,49,0.75) 100%)" }}
+        />
+        <div className="absolute inset-0 flex items-end p-5">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <Trophy className="h-4 w-4 text-white/70" />
+              <span className="text-white/70 text-xs font-medium uppercase tracking-wide">Community Rankings</span>
+            </div>
+            <h1 className="text-2xl font-serif font-bold text-white">Leaderboard</h1>
+          </div>
         </div>
       </div>
 
@@ -204,7 +214,7 @@ export default function LeaderboardPage() {
       </div>
 
       {/* Header row */}
-      <div className="px-4 flex items-center gap-3 text-[10px] font-bold text-gray-400 uppercase tracking-wide">
+      <div className="px-4 flex items-center gap-3 text-[10px] font-bold uppercase tracking-wide" style={{ color: "#7A6E60" }}>
         <div className="w-7" />
         <div className="w-9 flex-shrink-0" />
         <div className="flex-1">Member</div>
@@ -217,7 +227,7 @@ export default function LeaderboardPage() {
           {[...Array(10)].map((_, i) => <SkeletonRow key={i} />)}
         </div>
       ) : !data?.entries.length ? (
-        <div className="text-center py-16 text-gray-400">
+        <div className="text-center py-16" style={{ color: "#7A6E60" }}>
           <Medal className="h-10 w-10 mx-auto mb-3 opacity-30" />
           <p className="text-sm">No data yet for this scope</p>
         </div>
@@ -236,8 +246,8 @@ export default function LeaderboardPage() {
 
       {/* Your position — pinned if you're outside the visible list */}
       {!isLoading && user && !myEntryInList && data && data.total > 0 && (
-        <div className="pt-1 border-t border-dashed border-gray-200">
-          <p className="text-[10px] text-gray-400 uppercase tracking-wide font-bold mb-2 px-1">
+        <div className="pt-1 border-t border-dashed" style={{ borderColor: "rgba(29,71,49,0.12)" }}>
+          <p className="text-[10px] uppercase tracking-wide font-bold mb-2 px-1" style={{ color: "#7A6E60" }}>
             Your Position
           </p>
           <div
@@ -257,24 +267,24 @@ export default function LeaderboardPage() {
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
-              <p className="text-[13.5px] font-semibold text-gray-800 truncate">
+              <p className="text-[13.5px] font-semibold truncate" style={{ color: "#1A120B" }}>
                 {user.username}
-                <span className="ml-2 text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">
+                <span className="ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ color: "#C9922A", background: "rgba(201,146,42,0.1)" }}>
                   You
                 </span>
               </p>
-              <p className="text-[11px] text-gray-400">Not in top {data.entries.length}</p>
+              <p className="text-[11px]" style={{ color: "#7A6E60" }}>Not in top {data.entries.length}</p>
             </div>
             <div className="text-right flex-shrink-0">
-              <p className="text-[13px] text-gray-500">—</p>
-              <p className="text-[10px] text-gray-400">{scoreLabel(metric)}</p>
+              <p className="text-[13px]" style={{ color: "#7A6E60" }}>—</p>
+              <p className="text-[10px]" style={{ color: "#7A6E60" }}>{scoreLabel(metric)}</p>
             </div>
           </div>
         </div>
       )}
 
       {data && (
-        <p className="text-center text-[11px] text-gray-400">
+        <p className="text-center text-[11px]" style={{ color: "#7A6E60" }}>
           Showing {data.entries.length} of {data.total} members
         </p>
       )}
