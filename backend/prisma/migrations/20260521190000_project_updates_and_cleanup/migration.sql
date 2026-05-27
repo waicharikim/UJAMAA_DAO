@@ -1,7 +1,10 @@
 -- Remove PROJECT_UPDATE from PostType enum
 ALTER TYPE "PostType" RENAME TO "PostType_old";
 CREATE TYPE "PostType" AS ENUM ('NOTICE', 'ANNOUNCEMENT', 'RESOURCE');
+-- Drop default before changing column type (PG can't auto-cast the default)
+ALTER TABLE "posts" ALTER COLUMN "type" DROP DEFAULT;
 ALTER TABLE "posts" ALTER COLUMN "type" TYPE "PostType" USING "type"::text::"PostType";
+ALTER TABLE "posts" ALTER COLUMN "type" SET DEFAULT 'NOTICE';
 DROP TYPE "PostType_old";
 
 -- Remove projectId column from posts
