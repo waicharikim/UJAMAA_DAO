@@ -27,7 +27,7 @@ FROM base AS builder
 COPY --from=deps /usr/src/app/node_modules ./node_modules
 COPY . .
 
-RUN npm run build
+RUN npm run db:generate && npm run build
 
 # ──────────────────────── 
 # DEVELOPMENT IMAGE (hot reload)
