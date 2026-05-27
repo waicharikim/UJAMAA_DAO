@@ -12,6 +12,7 @@ const WalletButton = dynamic(
   { ssr: false, loading: () => <div className="h-8 w-20 rounded-full bg-[#C9922A]/10 animate-pulse" /> },
 )
 import { NotificationsPopover } from "./notifications-popover"
+import { GlobalSearch } from "./global-search"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -90,9 +91,14 @@ export function Topbar({ collapsed, onToggle }: TopbarProps) {
       )}
 
       {/* Page title */}
-      <h1 className="font-serif font-semibold text-[18px] text-chai leading-none tracking-tight flex-1">
+      <h1 className="font-serif font-semibold text-[18px] text-chai leading-none tracking-tight flex-shrink-0">
         {title}
       </h1>
+
+      {/* Global search — desktop only */}
+      <div className="hidden md:flex flex-1 max-w-xs mx-2">
+        <GlobalSearch />
+      </div>
 
       {/* Token stats — desktop only, gated on auth ready */}
       {!isLoading && isAuthenticated && user && (

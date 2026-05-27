@@ -860,6 +860,21 @@ export const notificationsApi = {
       method: "PUT",
       body: JSON.stringify({ channel, category, enabled }),
     }),
+
+  getVapidPublicKey: () =>
+    apiFetch<{ publicKey: string }>("/notifications/push/vapid-public-key"),
+
+  subscribePush: (subscription: { endpoint: string; keys: { p256dh: string; auth: string } }) =>
+    apiFetch<{ id: string }>("/notifications/push/subscribe", {
+      method: "POST",
+      body: JSON.stringify(subscription),
+    }),
+
+  unsubscribePush: (endpoint: string) =>
+    apiFetch<void>("/notifications/push/unsubscribe", {
+      method: "DELETE",
+      body: JSON.stringify({ endpoint }),
+    }),
 }
 
 // ─────────────────────────────────────────────────────────
@@ -2495,4 +2510,17 @@ export const conflictApi = {
       method: "PATCH",
       body: JSON.stringify({ resolution }),
     }),
+}
+
+// ─── Search ──────────────────────────────────────────────────────────────────
+export interface SearchResultDto {
+  users: { id: string; name: string; email: string; avatarUrl: string | null; verificationLevel: string }[]
+  proposals: { id: string; title: string; status: string; proposalType: string; createdAt: string }[]
+  modules: { id: string; title: string; category: string; difficulty: string }[]
+  groups: { id: string; name: string; memberCount: number; locationScope: string }[]
+}
+
+export const searchApi = {
+  search: (q: string): Promise<SearchResultDto> =>
+    apiFetch<SearchResultDto>(`/search?q=${encodeURIComponent(q)}`),
 }

@@ -10,7 +10,8 @@ import { NotificationController } from '../controllers/notification.controller.j
 import { authenticate } from '../../../core/middleware/auth.middleware.js';
 import { validateRequest } from '../../../core/middleware/validateRequest.js';
 import { z } from 'zod';
-import { asyncHandler } from '../../../core/utils/response.js';
+import { asyncHandler, sendSuccess } from '../../../core/utils/response.js';
+import { pushService } from '../services/push.service.js';
 
 const router = Router();
 
@@ -49,6 +50,45 @@ router.put(
     target: 'body',
   }),
   asyncHandler(NotificationController.updatePreference)
+);
+
+// ── Web Push ──────────────────────────────────────────────────────────────────
+
+router.get('/push/vapid-public-key', asyncHandler(async (_req, res) => {
+  sendSuccess(res, { publicKey: pushService.getPublicKey() });
+}));
+
+router.post(
+  '/push/subscribe',
+  validateRequest({
+    schema: z.object({
+      endpoint: z.string().url(),
+      keys: z.object({
+        p256dh: z.string().min(1),
+        auth:   z.string().min(1),
+      }),
+    }),
+    target: 'body',
+  }),
+  asyncHandler(async (req, res) => {
+    const userId = req.user!.userId;
+    const userAgent = req.headers['user-agent'];
+    const sub = await pushService.subscribe(userId, req.body, userAgent);
+    sendSuccess(res, { id: sub.id }, 'Push subscription registered');
+  })
+);
+
+router.delete(
+  '/push/unsubscribe',
+  validateRequest({
+    schema: z.object({ endpoint: z.string().url() }),
+    target: 'body',
+  }),
+  asyncHandler(async (req, res) => {
+    const userId = req.user!.userId;
+    await pushService.unsubscribe(userId, req.body.endpoint);
+    sendSuccess(res, null, 'Unsubscribed');
+  })
 );
 
 export default router;

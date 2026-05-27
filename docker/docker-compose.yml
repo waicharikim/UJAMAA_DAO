@@ -102,6 +102,10 @@ services:
       - BARAZA_AI_MODEL=${BARAZA_AI_MODEL:-claude-haiku-4-5-20251001}
       # ── Sentry (error monitoring) ────────────────────────────────────────
       - SENTRY_DSN=${SENTRY_DSN:-}
+      # ── Web Push (VAPID) ────────────────────────────────────────────────
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-BIAuVDOWk70idOiQ3QqdnZR7uiNx0zQ_PbpZHGZtMv5THfSiEVBNxQDJdanM89MmcfIhdhHpdH5A4atcnq_4B0c}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-Htu6nh3Mf8YJzZ8Fr5pS5YhqbCKzlJm7HauN-dwfduk}
+      - VAPID_SUBJECT=${VAPID_SUBJECT:-mailto:admin@ujamaadao.org}
       # ── DataDog APM ──────────────────────────────────────────────────────
       - DD_AGENT_HOST=datadog
       - DD_TRACE_AGENT_PORT=8126

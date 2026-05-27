@@ -27,6 +27,10 @@ const cormorant = Cormorant_Garamond({
 
 export const viewport: Viewport = {
   themeColor: "#1D4731",
+  width: "device-width",
+  initialScale: 1,
+  minimumScale: 1,
+  viewportFit: "cover",
 }
 
 const SITE_URL = "https://ujamaadao.org"
@@ -63,8 +67,17 @@ export const metadata: Metadata = {
     title: "UjamaaDAO",
   },
   icons: {
-    icon: "/icons/icon.svg",
-    apple: "/icons/icon.svg",
+    icon: [
+      { url: "/icons/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/icons/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icons/icon.svg", type: "image/svg+xml" },
+    ],
+    apple: [
+      { url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+    other: [
+      { rel: "mask-icon", url: "/icons/icon-maskable.svg", color: "#1D4731" },
+    ],
   },
 }
 
@@ -75,6 +88,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${inter.variable} ${cormorant.variable}`}>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://images.unsplash.com" />
+        <link rel="dns-prefetch" href="https://images.unsplash.com" />
+      </head>
       <body className="font-sans bg-background text-foreground antialiased">
         <Providers>
           <AppShell>{children}</AppShell>

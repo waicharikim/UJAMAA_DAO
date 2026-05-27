@@ -294,6 +294,7 @@ model User {
   // ---- Notifications module ----
   notifications             Notification[]
   notificationPreferences   NotificationPreference[]
+  pushSubscriptions         PushSubscription[]
   auditLogs                 UserAudit[]
   auditLogEntries           AuditLog[]                 @relation("UserAuditLog")
   consents                  UserConsent[]

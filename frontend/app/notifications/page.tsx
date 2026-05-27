@@ -8,6 +8,7 @@ import {
 import { notificationsApi, type NotificationDto } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import { PushNotificationBanner } from "@/components/notifications/push-banner"
 
 // ── Helpers ────────────────────────────────────────────────────
 function notifColor(type: string): string {
@@ -106,6 +107,8 @@ export default function NotificationsPage() {
 
   return (
     <div className="container mx-auto max-w-2xl py-8 px-4 space-y-5">
+      <PushNotificationBanner />
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-serif text-2xl font-semibold" style={{ color: "#1A120B" }}>

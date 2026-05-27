@@ -294,6 +294,7 @@ model User {
   // ---- Notifications module ----
   notifications             Notification[]
   notificationPreferences   NotificationPreference[]
+  pushSubscriptions         PushSubscription[]
   auditLogs                 UserAudit[]
   auditLogEntries           AuditLog[]                 @relation("UserAuditLog")
   consents                  UserConsent[]
@@ -2816,6 +2817,20 @@ model SystemLog {
   createdAt DateTime @default(now())
 
   @@index([level, createdAt])
+}
+
+model PushSubscription {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 
