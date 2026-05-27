@@ -1,0 +1,9 @@
+npm error code ETIMEDOUT
+npm error errno ETIMEDOUT
+npm error network request to https://registry.npmjs.org/@sentry-internal/replay/-/replay-10.52.0.tgz failed, reason: 
+npm error network This is a problem related to network connectivity.
+npm error network In most cases you are behind a proxy or have bad network settings.
+npm error network
+npm error network If you are behind a proxy, please make sure that the
+npm error network 'proxy' config is set properly.  See: 'npm help config'
+npm error A complete log of this run can be found in: /home/mzizi/.npm/_logs/2026-05-09T12_58_12_330Z-debug-0.log
