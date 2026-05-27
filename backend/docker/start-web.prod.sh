@@ -13,5 +13,8 @@ echo "⏳ Waiting for Postgres at ${DB_HOST}:${DB_PORT}..."
 echo "🚀 Applying Prisma migrations (production)..."
 npx prisma migrate deploy --schema=prisma/schema.prisma
 
+echo "🌱 Seeding database..."
+node dist/core/database/seed.js
+
 echo "🚀 Starting web server (production)..."
 exec node dist/index.js

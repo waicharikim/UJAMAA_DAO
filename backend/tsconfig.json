@@ -34,7 +34,6 @@
     "node_modules",
     "dist",
     "src/core/data/**",
-    "src/core/database/seed.ts",
     "src/core/jobs/auth-cleanup.jobs.ts",
     "src/modules/onboarding/seed.ts"
   ]

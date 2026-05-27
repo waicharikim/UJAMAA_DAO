@@ -56,7 +56,7 @@ interface WardFull {
     id: string;
     name: string;
     countyId: string;
-    county: { id: string; name: string; code: number };
+    county: { id: string; name: string; code: string };
   };
 }
 
@@ -1520,7 +1520,7 @@ async function seedIndustriesAndGoods() {
 // ============================================================================
 
 function buildGeographyRecords(data: typeof countiesData) {
-  const countyCreates: { id: string; code: number; name: string }[] = [];
+  const countyCreates: { id: string; code: string; name: string }[] = [];
   const constituencyCreates: {
     id: string;
     name: string;
