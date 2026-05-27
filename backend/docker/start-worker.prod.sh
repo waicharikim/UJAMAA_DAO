@@ -15,15 +15,6 @@ echo "⏳ Waiting for Postgres at ${DB_HOST}:${DB_PORT}..."
 echo "⏳ Waiting for Redis at ${REDIS_HOST}:${REDIS_PORT}..."
 ./docker/redischeck.sh "$REDIS_HOST" "$REDIS_PORT" "$WAIT_TIMEOUT"
 
-echo "🔄 Merging Prisma schemas..."
-npm run db:merge
-
-echo "✅ Validating schema..."
-npx prisma validate
-
-echo "🔄 Generating Prisma client..."
-npx prisma generate
-
 # Worker doesn't run migrations — web container handles that
 echo "ℹ️  Skipping migrations (handled by web container)"
 

@@ -58,9 +58,9 @@ CMD ["sh", "./docker/start-web.sh"]
 FROM base AS prod-web
 # Copy built artifacts
 COPY --from=builder /usr/src/app/dist ./dist
-COPY --from=builder /usr/src/app/backend/.generated ./backend/.generated
 COPY --from=builder /usr/src/app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /usr/src/app/node_modules/prisma ./node_modules/prisma
+COPY --from=builder /usr/src/app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /usr/src/app/package*.json ./
 COPY --from=builder /usr/src/app/prisma ./prisma
 COPY --from=builder /usr/src/app/docker ./docker
@@ -80,9 +80,9 @@ CMD ["sh", "./docker/start-web.prod.sh"]
 FROM base AS prod-worker
 # Copy built artifacts
 COPY --from=builder /usr/src/app/dist ./dist
-COPY --from=builder /usr/src/app/backend/.generated ./backend/.generated
 COPY --from=builder /usr/src/app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /usr/src/app/node_modules/prisma ./node_modules/prisma
+COPY --from=builder /usr/src/app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /usr/src/app/package*.json ./
 COPY --from=builder /usr/src/app/prisma ./prisma
 COPY --from=builder /usr/src/app/docker ./docker
