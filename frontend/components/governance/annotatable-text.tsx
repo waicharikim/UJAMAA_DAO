@@ -4,7 +4,7 @@ import { useRef, useState, useMemo, useCallback, useEffect } from "react"
 import { useMutation } from "@tanstack/react-query"
 import { governanceApi, type ProposalAnnotationDto } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, X, ThumbsUp, ThumbsDown, Trash2 } from "lucide-react"
+import { Loader2, X, ThumbsUp, ThumbsDown, Trash2, MessageSquarePlus } from "lucide-react"
 
 interface AnnotatableTextProps {
   text: string
@@ -22,14 +22,10 @@ interface SelectionState {
   start: number
   end: number
   selectedText: string
-  x: number
-  y: number
 }
 
 interface DetailState {
   annotation: ProposalAnnotationDto
-  x: number
-  y: number
 }
 
 interface Segment {
@@ -151,72 +147,69 @@ export function AnnotatableText({
     },
   })
 
-  const handleMouseUp = useCallback(() => {
+  // Works for both mouse (desktop) and touch (mobile) via onPointerUp
+  const handlePointerUp = useCallback(() => {
     if (!canAnnotate || !containerRef.current) return
-    const sel = window.getSelection()
-    if (!sel || sel.isCollapsed || !sel.rangeCount) return
 
-    const range = sel.getRangeAt(0)
-    if (!containerRef.current.contains(range.commonAncestorContainer)) return
+    // Small delay lets the browser finalise the touch selection
+    setTimeout(() => {
+      const sel = window.getSelection()
+      if (!sel || sel.isCollapsed || !sel.rangeCount) return
 
-    const selectedText = sel.toString().trim()
-    if (!selectedText) return
+      const range = sel.getRangeAt(0)
+      if (!containerRef.current!.contains(range.commonAncestorContainer)) return
 
-    const start = getOffsetInContainer(containerRef.current, range.startContainer, range.startOffset)
-    const end = getOffsetInContainer(containerRef.current, range.endContainer, range.endOffset)
-    if (end <= start) return
+      const selectedText = sel.toString().trim()
+      if (!selectedText) return
 
-    const rect = range.getBoundingClientRect()
-    const containerRect = containerRef.current.getBoundingClientRect()
-    setSelection({
-      start,
-      end,
-      selectedText,
-      x: rect.left - containerRect.left,
-      y: rect.bottom - containerRect.top + 6,
-    })
-    setDetail(null)
+      const start = getOffsetInContainer(containerRef.current!, range.startContainer, range.startOffset)
+      const end = getOffsetInContainer(containerRef.current!, range.endContainer, range.endOffset)
+      if (end <= start) return
+
+      setSelection({ start, end, selectedText })
+      setDetail(null)
+    }, 50)
   }, [canAnnotate])
 
-  // Close selection popover on outside click
+  // Close selection panel on outside click/tap
   useEffect(() => {
     if (!selection) return
-    const handler = (e: MouseEvent) => {
+    const handler = (e: MouseEvent | TouchEvent) => {
       const target = e.target as HTMLElement
-      if (!target.closest("[data-annotation-popover]") && !target.closest("[data-annotatable]")) {
+      if (!target.closest("[data-annotation-panel]") && !target.closest("[data-annotatable]")) {
         setSelection(null)
         setCommentDraft("")
       }
     }
     document.addEventListener("mousedown", handler)
-    return () => document.removeEventListener("mousedown", handler)
+    document.addEventListener("touchstart", handler)
+    return () => {
+      document.removeEventListener("mousedown", handler)
+      document.removeEventListener("touchstart", handler)
+    }
   }, [selection])
 
-  // Close detail popover on outside click
+  // Close detail panel on outside click/tap
   useEffect(() => {
     if (!detail) return
-    const handler = (e: MouseEvent) => {
+    const handler = (e: MouseEvent | TouchEvent) => {
       const target = e.target as HTMLElement
-      if (!target.closest("[data-detail-popover]")) {
+      if (!target.closest("[data-detail-panel]")) {
         setDetail(null)
       }
     }
     document.addEventListener("mousedown", handler)
-    return () => document.removeEventListener("mousedown", handler)
+    document.addEventListener("touchstart", handler)
+    return () => {
+      document.removeEventListener("mousedown", handler)
+      document.removeEventListener("touchstart", handler)
+    }
   }, [detail])
 
   const handleMarkClick = useCallback(
-    (ann: ProposalAnnotationDto, e: React.MouseEvent) => {
+    (ann: ProposalAnnotationDto, e: React.MouseEvent | React.TouchEvent) => {
       e.stopPropagation()
-      if (!containerRef.current) return
-      const containerRect = containerRef.current.getBoundingClientRect()
-      const target = e.currentTarget as HTMLElement
-      const rect = target.getBoundingClientRect()
-      setDetail({
-        annotation: ann,
-        x: rect.left - containerRect.left,
-        y: rect.bottom - containerRect.top + 6,
-      })
+      setDetail({ annotation: ann })
       setSelection(null)
     },
     []
@@ -235,10 +228,24 @@ export function AnnotatableText({
 
   return (
     <div className="relative" data-annotatable>
+      {/* How-it-works banner — shown before any selection */}
+      {canAnnotate && !selection && !detail && (
+        <div
+          className="mb-2 flex items-center gap-2 px-3 py-2 rounded-lg"
+          style={{ background: "rgba(201,146,42,0.07)", border: "1px dashed rgba(201,146,42,0.3)" }}
+        >
+          <MessageSquarePlus className="h-3.5 w-3.5 flex-shrink-0" style={{ color: "#C9922A" }} />
+          <p className="text-[11px] leading-snug" style={{ color: "#9A6B1A" }}>
+            <span className="font-semibold">Have an opinion?</span>
+            {" "}Long-press or highlight any part of the text below, then type your comment.
+          </p>
+        </div>
+      )}
+
       {/* Annotatable text body */}
       <div
         ref={containerRef}
-        onMouseUp={handleMouseUp}
+        onPointerUp={handlePointerUp}
         className="text-sm leading-relaxed whitespace-pre-line select-text"
         style={{ color: "#0A1F14", cursor: canAnnotate ? "text" : "default" }}
       >
@@ -253,6 +260,7 @@ export function AnnotatableText({
             <mark
               key={i}
               onClick={(e) => handleMarkClick(ann, e)}
+              onTouchEnd={(e) => { e.preventDefault(); handleMarkClick(ann, e) }}
               style={{
                 background: ann.color + "30",
                 borderBottom: `2px solid ${ann.color}`,
@@ -267,24 +275,15 @@ export function AnnotatableText({
         })}
       </div>
 
-      {/* Hint for annotatable fields */}
-      {canAnnotate && (
-        <p className="mt-1 text-[10px]" style={{ color: "#7A6E60" }}>
-          Select any text above to add your opinion
-        </p>
-      )}
-
-      {/* Selection popover */}
+      {/* Selection panel — inline below text, full-width (works on mobile) */}
       {selection && canAnnotate && (
         <div
-          data-annotation-popover
-          className="absolute z-50 rounded-xl shadow-xl p-3 space-y-2"
+          data-annotation-panel
+          className="mt-3 rounded-xl p-3 space-y-2"
           style={{
-            top: selection.y,
-            left: Math.max(0, selection.x),
-            width: 280,
             background: "white",
             border: "1px solid rgba(29,71,49,0.15)",
+            boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
           }}
         >
           <div className="flex items-start justify-between gap-2">
@@ -317,14 +316,14 @@ export function AnnotatableText({
             <button
               onClick={handleSubmit}
               disabled={creating || !commentDraft.trim()}
-              className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-full text-xs font-bold transition-all disabled:opacity-50"
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-full text-xs font-bold transition-all disabled:opacity-50"
               style={{ background: "#1D4731", color: "white" }}
             >
               {creating ? <Loader2 className="h-3 w-3 animate-spin" /> : "Submit"}
             </button>
             <button
               onClick={() => { setSelection(null); setCommentDraft("") }}
-              className="px-3 py-1.5 rounded-full text-xs"
+              className="px-3 py-2 rounded-full text-xs"
               style={{ background: "rgba(14,11,8,0.06)", color: "#7A6E60" }}
             >
               Cancel
@@ -333,25 +332,25 @@ export function AnnotatableText({
         </div>
       )}
 
-      {/* Detail popover */}
+      {/* Detail panel — inline, full-width */}
       {detail && (
         <div
-          data-detail-popover
-          className="absolute z-50 rounded-xl shadow-xl p-3 space-y-2"
+          data-detail-panel
+          className="mt-3 rounded-xl p-3 space-y-2"
           style={{
-            top: detail.y,
-            left: Math.max(0, detail.x),
-            width: 300,
             background: "white",
             border: `1px solid ${detail.annotation.color}44`,
+            boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
           }}
         >
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <div
-                className="w-3 h-3 rounded-full flex-shrink-0"
+                className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white flex-shrink-0"
                 style={{ background: detail.annotation.color }}
-              />
+              >
+                {(detail.annotation.author?.name ?? "M")[0].toUpperCase()}
+              </div>
               <span className="text-[12px] font-semibold" style={{ color: "#0A1F14" }}>
                 {detail.annotation.author?.name ?? "Member"}
               </span>
@@ -376,7 +375,6 @@ export function AnnotatableText({
             {detail.annotation.comment}
           </p>
 
-          {/* Reaction buttons */}
           <div className="flex items-center gap-2 pt-1">
             <button
               onClick={() => react({
