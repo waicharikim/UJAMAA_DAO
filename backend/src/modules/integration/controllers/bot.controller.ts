@@ -228,6 +228,8 @@ async function dispatchCommand(
 ): Promise<void> {
   if (text.startsWith('/verify'))
     return handleVerifyCommand(text, from, chatId);
+  if (text.startsWith('/register'))
+    return handleRegisterCommand(text, from, chatId, barazaGroup);
   if (!barazaGroup) {
     if (text.startsWith('/present'))
       logger.info(
@@ -385,6 +387,131 @@ async function handlePresentCommand(
     logger.warn(
       { operationType: 'TELEGRAM_WEBHOOK', error: String(err) },
       'Failed to process /present command — non-fatal'
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+// /register — self-register a Telegram group as a BarazaGroup
+// ─────────────────────────────────────────────
+
+async function handleRegisterCommand(
+  text: string,
+  from: TelegramFrom | undefined,
+  chatId: number,
+  existingBarazaGroup: BarazaGroupRow | null
+): Promise<void> {
+  if (!from?.id) return;
+
+  // Guard: already registered
+  if (existingBarazaGroup) {
+    await sendTelegramMessage(
+      from.id,
+      `ℹ️ Kikundi hiki kimesha-sajiliwa tayari kama *${existingBarazaGroup.externalId}*.\n\nKama kuna tatizo wasiliana na admin kupitia app.`,
+      chatId
+    );
+    return;
+  }
+
+  // Parse: /register <group-uuid>
+  const parts = text.trim().split(/\s+/);
+  const groupId = parts[1];
+  if (!groupId || !/^[0-9a-f-]{36}$/i.test(groupId)) {
+    await sendTelegramMessage(
+      from.id,
+      '❌ Format si sahihi. Tuma hivi:\n\n`/register <group-uuid>`\n\nPata UUID ya group yako kutoka UjamaaDAO app.',
+      chatId
+    );
+    return;
+  }
+
+  // Look up the caller's UjamaaDAO account
+  const profile = await prisma.userMessagingProfile.findFirst({
+    where: { platform: 'TELEGRAM', externalUserId: String(from.id) },
+    select: { userId: true },
+  });
+  if (!profile) {
+    await sendTelegramMessage(
+      from.id,
+      '❌ Akaunti yako ya UjamaaDAO haijaunganishwa na Telegram bado.\n\nNenda app → Settings → Verify Phone, kisha tuma /verify <code>.',
+      chatId
+    );
+    return;
+  }
+
+  // Check the group exists
+  const group = await prisma.group.findUnique({
+    where: { id: groupId },
+    select: { id: true, name: true },
+  });
+  if (!group) {
+    await sendTelegramMessage(
+      from.id,
+      `❌ Group UUID *${groupId}* haipatikani. Angalia tena kwenye app.`,
+      chatId
+    );
+    return;
+  }
+
+  // Check admin rights: SUPER_ADMIN, WARD_ADMIN, or LEADER of the group
+  const user = await prisma.user.findUnique({
+    where: { id: profile.userId },
+    select: { roles: true },
+  });
+  const roles: string[] = user?.roles ?? [];
+  const isSystemAdmin =
+    roles.includes(SystemRoles.SUPER_ADMIN) ||
+    roles.includes(SystemRoles.WARD_ADMIN);
+  if (!isSystemAdmin) {
+    const leaderMembership = await prisma.groupMember.findFirst({
+      where: { userId: profile.userId, groupId, role: 'LEADER' },
+    });
+    if (!leaderMembership) {
+      await sendTelegramMessage(
+        from.id,
+        '❌ Huna ruhusa ya kusajili kikundi hiki. Lazima uwe LEADER wa kikundi hicho au WARD_ADMIN.',
+        chatId
+      );
+      return;
+    }
+  }
+
+  try {
+    const barazaGroup = await barazaBotService.registerBarazaGroup(
+      profile.userId,
+      {
+        groupId,
+        platform: 'TELEGRAM',
+        externalId: String(chatId),
+        name: group.name,
+      }
+    );
+
+    await sendTelegramMessage(
+      chatId,
+      `✅ *${group.name}* imesajiliwa kama Baraza!\n\n` +
+        `Sasa mnaweza kutumia:\n` +
+        `• /schedule YYYY-MM-DD HH:MM — panga mkutano\n` +
+        `• /open — fungua baraza\n` +
+        `• /present — sajili mahudhurio\n` +
+        `• /close — funga baraza\n\n` +
+        `Ujamaa unaanza hapa! 🌿`,
+      chatId
+    );
+
+    logger.info(
+      { operationType: 'TELEGRAM_REGISTER', chatId, barazaGroupId: barazaGroup.id, groupId },
+      'Baraza group self-registered via /register command'
+    );
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const isDuplicate = msg.includes('Unique constraint');
+    await sendTelegramMessage(
+      from.id,
+      isDuplicate
+        ? '❌ Kikundi hiki kimesha-sajiliwa tayari. Tafadhali angalia upya.'
+        : `❌ Usajili haukufanikiwa: ${msg}`,
+      chatId
     );
   }
 }
