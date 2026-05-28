@@ -343,7 +343,7 @@ export function RegisterForm() {
         name: form.name.trim(),
         phoneNumber: form.phoneNumber.trim().replace(/\s+/g, '').replace(/^0/, '+254'),
         primaryWardId: form.primaryWardId,
-        secondaryWardId: form.secondaryWardId,
+        secondaryWardId: form.secondaryWardId || undefined,
         industryIds: form.industryIds,
         goodsServiceIds: form.goodsServiceIds,
         messagingPlatforms: form.messagingPlatforms.length > 0 ? form.messagingPlatforms : undefined,
