@@ -76,7 +76,7 @@ prod-logs-web:
 
 prod-seed:
 	@echo "Force-seeding production database (one-time use)..."
-	@FORCE_SEED=true docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) up -d
+	@docker exec -e FORCE_SEED=true ujamaa_web node dist/core/database/seed.js
 
 prod-build:
 	@echo "Building production images..."
