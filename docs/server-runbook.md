@@ -54,6 +54,35 @@ uj-restart    # down → up (uses existing images)
 
 ---
 
+## Super Admin
+
+### Grant super admin to a user
+
+The user must have registered first. Then:
+
+```bash
+# Via alias (after sourcing server-aliases.sh)
+uj-make-admin waicharikimani@gmail.com
+
+# Via Makefile
+cd ~/UJAMAA_DAO/backend && make prod-make-admin EMAIL=waicharikimani@gmail.com
+
+# Via raw SQL
+docker exec ujamaa_postgres psql -U ujamaa_user -d ujamaa_db \
+  -c "UPDATE users SET roles = array_append(roles, 'system:super_admin') WHERE email = 'user@example.com' AND NOT ('system:super_admin' = ANY(roles)); SELECT email, roles FROM users WHERE email = 'user@example.com';"
+```
+
+**Important:** Roles are embedded in the JWT at login time — the user must **log out and back in** after the role is granted for it to take effect.
+
+### Verify the role was applied
+
+```bash
+docker exec ujamaa_postgres psql -U ujamaa_user -d ujamaa_db \
+  -c "SELECT email, roles FROM users WHERE email = 'user@example.com';"
+```
+
+---
+
 ## Database
 
 ### Open a psql shell
@@ -224,5 +253,6 @@ uj-restart
 | `uj-db` | psql shell |
 | `uj-redis` | redis-cli shell |
 | `uj-migrate` | Run pending migrations |
+| `uj-make-admin <email>` | Grant super_admin role (log out + in after) |
 | `uj-disk` | Disk + Docker volume usage |
 | `uj-prune` | Remove unused Docker objects |
