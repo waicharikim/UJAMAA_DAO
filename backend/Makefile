@@ -1,4 +1,4 @@
-.PHONY: help dev prod prod-seed up down restart logs clean backup setup-configs enable-observability check-configs
+.PHONY: help dev prod prod-seed prod-rebuild-web prod-rebuild-worker prod-rebuild-frontend up down restart logs clean backup setup-configs enable-observability check-configs
 
 # Compose file location (relative to backend/)
 COMPOSE_FILE := ../docker/docker-compose.yml
@@ -41,9 +41,12 @@ help:
 	@echo "  make backup       - Create database backup"
 	@echo ""
 	@echo "Production Commands:"
-	@echo "  make prod         - Start production environment"
-	@echo "  make prod-seed    - Start production with FORCE_SEED=true (one-time use)"
-	@echo "  make prod-build   - Build production images"
+	@echo "  make prod                  - Start production environment"
+	@echo "  make prod-seed             - Start production with FORCE_SEED=true (one-time use)"
+	@echo "  make prod-build            - Rebuild all production images"
+	@echo "  make prod-rebuild-web      - Rebuild + restart web (API) only"
+	@echo "  make prod-rebuild-worker   - Rebuild + restart worker only"
+	@echo "  make prod-rebuild-frontend - Rebuild + restart frontend only"
 	@echo ""
 
 # Development
@@ -78,6 +81,21 @@ prod-seed:
 prod-build:
 	@echo "Building production images..."
 	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) build --no-cache
+
+prod-rebuild-web:
+	@echo "Rebuilding and restarting web service..."
+	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) build --no-cache web
+	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) up -d web
+
+prod-rebuild-worker:
+	@echo "Rebuilding and restarting worker service..."
+	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) build --no-cache worker
+	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) up -d worker
+
+prod-rebuild-frontend:
+	@echo "Rebuilding and restarting frontend service..."
+	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) build --no-cache frontend
+	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) up -d frontend
 
 # Common operations
 up:

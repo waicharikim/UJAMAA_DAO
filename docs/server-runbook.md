@@ -208,7 +208,13 @@ uj-restart
 | `uj-down` | Stop all prod containers |
 | `uj-restart` | Stop then start (no rebuild) |
 | `uj-build` | Rebuild all images (no cache) |
-| `uj-deploy` | git pull + build + start |
+| `uj-build-web` | Rebuild web (API) image only + restart |
+| `uj-build-worker` | Rebuild worker image only + restart |
+| `uj-build-frontend` | Rebuild frontend image only + restart |
+| `uj-deploy` | git pull + rebuild all + start |
+| `uj-deploy-web` | git pull + rebuild web only |
+| `uj-deploy-worker` | git pull + rebuild worker only |
+| `uj-deploy-frontend` | git pull + rebuild frontend only |
 | `uj-seed` | Force-seed database (first deploy) |
 | `uj-logs` | Tail all logs |
 | `uj-logs-web` | Tail API logs only |

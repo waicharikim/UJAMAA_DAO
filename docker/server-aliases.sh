@@ -10,7 +10,13 @@ alias uj-up="cd $UJAMAA_DIR && make prod"
 alias uj-down="cd $UJAMAA_DIR && make prod-down"
 alias uj-restart="cd $UJAMAA_DIR && make prod-down && make prod"
 alias uj-build="cd $UJAMAA_DIR && make prod-build"
+alias uj-build-web="cd $UJAMAA_DIR && make prod-rebuild-web"
+alias uj-build-worker="cd $UJAMAA_DIR && make prod-rebuild-worker"
+alias uj-build-frontend="cd $UJAMAA_DIR && make prod-rebuild-frontend"
 alias uj-deploy="cd $HOME/UJAMAA_DAO && git pull origin develop && cd backend && make prod-build && make prod"
+alias uj-deploy-web="cd $HOME/UJAMAA_DAO && git pull origin develop && cd backend && make prod-rebuild-web"
+alias uj-deploy-worker="cd $HOME/UJAMAA_DAO && git pull origin develop && cd backend && make prod-rebuild-worker"
+alias uj-deploy-frontend="cd $HOME/UJAMAA_DAO && git pull origin develop && cd backend && make prod-rebuild-frontend"
 alias uj-seed="cd $UJAMAA_DIR && make prod-seed"
 
 # ── Logs ─────────────────────────────────────────────────────────────────────
