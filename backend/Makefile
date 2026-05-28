@@ -42,7 +42,8 @@ help:
 	@echo ""
 	@echo "Production Commands:"
 	@echo "  make prod                  - Start production environment"
-	@echo "  make prod-seed             - Start production with FORCE_SEED=true (one-time use)"
+	@echo "  make prod-seed             - Force-seed database (one-time use)"
+	@echo "  make prod-make-admin EMAIL=x - Grant super_admin role to a user"
 	@echo "  make prod-build            - Rebuild all production images"
 	@echo "  make prod-rebuild-web      - Rebuild + restart web (API) only"
 	@echo "  make prod-rebuild-worker   - Rebuild + restart worker only"
@@ -77,6 +78,11 @@ prod-logs-web:
 prod-seed:
 	@echo "Force-seeding production database (one-time use)..."
 	@docker exec -e FORCE_SEED=true ujamaa_web node dist/core/database/seed.js
+
+prod-make-admin:
+	@test -n "$(EMAIL)" || (echo "Usage: make prod-make-admin EMAIL=user@example.com" && exit 1)
+	@docker exec ujamaa_postgres psql -U $${POSTGRES_USER:-ujamaa_user} -d $${POSTGRES_DB:-ujamaa_db} \
+		-c "UPDATE users SET roles = array_append(roles, 'system:super_admin') WHERE email = '$(EMAIL)' AND NOT ('system:super_admin' = ANY(roles)); SELECT email, roles FROM users WHERE email = '$(EMAIL)';"
 
 prod-build:
 	@echo "Building production images..."
