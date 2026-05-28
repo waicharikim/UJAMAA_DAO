@@ -15,32 +15,35 @@
  */
 
 import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import { logger } from '../logger/logger.js';
 import { ApiError } from '../errors/ApiError.js';
-
-// Email configuration from environment variables
-const smtpUser = process.env.SMTP_USER;
-const smtpPass = process.env.SMTP_PASSWORD;
-const hasAuth = !!(smtpUser && smtpPass);
-
-const EMAIL_CONFIG: nodemailer.TransportOptions = {
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: process.env.SMTP_SECURE === 'true',
-  ...(hasAuth ? { auth: { user: smtpUser, pass: smtpPass } } : {}),
-} as nodemailer.TransportOptions;
 
 const FROM_EMAIL =
   process.env.FROM_EMAIL || process.env.SMTP_FROM || 'noreply@ujamaadao.org';
 const FROM_NAME = process.env.FROM_NAME || 'UjamaaDAO';
 
-// Reusable transporter
+// ── Resend HTTP API (preferred in prod — bypasses SMTP port blocks) ──────────
+const resendApiKey = process.env.RESEND_API_KEY;
+const resendClient = resendApiKey ? new Resend(resendApiKey) : null;
+
+// ── Nodemailer SMTP (dev / MailHog fallback) ─────────────────────────────────
+const smtpUser = process.env.SMTP_USER;
+const smtpPass = process.env.SMTP_PASSWORD;
+const hasAuth = !!(smtpUser && smtpPass);
+
+const EMAIL_CONFIG: nodemailer.TransportOptions = {
+  host: process.env.SMTP_HOST || 'mailhog',
+  port: parseInt(process.env.SMTP_PORT || '1025'),
+  secure: process.env.SMTP_SECURE === 'true',
+  ...(hasAuth ? { auth: { user: smtpUser, pass: smtpPass } } : {}),
+} as nodemailer.TransportOptions;
+
 let transporter: nodemailer.Transporter | null = null;
 
 function getTransporter(): nodemailer.Transporter {
   if (!transporter) {
     if (!hasAuth) {
-      // No-auth SMTP (e.g. MailHog in dev). Log a warning but proceed.
       logger.warn(
         { operationType: 'GENERAL' },
         'Email service running without SMTP auth — suitable for dev/MailHog only'
@@ -64,47 +67,46 @@ export interface EmailOptions {
 }
 
 /**
- * Send email using configured SMTP
+ * Send email — uses Resend HTTP API when RESEND_API_KEY is set, SMTP otherwise.
  */
 export async function sendEmail(options: EmailOptions): Promise<void> {
+  const to = Array.isArray(options.to) ? options.to : [options.to];
   try {
-    const transport = getTransporter();
-
-    const mailOptions = {
-      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
-      to: Array.isArray(options.to) ? options.to.join(', ') : options.to,
-      subject: options.subject,
-      html: options.html,
-      text: options.text,
-      attachments: options.attachments,
-    };
-
-    const info = await transport.sendMail(mailOptions);
-
-    logger.info(
-      {
-        operationType: 'GENERAL',
-        metadata: {
-          messageId: info.messageId,
-          to: mailOptions.to,
-          subject: options.subject,
-        },
-      },
-      'Email sent successfully'
-    );
+    if (resendClient) {
+      const payload: Record<string, unknown> = {
+        from: `${FROM_NAME} <${FROM_EMAIL}>`,
+        to,
+        subject: options.subject,
+      };
+      if (options.html) payload.html = options.html;
+      if (options.text) payload.text = options.text;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await resendClient.emails.send(payload as any);
+      if (error) throw new Error(error.message);
+      logger.info(
+        { operationType: 'GENERAL', metadata: { to, subject: options.subject } },
+        'Email sent via Resend'
+      );
+    } else {
+      const transport = getTransporter();
+      const info = await transport.sendMail({
+        from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+        to: to.join(', '),
+        subject: options.subject,
+        html: options.html,
+        text: options.text,
+        attachments: options.attachments,
+      });
+      logger.info(
+        { operationType: 'GENERAL', metadata: { messageId: info.messageId, to, subject: options.subject } },
+        'Email sent via SMTP'
+      );
+    }
   } catch (error) {
     logger.error(
-      {
-        operationType: 'GENERAL',
-        metadata: {
-          error: error instanceof Error ? error.message : String(error),
-          to: options.to,
-          subject: options.subject,
-        },
-      },
+      { operationType: 'GENERAL', metadata: { error: error instanceof Error ? error.message : String(error), to, subject: options.subject } },
       'Failed to send email'
     );
-
     throw ApiError.systemError('Failed to send email', {
       original: error instanceof Error ? error.message : String(error),
     });
@@ -166,25 +168,23 @@ export async function sendLoginEmail(
 }
 
 /**
- * Verify SMTP configuration on app startup
+ * Verify email configuration on app startup.
+ * Resend: no network check needed — API key presence is sufficient.
+ * SMTP: calls transport.verify() to confirm connectivity.
  */
 export async function verifyEmailConfig(): Promise<boolean> {
+  if (resendClient) {
+    logger.info({ operationType: 'GENERAL' }, 'Email service configured (Resend HTTP API)');
+    return true;
+  }
   try {
     const transport = getTransporter();
     await transport.verify();
-    logger.info(
-      { operationType: 'GENERAL' },
-      'Email service configured successfully'
-    );
+    logger.info({ operationType: 'GENERAL' }, 'Email service configured (SMTP)');
     return true;
   } catch (error) {
     logger.error(
-      {
-        operationType: 'GENERAL',
-        metadata: {
-          error: error instanceof Error ? error.message : String(error),
-        },
-      },
+      { operationType: 'GENERAL', metadata: { error: error instanceof Error ? error.message : String(error) } },
       'Email service configuration failed'
     );
     return false;
