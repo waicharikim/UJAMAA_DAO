@@ -34,7 +34,7 @@ alias uj-health="curl -s https://api.ujamaadao.org/health | python3 -m json.tool
 
 # ── Shell access ─────────────────────────────────────────────────────────────
 alias uj-shell="docker exec -it ujamaa_web sh"
-alias uj-db="docker exec -it ujamaa_postgres psql -U \${POSTGRES_USER:-ujamaa} -d \${POSTGRES_DB:-ujamaa_db}"
+alias uj-db="docker exec -it ujamaa_postgres psql -U \${POSTGRES_USER:-ujamaa_user} -d \${POSTGRES_DB:-ujamaa_db}"
 alias uj-redis="docker exec -it ujamaa_redis redis-cli"
 
 # ── Maintenance ───────────────────────────────────────────────────────────────
