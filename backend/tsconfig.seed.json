@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "skipLibCheck": true
+  },
+  "files": ["src/core/database/seed.ts"],
+  "include": [],
+  "exclude": ["node_modules", "dist"]
+}

@@ -35,6 +35,10 @@
     "dist",
     "src/core/data/seedIndustry.ts",
     "src/core/data/seedRoles.ts",
+    "src/core/data/counties.ts",
+    "src/core/data/industries.ts",
+    "src/core/data/goodsServices.ts",
+    "src/core/database/seed.ts",
     "src/core/jobs/auth-cleanup.jobs.ts",
     "src/modules/onboarding/seed.ts"
   ]
