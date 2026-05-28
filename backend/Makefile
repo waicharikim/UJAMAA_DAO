@@ -81,8 +81,16 @@ prod-seed:
 
 prod-make-admin:
 	@test -n "$(EMAIL)" || (echo "Usage: make prod-make-admin EMAIL=user@example.com" && exit 1)
-	@docker exec ujamaa_postgres psql -U $${POSTGRES_USER:-ujamaa_user} -d $${POSTGRES_DB:-ujamaa_db} \
-		-c "UPDATE users SET roles = array_append(roles, 'system:super_admin') WHERE email = '$(EMAIL)' AND NOT ('system:super_admin' = ANY(roles)); SELECT email, roles FROM users WHERE email = '$(EMAIL)';"
+	@docker exec ujamaa_postgres psql -U $${POSTGRES_USER:-ujamaa_user} -d $${POSTGRES_DB:-ujamaa_db} -c \
+		"INSERT INTO user_roles (id, user_id, role_id) \
+		 SELECT gen_random_uuid(), u.id, r.id \
+		 FROM users u, roles r \
+		 WHERE u.email = '$(EMAIL)' AND r.name = 'system:super_admin' \
+		 ON CONFLICT DO NOTHING; \
+		 SELECT u.email, r.name FROM users u \
+		 JOIN user_roles ur ON ur.user_id = u.id \
+		 JOIN roles r ON r.id = ur.role_id \
+		 WHERE u.email = '$(EMAIL)';"
 
 prod-build:
 	@echo "Building production images..."

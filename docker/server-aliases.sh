@@ -41,6 +41,6 @@ alias uj-redis="docker exec -it ujamaa_redis redis-cli"
 alias uj-prune="docker system prune -af && docker volume prune -f"
 alias uj-disk="df -h / && docker system df"
 alias uj-migrate="docker exec ujamaa_web npx prisma migrate deploy"
-alias uj-make-admin='f() { docker exec ujamaa_postgres psql -U ujamaa_user -d ujamaa_db -c "UPDATE users SET roles = array_append(roles, '"'"'system:super_admin'"'"') WHERE email = '"'"'$1'"'"' AND NOT ('"'"'system:super_admin'"'"' = ANY(roles)); SELECT email, roles FROM users WHERE email = '"'"'$1'"'"';"; }; f'
+alias uj-make-admin='f() { docker exec ujamaa_postgres psql -U ujamaa_user -d ujamaa_db -c "INSERT INTO user_roles (id, user_id, role_id) SELECT gen_random_uuid(), u.id, r.id FROM users u, roles r WHERE u.email = '"'"'$1'"'"' AND r.name = '"'"'system:super_admin'"'"' ON CONFLICT DO NOTHING; SELECT u.email, r.name FROM users u JOIN user_roles ur ON ur.user_id = u.id JOIN roles r ON r.id = ur.role_id WHERE u.email = '"'"'$1'"'"';"; }; f'
 
 echo "✅  UjamaaDAO aliases loaded. Type 'uj-<tab>' to see all commands."
