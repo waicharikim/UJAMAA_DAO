@@ -1,6 +1,6 @@
 # Integration (Baraza) API Documentation
 
-> **Module status:** `tested` — 30 green tests across 3 files (service unit + reward jobs + route integration).
+> **Module status:** `tested` — 48 green tests across 4 files (service unit + baraza-ai + reward jobs + route integration).
 > Base URL: `http://localhost:4000/api/v1/integration`
 
 ---
@@ -194,11 +194,25 @@ Close the currently open session. Returns final attendance count.
 
 | Command | Who | What |
 |---|---|---|
+| `/register <group-uuid>` | LEADER / WARD_ADMIN / SUPER_ADMIN | Self-registers the current Telegram chat as a Baraza for the given platform group UUID. No chat ID lookup needed — bot reads `chatId` from context. Idempotent. |
 | `/present` | Any member | Marks attendance for the current open session. Awards 15 PR via BullMQ job. |
 | `/schedule YYYY-MM-DD HH:MM` | Group LEADER | Schedules next session (EAT timezone). |
 | `/open` | Group LEADER | Opens the scheduled session for `/present` check-ins. |
 | `/close` | Group LEADER | Closes the open session. Reports attendance count to the group chat. |
 | `/verify <code>` | Any Telegram user | Links Telegram account to platform account using a 6-digit code from the app. |
+
+### `/register` flow
+
+1. A group LEADER or admin runs `/register <uuid>` from within the Telegram group.
+2. Bot verifies: caller has a linked `UserMessagingProfile` (must `/verify` first), and caller is a SUPER_ADMIN / WARD_ADMIN **or** a LEADER of the target group.
+3. On success: the chat is registered as an active BarazaGroup; members can immediately use `/present`, `/schedule`, `/open`, `/close`.
+4. If already registered: bot replies with an info message (idempotent — safe to run twice).
+
+**Error cases:**
+- No linked profile → "Link your account first with `/verify <code>`"
+- Invalid UUID format → "Invalid group ID"
+- Group UUID not found in platform → "Group not found"
+- Caller not LEADER/admin of that group → "You must be a LEADER of that group or a platform admin"
 
 ---
 

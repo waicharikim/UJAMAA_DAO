@@ -10,13 +10,14 @@ UjamaaDAO is a neighborhood sovereignty platform for Kenyan wards — cooperativ
 
 | Layer | Status |
 |---|---|
-| Backend API | ✅ Running — 21 routes mounted, 749 tests green across 13 tested modules |
+| Backend API | ✅ Running — 22 routes mounted, **1398 tests green across 20 tested modules** |
 | Prisma schema | ✅ 80 models, migrations applied, E2E flow verified |
 | Docker/Infra | ✅ All services running (`make dev`) — API, worker, Postgres, Redis, frontend, MailHog, Anvil |
-| Frontend | ✅ 26+ routes, Chai palette design system, magic-link + passkey auth, Privy wallet, PWA installable |
+| Frontend | ✅ 30+ routes, Chai palette design system, magic-link + passkey auth, Privy wallet, PWA installable |
 | Payments | ✅ M-Pesa STK push via Buni by KCB — end-to-end verified (push sent, callback received, DB updated) |
-| Smart Contracts | 🔶 Written and tested — `PrToken.sol` (soulbound) + `UtToken.sol`, 13 Foundry tests green; Base Sepolia deploy pending (minter wallet not funded) |
+| Smart Contracts | 🔶 Written and tested — `PrToken.sol` (soulbound) + `UtToken.sol` + `GovernanceVoting.sol`, 13 Foundry tests green; Base Sepolia deploy pending (minter wallet not funded) |
 | Observability | ✅ Sentry (backend + frontend), DataDog APM, BrowserStack wired |
+| **Production** | ✅ **LIVE** — `ujamaadao.org` + `api.ujamaadao.org` on DigitalOcean droplet `167.71.55.51` |
 
 ---
 
@@ -28,11 +29,11 @@ UJAMAA_DAO/
 │   ├── src/
 │   │   ├── app.ts          # Express app, middleware, route mounts (21 routes)
 │   │   ├── index.ts        # Server entry, startup assertions, graceful shutdown
-│   │   ├── workers.ts      # BullMQ worker (10 scheduled + 3 event-triggered jobs)
+│   │   ├── workers.ts      # BullMQ worker (12 scheduled + 3 event-triggered jobs)
 │   │   ├── core/           # Shared infrastructure (logger, queue, rbac, errors, blockchain)
 │   │   └── modules/        # 21 feature modules
 │   ├── prisma/             # Merged schema (80 models) + migrations
-│   ├── tests/              # Vitest suites — 749 tests, 13 tested modules
+│   ├── tests/              # Vitest suites — 1398 tests, 20 tested modules
 │   ├── Makefile            # All dev commands
 │   └── .env.example
 │
@@ -97,14 +98,14 @@ Visit **`http://localhost:8025`** — MailHog catches all outgoing emails in dev
 | Runtime | Node.js 22, TypeScript strict mode |
 | Framework | Express |
 | Database | PostgreSQL 15 + Prisma ORM (80 models) |
-| Queue | BullMQ + Redis — 10 scheduled jobs + 3 event-triggered |
+| Queue | BullMQ + Redis — 12 scheduled jobs + 3 event-triggered |
 | Logger | Pino (structured JSON, `operationType` context) |
-| Testing | Vitest + Supertest — 749 tests, 13 tested modules |
+| Testing | Vitest + Supertest — **1398 tests, 20 tested modules** |
 | Auth | Email magic links (JWT + hex token), WebAuthn/passkeys, Africa's Talking SMS OTP |
 | Payments | Buni by KCB — M-Pesa STK push (end-to-end verified) |
 | Frontend | Next.js 16.1.6 (App Router + Turbopack), TanStack Query v5, Tailwind v3, shadcn/ui |
 | Wallet | Privy (`@privy-io/react-auth` v3.14.1) — embedded wallets on Base L2 |
-| Contracts | Foundry (forge/cast/anvil) — Base Sepolia → Base Mainnet |
+| Contracts | Foundry (forge/cast/anvil) — `PrToken` + `UtToken` + `GovernanceVoting`; Base Sepolia → Base Mainnet |
 | Observability | Sentry (backend + frontend), DataDog APM, BrowserStack |
 | Infra | Docker Compose (8 services), Traefik (disabled in dev) |
 | CI | GitHub Actions — type-check · lint · prisma validate · build |
@@ -153,7 +154,7 @@ UNVERIFIED → EMAIL_VERIFIED → PHONE_VERIFIED → COMMUNITY_VERIFIED → FULL
 
 ## Background Jobs
 
-10 scheduled jobs + 3 event-triggered, running on 6 BullMQ queues:
+12 scheduled jobs + 3 event-triggered, running on 6 BullMQ queues:
 
 | Queue | Scheduled Jobs |
 |---|---|
@@ -205,6 +206,7 @@ All payments go to platform-controlled M-Pesa accounts. No P2P transfers.
 | [`docs/audit-api.md`](docs/audit-api.md) | Audit log search and activity feed |
 | [`docs/admin-api.md`](docs/admin-api.md) | Admin panel — users, stats, config, Baraza management |
 | [`docs/treasury.md`](docs/treasury.md) | Treasury structure, M-Pesa flows, UT two-pool model |
+| [`docs/posts-api.md`](docs/posts-api.md) | Ward posts (notices, announcements, resources) — geo-cascade feed |
 | [`docs/whitepaper.md`](docs/whitepaper.md) | Project vision and philosophy |
 | [`docs/features.md`](docs/features.md) | Feature inventory by module |
 | [`docs/ecosystem.md`](docs/ecosystem.md) | Ecosystem overview |

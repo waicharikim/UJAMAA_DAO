@@ -1,6 +1,6 @@
 # Audit & Feed API Documentation
 
-> **Module status:** `partial` — audit search live; activity feed live; no unit tests yet.
+> **Module status:** `tested` — 31 green tests (service unit + route integration for audit search + activity feed).
 > Audit base URL: `http://localhost:4000/api/v1/audit`
 > Feed base URL: `http://localhost:4000/api/v1/feed`
 

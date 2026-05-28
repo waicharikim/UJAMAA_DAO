@@ -1,7 +1,7 @@
 # UjamaaDAO Voting Module Documentation
 
-> **Module status:** `tested` — governance (voting) routes at `/api/v1/governance` (58 tests).
-> Individual PR-weighted votes live. `castVote`, `tallyVotes`, `startVoting` all tested.
+> **Module status:** `tested` — voting is part of the governance suite: 175 green tests across 6 files (148 proposal lifecycle + 27 annotation tests).
+> `castVote`, `tallyVotes`, `startVoting` all tested. See also [`proposal-api.md`](proposal-api.md).
 
 ## Overview
 

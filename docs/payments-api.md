@@ -1,6 +1,6 @@
 # Payments API Documentation
 
-> **Module status:** `partial` — all endpoints live, both flows end-to-end verified; unit tests pending.
+> **Module status:** `tested` — 50 green tests (service unit + route integration + webhook handling).
 > **Provider:** Buni by KCB — M-Pesa STK push (inbound) + M-Pesa B2C (outbound payouts).
 > Base URL: `http://localhost:4000/api/v1/payments`
 

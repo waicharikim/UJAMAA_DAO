@@ -103,7 +103,7 @@
 
 ## 5. Marketplace (Goods & Services Exchange)
 
-### Major Features (designed, partial backend)
+### Major Features (backend tested — 35 tests)
 
 - Post offer/request (title, description, category, price in KES, location)
 - Filter by goods/services category, distance, price
@@ -168,7 +168,7 @@
 
 ## 8. Notifications & Communication
 
-### Major Features (partial backend)
+### Major Features (backend tested — 43 tests)
 
 - In-app notification center
 - Email notifications (verification, proposal created, vote ended, PR awarded, penalty warning)
@@ -185,7 +185,7 @@
 
 ## 9. Admin & Moderation Tools
 
-### Major Features (partial backend)
+### Major Features (backend tested — 84 tests)
 
 - Pending verification queue (community/location)
 - Manual PR award / penalty / adjustment

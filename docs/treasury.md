@@ -1,6 +1,9 @@
 # UjamaaDAO – Treasury
 
-**Last updated:** May 2026 (session 65)
+> **Module status:** `tested` — 40 green tests (service unit + route integration).
+> Base URL: `http://localhost:4000/api/v1/treasury`
+
+**Last updated:** May 2026
 **Scope:** Group treasury ledger, M-Pesa deposit flows, UT cash-out design, on-chain mirroring roadmap.
 
 > **Rule 2 reminder**: All real money flows through M-Pesa to platform-controlled accounts. Never P2P. No exceptions.

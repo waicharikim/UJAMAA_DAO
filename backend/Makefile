@@ -1,4 +1,4 @@
-.PHONY: help dev prod up down restart logs clean backup setup-configs enable-observability check-configs
+.PHONY: help dev prod prod-seed up down restart logs clean backup setup-configs enable-observability check-configs
 
 # Compose file location (relative to backend/)
 COMPOSE_FILE := ../docker/docker-compose.yml
@@ -42,6 +42,7 @@ help:
 	@echo ""
 	@echo "Production Commands:"
 	@echo "  make prod         - Start production environment"
+	@echo "  make prod-seed    - Start production with FORCE_SEED=true (one-time use)"
 	@echo "  make prod-build   - Build production images"
 	@echo ""
 
@@ -69,6 +70,10 @@ prod-logs:
 
 prod-logs-web:
 	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) logs -f web
+
+prod-seed:
+	@echo "Force-seeding production database (one-time use)..."
+	@FORCE_SEED=true docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) up -d
 
 prod-build:
 	@echo "Building production images..."

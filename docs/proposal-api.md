@@ -1,6 +1,6 @@
 # Governance / Proposals API Documentation
 
-> **Module status:** `tested` — 148 green tests across 5 files.
+> **Module status:** `tested` — 175 green tests across 6 files (148 proposal lifecycle + 27 annotation tests).
 > Base URL: `http://localhost:4000/api/v1/governance`
 
 ---

@@ -1,6 +1,6 @@
 # Elections API Documentation
 
-> **Module status:** `partial` — full backend lifecycle implemented; no unit tests yet.
+> **Module status:** `tested` — 63 green tests (service unit + route integration).
 > Base URL: `http://localhost:4000/api/v1/elections`
 
 ---
