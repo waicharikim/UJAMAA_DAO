@@ -26,8 +26,8 @@ build/
 !prisma/migrations/**/*.sql
 backups/*.sql.gz
 
-# Docker volumes
-data/
+# Docker volumes (root-level only, does not affect src/core/data/)
+/data/
 postgres-data/
 redis-data/
 
