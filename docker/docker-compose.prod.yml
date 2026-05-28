@@ -72,6 +72,7 @@ services:
       - SMTP_USER=${SMTP_USER}
       - SMTP_PASSWORD=${SMTP_PASSWORD}
       - SMTP_FROM=${SMTP_FROM}
+      - RESEND_API_KEY=${RESEND_API_KEY}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - ENABLE_SMS=${ENABLE_SMS:-false}
       - AT_API_KEY=${AT_API_KEY:-}
