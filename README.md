@@ -209,6 +209,7 @@ All payments go to platform-controlled M-Pesa accounts. No P2P transfers.
 | [`docs/posts-api.md`](docs/posts-api.md) | Ward posts (notices, announcements, resources) — geo-cascade feed |
 | [`docs/whitepaper.md`](docs/whitepaper.md) | Project vision and philosophy |
 | [`docs/features.md`](docs/features.md) | Feature inventory by module |
+| [`docs/server-runbook.md`](docs/server-runbook.md) | Production server operations — deploy, logs, DB, secrets, incident checklist |
 | [`docs/ecosystem.md`](docs/ecosystem.md) | Ecosystem overview |
 
 ---
