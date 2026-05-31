@@ -21,6 +21,11 @@ interface GetPostsInput {
   type?: PostType;
   cursor?: string;
   limit?: number;
+  // Location overrides — used when viewing a group wall to show that
+  // group's geographic area rather than the calling user's own wards.
+  wardId?: string;
+  constituencyId?: string;
+  countyId?: string;
 }
 
 type PostWithRelations = {
@@ -159,25 +164,32 @@ export class PostService {
       },
     });
 
-    // Collect unique IDs across both wards so the feed merges both communities
-    const wardIds = [user?.primaryWardId, user?.secondaryWardId].filter(
-      Boolean
-    ) as string[];
-    const constituencyIds = [
-      ...new Set(
-        [
-          user?.primaryWard?.constituencyId,
-          user?.secondaryWard?.constituencyId,
-        ].filter(Boolean) as string[]
-      ),
-    ];
-    const countyIds = [
-      ...new Set(
-        [user?.primaryWard?.countyId, user?.secondaryWard?.countyId].filter(
-          Boolean
-        ) as string[]
-      ),
-    ];
+    // When location overrides are provided (group wall context), use them directly.
+    // Otherwise collect unique IDs across the user's wards for the personal feed.
+    const wardIds = input.wardId
+      ? [input.wardId]
+      : ([user?.primaryWardId, user?.secondaryWardId].filter(Boolean) as string[]);
+
+    const constituencyIds = input.constituencyId
+      ? [input.constituencyId]
+      : [
+          ...new Set(
+            [
+              user?.primaryWard?.constituencyId,
+              user?.secondaryWard?.constituencyId,
+            ].filter(Boolean) as string[]
+          ),
+        ];
+
+    const countyIds = input.countyId
+      ? [input.countyId]
+      : [
+          ...new Set(
+            [user?.primaryWard?.countyId, user?.secondaryWard?.countyId].filter(
+              Boolean
+            ) as string[]
+          ),
+        ];
 
     const scopeFilter = buildScopeFilter(
       input.scope,
@@ -217,7 +229,10 @@ function buildScopeFilter(
   constituencyIds: string[],
   countyIds: string[]
 ): Prisma.PostWhereInput {
-  if (scope === 'NATIONAL' || (!scope && wardIds.length === 0)) return {};
+  // Explicit national request → only posts tagged as national scope
+  if (scope === 'NATIONAL') return { scope: 'NATIONAL' };
+  // No scope + no wards → return everything (legacy no-filter path)
+  if (!scope && wardIds.length === 0) return {};
 
   if (scope === 'COUNTY') {
     if (countyIds.length === 0) return {};

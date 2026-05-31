@@ -10,14 +10,12 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/contexts/auth-context"
-import { useRole } from "@/contexts/role-context"
-import { economyApi, governanceApi, communityApi, adminApi } from "@/lib/api"
+import { economyApi, governanceApi, communityApi } from "@/lib/api"
 import { HomeFeed } from "@/components/feed/home-feed"
 import { BarazaGroupsCard } from "@/components/integration/baraza-groups-card"
 import { SystemGroupsCard } from "@/components/community/system-groups-card"
 import { EmergencyAlertsCard } from "@/components/emergency/emergency-alerts-card"
 import { GettingStartedCard } from "@/components/onboarding/getting-started-card"
-import { ImpactTracker } from "@/components/user/impact-tracker"
 
 // ─── Stat card skeleton ───────────────────────────────────
 function StatSkeleton() {
@@ -451,12 +449,11 @@ function ActivitySection() {
       </div>
       <div className="space-y-4">
         <GettingStartedCard />
-        <ImpactTracker />
+        <EmergencyAlertsCard />
         <SystemGroupsCard />
         <Suspense fallback={<Skeleton className="h-48 w-full rounded-xl" />}>
           <BarazaGroupsCard />
         </Suspense>
-        <EmergencyAlertsCard />
       </div>
     </div>
   )
@@ -473,11 +470,6 @@ function RolePanels({ isAdmin, isCompliance, isCoordinator }: { isAdmin: boolean
 // ─── Main dashboard ───────────────────────────────────────
 export function DashboardContent() {
   const { user, isAuthenticated } = useAuth()
-  const { hasAnyRole } = useRole()
-
-  const isAdmin       = hasAnyRole(["super_admin", "admin", "auditor", "ward_admin", "constituency_admin", "county_admin"])
-  const isCompliance  = hasAnyRole(["compliance_officer"])
-  const isCoordinator = hasAnyRole(["county_coordinator"])
 
   const { data: prData, isLoading: prLoading } = useQuery({
     queryKey: ["pr-balance"],
@@ -519,7 +511,6 @@ export function DashboardContent() {
     <div className="px-4 md:px-8 py-4 md:py-6 space-y-4 md:space-y-8 max-w-6xl mx-auto">
       {user && <WelcomeHeader user={user} />}
       {user?.verificationLevel && <VerificationNudge level={user.verificationLevel} />}
-      <RolePanels isAdmin={isAdmin} isCompliance={isCompliance} isCoordinator={isCoordinator} />
       <StatsGrid
         prBalance={prBalance}
         impactPoints={impactPoints}

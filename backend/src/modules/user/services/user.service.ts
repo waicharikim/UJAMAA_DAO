@@ -84,7 +84,19 @@ class UserService {
             },
           },
         },
-        secondaryWard: { select: { id: true, name: true } },
+        secondaryWard: {
+          select: {
+            id: true,
+            name: true,
+            constituency: {
+              select: {
+                id: true,
+                name: true,
+                county: { select: { id: true, name: true } },
+              },
+            },
+          },
+        },
         currentWard: { select: { id: true, name: true } },
         privacySettings: true,
         userIndustries: {
@@ -239,7 +251,15 @@ class UserService {
         county: { id: string; name: string };
       };
     } | null;
-    secondaryWard: { id: string; name: string } | null;
+    secondaryWard: {
+      id: string;
+      name: string;
+      constituency: {
+        id: string;
+        name: string;
+        county: { id: string; name: string };
+      };
+    } | null;
     currentLocationId: string | null;
     currentLocationUntil: Date | null;
     currentWard: { id: string; name: string } | null;
@@ -263,7 +283,14 @@ class UserService {
       primaryConstituency: primaryHierarchy?.constituency ?? null,
       primaryCounty: primaryHierarchy?.county ?? null,
       secondaryWard: user.secondaryWard
-        ? { id: user.secondaryWard.id, name: user.secondaryWard.name }
+        ? {
+            id: user.secondaryWard.id,
+            name: user.secondaryWard.name,
+            constituencyId: user.secondaryWard.constituency.id,
+            constituencyName: user.secondaryWard.constituency.name,
+            countyId: user.secondaryWard.constituency.county.id,
+            countyName: user.secondaryWard.constituency.county.name,
+          }
         : null,
       currentLocation: user.currentLocationId
         ? {

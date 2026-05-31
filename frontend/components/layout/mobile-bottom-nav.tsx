@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useRole } from "@/contexts/role-context"
+import { useBottomNav } from "@/contexts/bottom-nav-context"
 import {
   Home,
   Users,
@@ -32,10 +33,10 @@ import {
 } from "@/components/ui/drawer"
 
 const primaryNav = [
-  { label: "Home",       href: "/dashboard",  icon: Home         },
-  { label: "Governance", href: "/proposals",  icon: Scale        },
-  { label: "Emergency",  href: "/emergency",  icon: AlertTriangle },
-  { label: "Profile",    href: "/profile",    icon: User         },
+  { label: "Home",       href: "/dashboard", icon: Home         },
+  { label: "Community",  href: "/groups",    icon: Users        },
+  { label: "Governance", href: "/proposals", icon: Scale        },
+  { label: "Profile",    href: "/profile",   icon: User         },
 ]
 
 const drawerGroups = [
@@ -43,7 +44,6 @@ const drawerGroups = [
     label: "Community",
     color: "#2A6B7C",
     items: [
-      { label: "Groups",    href: "/groups",    icon: Users    },
       { label: "Learn",     href: "/education", icon: BookOpen },
       { label: "Conflicts", href: "/conflicts", icon: Flag     },
     ],
@@ -83,6 +83,7 @@ export function MobileBottomNav() {
   const pathname = usePathname()
   const router = useRouter()
   const { hasAnyRole } = useRole()
+  const { contextualItems } = useBottomNav()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [fabOpen, setFabOpen] = useState(false)
   const [hidden, setHidden] = useState(false)
@@ -105,25 +106,27 @@ export function MobileBottomNav() {
 
   return (
     <>
-      {/* "+" FAB — sits above the pill nav */}
-      <button
-        onClick={() => setFabOpen(true)}
-        className="md:hidden fixed z-40 flex items-center justify-center rounded-full active:scale-95"
-        style={{
-          bottom: "88px",
-          right: "16px",
-          width: 52,
-          height: 52,
-          background: "linear-gradient(135deg, #1D4731 0%, #2A5C3F 100%)",
-          border: "1.5px solid rgba(212,145,30,0.45)",
-          boxShadow: "0 8px 28px rgba(0,0,0,0.32), 0 0 0 1px rgba(212,145,30,0.12)",
-          transform: hidden ? "translateY(160px)" : "translateY(0)",
-          transition: "transform 0.35s cubic-bezier(0.4,0,0.2,1)",
-        }}
-        aria-label="Quick actions"
-      >
-        <Plus className="h-5 w-5" style={{ color: "#E9A52E" }} />
-      </button>
+      {/* "+" FAB — hidden when contextual nav is active */}
+      {!contextualItems && (
+        <button
+          onClick={() => setFabOpen(true)}
+          className="md:hidden fixed z-40 flex items-center justify-center rounded-full active:scale-95"
+          style={{
+            bottom: "88px",
+            right: "16px",
+            width: 52,
+            height: 52,
+            background: "linear-gradient(135deg, #1D4731 0%, #2A5C3F 100%)",
+            border: "1.5px solid rgba(212,145,30,0.45)",
+            boxShadow: "0 8px 28px rgba(0,0,0,0.32), 0 0 0 1px rgba(212,145,30,0.12)",
+            transform: hidden ? "translateY(160px)" : "translateY(0)",
+            transition: "transform 0.35s cubic-bezier(0.4,0,0.2,1)",
+          }}
+          aria-label="Quick actions"
+        >
+          <Plus className="h-5 w-5" style={{ color: "#E9A52E" }} />
+        </button>
+      )}
 
       {/* FAB action sheet */}
       <Drawer open={fabOpen} onOpenChange={setFabOpen}>
@@ -170,53 +173,91 @@ export function MobileBottomNav() {
         </DrawerContent>
       </Drawer>
 
-      {/* Floating pill nav */}
+      {/* Floating pill nav — contextual or global */}
       <nav
         className="md:hidden fixed bottom-5 left-4 right-4 z-50 flex items-center justify-around px-1 py-1.5 rounded-full"
         style={{
           background: "linear-gradient(135deg, #1D4731 0%, #1A3D2B 100%)",
-          border: "1px solid rgba(212,145,30,0.28)",
+          border: contextualItems
+            ? "1px solid rgba(212,145,30,0.45)"
+            : "1px solid rgba(212,145,30,0.28)",
           boxShadow: "0 20px 60px rgba(0,0,0,0.38), 0 4px 16px rgba(0,0,0,0.20)",
           transform: hidden ? "translateY(120px)" : "translateY(0)",
           transition: "transform 0.35s cubic-bezier(0.4,0,0.2,1)",
         }}
       >
-        {primaryNav.map((item) => {
-          const Icon = item.icon
-          const active = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href))
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="relative flex flex-col items-center justify-center gap-[3px] px-3.5 py-2 rounded-full min-w-[60px] transition-all duration-200"
-              style={{
-                background: active ? "rgba(233,165,46,0.14)" : "transparent",
-              }}
-            >
-              <Icon
-                className="h-[18px] w-[18px]"
-                style={{ color: active ? "#E9A52E" : "rgba(247,242,232,0.48)" }}
-              />
-              <span
-                className="text-[10px] font-semibold"
-                style={{ color: active ? "#E9A52E" : "rgba(247,242,232,0.38)" }}
+        {contextualItems ? (
+          // ── Contextual nav ──────────────────────────────────────────
+          contextualItems.map((item) => {
+            const Icon = item.icon
+            const active = item.active ?? (item.href
+              ? pathname === item.href || pathname.startsWith(item.href)
+              : false)
+            const el = item.href ? (
+              <Link
+                key={item.key}
+                href={item.href}
+                className="relative flex flex-col items-center justify-center gap-[3px] px-3 py-2 rounded-full min-w-[56px] flex-1 transition-all duration-200"
+                style={{ background: active ? "rgba(233,165,46,0.14)" : "transparent" }}
               >
-                {item.label}
-              </span>
-            </Link>
-          )
-        })}
-
-        {/* More button */}
-        <button
-          onClick={() => setDrawerOpen(true)}
-          className="flex flex-col items-center justify-center gap-[3px] px-3.5 py-2 rounded-full min-w-[60px] transition-all duration-200"
-        >
-          <MoreHorizontal className="h-[18px] w-[18px]" style={{ color: "rgba(247,242,232,0.48)" }} />
-          <span className="text-[10px] font-semibold" style={{ color: "rgba(247,242,232,0.38)" }}>
-            More
-          </span>
-        </button>
+                <Icon className="h-[18px] w-[18px]" style={{ color: active ? "#E9A52E" : "rgba(247,242,232,0.55)" }} />
+                <span className="text-[9px] font-semibold leading-tight text-center max-w-[52px] truncate"
+                  style={{ color: active ? "#E9A52E" : "rgba(247,242,232,0.42)" }}>
+                  {item.label}
+                </span>
+                {item.badge ? (
+                  <span className="absolute top-1 right-2 h-2 w-2 rounded-full bg-[#B03A1E]" />
+                ) : null}
+              </Link>
+            ) : (
+              <button
+                key={item.key}
+                onClick={item.onClick}
+                className="relative flex flex-col items-center justify-center gap-[3px] px-3 py-2 rounded-full min-w-[56px] flex-1 transition-all duration-200"
+                style={{ background: active ? "rgba(233,165,46,0.14)" : "transparent" }}
+              >
+                <Icon className="h-[18px] w-[18px]" style={{ color: active ? "#E9A52E" : "rgba(247,242,232,0.55)" }} />
+                <span className="text-[9px] font-semibold leading-tight text-center max-w-[52px] truncate"
+                  style={{ color: active ? "#E9A52E" : "rgba(247,242,232,0.42)" }}>
+                  {item.label}
+                </span>
+                {item.badge ? (
+                  <span className="absolute top-1 right-2 h-2 w-2 rounded-full bg-[#B03A1E]" />
+                ) : null}
+              </button>
+            )
+            return el
+          })
+        ) : (
+          // ── Global nav ──────────────────────────────────────────────
+          <>
+            {primaryNav.map((item) => {
+              const Icon = item.icon
+              const active = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href))
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="relative flex flex-col items-center justify-center gap-[3px] px-3.5 py-2 rounded-full min-w-[60px] transition-all duration-200"
+                  style={{ background: active ? "rgba(233,165,46,0.14)" : "transparent" }}
+                >
+                  <Icon className="h-[18px] w-[18px]" style={{ color: active ? "#E9A52E" : "rgba(247,242,232,0.48)" }} />
+                  <span className="text-[10px] font-semibold"
+                    style={{ color: active ? "#E9A52E" : "rgba(247,242,232,0.38)" }}>
+                    {item.label}
+                  </span>
+                </Link>
+              )
+            })}
+            <button
+              onClick={() => setDrawerOpen(true)}
+              className="flex flex-col items-center justify-center gap-[3px] px-3.5 py-2 rounded-full min-w-[60px] transition-all duration-200"
+            >
+              <MoreHorizontal className="h-[18px] w-[18px]" style={{ color: "rgba(247,242,232,0.48)" }} />
+              <span className="text-[10px] font-semibold" style={{ color: "rgba(247,242,232,0.38)" }}>More</span>
+            </button>
+          </>
+        )}
       </nav>
 
       {/* More drawer */}
@@ -287,6 +328,33 @@ export function MobileBottomNav() {
                 </div>
               </div>
             ))}
+
+            {/* Emergency — urgent standalone row */}
+            <div>
+              <p className="px-1 pb-2 text-[9px] font-bold tracking-[2.5px] uppercase"
+                style={{ color: "rgba(176,58,30,0.60)" }}>
+                Urgent
+              </p>
+              <Link
+                href="/emergency"
+                onClick={() => setDrawerOpen(false)}
+                className="flex items-center gap-3.5 px-2 py-3 rounded-xl transition-all duration-150"
+                style={{
+                  background: pathname.startsWith("/emergency") ? "rgba(176,58,30,0.14)" : "rgba(176,58,30,0.06)",
+                  border: "1px solid rgba(176,58,30,0.18)",
+                }}
+              >
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{ background: "rgba(176,58,30,0.18)" }}>
+                  <AlertTriangle className="h-[18px] w-[18px]" style={{ color: "#E05A3A" }} />
+                </div>
+                <div className="flex-1">
+                  <span className="text-[14px] font-semibold" style={{ color: "#E9A52E" }}>Emergency</span>
+                  <p className="text-[11px]" style={{ color: "rgba(247,242,232,0.40)" }}>Report an urgent issue</p>
+                </div>
+                <ChevronRight className="h-4 w-4 flex-shrink-0" style={{ color: "rgba(247,242,232,0.20)" }} />
+              </Link>
+            </div>
 
             {showAdmin && (
               <div>

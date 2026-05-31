@@ -7,14 +7,12 @@ import {
   Coins,
   Award,
   Zap,
-  ChevronDown,
   RefreshCw,
   LogIn,
   Send,
   Megaphone,
   BookOpen,
   FileText,
-  Check,
   Vote,
   Users,
   Trophy,
@@ -27,8 +25,6 @@ import { PostCard, TYPE_CONFIG } from "@/components/feed/post-card"
 
 // ─── Types ────────────────────────────────────────────────────
 
-type Filter = "all" | PostScope
-
 type CommunityOption = {
   scope: PostScope
   wardId?: string
@@ -36,7 +32,7 @@ type CommunityOption = {
   sublabel?: string
 }
 
-// ─── Scope reach colors (used for filter pills and avatar reach indicator) ─
+// ─── Scope reach colors ───────────────────────────────────────
 
 const SCOPE_COLOR: Record<PostScope, { color: string; bg: string }> = {
   WARD:         { color: "#1D4731", bg: "rgba(29,71,49,0.10)"   },
@@ -45,12 +41,16 @@ const SCOPE_COLOR: Record<PostScope, { color: string; bg: string }> = {
   NATIONAL:     { color: "#C9922A", bg: "rgba(201,146,42,0.12)" },
 }
 
+// Default option before user loads
+const NATIONAL_OPTION: CommunityOption = { scope: "NATIONAL", label: "All of Kenya" }
+
 // ─── Build community options from user's geography ────────────
+// This drives BOTH the filter pills and the compose scope — single source of truth.
 
 function buildCommunityOptions(
   user: ReturnType<typeof useAuth>["user"],
 ): CommunityOption[] {
-  if (!user) return []
+  if (!user) return [NATIONAL_OPTION]
 
   const hasBothWards =
     !!user.secondaryWardId && user.secondaryWardId !== user.primaryWardId
@@ -62,7 +62,7 @@ function buildCommunityOptions(
       scope: "WARD",
       wardId: user.primaryWardId,
       label: user.primaryWardName ?? "My Ward",
-      sublabel: hasBothWards ? "primary home" : undefined,
+      sublabel: hasBothWards ? "home" : undefined,
     })
   }
 
@@ -70,31 +70,34 @@ function buildCommunityOptions(
     opts.push({
       scope: "WARD",
       wardId: user.secondaryWardId,
-      label: user.secondaryWardName ?? "Secondary Ward",
-      sublabel: "secondary home",
+      label: user.secondaryWardName ?? "Origin Ward",
+      sublabel: "origin",
     })
   }
 
   opts.push({
     scope: "CONSTITUENCY",
-    label: user.residenceConstituency || "My Constituency",
+    label: user.residenceConstituency || user.primaryConstituencyName || "My Constituency",
   })
   opts.push({
     scope: "COUNTY",
-    label: user.residenceCounty || "My County",
+    label: user.residenceCounty || user.primaryCountyName || "My County",
   })
-  opts.push({ scope: "NATIONAL", label: "All of Kenya" })
+  opts.push(NATIONAL_OPTION)
 
   return opts
 }
 
-// ─── Post type list ───────────────────────────────────────────
-
-const POST_TYPES: { value: PostType; label: string; icon: React.ElementType }[] = [
-  { value: "NOTICE",       label: "Notice",       icon: FileText  },
-  { value: "ANNOUNCEMENT", label: "Announcement", icon: Megaphone },
-  { value: "RESOURCE",     label: "Resource",     icon: BookOpen  },
-]
+// Derive location params for postsApi from an active CommunityOption + user
+function getLocationParams(
+  opt: CommunityOption,
+  user: ReturnType<typeof useAuth>["user"],
+): { wardId?: string; constituencyId?: string; countyId?: string } {
+  if (opt.wardId) return { wardId: opt.wardId }
+  if (opt.scope === "CONSTITUENCY") return { constituencyId: user?.primaryConstituencyId ?? undefined }
+  if (opt.scope === "COUNTY")       return { countyId: user?.primaryCountyId ?? undefined }
+  return {}
+}
 
 // ─── Post skeleton ────────────────────────────────────────────
 
@@ -117,34 +120,37 @@ function PostSkeleton() {
 
 // ─── Compose box ─────────────────────────────────────────────
 
-function ComposeBox() {
+interface ComposeBoxProps {
+  activeCommunity: CommunityOption
+  queryKey: readonly [string, string, string]
+}
+
+function ComposeBox({ activeCommunity, queryKey }: ComposeBoxProps) {
   const { user, isAuthenticated } = useAuth()
   const queryClient = useQueryClient()
-  const communityOptions = buildCommunityOptions(user)
 
-  const [content, setContent] = useState("")
-  const [selectedCommunity, setSelectedCommunity] = useState<CommunityOption | null>(null)
-  const [type, setType] = useState<PostType>("NOTICE")
-  const [resourceUrl, setResourceUrl] = useState("")
+  const [content, setContent]           = useState("")
+  const [type, setType]                 = useState<PostType>("NOTICE")
+  const [resourceUrl, setResourceUrl]   = useState("")
   const [resourceTitle, setResourceTitle] = useState("")
-  const [focused, setFocused] = useState(false)
-  const [pickerOpen, setPickerOpen] = useState(false)
+  const [focused, setFocused]           = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-
-  const activeCommunity = selectedCommunity ?? communityOptions[0] ?? null
+  const typeCfg = TYPE_CONFIG[type]
 
   const canPost =
     isAuthenticated &&
     (user?.verificationLevel === "COMMUNITY_VERIFIED" ||
       user?.verificationLevel === "FULL_VERIFIED")
 
+  const scopeColor = SCOPE_COLOR[activeCommunity.scope]
+
   const mutation = useMutation({
     mutationFn: () =>
       postsApi.createPost({
         content: content.trim(),
-        scope: activeCommunity?.scope ?? "WARD",
+        scope: activeCommunity.scope,
         type,
-        wardId: activeCommunity?.wardId,
+        wardId: activeCommunity.wardId,
         resourceUrl: type === "RESOURCE" && resourceUrl.trim() ? resourceUrl.trim() : undefined,
         resourceTitle: type === "RESOURCE" && resourceTitle.trim() ? resourceTitle.trim() : undefined,
       }),
@@ -153,8 +159,7 @@ function ComposeBox() {
       setResourceUrl("")
       setResourceTitle("")
       setFocused(false)
-      setPickerOpen(false)
-      queryClient.invalidateQueries({ queryKey: ["posts"] })
+      queryClient.invalidateQueries({ queryKey })
     },
   })
 
@@ -188,11 +193,8 @@ function ComposeBox() {
     )
   }
 
-  const typeCfg = TYPE_CONFIG[type]
-  const scopeColor = activeCommunity ? SCOPE_COLOR[activeCommunity.scope] : SCOPE_COLOR.WARD
-
   return (
-    <div className="mx-3 mt-3 relative">
+    <div className="mx-3 mt-3">
       <div
         className="rounded-2xl overflow-hidden"
         style={{
@@ -203,43 +205,43 @@ function ComposeBox() {
           transition: "box-shadow 0.15s",
         }}
       >
-        {/* "Posting to" context — always visible */}
-        <div
-          className="flex items-center gap-2 px-3 pt-3 pb-0"
-        >
+        {/* "Posting to" context — synced with active filter pill */}
+        <div className="flex items-center gap-2 px-3 pt-3 pb-0">
           <span className="text-[11px]" style={{ color: "rgba(14,11,8,0.35)" }}>
             Posting to
           </span>
-          <button
-            onClick={() => setPickerOpen((o) => !o)}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all"
+          <span
+            className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold"
             style={{ background: scopeColor.bg, color: scopeColor.color }}
           >
-            {activeCommunity?.label ?? "My Ward"}
-            {activeCommunity?.sublabel && (
+            {activeCommunity.label}
+            {activeCommunity.sublabel && (
               <span className="opacity-60 font-normal">· {activeCommunity.sublabel}</span>
             )}
-            <ChevronDown className="h-3 w-3 ml-0.5" />
-          </button>
+          </span>
         </div>
 
         {/* Type selector */}
         <div className="flex gap-1 px-3 pt-2.5 pb-0">
-          {POST_TYPES.map(({ value, label, icon: Icon }) => (
-            <button
-              key={value}
-              onClick={() => setType(value)}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all"
-              style={
-                type === value
-                  ? { background: TYPE_CONFIG[value].bg, color: TYPE_CONFIG[value].color }
-                  : { background: "rgba(14,11,8,0.04)", color: "rgba(14,11,8,0.40)" }
-              }
-            >
-              <Icon className="h-2.5 w-2.5" />
-              {label}
-            </button>
-          ))}
+          {(["NOTICE", "ANNOUNCEMENT", "RESOURCE"] as PostType[]).map((value) => {
+            const Cfg = TYPE_CONFIG[value]
+            const Icon = Cfg.icon
+            return (
+              <button
+                key={value}
+                onClick={() => setType(value)}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all"
+                style={
+                  type === value
+                    ? { background: Cfg.bg, color: Cfg.color }
+                    : { background: "rgba(14,11,8,0.04)", color: "rgba(14,11,8,0.40)" }
+                }
+              >
+                <Icon className="h-2.5 w-2.5" />
+                {Cfg.label}
+              </button>
+            )
+          })}
         </div>
 
         {/* Resource URL fields */}
@@ -320,58 +322,6 @@ function ComposeBox() {
           </div>
         )}
       </div>
-
-      {/* Community picker dropdown */}
-      {pickerOpen && (
-        <div
-          className="absolute left-0 right-0 top-full mt-1 z-20 rounded-2xl overflow-hidden"
-          style={{
-            background: "#fff",
-            boxShadow: "0 4px 24px rgba(14,11,8,0.12), 0 0 0 1px rgba(14,11,8,0.06)",
-          }}
-        >
-          <div className="px-3 pt-3 pb-1">
-            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "rgba(14,11,8,0.35)" }}>
-              Post into
-            </p>
-          </div>
-          {communityOptions.map((opt) => {
-            const isActive =
-              activeCommunity?.scope === opt.scope &&
-              activeCommunity?.wardId === opt.wardId
-            const color = SCOPE_COLOR[opt.scope]
-            return (
-              <button
-                key={`${opt.scope}-${opt.wardId ?? ""}`}
-                onClick={() => {
-                  setSelectedCommunity(opt)
-                  setPickerOpen(false)
-                }}
-                className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-[rgba(14,11,8,0.03)]"
-              >
-                <div
-                  className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center"
-                  style={{ background: color.bg }}
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-semibold" style={{ color: "#0E0B08" }}>
-                    {opt.label}
-                  </p>
-                  {opt.sublabel && (
-                    <p className="text-[11px]" style={{ color: "rgba(14,11,8,0.40)" }}>
-                      {opt.sublabel}
-                    </p>
-                  )}
-                </div>
-                {isActive && (
-                  <Check className="h-4 w-4 flex-shrink-0" style={{ color: color.color }} />
-                )}
-              </button>
-            )
-          })}
-          <div className="h-2" />
-        </div>
-      )}
     </div>
   )
 }
@@ -408,39 +358,27 @@ function StatsStrip() {
   )
 }
 
-// ─── Filter pills ─────────────────────────────────────────────
+// ─── Filter pills — driven by community options ───────────────
 
-function FilterPills({ active, onChange }: { active: Filter; onChange: (f: Filter) => void }) {
-  const { user } = useAuth()
+interface FilterPillsProps {
+  options: CommunityOption[]
+  active: CommunityOption
+  onChange: (opt: CommunityOption) => void
+}
 
-  const hasBothWards =
-    !!user?.secondaryWardId && user.secondaryWardId !== user?.primaryWardId
-
-  const filters: { key: Filter; label: string }[] = [
-    { key: "all", label: "All" },
-    {
-      key: "WARD",
-      label: hasBothWards
-        ? "My Wards"
-        : (user?.primaryWardName ?? user?.primaryWardId ? "My Ward" : "Ward"),
-    },
-    { key: "CONSTITUENCY", label: user?.residenceConstituency || "Constituency" },
-    { key: "COUNTY",       label: user?.residenceCounty || "County" },
-    { key: "NATIONAL",     label: "All Kenya" },
-  ]
-
+function FilterPills({ options, active, onChange }: FilterPillsProps) {
   return (
     <div
       className="flex gap-2 px-4 py-2.5 overflow-x-auto scrollbar-none border-b"
       style={{ background: "#F7F2E8", borderColor: "rgba(14,11,8,0.06)" }}
     >
-      {filters.map(({ key, label }) => {
-        const isActive = active === key
-        const color = key === "all" ? "#0E0B08" : SCOPE_COLOR[key as PostScope].color
+      {options.map((opt) => {
+        const isActive = opt.scope === active.scope && opt.wardId === active.wardId
+        const { color, bg } = SCOPE_COLOR[opt.scope]
         return (
           <button
-            key={key}
-            onClick={() => onChange(key)}
+            key={`${opt.scope}-${opt.wardId ?? ""}`}
+            onClick={() => onChange(opt)}
             className="flex-shrink-0 px-4 py-1.5 rounded-full text-[12px] font-semibold transition-all"
             style={
               isActive
@@ -448,7 +386,10 @@ function FilterPills({ active, onChange }: { active: Filter; onChange: (f: Filte
                 : { background: "rgba(14,11,8,0.06)", color: "rgba(14,11,8,0.50)" }
             }
           >
-            {label}
+            {opt.label}
+            {opt.sublabel && (
+              <span className="ml-1 text-[10px] opacity-70">({opt.sublabel})</span>
+            )}
           </button>
         )
       })}
@@ -487,76 +428,78 @@ function UnauthenticatedState() {
 
 // ─── Empty feed state ─────────────────────────────────────────
 
-function EmptyFeedState() {
-  const { user } = useAuth()
-  const wardName = user?.primaryWardName ?? "your ward"
+// ─── Quick actions — always visible between compose and feed ─
 
-  const actions = [
-    {
-      icon: Vote,
-      label: "Create a Proposal",
-      description: "Raise an issue or initiative for your ward",
-      href: "/proposals/create",
-      color: "#C9922A",
-      bg: "rgba(201,146,42,0.08)",
-    },
-    {
-      icon: Users,
-      label: "Explore Groups",
-      description: "Find community groups in your area",
-      href: "/groups",
-      color: "#1D4731",
-      bg: "rgba(29,71,49,0.07)",
-    },
-    {
-      icon: Trophy,
-      label: "View Leaderboard",
-      description: "See top contributors in your community",
-      href: "/leaderboard",
-      color: "#7A4F1E",
-      bg: "rgba(122,79,30,0.07)",
-    },
-  ]
+const QUICK_ACTIONS = [
+  {
+    icon: Vote,
+    label: "Propose",
+    description: "Start a proposal",
+    href: "/proposals/create",
+    color: "#C9922A",
+    bg: "rgba(201,146,42,0.08)",
+  },
+  {
+    icon: Users,
+    label: "Groups",
+    description: "Explore community groups",
+    href: "/groups",
+    color: "#1D4731",
+    bg: "rgba(29,71,49,0.07)",
+  },
+  {
+    icon: Trophy,
+    label: "Leaderboard",
+    description: "Top contributors",
+    href: "/leaderboard",
+    color: "#7A4F1E",
+    bg: "rgba(122,79,30,0.07)",
+  },
+]
 
+function QuickActions() {
   return (
-    <div className="px-4 py-8">
-      <div className="text-center mb-6">
-        <div
-          className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3"
-          style={{ background: "rgba(29,71,49,0.07)" }}
-        >
-          <span className="text-2xl">🌿</span>
-        </div>
-        <p className="text-[14px] font-semibold" style={{ color: "rgba(14,11,8,0.65)" }}>
-          {wardName} is quiet right now
-        </p>
-        <p className="text-[12px] mt-1" style={{ color: "rgba(14,11,8,0.35)" }}>
-          Be the first to post — or take action below
-        </p>
-      </div>
-
-      <div className="space-y-2">
-        {actions.map(({ icon: Icon, label, description, href, color, bg }) => (
-          <Link key={href} href={href}>
+    <div className="mx-3 mt-3 grid grid-cols-3 gap-2">
+      {QUICK_ACTIONS.map(({ icon: Icon, label, description, href, color, bg }) => (
+        <Link key={href} href={href}>
+          <div
+            className="flex flex-col items-center gap-1.5 p-3 rounded-2xl text-center transition-all hover:shadow-sm active:scale-[0.97]"
+            style={{ background: bg, border: `1px solid ${color}22` }}
+          >
             <div
-              className="flex items-center gap-3 p-3 rounded-xl transition-all hover:shadow-sm cursor-pointer"
-              style={{ background: bg, border: `1px solid ${color}22` }}
+              className="w-9 h-9 rounded-xl flex items-center justify-center"
+              style={{ background: `${color}18` }}
             >
-              <div
-                className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                style={{ background: `${color}18` }}
-              >
-                <Icon className="h-4 w-4" style={{ color }} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[13px] font-semibold" style={{ color: "#0E0B08" }}>{label}</p>
-                <p className="text-[11px]" style={{ color: "rgba(14,11,8,0.45)" }}>{description}</p>
-              </div>
-              <ArrowRight className="h-4 w-4 flex-shrink-0" style={{ color: `${color}80` }} />
+              <Icon className="h-4 w-4" style={{ color }} />
             </div>
-          </Link>
-        ))}
+            <p className="text-[12px] font-semibold leading-tight" style={{ color: "#0E0B08" }}>
+              {label}
+            </p>
+            <p className="text-[10px] leading-tight" style={{ color: "rgba(14,11,8,0.40)" }}>
+              {description}
+            </p>
+          </div>
+        </Link>
+      ))}
+    </div>
+  )
+}
+
+function EmptyFeedState({ label }: { label: string }) {
+  return (
+    <div className="px-4 py-8 text-center">
+      <div
+        className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-3"
+        style={{ background: "rgba(29,71,49,0.07)" }}
+      >
+        <span className="text-xl">🌿</span>
       </div>
+      <p className="text-[14px] font-semibold" style={{ color: "rgba(14,11,8,0.65)" }}>
+        {label} is quiet right now
+      </p>
+      <p className="text-[12px] mt-1" style={{ color: "rgba(14,11,8,0.35)" }}>
+        Be the first to post something.
+      </p>
     </div>
   )
 }
@@ -564,17 +507,36 @@ function EmptyFeedState() {
 // ─── Main component ───────────────────────────────────────────
 
 export function HomeFeed({ embedded = false }: { embedded?: boolean }) {
-  const { isAuthenticated } = useAuth()
-  const [filter, setFilter] = useState<Filter>("all")
+  const { user, isAuthenticated } = useAuth()
   const queryClient = useQueryClient()
 
-  const scope = filter === "all" ? undefined : (filter as PostScope)
+  const communityOptions = buildCommunityOptions(user)
+  // Default to All Kenya (always the last option)
+  const [activeCommunity, setActiveCommunity] = useState<CommunityOption>(NATIONAL_OPTION)
+
+  // When user loads, keep NATIONAL selected but use the properly-labelled option
+  useEffect(() => {
+    if (user) {
+      const opts = buildCommunityOptions(user)
+      const national = opts.find(o => o.scope === "NATIONAL") ?? NATIONAL_OPTION
+      setActiveCommunity(prev =>
+        prev.scope === "NATIONAL" && !prev.wardId ? national : prev
+      )
+    }
+  }, [user?.id])
+
+  const locationParams = getLocationParams(activeCommunity, user)
+  const queryKey = ["posts", activeCommunity.scope, activeCommunity.wardId ?? ""] as const
 
   const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage } =
     useInfiniteQuery({
-      queryKey: ["posts", scope],
+      queryKey,
       queryFn: ({ pageParam }) =>
-        postsApi.getPosts({ scope, cursor: pageParam as string | undefined }),
+        postsApi.getPosts({
+          scope: activeCommunity.scope,
+          ...locationParams,
+          cursor: pageParam as string | undefined,
+        }),
       initialPageParam: undefined as string | undefined,
       getNextPageParam: (last) => last.nextCursor ?? undefined,
       staleTime: 30_000,
@@ -584,17 +546,31 @@ export function HomeFeed({ embedded = false }: { embedded?: boolean }) {
   const allPosts = data?.pages.flatMap((p) => p.items) ?? []
 
   function refresh() {
-    queryClient.invalidateQueries({ queryKey: ["posts"] })
+    queryClient.invalidateQueries({ queryKey })
   }
 
   if (!isAuthenticated) return <UnauthenticatedState />
 
+  const feedLabel = `${activeCommunity.label} updates`
+
   return (
     <div className="flex flex-col">
       {!embedded && <StatsStrip />}
-      <FilterPills active={filter} onChange={setFilter} />
-      <ComposeBox />
 
+      {/* Filter pills — community options drive both filter and compose */}
+      <FilterPills
+        options={communityOptions}
+        active={activeCommunity}
+        onChange={setActiveCommunity}
+      />
+
+      {/* Compose — scope locked to active filter */}
+      <ComposeBox activeCommunity={activeCommunity} queryKey={queryKey} />
+
+      {/* Quick action shortcuts — always visible */}
+      <QuickActions />
+
+      {/* Feed */}
       <div
         className="mx-3 mt-3 rounded-2xl overflow-hidden"
         style={{ background: "#fff", boxShadow: "0 1px 6px rgba(14,11,8,0.07), 0 0 0 1px rgba(14,11,8,0.04)" }}
@@ -604,7 +580,7 @@ export function HomeFeed({ embedded = false }: { embedded?: boolean }) {
           style={{ borderColor: "rgba(14,11,8,0.06)" }}
         >
           <span className="text-xs font-semibold" style={{ color: "#7A6E60" }}>
-            {filter === "all" ? "Community updates" : `${filter === "NATIONAL" ? "All Kenya" : filter.charAt(0) + filter.slice(1).toLowerCase()} updates`}
+            {feedLabel}
           </span>
           <button
             onClick={refresh}
@@ -619,7 +595,7 @@ export function HomeFeed({ embedded = false }: { embedded?: boolean }) {
         {isLoading ? (
           <PostSkeleton />
         ) : allPosts.length === 0 ? (
-          <EmptyFeedState />
+          <EmptyFeedState label={activeCommunity.label} />
         ) : (
           <div>
             {allPosts.map((post) => (

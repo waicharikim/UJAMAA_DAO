@@ -29,7 +29,11 @@ import { GroupMembers } from "@/components/groups/group-members"
 import { LeaderAdminPanel } from "@/components/groups/group-detail"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { useAuth } from "@/contexts/auth-context"
+import { useContextualNav } from "@/hooks/use-contextual-nav"
 import { Skeleton } from "@/components/ui/skeleton"
+import {
+  Drawer, DrawerContent, DrawerHeader, DrawerTitle,
+} from "@/components/ui/drawer"
 import {
   Globe,
   MapPin,
@@ -37,6 +41,7 @@ import {
   Users,
   CalendarDays,
   ChevronRight,
+  ChevronLeft,
   Rss,
   Vote,
   ScrollText,
@@ -52,6 +57,8 @@ import {
   RefreshCw,
   Plus,
   Loader2,
+  MoreHorizontal,
+  X,
 } from "lucide-react"
 import { cn, formatDate } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
@@ -242,13 +249,30 @@ const POST_TYPE_LIST: { value: PostType; label: string; icon: React.ElementType 
 function FeedTab({ group }: { group: GroupDetailDto }) {
   const { user, isAuthenticated } = useAuth()
   const queryClient = useQueryClient()
-  const [content, setContent] = useState("")
-  const [focused, setFocused] = useState(false)
-  const [type, setType] = useState<PostType>("NOTICE")
+
+  // ── Derived values (not hooks) ───────────────────────────────
+  const scope            = groupScope(group)
+  const groupWardId         = group.ward?.id
+  const groupConstituencyId = group.constituency?.id
+  const groupCountyId       = group.county?.id
+  const maxScopeIndex    = ["WARD", "CONSTITUENCY", "COUNTY", "NATIONAL"].indexOf(scope)
+  const availableScopes: PostScope[] = group.isSystem
+    ? [scope]
+    : (["WARD", "CONSTITUENCY", "COUNTY", "NATIONAL"] as PostScope[]).slice(0, maxScopeIndex + 1)
+  const locationParams = {
+    ...(groupWardId         ? { wardId: groupWardId }                 : {}),
+    ...(groupConstituencyId ? { constituencyId: groupConstituencyId } : {}),
+    ...(groupCountyId       ? { countyId: groupCountyId }             : {}),
+  }
+
+  // ── All hooks — declared together, in consistent order ───────
+  const [content, setContent]         = useState("")
+  const [focused, setFocused]         = useState(false)
+  const [type, setType]               = useState<PostType>("NOTICE")
   const [resourceUrl, setResourceUrl] = useState("")
   const [resourceTitle, setResourceTitle] = useState("")
+  const [postScope, setPostScope]     = useState<PostScope>(scope)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const scope = groupScope(group)
   const typeCfg = TYPE_CONFIG[type]
 
   const canPost =
@@ -260,8 +284,9 @@ function FeedTab({ group }: { group: GroupDetailDto }) {
     mutationFn: () =>
       postsApi.createPost({
         content: content.trim(),
-        scope,
+        scope: postScope,
         type,
+        wardId: groupWardId,
         resourceUrl: type === "RESOURCE" && resourceUrl.trim() ? resourceUrl.trim() : undefined,
         resourceTitle: type === "RESOURCE" && resourceTitle.trim() ? resourceTitle.trim() : undefined,
       }),
@@ -270,7 +295,7 @@ function FeedTab({ group }: { group: GroupDetailDto }) {
       setResourceUrl("")
       setResourceTitle("")
       setFocused(false)
-      queryClient.invalidateQueries({ queryKey: ["group-feed", scope] })
+      queryClient.invalidateQueries({ queryKey: ["group-feed", scope, groupWardId, groupConstituencyId, groupCountyId] })
     },
   })
 
@@ -290,9 +315,9 @@ function FeedTab({ group }: { group: GroupDetailDto }) {
     refetch,
     isRefetching,
   } = useInfiniteQuery({
-    queryKey: ["group-feed", scope],
+    queryKey: ["group-feed", scope, groupWardId, groupConstituencyId, groupCountyId],
     queryFn: ({ pageParam }) =>
-      postsApi.getPosts({ scope, cursor: pageParam as string | undefined }),
+      postsApi.getPosts({ scope, ...locationParams, cursor: pageParam as string | undefined }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
     staleTime: 30_000,
@@ -315,8 +340,8 @@ function FeedTab({ group }: { group: GroupDetailDto }) {
               transition: "box-shadow 0.15s",
             }}
           >
-            {/* "Posting in" context */}
-            <div className="flex items-center gap-2 px-4 pt-3">
+            {/* "Posting in" context + optional scope selector */}
+            <div className="flex items-center gap-2 px-4 pt-3 flex-wrap">
               <span className="text-[11px]" style={{ color: "rgba(14,11,8,0.35)" }}>
                 Posting in
               </span>
@@ -327,8 +352,26 @@ function FeedTab({ group }: { group: GroupDetailDto }) {
                   color: LEVEL_CONFIG[groupScope(group)]?.color ?? "#1D4731",
                 }}
               >
-                {group.name}
+                {group.groupName}
               </span>
+              {/* Scope selector — only for voluntary groups where multiple scopes are available */}
+              {!group.isSystem && availableScopes.length > 1 && (
+                <div className="flex items-center gap-1 ml-1">
+                  <span className="text-[11px]" style={{ color: "rgba(14,11,8,0.35)" }}>reach:</span>
+                  {availableScopes.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => setPostScope(s)}
+                      className="text-[10px] font-bold px-2 py-0.5 rounded-full transition-all"
+                      style={postScope === s
+                        ? { background: LEVEL_CONFIG[s]?.bg ?? "rgba(29,71,49,0.10)", color: LEVEL_CONFIG[s]?.color ?? "#1D4731" }
+                        : { background: "rgba(14,11,8,0.04)", color: "rgba(14,11,8,0.35)" }}
+                    >
+                      {s.charAt(0) + s.slice(1).toLowerCase()}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Type selector */}
@@ -446,7 +489,7 @@ function FeedTab({ group }: { group: GroupDetailDto }) {
       >
         <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: "rgba(14,11,8,0.06)" }}>
           <span className="text-xs font-semibold" style={{ color: "#7A6E60" }}>
-            {group.name} updates
+            {group.groupName} updates
           </span>
           <button
             onClick={() => refetch()}
@@ -827,9 +870,13 @@ function ProjectsTab({ groupId, canCreate }: { groupId: string; canCreate: boole
 
 // ── Hub ───────────────────────────────────────────────────────
 
+// Primary tabs shown in mobile bottom nav; secondary tabs in More drawer
+const PRIMARY_TABS: HubTab[] = ["feed", "proposals", "projects", "members"]
+
 function GroupHub({ groupId }: { groupId: string }) {
   const { user } = useAuth()
   const [activeTab, setActiveTab] = useState<HubTab>("feed")
+  const [groupMoreOpen, setGroupMoreOpen] = useState(false)
 
   const { data: group, isLoading, error } = useQuery({
     queryKey: ["group", groupId],
@@ -843,7 +890,7 @@ function GroupHub({ groupId }: { groupId: string }) {
     (user?.verificationLevel === "COMMUNITY_VERIFIED" ||
       user?.verificationLevel === "FULL_VERIFIED")
 
-  const TABS: { id: HubTab; label: string; Icon: React.ElementType }[] = [
+  const ALL_TABS: { id: HubTab; label: string; Icon: React.ElementType }[] = [
     { id: "feed",      label: "Feed",      Icon: Rss        },
     { id: "proposals", label: "Proposals", Icon: Vote       },
     { id: "elections", label: "Elections", Icon: ScrollText },
@@ -853,6 +900,32 @@ function GroupHub({ groupId }: { groupId: string }) {
     { id: "sessions",  label: "Sessions",  Icon: CalendarDays },
     ...(isLeader && !group?.isSystem ? [{ id: "admin" as HubTab, label: "Admin", Icon: Settings }] : []),
   ]
+
+  // Contextual bottom nav — primary tabs + More
+  useContextualNav(
+    () => [
+      ...PRIMARY_TABS.map((id) => {
+        const tab = ALL_TABS.find(t => t.id === id)!
+        return {
+          key: id,
+          label: tab.label,
+          icon: tab.Icon,
+          active: activeTab === id,
+          onClick: () => { setActiveTab(id); setGroupMoreOpen(false) },
+        }
+      }),
+      {
+        key: "more",
+        label: "More",
+        icon: MoreHorizontal,
+        active: !PRIMARY_TABS.includes(activeTab),
+        onClick: () => setGroupMoreOpen(true),
+      },
+    ],
+    [activeTab, groupId]
+  )
+
+  const TABS = ALL_TABS
 
   if (isLoading) {
     return (
@@ -885,9 +958,9 @@ function GroupHub({ groupId }: { groupId: string }) {
       {/* Header */}
       <GroupHeader group={group} groupId={groupId} />
 
-      {/* Tab strip — sticky below topbar */}
+      {/* Tab strip — desktop only, mobile uses bottom nav */}
       <div
-        className="sticky top-[52px] z-30 backdrop-blur-sm border-b"
+        className="hidden md:block sticky top-[52px] z-30 backdrop-blur-sm border-b"
         style={{ background: "rgba(247,242,232,0.95)", borderColor: "rgba(14,11,8,0.06)" }}
       >
         <div className="flex gap-0 overflow-x-auto scrollbar-none max-w-3xl mx-auto px-4">
@@ -921,7 +994,7 @@ function GroupHub({ groupId }: { groupId: string }) {
           isMember
             ? <GroupTreasuryCard groupId={groupId} />
             : <div className="py-12 text-center">
-                <p className="text-sm" style={{ color: "#7A6E60" }}>Join this community to view the treasury.</p>
+                <p className="text-sm" style={{ color: "#7A6E60" }}>Join this group to view the treasury.</p>
               </div>
         )}
         {activeTab === "members"   && <GroupMembers groupId={groupId} />}
@@ -930,6 +1003,70 @@ function GroupHub({ groupId }: { groupId: string }) {
           <LeaderAdminPanel group={group} />
         )}
       </div>
+
+      {/* Group More drawer — secondary tabs + back to community */}
+      <Drawer open={groupMoreOpen} onOpenChange={setGroupMoreOpen}>
+        <DrawerContent className="rounded-t-[24px]" style={{ background: "#17382A", border: "1px solid rgba(212,145,30,0.12)" }}>
+          <DrawerHeader className="flex items-center justify-between px-5 pt-6 pb-2">
+            <div>
+              <DrawerTitle className="font-serif text-cream text-[17px] leading-tight">{group.groupName}</DrawerTitle>
+              <p className="text-[11px] mt-0.5" style={{ color: "rgba(247,242,232,0.40)" }}>
+                {group.voluntaryType?.replace(/_/g, " ") ?? group.systemType ?? "Group"}
+              </p>
+            </div>
+            <button onClick={() => setGroupMoreOpen(false)}
+              className="h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0"
+              style={{ background: "rgba(247,242,232,0.07)", border: "1px solid rgba(247,242,232,0.06)" }}>
+              <X className="h-3.5 w-3.5 text-cream opacity-60" />
+            </button>
+          </DrawerHeader>
+
+          <div className="px-4 pb-10 mt-1 space-y-5">
+            {/* Secondary tabs */}
+            <div>
+              <p className="px-1 pb-2 text-[9px] font-bold tracking-[2.5px] uppercase"
+                style={{ color: "rgba(212,145,30,0.55)" }}>More</p>
+              <div className="space-y-0.5">
+                {TABS.filter(t => !PRIMARY_TABS.includes(t.id)).map(({ id, label, Icon }) => (
+                  <button key={id}
+                    onClick={() => { setActiveTab(id); setGroupMoreOpen(false) }}
+                    className="w-full flex items-center gap-3.5 px-2 py-3 rounded-xl transition-all"
+                    style={{ background: activeTab === id ? "rgba(212,145,30,0.12)" : "transparent" }}>
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                      style={{ background: activeTab === id ? "rgba(212,145,30,0.20)" : "rgba(247,242,232,0.07)" }}>
+                      <Icon className="h-[18px] w-[18px]"
+                        style={{ color: activeTab === id ? "#E9A52E" : "rgba(247,242,232,0.55)" }} />
+                    </div>
+                    <span className="text-[14px] font-medium"
+                      style={{ color: activeTab === id ? "#E9A52E" : "rgba(247,242,232,0.85)" }}>
+                      {label}
+                    </span>
+                    {activeTab === id && <div className="ml-auto h-2 w-2 rounded-full" style={{ background: "#E9A52E" }} />}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Back to community */}
+            <div>
+              <p className="px-1 pb-2 text-[9px] font-bold tracking-[2.5px] uppercase"
+                style={{ color: "rgba(212,145,30,0.55)" }}>Navigate</p>
+              <Link href="/groups" onClick={() => setGroupMoreOpen(false)}
+                className="flex items-center gap-3.5 px-2 py-3 rounded-xl transition-all"
+                style={{ background: "transparent" }}>
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{ background: "rgba(247,242,232,0.07)" }}>
+                  <ChevronLeft className="h-[18px] w-[18px]" style={{ color: "rgba(247,242,232,0.55)" }} />
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="text-[14px] font-medium" style={{ color: "rgba(247,242,232,0.85)" }}>Back to Community</p>
+                  <p className="text-[11px]" style={{ color: "rgba(247,242,232,0.35)" }}>Return to your community hub</p>
+                </div>
+              </Link>
+            </div>
+          </div>
+        </DrawerContent>
+      </Drawer>
     </div>
   )
 }

@@ -73,9 +73,8 @@ const HUBS = [
     icon: User,
     href: "/profile",
     items: [
-      { label: "Profile",        href: "/profile",        icon: User          },
-      { label: "Notifications",  href: "/notifications",  icon: Bell          },
-      { label: "Emergency",      href: "/emergency",      icon: AlertTriangle },
+      { label: "Profile",       href: "/profile",       icon: User },
+      { label: "Notifications", href: "/notifications", icon: Bell },
     ],
   },
 ] as const
@@ -322,7 +321,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               className="text-[13.5px] font-medium whitespace-nowrap"
               style={{ color: dashActive ? "#E9A52E" : "rgba(247,242,232,0.60)" }}
             >
-              Dashboard
+              Home
             </span>
           )}
         </Link>
@@ -338,6 +337,34 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             <HubSection key={hub.id} hub={hub} pathname={pathname} collapsed={collapsed} />
           ))}
         </div>
+
+        {/* Emergency — urgent standalone */}
+        <div className="my-1 mx-[10px] h-px" style={{ background: "rgba(247,242,232,0.06)" }} />
+        <Link
+          href="/emergency"
+          title={collapsed ? "Emergency" : undefined}
+          className={cn(
+            "relative flex items-center gap-[11px] rounded-lg overflow-hidden transition-all duration-200",
+            collapsed ? "justify-center px-0 py-[10px]" : "px-3 py-[10px]",
+            pathname.startsWith("/emergency") ? "bg-[rgba(176,58,30,0.14)]" : "hover:bg-[rgba(176,58,30,0.08)]"
+          )}
+          style={{ border: "1px solid rgba(176,58,30,0.12)" }}
+        >
+          <span
+            className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+            style={{ background: "rgba(176,58,30,0.18)" }}
+          >
+            <AlertTriangle
+              className="h-[15px] w-[15px]"
+              style={{ color: "#E05A3A" }}
+            />
+          </span>
+          {!collapsed && (
+            <span className="text-[13.5px] font-medium whitespace-nowrap" style={{ color: "#E05A3A" }}>
+              Emergency
+            </span>
+          )}
+        </Link>
 
         {/* Admin — conditional, standalone */}
         {showAdmin && (

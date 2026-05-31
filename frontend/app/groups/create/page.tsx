@@ -2,12 +2,12 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { useMutation } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { Card, CardContent } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/auth-context"
-import { communityApi } from "@/lib/api"
-import { ArrowLeft, Loader2, Users } from "lucide-react"
+import { communityApi, userApi } from "@/lib/api"
+import { Loader2, Users, Home, Building2, Landmark } from "lucide-react"
 import Link from "next/link"
 import { WardDeclarationScreen } from "@/components/groups/ward-declaration-screen"
 
@@ -39,13 +39,29 @@ export default function CreateGroupPage() {
   const { toast } = useToast()
   const { isAuthenticated, user } = useAuth()
 
+  type ScopeLevel = "ward" | "constituency" | "county"
+
   const [form, setForm] = useState({
     name: "",
     voluntaryType: "",
     description: "",
   })
+  const [scope, setScope] = useState<ScopeLevel>("ward")
+  const [countyId, setCountyId]           = useState(user?.primaryCountyId ?? "")
+  const [constituencyId, setConstituencyId] = useState(user?.primaryConstituencyId ?? "")
+  const [wardId, setWardId]               = useState(user?.primaryWardId ?? "")
+
+  const { data: counties = [] }       = useQuery({ queryKey: ["counties"],             queryFn: () => userApi.getCounties(),                     staleTime: Infinity })
+  const { data: constituencies = [] } = useQuery({ queryKey: ["constituencies", countyId], queryFn: () => userApi.getConstituencies(countyId), enabled: !!countyId, staleTime: Infinity })
+  const { data: wards = [] }          = useQuery({ queryKey: ["wards", constituencyId],   queryFn: () => userApi.getWards(constituencyId),        enabled: !!constituencyId && scope === "ward", staleTime: Infinity })
 
   const [createdGroup, setCreatedGroup] = useState<{ id: string; name: string } | null>(null)
+
+  const locationPayload = {
+    ...(scope === "ward"         && wardId         ? { wardId }         : {}),
+    ...(scope === "constituency" && constituencyId ? { constituencyId } : {}),
+    ...(scope === "county"       && countyId       ? { countyId }       : {}),
+  }
 
   const { mutate: submit, isPending } = useMutation({
     mutationFn: () =>
@@ -53,6 +69,7 @@ export default function CreateGroupPage() {
         name: form.name.trim(),
         voluntaryType: form.voluntaryType,
         description: form.description.trim() || undefined,
+        ...locationPayload,
       }),
     onSuccess: (data) => {
       toast({ title: "Group created", description: "You are now the leader." })
@@ -67,7 +84,12 @@ export default function CreateGroupPage() {
     },
   })
 
-  const canSubmit = form.name.trim().length >= 3 && form.voluntaryType !== ""
+  const locationSelected =
+    (scope === "ward" && !!wardId) ||
+    (scope === "constituency" && !!constituencyId) ||
+    (scope === "county" && !!countyId)
+
+  const canSubmit = form.name.trim().length >= 3 && form.voluntaryType !== "" && locationSelected
 
   if (createdGroup) {
     return (
@@ -103,15 +125,6 @@ export default function CreateGroupPage() {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-2xl space-y-6">
-      {/* Back */}
-      <Link
-        href="/groups"
-        className="inline-flex items-center gap-1.5 text-sm text-warm-gray hover:text-amber transition-colors"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to groups
-      </Link>
-
       {/* Header */}
       <div>
         <h1
@@ -173,6 +186,83 @@ export default function CreateGroupPage() {
               className="w-full rounded-lg border border-cream bg-white px-3 py-2.5 text-sm text-[#0A1F14] placeholder:text-warm-gray/60 focus:outline-none focus:ring-2 focus:ring-amber/40 resize-none"
             />
             <p className="text-xs text-warm-gray text-right">{form.description.length}/500</p>
+          </div>
+
+          {/* Scope */}
+          <div className="space-y-3">
+            <label className="text-sm font-semibold text-[#0A1F14]">Group Scope *</label>
+            <p className="text-xs text-warm-gray -mt-1">
+              Where does this group operate? This determines who can discover and join it.
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { value: "ward",         label: "Ward",         sub: "Most local",   icon: Home      },
+                { value: "constituency", label: "Constituency", sub: "Sub-county",   icon: Building2 },
+                { value: "county",       label: "County",       sub: "Widest reach", icon: Landmark  },
+              ] as const).map(({ value, label, sub, icon: Icon }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setScope(value)}
+                  className="flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl border text-center transition-all"
+                  style={scope === value
+                    ? { background: "rgba(29,71,49,0.08)", border: "1.5px solid #1D4731", color: "#1D4731" }
+                    : { border: "1px solid rgba(0,0,0,0.10)", color: "#7A6E60" }}
+                >
+                  <Icon className="h-4 w-4" />
+                  <span className="text-[12px] font-semibold leading-tight">{label}</span>
+                  <span className="text-[10px] opacity-60">{sub}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* County selector — always shown */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-[#7A6E60]">County</label>
+              <select
+                value={countyId}
+                onChange={(e) => { setCountyId(e.target.value); setConstituencyId(""); setWardId("") }}
+                className="w-full rounded-lg px-3 py-2 text-sm border bg-white focus:outline-none focus:ring-2 focus:ring-amber/40"
+                style={{ borderColor: "rgba(0,0,0,0.10)" }}
+              >
+                <option value="">Select county…</option>
+                {counties.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+
+            {/* Constituency selector — shown for constituency + ward scope */}
+            {scope !== "county" && (
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold uppercase tracking-wide text-[#7A6E60]">Constituency</label>
+                <select
+                  value={constituencyId}
+                  onChange={(e) => { setConstituencyId(e.target.value); setWardId("") }}
+                  disabled={!countyId}
+                  className="w-full rounded-lg px-3 py-2 text-sm border bg-white focus:outline-none focus:ring-2 focus:ring-amber/40 disabled:opacity-40"
+                  style={{ borderColor: "rgba(0,0,0,0.10)" }}
+                >
+                  <option value="">{countyId ? "Select constituency…" : "Select county first"}</option>
+                  {constituencies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+            )}
+
+            {/* Ward selector — shown only for ward scope */}
+            {scope === "ward" && (
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold uppercase tracking-wide text-[#7A6E60]">Ward</label>
+                <select
+                  value={wardId}
+                  onChange={(e) => setWardId(e.target.value)}
+                  disabled={!constituencyId}
+                  className="w-full rounded-lg px-3 py-2 text-sm border bg-white focus:outline-none focus:ring-2 focus:ring-amber/40 disabled:opacity-40"
+                  style={{ borderColor: "rgba(0,0,0,0.10)" }}
+                >
+                  <option value="">{constituencyId ? "Select ward…" : "Select constituency first"}</option>
+                  {wards.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+                </select>
+              </div>
+            )}
           </div>
 
           {/* Submit */}

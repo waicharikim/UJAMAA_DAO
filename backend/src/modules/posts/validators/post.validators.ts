@@ -22,4 +22,7 @@ export const getPostsSchema = z.object({
   type: typeEnum.optional(),
   cursor: z.string().optional(),
   limit: z.coerce.number().min(1).max(30).default(20).optional(),
+  wardId: z.string().uuid().optional(),
+  constituencyId: z.string().uuid().optional(),
+  countyId: z.string().uuid().optional(),
 });

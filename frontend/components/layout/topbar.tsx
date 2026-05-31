@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { PanelLeft, Coins, Award, Zap } from "lucide-react"
+import { PanelLeft, Coins, Award, Zap, ChevronLeft } from "lucide-react"
 import dynamic from "next/dynamic"
 import { Button } from "@/components/ui/button"
 
@@ -47,7 +47,19 @@ const PAGE_TITLES: Record<string, string> = {
   "/conflicts":     "Conflicts",
   "/profile":       "Profile",
   "/admin":         "Administration",
+  "/emergency":     "Emergency",
 }
+
+// Pages that have a parent — back button appears on mobile for these
+const PARENT_ROUTES: { prefix: string; href: string; label: string }[] = [
+  { prefix: "/groups/",     href: "/groups",     label: "Community"  },
+  { prefix: "/proposals/",  href: "/proposals",  label: "Governance" },
+  { prefix: "/projects/",   href: "/projects",   label: "Projects"   },
+  { prefix: "/elections/",  href: "/elections",  label: "Elections"  },
+  { prefix: "/education/",  href: "/education",  label: "Learn"      },
+  { prefix: "/conflicts/",  href: "/conflicts",  label: "Conflicts"  },
+  { prefix: "/profile/",    href: "/profile",    label: "Profile"    },
+]
 
 function resolveTitle(pathname: string): string {
   if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname]
@@ -57,6 +69,13 @@ function resolveTitle(pathname: string): string {
   return "UjamaaDAO"
 }
 
+function resolveParent(pathname: string): { href: string; label: string } | null {
+  for (const route of PARENT_ROUTES) {
+    if (pathname.startsWith(route.prefix)) return { href: route.href, label: route.label }
+  }
+  return null
+}
+
 interface TopbarProps {
   collapsed: boolean
   onToggle: () => void
@@ -64,7 +83,8 @@ interface TopbarProps {
 
 export function Topbar({ collapsed, onToggle }: TopbarProps) {
   const pathname = usePathname()
-  const title = resolveTitle(pathname)
+  const title  = resolveTitle(pathname)
+  const parent = resolveParent(pathname)
   const { isAuthenticated, user, isLoading } = useAuth()
 
   return (
@@ -77,7 +97,7 @@ export function Topbar({ collapsed, onToggle }: TopbarProps) {
         borderBottom: "1px solid rgba(26,18,11,0.07)",
       }}
     >
-      {/* Sidebar toggle — only shown on md+ when sidebar is collapsed */}
+      {/* Sidebar toggle — desktop only, when collapsed */}
       {collapsed && (
         <Button
           variant="ghost"
@@ -90,8 +110,24 @@ export function Topbar({ collapsed, onToggle }: TopbarProps) {
         </Button>
       )}
 
-      {/* Page title */}
-      <h1 className="font-serif font-semibold text-[18px] text-chai leading-none tracking-tight flex-shrink-0">
+      {/* Mobile back button — shown on detail/sub pages */}
+      {parent && (
+        <Link
+          href={parent.href}
+          className="md:hidden flex items-center gap-1 -ml-1 px-1 py-1 rounded-lg flex-shrink-0 active:bg-[rgba(14,11,8,0.06)] transition-colors"
+          aria-label={`Back to ${parent.label}`}
+        >
+          <ChevronLeft className="h-5 w-5" style={{ color: "#1D4731" }} />
+          <span className="text-[13px] font-semibold" style={{ color: "#1D4731" }}>
+            {parent.label}
+          </span>
+        </Link>
+      )}
+
+      {/* Page title — hidden on mobile when back button is shown */}
+      <h1
+        className={`font-serif font-semibold text-[18px] text-chai leading-none tracking-tight flex-shrink-0 ${parent ? "hidden md:block" : ""}`}
+      >
         {title}
       </h1>
 

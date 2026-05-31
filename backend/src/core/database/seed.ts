@@ -1781,7 +1781,7 @@ async function seedTestAdmin() {
 
   console.log('   Creating test admin user...');
 
-  const firstWard = await prisma.ward.findFirst();
+  const firstWard = await prisma.ward.findFirst({ orderBy: { name: 'asc' } });
   if (!firstWard) {
     console.warn('   No ward found — skipping test admin');
     return;
@@ -1792,6 +1792,7 @@ async function seedTestAdmin() {
       constituencyId: firstWard.constituencyId,
       id: { not: firstWard.id },
     },
+    orderBy: { name: 'asc' },
   });
 
   const adminUser = await prisma.user.upsert({
@@ -2341,6 +2342,7 @@ async function seedTestUsers() {
   );
 
   const firstWard = await prisma.ward.findFirst({
+    orderBy: { name: 'asc' },
     include: { constituency: { include: { county: true } } },
   });
   if (!firstWard) {
@@ -2353,6 +2355,7 @@ async function seedTestUsers() {
       constituencyId: firstWard.constituencyId,
       id: { not: firstWard.id },
     },
+    orderBy: { name: 'asc' },
     include: { constituency: { include: { county: true } } },
   });
 
@@ -2363,6 +2366,7 @@ async function seedTestUsers() {
         id: { not: firstWard.constituencyId },
       },
     },
+    orderBy: { name: 'asc' },
     include: { constituency: { include: { county: true } } },
   });
 
@@ -2372,6 +2376,7 @@ async function seedTestUsers() {
         countyId: { not: firstWard.constituency.countyId },
       },
     },
+    orderBy: { name: 'asc' },
     include: { constituency: { include: { county: true } } },
   });
 

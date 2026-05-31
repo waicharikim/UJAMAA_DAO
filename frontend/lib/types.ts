@@ -20,10 +20,18 @@ export interface User {
   primaryCountyName?: string
   secondaryWardId?: string
   secondaryWardName?: string
+  secondaryConstituencyId?: string
+  secondaryConstituencyName?: string
+  secondaryCountyId?: string
+  secondaryCountyName?: string
+  // Temporary check-in
+  currentLocationId?: string
+  currentLocationWardName?: string
+  currentLocationUntil?: string   // ISO date string
   residenceCounty: string
   residenceConstituency: string
-  originCounty: string  // not in backend — always empty
-  originConstituency: string  // not in backend — always empty
+  originCounty: string
+  originConstituency: string
 
   // Professional information
   industry: string

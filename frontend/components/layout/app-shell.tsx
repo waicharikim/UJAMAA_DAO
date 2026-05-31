@@ -7,6 +7,7 @@ import { Sidebar } from "./sidebar"
 import { Topbar } from "./topbar"
 import { MobileBottomNav } from "./mobile-bottom-nav"
 import { OnboardingWizard } from "@/components/onboarding/onboarding-wizard"
+import { BottomNavProvider } from "@/contexts/bottom-nav-context"
 
 interface AppShellProps {
   children: ReactNode
@@ -24,24 +25,26 @@ export function AppShell({ children }: AppShellProps) {
   }
 
   return (
-    <div className="flex min-h-screen" style={{ background: "#F7F2E8" }}>
-      {/* Desktop sidebar */}
-      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
+    <BottomNavProvider>
+      <div className="flex min-h-screen" style={{ background: "#F7F2E8" }}>
+        {/* Desktop sidebar */}
+        <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
 
-      {/* Main content area */}
-      <div className="flex flex-1 flex-col min-w-0">
-        <Topbar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
-        {/* Page content — extra bottom padding on mobile for pill nav */}
-        <main className="flex-1 overflow-y-auto pb-28 md:pb-0">
-          {children}
-        </main>
+        {/* Main content area */}
+        <div className="flex flex-1 flex-col min-w-0">
+          <Topbar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
+          {/* Page content — extra bottom padding on mobile for pill nav */}
+          <main className="flex-1 overflow-y-auto pb-28 md:pb-0">
+            {children}
+          </main>
+        </div>
+
+        {/* Mobile floating pill nav */}
+        <MobileBottomNav />
+
+        {/* First-time walkthrough wizard — shown once to new users; sets both wizard + audit-gate keys */}
+        <OnboardingWizard />
       </div>
-
-      {/* Mobile floating pill nav */}
-      <MobileBottomNav />
-
-      {/* First-time walkthrough wizard — shown once to new users; sets both wizard + audit-gate keys */}
-      <OnboardingWizard />
-    </div>
+    </BottomNavProvider>
   )
 }

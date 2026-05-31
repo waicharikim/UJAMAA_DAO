@@ -31,23 +31,23 @@ function AlertRow({ alert }: { alert: EmergencyAlertDto }) {
   const sev = SEVERITY_CONFIG[alert.severity]
   return (
     <div
-      className="flex items-start justify-between gap-3 py-2.5 border-b last:border-0"
+      className="flex items-center gap-2.5 py-2 border-b last:border-0"
       style={{ borderColor: "rgba(26,18,11,0.06)" }}
     >
-      <div className="flex flex-col gap-1 min-w-0 flex-1">
-        <span
-          className="inline-flex items-center self-start rounded-full px-2 py-0.5 text-[10px] font-bold"
-          style={{ background: sev.bg, color: sev.color }}
-        >
-          {sev.label}
-        </span>
-        <p className="text-sm font-medium text-[#0E0B08] truncate">
+      <span
+        className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold flex-shrink-0"
+        style={{ background: sev.bg, color: sev.color }}
+      >
+        {sev.label}
+      </span>
+      <div className="flex-1 min-w-0">
+        <p className="text-[12px] font-semibold text-[#0E0B08] truncate leading-tight">
           {TYPE_LABELS[alert.emergencyType]}
         </p>
-        <p className="text-xs text-[#0E0B08]/50 line-clamp-1">{alert.description}</p>
+        <p className="text-[11px] text-[#0E0B08]/45 truncate leading-tight">{alert.description}</p>
       </div>
-      <span className="text-[10px] text-[#0E0B08]/40 flex-shrink-0 mt-1">
-        {new Date(alert.createdAt).toLocaleDateString()}
+      <span className="text-[10px] text-[#0E0B08]/35 flex-shrink-0">
+        {new Date(alert.createdAt).toLocaleDateString("en-KE", { month: "short", day: "numeric" })}
       </span>
     </div>
   )
@@ -67,11 +67,11 @@ export function EmergencyAlertsCard() {
   if (!isAuthenticated) return null
 
   return (
-    <Card className="border-0 shadow-card h-full">
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center justify-between gap-2 text-base">
-          <span className="flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4" style={{ color: "#B03A1E" }} />
+    <Card className="border-0 shadow-card">
+      <CardHeader className="pb-1 pt-4 px-4">
+        <CardTitle className="flex items-center justify-between gap-2 text-sm">
+          <span className="flex items-center gap-1.5">
+            <AlertTriangle className="h-3.5 w-3.5" style={{ color: "#B03A1E" }} />
             Ward Alerts
           </span>
           {alerts.length > 0 && (
@@ -84,19 +84,17 @@ export function EmergencyAlertsCard() {
           )}
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-4 pb-3 pt-1">
         {isLoading ? (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {[1, 2].map((i) => (
-              <Skeleton key={i} className="h-14 w-full rounded-lg" />
+              <Skeleton key={i} className="h-8 w-full rounded-lg" />
             ))}
           </div>
         ) : alerts.length === 0 ? (
-          <div className="py-6 text-center">
-            <AlertTriangle className="h-8 w-8 mx-auto mb-2" style={{ color: "rgba(14,11,8,0.12)" }} />
-            <p className="text-sm text-[#0E0B08]/50">No active alerts.</p>
-            <p className="text-xs text-[#0E0B08]/35 mt-1">Your ward is all clear.</p>
-          </div>
+          <p className="text-[12px] py-2" style={{ color: "rgba(14,11,8,0.40)" }}>
+            No active alerts — your ward is clear.
+          </p>
         ) : (
           <div>
             {alerts.map((a) => (

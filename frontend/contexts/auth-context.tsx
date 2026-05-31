@@ -113,11 +113,17 @@ function mapBackendUser(raw: any): User {
     primaryCountyName: raw.geographic?.primaryCounty?.name ?? undefined,
     secondaryWardId: raw.geographic?.secondaryWard?.id ?? undefined,
     secondaryWardName: raw.geographic?.secondaryWard?.name ?? undefined,
+    secondaryConstituencyId: raw.geographic?.secondaryWard?.constituencyId ?? undefined,
+    secondaryConstituencyName: raw.geographic?.secondaryWard?.constituencyName ?? undefined,
+    secondaryCountyId: raw.geographic?.secondaryWard?.countyId ?? undefined,
+    secondaryCountyName: raw.geographic?.secondaryWard?.countyName ?? undefined,
+    currentLocationId: raw.geographic?.currentLocation?.wardId ?? undefined,
+    currentLocationWardName: raw.geographic?.currentLocation?.wardName ?? undefined,
+    currentLocationUntil: raw.geographic?.currentLocation?.until ?? undefined,
     residenceCounty: primaryCountyName,
     residenceConstituency: primaryConstituencyName,
-    // originCounty / originConstituency are not in backend — omit or empty
-    originCounty: "",
-    originConstituency: "",
+    originCounty: raw.geographic?.secondaryWard?.countyName ?? "",
+    originConstituency: raw.geographic?.secondaryWard?.constituencyName ?? "",
 
     // Industries — primary industry name from getMe, empty on auth shape
     industry: primaryIndustry,

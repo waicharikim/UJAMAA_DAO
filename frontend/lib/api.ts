@@ -2309,11 +2309,21 @@ export interface PostPageDto {
 }
 
 export const postsApi = {
-  getPosts: (params?: { scope?: PostScope; type?: PostType; cursor?: string }): Promise<PostPageDto> => {
+  getPosts: (params?: {
+    scope?: PostScope
+    type?: PostType
+    cursor?: string
+    wardId?: string
+    constituencyId?: string
+    countyId?: string
+  }): Promise<PostPageDto> => {
     const qs = new URLSearchParams()
-    if (params?.scope) qs.set("scope", params.scope)
-    if (params?.type) qs.set("type", params.type)
-    if (params?.cursor) qs.set("cursor", params.cursor)
+    if (params?.scope)          qs.set("scope", params.scope)
+    if (params?.type)           qs.set("type", params.type)
+    if (params?.cursor)         qs.set("cursor", params.cursor)
+    if (params?.wardId)         qs.set("wardId", params.wardId)
+    if (params?.constituencyId) qs.set("constituencyId", params.constituencyId)
+    if (params?.countyId)       qs.set("countyId", params.countyId)
     const q = qs.toString()
     return apiFetch<PostPageDto>(`/posts${q ? `?${q}` : ""}`)
   },

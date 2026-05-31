@@ -1,6 +1,5 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { communityApi } from "@/lib/api"
 
@@ -15,31 +14,11 @@ export function WardDeclarationScreen({
   wardName,
   onContinue,
 }: WardDeclarationScreenProps) {
-  const [secondsLeft, setSecondsLeft] = useState(15)
-  const [canSkip, setCanSkip] = useState(false)
-
   const { data, isLoading } = useQuery({
     queryKey: ["ward-declaration", groupId],
     queryFn: () => communityApi.getDeclaration(groupId),
     staleTime: Infinity,
   })
-
-  // Countdown timer — enable skip after 5s, auto-advance at 0
-  useEffect(() => {
-    if (!data) return
-    const interval = setInterval(() => {
-      setSecondsLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval)
-          onContinue()
-          return 0
-        }
-        if (prev === 11) setCanSkip(true)
-        return prev - 1
-      })
-    }, 1000)
-    return () => clearInterval(interval)
-  }, [data, onContinue])
 
   if (isLoading) {
     return (
@@ -104,20 +83,14 @@ export function WardDeclarationScreen({
           </p>
 
           {/* Footer actions */}
-          <div className="mt-12 flex items-center justify-between">
-            <span className="text-[#F7F2E8]/30 text-xs">
-              {secondsLeft > 0
-                ? `Continuing in ${secondsLeft}s…`
-                : "Redirecting…"}
-            </span>
-            {canSkip && (
-              <button
-                onClick={onContinue}
-                className="text-sm font-medium px-5 py-2 rounded-xl border border-[#C9922A]/40 text-[#C9922A] hover:bg-[#C9922A]/10 transition-colors"
-              >
-                Continue →
-              </button>
-            )}
+          <div className="mt-12 flex justify-end">
+            <button
+              onClick={onContinue}
+              className="text-sm font-semibold px-6 py-2.5 rounded-xl transition-colors"
+              style={{ background: "#C9922A", color: "#0E0B08" }}
+            >
+              Enter your group →
+            </button>
           </div>
         </div>
       </div>

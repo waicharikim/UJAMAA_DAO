@@ -40,18 +40,25 @@ export class PostController {
 
   static async getPosts(req: AuthRequest, res: Response) {
     const userId = req.user!.userId;
-    const { scope, type, cursor, limit } = req.query as {
-      scope?: PostScope;
-      type?: PostType;
-      cursor?: string;
-      limit?: string;
-    };
+    const { scope, type, cursor, limit, wardId, constituencyId, countyId } =
+      req.query as {
+        scope?: PostScope;
+        type?: PostType;
+        cursor?: string;
+        limit?: string;
+        wardId?: string;
+        constituencyId?: string;
+        countyId?: string;
+      };
     const result = await postService.getPosts({
       userId,
       scope,
       type,
       cursor,
       limit: limit ? Number(limit) : undefined,
+      wardId,
+      constituencyId,
+      countyId,
     });
     sendSuccess(res, result, 'Posts fetched');
   }

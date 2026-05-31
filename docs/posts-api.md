@@ -32,7 +32,7 @@ All endpoints require a valid session token.
 | `COUNTY` | Members of the same county + NATIONAL posts |
 | `NATIONAL` | All users on the platform |
 
-Geo-cascade means a user requesting `WARD` posts sees: their ward's WARD posts + matching CONSTITUENCY posts + matching COUNTY posts + all NATIONAL posts. Requesting `NATIONAL` returns all posts regardless of location.
+Geo-cascade means a user requesting `WARD` posts sees: their ward's WARD posts + matching CONSTITUENCY posts + matching COUNTY posts + all NATIONAL posts. Requesting `NATIONAL` returns **only** posts explicitly scoped to NATIONAL — national content cascades *down* into local feeds, but local content never appears in the national feed. (Before session 87, NATIONAL returned every post in the database — a firehose bug; see CLAUDE.md §7.)
 
 ---
 
@@ -51,6 +51,11 @@ Fetch paginated posts for the authenticated user's geographic context. Applies t
 | `type` | `NOTICE` \| `ANNOUNCEMENT` \| `RESOURCE` | — | Filter by post type (optional) |
 | `cursor` | ISO datetime string | — | Cursor for pagination (createdAt of last item) |
 | `limit` | integer 1–30 | 20 | Items per page |
+| `wardId` | UUID | — | Override: filter to a specific ward instead of the caller's wards (used by the group-wall feed) |
+| `constituencyId` | UUID | — | Override: filter to a specific constituency |
+| `countyId` | UUID | — | Override: filter to a specific county |
+
+> All three location overrides must be declared in `getPostsSchema` (the Zod validator) — `validateRequest` strips any undeclared query param before it reaches the controller. When an override is supplied, the geo-cascade uses it instead of the caller's own ward/constituency/county IDs. This lets a group-wall show exactly that group's geographic feed rather than the viewer's home feed.
 
 **Response `200`:**
 ```json
@@ -125,12 +130,13 @@ Create a new post.
 
 | Requested scope | What the filter includes |
 |---|---|
-| `NATIONAL` (or user has no ward) | All posts — no location filter |
-| `COUNTY` | `NATIONAL` posts + posts from the user's county |
-| `CONSTITUENCY` | `NATIONAL` + `COUNTY` (user's county) + `CONSTITUENCY` (user's constituency) |
-| `WARD` (default) | `NATIONAL` + `COUNTY` + `CONSTITUENCY` + `WARD` (user's ward) |
+| `NATIONAL` | Only `NATIONAL`-scoped posts |
+| no scope + user has no ward | All posts — legacy no-filter path |
+| `COUNTY` | `NATIONAL` posts + posts from the (overridden or user's) county |
+| `CONSTITUENCY` | `NATIONAL` + `COUNTY` + `CONSTITUENCY` |
+| `WARD` (default) | `NATIONAL` + `COUNTY` + `CONSTITUENCY` + `WARD` |
 
-A user is associated with all wards they have a `GroupMember` record in — the filter uses `wardIds`, `constituencyIds`, and `countyIds` arrays derived from their memberships.
+By default a user is associated with all wards they have a `GroupMember` record in — the filter uses `wardIds`, `constituencyIds`, and `countyIds` arrays derived from their memberships (primary + secondary ward). When a `wardId`/`constituencyId`/`countyId` override query param is supplied, that single ID replaces the derived array for its tier.
 
 ---
 
