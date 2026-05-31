@@ -87,6 +87,10 @@ prod-make-admin:
 		 FROM users u, roles r \
 		 WHERE u.email = '$(EMAIL)' AND r.name = 'system:super_admin' \
 		 ON CONFLICT DO NOTHING; \
+		 INSERT INTO audit_logs (id, \"userId\", action, \"entityType\", \"entityId\", metadata) \
+		 SELECT gen_random_uuid(), u.id, 'ROLE_ASSIGNED', 'User', u.id, \
+		   '{\"role\":\"system:super_admin\",\"grantedBy\":\"ops:prod-make-admin\",\"method\":\"manual-sql\"}'::jsonb \
+		 FROM users u WHERE u.email = '$(EMAIL)'; \
 		 SELECT u.email, r.name FROM users u \
 		 JOIN user_roles ur ON ur.\"userId\" = u.id \
 		 JOIN roles r ON r.id = ur.\"roleId\" \
