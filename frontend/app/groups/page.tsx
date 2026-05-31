@@ -6,13 +6,32 @@ import Link from "next/link"
 import Image from "next/image"
 import { PageHeader } from "@/components/layout/page-header"
 import { StatsGrid } from "@/components/layout/stats-grid"
-import { communityApi, leaderboardApi, userApi, GroupDiscoveryDto, GroupMembershipDto, LeaderboardEntryDto } from "@/lib/api"
-import { Plus, Users, Crown, Shield, Network, Search, Globe, ChevronRight, Trophy, Star, Zap, BarChart3, Medal, MapPin, Home, Building2, Landmark, ShieldCheck, Loader2 } from "lucide-react"
+import { communityApi, leaderboardApi, userApi, governanceApi, GroupDiscoveryDto, GroupMembershipDto, LeaderboardEntryDto, ProposalDto } from "@/lib/api"
+import { Plus, Users, Crown, Shield, Network, Search, Globe, ChevronRight, Trophy, Star, Zap, BarChart3, Medal, MapPin, Home, Building2, Landmark, ShieldCheck, Loader2, Vote, Award } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAuth } from "@/contexts/auth-context"
+
+// ─── Ward tab constants ─────────────────────────────────────────────────────
+
+const LEVEL_COLOR: Record<string, string> = {
+  FULL_VERIFIED:      "#1A6B3C",
+  COMMUNITY_VERIFIED: "#7A4F1E",
+  PHONE_VERIFIED:     "#1E3D2F",
+  EMAIL_VERIFIED:     "#555",
+}
+
+const STATUS_BADGE: Record<string, { label: string; color: string }> = {
+  VOTING_OPEN:    { label: "Voting",    color: "#1A6B3C" },
+  PENDING_REVIEW: { label: "Review",    color: "#7A4F1E" },
+  DRAFT:          { label: "Draft",     color: "#999"    },
+  PASSED:         { label: "Passed",    color: "#1E3D2F" },
+  FAILED:         { label: "Failed",    color: "#B03A1E" },
+  CANCELLED:      { label: "Cancelled", color: "#999"    },
+}
 
 // ─── My Groups tab ──────────────────────────────────────────────────────────
 
@@ -500,6 +519,242 @@ function LeaderboardContent() {
   )
 }
 
+// ─── Ward tab ──────────────────────────────────────────────────────────────
+
+function WardTab() {
+  const { user } = useAuth()
+  const wardId   = user?.primaryWardId
+  const wardName = user?.primaryWardName ?? "My Ward"
+
+  const { data: members, isLoading: membersLoading } = useQuery({
+    queryKey: ["ward-members", wardId],
+    queryFn:  () => userApi.getWardMembers(wardId!),
+    enabled:  !!wardId,
+    staleTime: 120_000,
+  })
+  const { data: leaderboard, isLoading: lbLoading } = useQuery({
+    queryKey: ["ward-leaderboard", wardId],
+    queryFn:  () => leaderboardApi.getLeaderboard({ scope: "ward", scopeId: wardId!, limit: 10 }),
+    enabled:  !!wardId,
+    staleTime: 120_000,
+  })
+  const { data: proposals, isLoading: propLoading } = useQuery({
+    queryKey: ["ward-proposals"],
+    queryFn:  () => governanceApi.getProposals({ limit: 8 }),
+    enabled:  !!wardId,
+    staleTime: 60_000,
+  })
+
+  if (!wardId) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-[#6B5E4E]">
+        <MapPin className="h-10 w-10 mb-3 opacity-40" />
+        <p className="text-sm font-medium">No ward set</p>
+        <p className="text-xs mt-1 opacity-70">Add your home ward in your profile to see local stats.</p>
+        <Link href="/profile" className="mt-3 text-sm font-semibold flex items-center gap-1" style={{ color: "#1A6B3C" }}>
+          Go to Profile <ChevronRight className="h-3.5 w-3.5" />
+        </Link>
+      </div>
+    )
+  }
+
+  const verificationCounts = (members ?? []).reduce<Record<string, number>>((acc, m) => {
+    acc[m.verificationLevel] = (acc[m.verificationLevel] ?? 0) + 1
+    return acc
+  }, {})
+
+  return (
+    <div className="space-y-5">
+      {/* Hero */}
+      <div className="relative h-32 rounded-2xl overflow-hidden">
+        <img
+          src="https://images.unsplash.com/photo-1494389945381-0c69f0f3e5a1?w=800&q=80"
+          alt={wardName}
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+        <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, rgba(29,71,49,0.82) 0%, rgba(29,71,49,0.50) 100%)" }} />
+        <div className="absolute inset-0 flex items-end p-5">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <MapPin className="h-4 w-4 text-white/70" />
+              <span className="text-white/70 text-xs font-medium uppercase tracking-wide">My Ward</span>
+            </div>
+            <h2 className="text-xl font-serif font-bold text-white">{wardName}</h2>
+          </div>
+        </div>
+      </div>
+
+      {/* Stat chips */}
+      <div className="grid grid-cols-3 gap-2">
+        {membersLoading ? (
+          [1,2,3].map((i) => <Skeleton key={i} className="h-16 rounded-xl" />)
+        ) : (
+          <>
+            <div className="rounded-xl p-3 text-center" style={{ background: "rgba(30,61,47,0.07)" }}>
+              <p className="text-2xl font-bold" style={{ color: "#1E3D2F" }}>{(members?.length ?? 0).toLocaleString()}</p>
+              <p className="text-[10px] font-medium mt-0.5" style={{ color: "rgba(14,11,8,0.45)" }}>Members</p>
+            </div>
+            <div className="rounded-xl p-3 text-center" style={{ background: "rgba(201,146,42,0.08)" }}>
+              <p className="text-2xl font-bold" style={{ color: "#C9922A" }}>
+                {(verificationCounts["COMMUNITY_VERIFIED"] ?? 0) + (verificationCounts["FULL_VERIFIED"] ?? 0)}
+              </p>
+              <p className="text-[10px] font-medium mt-0.5" style={{ color: "rgba(14,11,8,0.45)" }}>Verified</p>
+            </div>
+            <div className="rounded-xl p-3 text-center" style={{ background: "rgba(26,107,60,0.06)" }}>
+              <p className="text-2xl font-bold" style={{ color: "#1A6B3C" }}>
+                {leaderboard?.entries?.length
+                  ? leaderboard.entries.reduce((s, e) => s + e.globalImpactPoints, 0).toLocaleString()
+                  : "—"}
+              </p>
+              <p className="text-[10px] font-medium mt-0.5" style={{ color: "rgba(14,11,8,0.45)" }}>Total IP</p>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Sub-tabs */}
+      <Tabs defaultValue="members">
+        <TabsList className="w-full grid grid-cols-3 h-10 rounded-xl" style={{ background: "rgba(14,11,8,0.05)" }}>
+          <TabsTrigger value="members" className="rounded-lg text-xs font-semibold flex items-center gap-1.5">
+            <Users className="h-3.5 w-3.5" /> Members
+          </TabsTrigger>
+          <TabsTrigger value="leaderboard" className="rounded-lg text-xs font-semibold flex items-center gap-1.5">
+            <Trophy className="h-3.5 w-3.5" /> Leaderboard
+          </TabsTrigger>
+          <TabsTrigger value="proposals" className="rounded-lg text-xs font-semibold flex items-center gap-1.5">
+            <Vote className="h-3.5 w-3.5" /> Proposals
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="members" className="mt-4">
+          <Card className="border-0 shadow-card">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center justify-between text-base">
+                <span className="flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4" style={{ color: "#1E3D2F" }} />
+                  Ward Members
+                </span>
+                {!membersLoading && (
+                  <span className="text-xs font-normal" style={{ color: "rgba(14,11,8,0.4)" }}>{members?.length ?? 0} total</span>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {membersLoading ? (
+                <div className="space-y-3">{[1,2,3,4].map((i) => <Skeleton key={i} className="h-10 rounded-lg" />)}</div>
+              ) : !members?.length ? (
+                <p className="text-sm text-center py-6" style={{ color: "rgba(14,11,8,0.35)" }}>No members found.</p>
+              ) : (
+                <>
+                  <div className="flex flex-wrap gap-2 mb-3 pb-3 border-b" style={{ borderColor: "rgba(26,18,11,0.06)" }}>
+                    {Object.entries(verificationCounts).map(([level, count]) => (
+                      <span key={level} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold"
+                        style={{ background: `${LEVEL_COLOR[level] ?? "#555"}18`, color: LEVEL_COLOR[level] ?? "#555" }}>
+                        {count} {level.replace(/_/g, " ")}
+                      </span>
+                    ))}
+                  </div>
+                  {members.map((m, i) => (
+                    <div key={m.id} className="flex items-center gap-3 py-2.5 border-b last:border-0" style={{ borderColor: "rgba(26,18,11,0.06)" }}>
+                      <span className="w-5 text-xs font-bold text-center" style={{ color: "rgba(14,11,8,0.3)" }}>{i + 1}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-[#0E0B08] truncate">{m.name}</p>
+                        <p className="text-[10px]" style={{ color: LEVEL_COLOR[m.verificationLevel] ?? "#555" }}>
+                          {m.verificationLevel.replace(/_/g, " ")}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="leaderboard" className="mt-4">
+          <Card className="border-0 shadow-card">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Trophy className="h-4 w-4" style={{ color: "#C9922A" }} />
+                IP Leaderboard
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {lbLoading ? (
+                <div className="space-y-3">{[1,2,3,4,5].map((i) => <Skeleton key={i} className="h-10 rounded-lg" />)}</div>
+              ) : !leaderboard?.entries?.length ? (
+                <p className="text-sm text-center py-6" style={{ color: "rgba(14,11,8,0.35)" }}>No activity recorded yet.</p>
+              ) : (
+                leaderboard.entries.map((e) => (
+                  <div key={e.userId} className="flex items-center gap-3 py-2.5 border-b last:border-0" style={{ borderColor: "rgba(26,18,11,0.06)" }}>
+                    <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                      style={{
+                        background: e.rank <= 3 ? "rgba(201,146,42,0.12)" : "rgba(14,11,8,0.05)",
+                        color:      e.rank <= 3 ? "#C9922A" : "rgba(14,11,8,0.4)",
+                      }}>
+                      {e.rank}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-[#0E0B08] truncate">{e.name}</p>
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <Award className="h-3.5 w-3.5" style={{ color: "#C9922A" }} />
+                      <span className="text-sm font-bold" style={{ color: "#C9922A" }}>{e.globalImpactPoints.toLocaleString()}</span>
+                      <span className="text-[10px] opacity-50" style={{ color: "#C9922A" }}>IP</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="proposals" className="mt-4">
+          <Card className="border-0 shadow-card">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center justify-between text-base">
+                <span className="flex items-center gap-2">
+                  <Vote className="h-4 w-4" style={{ color: "#1E3D2F" }} />
+                  Recent Proposals
+                </span>
+                <Link href="/proposals" className="text-xs font-semibold flex items-center gap-0.5" style={{ color: "#1A6B3C" }}>
+                  All <ChevronRight className="h-3 w-3" />
+                </Link>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {propLoading ? (
+                <div className="space-y-3">{[1,2,3].map((i) => <Skeleton key={i} className="h-12 rounded-lg" />)}</div>
+              ) : !proposals?.proposals?.length ? (
+                <p className="text-sm text-center py-6" style={{ color: "rgba(14,11,8,0.35)" }}>No proposals yet.</p>
+              ) : (
+                proposals.proposals.map((p: ProposalDto) => {
+                  const badge = STATUS_BADGE[p.status] ?? { label: p.status, color: "#999" }
+                  return (
+                    <Link key={p.id} href={`/proposals/${p.id}`}
+                      className="flex items-start gap-3 py-3 border-b last:border-0 hover:bg-black/[0.02] rounded-lg px-1 -mx-1 transition-colors"
+                      style={{ borderColor: "rgba(26,18,11,0.06)" }}>
+                      <Vote className="h-4 w-4 flex-shrink-0 mt-0.5" style={{ color: "#1E3D2F" }} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-[#0E0B08] leading-snug line-clamp-2">{p.title}</p>
+                        {p.group && <p className="text-[11px] mt-0.5" style={{ color: "rgba(14,11,8,0.4)" }}>{p.group.name}</p>}
+                      </div>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 mt-0.5"
+                        style={{ background: `${badge.color}18`, color: badge.color }}>
+                        {badge.label}
+                      </span>
+                    </Link>
+                  )
+                })
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  )
+}
+
 // ─── Page ──────────────────────────────────────────────────────────────────
 
 export default function GroupsPage() {
@@ -576,6 +831,10 @@ export default function GroupsPage() {
           <TabsTrigger value="my-groups" className="data-[state=active]:bg-[#1E3D2F] data-[state=active]:text-[#F7F2E8]">
             My Groups
           </TabsTrigger>
+          <TabsTrigger value="my-ward" className="data-[state=active]:bg-[#1E3D2F] data-[state=active]:text-[#F7F2E8]">
+            <MapPin className="h-3.5 w-3.5 mr-1.5" />
+            My Ward
+          </TabsTrigger>
           <TabsTrigger value="explore" className="data-[state=active]:bg-[#1E3D2F] data-[state=active]:text-[#F7F2E8]">
             Explore
           </TabsTrigger>
@@ -587,6 +846,10 @@ export default function GroupsPage() {
 
         <TabsContent value="my-groups" className="mt-6">
           <MyGroupsList />
+        </TabsContent>
+
+        <TabsContent value="my-ward" className="mt-6">
+          <WardTab />
         </TabsContent>
 
         <TabsContent value="explore" className="mt-6">
