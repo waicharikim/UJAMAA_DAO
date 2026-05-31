@@ -500,7 +500,12 @@ async function handleRegisterCommand(
     );
 
     logger.info(
-      { operationType: 'TELEGRAM_REGISTER', chatId, barazaGroupId: barazaGroup.id, groupId },
+      {
+        operationType: 'TELEGRAM_REGISTER',
+        chatId,
+        barazaGroupId: barazaGroup.id,
+        groupId,
+      },
       'Baraza group self-registered via /register command'
     );
   } catch (err: unknown) {

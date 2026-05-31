@@ -1,4 +1,8 @@
-export const goodsServices: Array<{ name: string; industry: string; category: string }> = [
+export const goodsServices: Array<{
+  name: string;
+  industry: string;
+  category: string;
+}> = [
   // AGRICULTURE (23 items)
   { name: 'Maize', industry: 'Agriculture', category: 'Crops' },
   { name: 'Wheat', industry: 'Agriculture', category: 'Crops' },

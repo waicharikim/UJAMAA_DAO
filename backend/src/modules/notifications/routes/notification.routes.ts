@@ -55,9 +55,12 @@ router.put(
 
 // ── Web Push ──────────────────────────────────────────────────────────────────
 
-router.get('/push/vapid-public-key', asyncHandler(async (_req, res) => {
-  sendSuccess(res, { publicKey: pushService.getPublicKey() });
-}));
+router.get(
+  '/push/vapid-public-key',
+  asyncHandler(async (_req, res) => {
+    sendSuccess(res, { publicKey: pushService.getPublicKey() });
+  })
+);
 
 router.post(
   '/push/subscribe',
@@ -66,7 +69,7 @@ router.post(
       endpoint: z.string().url(),
       keys: z.object({
         p256dh: z.string().min(1),
-        auth:   z.string().min(1),
+        auth: z.string().min(1),
       }),
     }),
     target: 'body',

@@ -168,7 +168,9 @@ export class PostService {
     // Otherwise collect unique IDs across the user's wards for the personal feed.
     const wardIds = input.wardId
       ? [input.wardId]
-      : ([user?.primaryWardId, user?.secondaryWardId].filter(Boolean) as string[]);
+      : ([user?.primaryWardId, user?.secondaryWardId].filter(
+          Boolean
+        ) as string[]);
 
     const constituencyIds = input.constituencyId
       ? [input.constituencyId]

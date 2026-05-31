@@ -84,7 +84,10 @@ export async function sendEmail(options: EmailOptions): Promise<void> {
       const { error } = await resendClient.emails.send(payload as any);
       if (error) throw new Error(error.message);
       logger.info(
-        { operationType: 'GENERAL', metadata: { to, subject: options.subject } },
+        {
+          operationType: 'GENERAL',
+          metadata: { to, subject: options.subject },
+        },
         'Email sent via Resend'
       );
     } else {
@@ -98,13 +101,23 @@ export async function sendEmail(options: EmailOptions): Promise<void> {
         attachments: options.attachments,
       });
       logger.info(
-        { operationType: 'GENERAL', metadata: { messageId: info.messageId, to, subject: options.subject } },
+        {
+          operationType: 'GENERAL',
+          metadata: { messageId: info.messageId, to, subject: options.subject },
+        },
         'Email sent via SMTP'
       );
     }
   } catch (error) {
     logger.error(
-      { operationType: 'GENERAL', metadata: { error: error instanceof Error ? error.message : String(error), to, subject: options.subject } },
+      {
+        operationType: 'GENERAL',
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          to,
+          subject: options.subject,
+        },
+      },
       'Failed to send email'
     );
     throw ApiError.systemError('Failed to send email', {
@@ -174,17 +187,28 @@ export async function sendLoginEmail(
  */
 export async function verifyEmailConfig(): Promise<boolean> {
   if (resendClient) {
-    logger.info({ operationType: 'GENERAL' }, 'Email service configured (Resend HTTP API)');
+    logger.info(
+      { operationType: 'GENERAL' },
+      'Email service configured (Resend HTTP API)'
+    );
     return true;
   }
   try {
     const transport = getTransporter();
     await transport.verify();
-    logger.info({ operationType: 'GENERAL' }, 'Email service configured (SMTP)');
+    logger.info(
+      { operationType: 'GENERAL' },
+      'Email service configured (SMTP)'
+    );
     return true;
   } catch (error) {
     logger.error(
-      { operationType: 'GENERAL', metadata: { error: error instanceof Error ? error.message : String(error) } },
+      {
+        operationType: 'GENERAL',
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      },
       'Email service configuration failed'
     );
     return false;

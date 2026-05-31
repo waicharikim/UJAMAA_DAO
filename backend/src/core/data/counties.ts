@@ -2,8 +2,15 @@
 // Source: IEBC official ward boundaries via stevehoober254/kenya-county-data
 // 47 counties | 290 constituencies | 1,450 wards
 
-interface Constituency { name: string; wards: string[] }
-interface County { name: string; code: string; constituencies: Constituency[] }
+interface Constituency {
+  name: string;
+  wards: string[];
+}
+interface County {
+  name: string;
+  code: string;
+  constituencies: Constituency[];
+}
 
 const counties: County[] = [
   {
