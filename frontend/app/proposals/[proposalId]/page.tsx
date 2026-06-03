@@ -831,11 +831,25 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
               {proposal?.outcome ? (
                 <div>
                   <p className="text-sm text-[#0A1F14]/80 leading-relaxed">{proposal.outcome}</p>
-                  {proposal.outcomeRecordedAt && (
-                    <p className="text-[11px] text-[#7A6E60] mt-1">
-                      Recorded {formatDate(proposal.outcomeRecordedAt)}
-                    </p>
-                  )}
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    {proposal.outcomeRecordedAt && (
+                      <p className="text-[11px] text-[#7A6E60]">
+                        Recorded {formatDate(proposal.outcomeRecordedAt)}
+                      </p>
+                    )}
+                    {proposal.memoryAnchorTxHash && (
+                      <a
+                        href={`https://sepolia.basescan.org/tx/${proposal.memoryAnchorTxHash}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold rounded-full px-2 py-0.5 transition-opacity hover:opacity-80"
+                        style={{ background: "rgba(29,71,49,0.08)", color: "#1D4731" }}
+                        title="This outcome is anchored on the Base blockchain"
+                      >
+                        ⛓ Anchored on-chain ↗
+                      </a>
+                    )}
+                  </div>
                 </div>
               ) : !showOutcomeForm ? (
                 <p className="text-xs text-[#7A6E60]">No outcome recorded yet.</p>

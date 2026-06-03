@@ -133,6 +133,31 @@ contract GovernanceVoting is AccessControl {
         emit OpinionAnchored(proposalId, annotationHash, msg.sender, block.timestamp);
     }
 
+    // proposalId => latest ward-memory record hash
+    mapping(bytes32 => bytes32) public memories;
+
+    event MemoryAnchored(
+        bytes32 indexed proposalId,
+        bytes32 indexed memoryHash,
+        address indexed recorder,
+        uint256 timestamp
+    );
+
+    /**
+     * @notice Anchor a proposal's ward-memory record hash on-chain.
+     * @dev No dedup guard: an outcome may legitimately be corrected/re-recorded.
+     *      The mapping holds the latest hash; the event log is the immutable history.
+     * @param proposalId UUID of the proposal (packed as bytes32).
+     * @param memoryHash keccak256 of (proposalId + rationale + alternatives + outcome + outcomeRecordedAt + recorder).
+     */
+    function recordMemory(
+        bytes32 proposalId,
+        bytes32 memoryHash
+    ) external onlyRole(RECORDER_ROLE) {
+        memories[proposalId] = memoryHash;
+        emit MemoryAnchored(proposalId, memoryHash, msg.sender, block.timestamp);
+    }
+
     /**
      * @notice Get the tally result for a proposal.
      */

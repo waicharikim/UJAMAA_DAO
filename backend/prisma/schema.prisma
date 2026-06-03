@@ -1723,10 +1723,11 @@ model Proposal {
   images            String[]       // Proposal images
 
   // WARD MEMORY LAYER — reasoning, alternatives, outcomes
-  rationale         String?        @db.Text  // Why this option, not others
-  alternatives      String?        @db.Text  // What else was considered
-  outcome           String?        @db.Text  // What actually happened after execution
-  outcomeRecordedAt DateTime?                // When outcome was written
+  rationale          String?       @db.Text  // Why this option, not others
+  alternatives       String?       @db.Text  // What else was considered
+  outcome            String?       @db.Text  // What actually happened after execution
+  outcomeRecordedAt  DateTime?               // When outcome was written
+  memoryAnchorTxHash String?       @db.VarChar(66) // on-chain tx hash when outcome anchored
 
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt

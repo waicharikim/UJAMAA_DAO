@@ -21,6 +21,53 @@ import { NotificationType } from '../../notifications/types.js';
 import { auditService } from '../../audit/services/audit.service.js';
 import { AuditAction } from '../../audit/types.js';
 import { treasuryService } from '../../treasury/services/treasury.service.js';
+import { getGovernanceContract } from '../../../core/blockchain/client.js';
+import { ethers } from 'ethers';
+
+/**
+ * Anchor a proposal's ward-memory record hash on-chain.
+ *
+ * Mirrors anchorAnnotationOnChain() but does NOT require the recorder's wallet —
+ * ward memory is the ward's institutional record, not a personal opinion; the
+ * signer is the platform RECORDER_ROLE minter wallet. The recorder's userId is
+ * folded into the hash for provenance instead.
+ *
+ * Returns the tx hash, or null if the chain is not configured / the call fails
+ * (the off-chain record is always intact regardless).
+ */
+async function anchorMemoryOnChain(
+  proposalId: string,
+  userId: string,
+  memory: {
+    rationale: string | null;
+    alternatives: string | null;
+    outcome: string;
+    outcomeRecordedAt: Date;
+  }
+): Promise<string | null> {
+  if (process.env.NODE_ENV === 'test') return null;
+
+  const govContract = getGovernanceContract();
+  if (!govContract) return null;
+
+  try {
+    const proposalBytes32 = ethers.keccak256(ethers.toUtf8Bytes(proposalId));
+    const memoryHash = ethers.keccak256(
+      ethers.toUtf8Bytes(
+        `${proposalId}:${memory.rationale ?? ''}:${memory.alternatives ?? ''}:${memory.outcome}:${memory.outcomeRecordedAt.toISOString()}:${userId}`
+      )
+    );
+    const tx = await govContract.recordMemory(proposalBytes32, memoryHash);
+    logger.info({ proposalId }, '[GOV] Ward memory anchored on-chain');
+    return tx.hash as string;
+  } catch (err) {
+    logger.warn(
+      { proposalId, err },
+      '[GOV] On-chain memory anchor failed — off-chain record intact'
+    );
+    return null;
+  }
+}
 
 export type ProposalWithGroup = Prisma.ProposalGetPayload<{
   include: { group: true };
@@ -786,7 +833,13 @@ class ProposalLifecycleService {
   async recordOutcome(userId: string, proposalId: string, outcome: string) {
     const proposal = await prisma.proposal.findUnique({
       where: { id: proposalId },
-      select: { creatorId: true, status: true, groupId: true },
+      select: {
+        creatorId: true,
+        status: true,
+        groupId: true,
+        rationale: true,
+        alternatives: true,
+      },
     });
     if (!proposal) throw ApiError.notFound('Proposal');
 
@@ -798,11 +851,41 @@ class ProposalLifecycleService {
 
     await this.assertCreatorOrLeaderAuth(userId, proposal, 'record outcomes');
 
-    return prisma.proposal.update({
+    const outcomeRecordedAt = new Date();
+    const updated = await prisma.proposal.update({
       where: { id: proposalId },
-      data: { outcome, outcomeRecordedAt: new Date() },
-      select: { id: true, outcome: true, outcomeRecordedAt: true },
+      data: { outcome, outcomeRecordedAt },
+      select: {
+        id: true,
+        outcome: true,
+        outcomeRecordedAt: true,
+        memoryAnchorTxHash: true,
+      },
     });
+
+    // Anchor the complete ward-memory record on-chain. No-op until the chain is
+    // configured; the off-chain record above is authoritative regardless.
+    const anchorTxHash = await anchorMemoryOnChain(proposalId, userId, {
+      rationale: proposal.rationale,
+      alternatives: proposal.alternatives,
+      outcome,
+      outcomeRecordedAt,
+    });
+    if (anchorTxHash) {
+      const patched = await prisma.proposal.update({
+        where: { id: proposalId },
+        data: { memoryAnchorTxHash: anchorTxHash },
+        select: {
+          id: true,
+          outcome: true,
+          outcomeRecordedAt: true,
+          memoryAnchorTxHash: true,
+        },
+      });
+      return patched;
+    }
+
+    return updated;
   }
 
   private async assertCreatorOrLeaderAuth(

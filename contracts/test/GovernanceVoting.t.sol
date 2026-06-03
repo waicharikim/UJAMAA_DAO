@@ -161,4 +161,51 @@ contract GovernanceVotingTest is Test {
         emit GovernanceVoting.ProposalResultRecorded(PROPOSAL_A, 1, block.timestamp);
         voting.recordResult(PROPOSAL_A, 1);
     }
+
+    // ── recordMemory tests ───────────────────────────────────────────────────
+
+    function test_RecordMemory() public {
+        bytes32 memoryHash = keccak256("ward-memory-record-1");
+        vm.prank(recorder);
+        vm.expectEmit(true, true, true, true);
+        emit GovernanceVoting.MemoryAnchored(PROPOSAL_A, memoryHash, recorder, block.timestamp);
+        voting.recordMemory(PROPOSAL_A, memoryHash);
+
+        assertEq(voting.memories(PROPOSAL_A), memoryHash);
+    }
+
+    function test_RecordMemoryOverwrites() public {
+        bytes32 firstHash  = keccak256("ward-memory-record-1");
+        bytes32 secondHash = keccak256("ward-memory-record-corrected");
+
+        vm.prank(recorder);
+        voting.recordMemory(PROPOSAL_A, firstHash);
+        assertEq(voting.memories(PROPOSAL_A), firstHash);
+
+        // Re-recording (outcome corrected) overwrites the mapping and emits again.
+        vm.prank(recorder);
+        vm.expectEmit(true, true, true, true);
+        emit GovernanceVoting.MemoryAnchored(PROPOSAL_A, secondHash, recorder, block.timestamp);
+        voting.recordMemory(PROPOSAL_A, secondHash);
+        assertEq(voting.memories(PROPOSAL_A), secondHash);
+    }
+
+    function test_RecordMemoryIsolatedByProposal() public {
+        bytes32 hashA = keccak256("memory-a");
+        bytes32 hashB = keccak256("memory-b");
+
+        vm.prank(recorder);
+        voting.recordMemory(PROPOSAL_A, hashA);
+        vm.prank(recorder);
+        voting.recordMemory(PROPOSAL_B, hashB);
+
+        assertEq(voting.memories(PROPOSAL_A), hashA);
+        assertEq(voting.memories(PROPOSAL_B), hashB);
+    }
+
+    function test_RecordMemoryUnauthorized() public {
+        vm.prank(voter1);
+        vm.expectRevert();
+        voting.recordMemory(PROPOSAL_A, keccak256("nope"));
+    }
 }

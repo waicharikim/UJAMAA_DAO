@@ -1088,6 +1088,7 @@ export interface ProposalDto {
   alternatives?: string | null
   outcome?: string | null
   outcomeRecordedAt?: string | null
+  memoryAnchorTxHash?: string | null
   // Inline annotations
   annotations?: ProposalAnnotationDto[]
 }
