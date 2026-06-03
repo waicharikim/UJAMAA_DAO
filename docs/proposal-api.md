@@ -252,10 +252,12 @@ Record the real-world outcome of a passed proposal. Used for community accountab
 | `outcome` | string (min 10, max 2000) | Yes |
 
 **Responses:**
-- `200 OK` — updated `{ id, outcome, outcomeRecordedAt }`.
+- `200 OK` — updated `{ id, outcome, outcomeRecordedAt, memoryAnchorTxHash }`.
 - `400 Bad Request` — proposal has not reached `APPROVED`, `EXECUTING`, or `COMPLETED` status.
 - `403 Forbidden` — caller is neither the creator nor the group leader.
 - `404 Not Found` — proposal not found.
+
+**On-chain anchoring (ADR-052):** when an outcome is recorded, the complete ward-memory record (`rationale + alternatives + outcome + outcomeRecordedAt + recorderUserId`) is keccak256-hashed and anchored on-chain via `GovernanceVoting.recordMemory()`. The full text stays in PostgreSQL; only the hash goes on-chain. Unlike annotation anchoring, **no recorder wallet is required** — ward memory is the ward's institutional record, signed by the platform `RECORDER_ROLE` wallet. The tx hash is returned in `memoryAnchorTxHash` (and rendered as a Basescan link on the proposal detail outcome card). Anchoring is fail-open and **dormant until the Base Sepolia deploy** sets `GOVERNANCE_VOTING_ADDRESS` — until then `memoryAnchorTxHash` is `null` and the off-chain record is authoritative. Re-recording an outcome overwrites the on-chain mapping and emits a fresh `MemoryAnchored` event (no dedup — the event log is the revision history).
 
 ---
 
