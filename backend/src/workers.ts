@@ -79,8 +79,10 @@ import {
 import {
   TALLY_PROPOSALS_JOB,
   EXPIRE_PROPOSAL_REVIEW_JOB,
+  GENERATE_DELIBERATION_SUMMARY_JOB,
   processTallyProposals,
   processExpireProposalReview,
+  processGenerateDeliberationSummary,
 } from './modules/governance/jobs/proposal.jobs.js';
 
 import {
@@ -338,6 +340,9 @@ const governanceWorker = createWorker('governance', async (job) => {
           timezone: 'Africa/Nairobi',
         }
       );
+    } else if (job.name === GENERATE_DELIBERATION_SUMMARY_JOB) {
+      // On-demand (enqueued when voting opens) — not scheduled, so no Sentry monitor.
+      await processGenerateDeliberationSummary(job.data.proposalId);
     } else {
       logger.warn(
         { jobName: job.name, queue: 'governance' },

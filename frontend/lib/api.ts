@@ -1089,6 +1089,13 @@ export interface ProposalDto {
   outcome?: string | null
   outcomeRecordedAt?: string | null
   memoryAnchorTxHash?: string | null
+  deliberationSummary?: {
+    support: string[]
+    concerns: string[]
+    openQuestions: string[]
+    note?: string
+  } | null
+  deliberationSummaryAt?: string | null
   // Inline annotations
   annotations?: ProposalAnnotationDto[]
 }

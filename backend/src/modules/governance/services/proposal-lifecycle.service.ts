@@ -23,6 +23,8 @@ import { AuditAction } from '../../audit/types.js';
 import { treasuryService } from '../../treasury/services/treasury.service.js';
 import { getGovernanceContract } from '../../../core/blockchain/client.js';
 import { ethers } from 'ethers';
+import { governanceQueue } from '../../../core/queue/index.js';
+import { GENERATE_DELIBERATION_SUMMARY_JOB } from '../jobs/proposal.jobs.js';
 
 /**
  * Anchor a proposal's ward-memory record hash on-chain.
@@ -43,6 +45,7 @@ async function anchorMemoryOnChain(
     alternatives: string | null;
     outcome: string;
     outcomeRecordedAt: Date;
+    deliberationSummary: unknown;
   }
 ): Promise<string | null> {
   if (process.env.NODE_ENV === 'test') return null;
@@ -54,7 +57,7 @@ async function anchorMemoryOnChain(
     const proposalBytes32 = ethers.keccak256(ethers.toUtf8Bytes(proposalId));
     const memoryHash = ethers.keccak256(
       ethers.toUtf8Bytes(
-        `${proposalId}:${memory.rationale ?? ''}:${memory.alternatives ?? ''}:${memory.outcome}:${memory.outcomeRecordedAt.toISOString()}:${userId}`
+        `${proposalId}:${memory.rationale ?? ''}:${memory.alternatives ?? ''}:${memory.outcome}:${JSON.stringify(memory.deliberationSummary ?? null)}:${memory.outcomeRecordedAt.toISOString()}:${userId}`
       )
     );
     const tx = await govContract.recordMemory(proposalBytes32, memoryHash);
@@ -558,6 +561,14 @@ class ProposalLifecycleService {
       { newStatus: ProposalStatus.VOTING, title: proposal.title }
     );
 
+    // Distil the (now-frozen) community annotations into a neutral deliberation
+    // digest, asynchronously. No-op when CLAUDE_API_KEY is unset.
+    await governanceQueue.add(
+      GENERATE_DELIBERATION_SUMMARY_JOB,
+      { proposalId },
+      { jobId: `delib-${proposalId}` }
+    );
+
     await this.notifyGroupVotingStarted(proposalId, proposal, days);
 
     return { startsAt, endsAt };
@@ -839,6 +850,7 @@ class ProposalLifecycleService {
         groupId: true,
         rationale: true,
         alternatives: true,
+        deliberationSummary: true,
       },
     });
     if (!proposal) throw ApiError.notFound('Proposal');
@@ -870,6 +882,7 @@ class ProposalLifecycleService {
       alternatives: proposal.alternatives,
       outcome,
       outcomeRecordedAt,
+      deliberationSummary: proposal.deliberationSummary,
     });
     if (anchorTxHash) {
       const patched = await prisma.proposal.update({

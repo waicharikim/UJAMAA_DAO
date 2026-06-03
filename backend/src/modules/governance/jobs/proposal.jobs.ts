@@ -11,6 +11,7 @@
 import { prisma } from '../../../core/database/client.js';
 import { logger } from '../../../core/logger/logger.js';
 import { proposalService } from '../services/proposal.service.js';
+import { deliberationService } from '../services/deliberation.service.js';
 import { notificationService } from '../../notifications/services/notification.service.js';
 import { NotificationType } from '../../notifications/types.js';
 import { auditService } from '../../audit/services/audit.service.js';
@@ -18,6 +19,22 @@ import { AuditAction } from '../../audit/types.js';
 
 export const TALLY_PROPOSALS_JOB = 'tally-proposals';
 export const EXPIRE_PROPOSAL_REVIEW_JOB = 'expire-proposal-review';
+export const GENERATE_DELIBERATION_SUMMARY_JOB =
+  'generate-deliberation-summary';
+
+/**
+ * On-demand job enqueued when voting opens. Distils community annotations into
+ * a neutral digest. No-op when CLAUDE_API_KEY is unset.
+ */
+export async function processGenerateDeliberationSummary(
+  proposalId: string
+): Promise<void> {
+  logger.info(
+    { job: GENERATE_DELIBERATION_SUMMARY_JOB, proposalId },
+    '[Proposals] Generating deliberation summary'
+  );
+  await deliberationService.generateAndStore(proposalId);
+}
 
 export async function processTallyProposals(): Promise<void> {
   logger.info(

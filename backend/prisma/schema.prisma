@@ -1729,6 +1729,10 @@ model Proposal {
   outcomeRecordedAt  DateTime?               // When outcome was written
   memoryAnchorTxHash String?       @db.VarChar(66) // on-chain tx hash when outcome anchored
 
+  // DELIBERATION LAYER — neutral AI digest of community annotations, generated at voting-open
+  deliberationSummary   Json?      // { support: string[], concerns: string[], openQuestions: string[], note?: string }
+  deliberationSummaryAt DateTime?
+
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 

@@ -10,6 +10,8 @@ import { useAuth } from "@/contexts/auth-context"
 import { governanceApi, communityApi, projectApi, onboardingApi, type ProposalAnnotationDto } from "@/lib/api"
 import { AnnotatableText } from "@/components/governance/annotatable-text"
 import { AnnotationSidebar } from "@/components/governance/annotation-sidebar"
+import { DeliberationHighlights } from "@/components/governance/deliberation-highlights"
+import { DeliberationSummary } from "@/components/governance/deliberation-summary"
 import {
   ArrowLeft,
   Loader2,
@@ -880,6 +882,17 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
           )}
         </CardContent>
       </Card>
+
+      {/* ── Most-reacted opinions (Part A — deterministic) ─ */}
+      <DeliberationHighlights annotations={annotations} />
+
+      {/* ── AI deliberation digest (Part B — shown at voting) ─ */}
+      {proposal && (
+        <DeliberationSummary
+          summary={proposal.deliberationSummary}
+          status={proposal.status}
+        />
+      )}
 
       {/* ── Community Opinions ───────────────────────────── */}
       {annotations.length > 0 && proposal && (
