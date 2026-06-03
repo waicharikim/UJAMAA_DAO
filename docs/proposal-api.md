@@ -268,6 +268,12 @@ Record the real-world outcome of a passed proposal. Used for community accountab
 
 Community members can highlight any passage in a proposal's `description`, `rationale`, or `alternatives` and attach a comment. Each annotator is assigned a consistent colour (7-colour deterministic palette ordered by first annotation per user per proposal). A keccak256 hash of every annotation is anchored on-chain via `GovernanceVoting.recordOpinion()` — providing a tamper-evident timestamp without storing full text on-chain. Annotations and reactions feed into the Baraza AI `search_past_decisions` tool.
 
+### Deliberation layer (ADR-053)
+
+Two surfaces connect these opinions to the vote:
+- **Most-reacted opinions (deterministic):** annotations ranked by net score (`upvotes − downvotes`), surfaced next to the rationale. Works with no AI configured.
+- **Deliberation digest (AI):** when voting opens (APPROVED_FOR_VOTING → VOTING), a BullMQ job (`generate-deliberation-summary`) calls Claude with a strict **neutral-clerk** prompt and stores `Proposal.deliberationSummary` = `{ support: string[], concerns: string[], openQuestions: string[] }` (or `{ note }` on parse fallback) + `deliberationSummaryAt`. It rides in the `GET /governance/:proposalId` response — no separate endpoint. The digest **never recommends how to vote** (the binding step is the human vote); it only summarises what annotators wrote. Dormant (`null`) until `CLAUDE_API_KEY` is set. The summary is folded into the on-chain ward-memory hash when an outcome is recorded (see ADR-052/ADR-053).
+
 ### `POST /governance/:proposalId/annotations`
 Create an annotation on a highlighted passage. Returns **201**.
 **Auth:** required · **Verification:** `COMMUNITY_VERIFIED`
