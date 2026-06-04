@@ -13,3 +13,6 @@ traefik/acme.json
 # Internal AI workflow files — not for public consumption
 ai_workflows/
 CLAUDE.md
+
+# Private growth/marketing/launch strategy — local only, never push
+growth/
