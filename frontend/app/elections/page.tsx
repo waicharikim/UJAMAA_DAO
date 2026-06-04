@@ -10,6 +10,8 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/contexts/auth-context"
+import { useSectionTour } from "@/hooks/use-section-tour"
+import { electionsTour } from "@/lib/tours"
 
 const STATUS_TABS: { label: string; value: ElectionStatus | "ALL" }[] = [
   { label: "All",             value: "ALL" },
@@ -152,6 +154,7 @@ function SkeletonCard() {
 
 export default function ElectionsPage() {
   const { isAuthenticated } = useAuth()
+  useSectionTour(electionsTour.key, electionsTour.steps)
   const [tab, setTab] = useState<ElectionStatus | "ALL">("ALL")
 
   const { data, isLoading } = useQuery({
@@ -227,7 +230,7 @@ export default function ElectionsPage() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1.5 flex-wrap">
+      <div className="flex gap-1.5 flex-wrap" data-tour="elections-tabs">
         {STATUS_TABS.map((t) => (
           <button
             key={t.value}
@@ -255,7 +258,7 @@ export default function ElectionsPage() {
           <p className="text-sm">No elections in this category</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-3" data-tour="elections-list">
           {data.elections.map((e) => <ElectionCard key={e.id} election={e} />)}
         </div>
       )}

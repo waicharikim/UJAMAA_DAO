@@ -12,6 +12,8 @@ import { AnnotatableText } from "@/components/governance/annotatable-text"
 import { AnnotationSidebar } from "@/components/governance/annotation-sidebar"
 import { DeliberationHighlights } from "@/components/governance/deliberation-highlights"
 import { DeliberationSummary } from "@/components/governance/deliberation-summary"
+import { useSectionTour } from "@/hooks/use-section-tour"
+import { proposalDetailTour } from "@/lib/tours"
 import {
   ArrowLeft,
   Loader2,
@@ -92,6 +94,7 @@ function pendingAdminLabel(group: { wardId?: string | null; constituencyId?: str
 export default function ProposalDetailPage({ params }: { params: Promise<{ proposalId: string }> }) {
   const { proposalId } = use(params)
   const { isAuthenticated, user } = useAuth()
+  useSectionTour(proposalDetailTour.key, proposalDetailTour.steps)
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const [rejectNote, setRejectNote] = useState("")
@@ -311,7 +314,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
       </Link>
 
       {/* Header card */}
-      <Card className="border-0 shadow-sm">
+      <Card className="border-0 shadow-sm" data-tour="proposal-body">
         <CardContent className="p-4 md:p-6 space-y-4">
           <div className="flex flex-wrap gap-2">
             <Badge className={`text-xs font-semibold ${statusMeta.className}`}>{statusMeta.label}</Badge>
@@ -591,7 +594,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
       )}
 
       {/* Vote tally */}
-      <Card className="border-0 shadow-sm">
+      <Card className="border-0 shadow-sm" data-tour="proposal-vote">
         <CardContent className="p-4 md:p-6 space-y-4">
           <div className="flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-amber" />
@@ -884,15 +887,19 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
       </Card>
 
       {/* ── Most-reacted opinions (Part A — deterministic) ─ */}
-      <DeliberationHighlights annotations={annotations} />
+      {/* data-tour attached only when there's actual deliberation, so the tour
+          step auto-skips on quiet proposals (the hook drops absent anchors). */}
+      <div {...(annotations.length > 0 ? { "data-tour": "proposal-deliberation" } : {})}>
+        <DeliberationHighlights annotations={annotations} />
 
-      {/* ── AI deliberation digest (Part B — shown at voting) ─ */}
-      {proposal && (
-        <DeliberationSummary
-          summary={proposal.deliberationSummary}
-          status={proposal.status}
-        />
-      )}
+        {/* ── AI deliberation digest (Part B — shown at voting) ─ */}
+        {proposal && (
+          <DeliberationSummary
+            summary={proposal.deliberationSummary}
+            status={proposal.status}
+          />
+        )}
+      </div>
 
       {/* ── Community Opinions ───────────────────────────── */}
       {annotations.length > 0 && proposal && (

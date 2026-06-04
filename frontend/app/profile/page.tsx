@@ -13,6 +13,8 @@ import { VerificationCard } from "@/components/profile/verification-card"
 import { DuesPaymentCard } from "@/components/payments/dues-payment-card"
 import { UtWithdrawalCard } from "@/components/payments/ut-withdrawal-card"
 import { GettingStartedCard } from "@/components/onboarding/getting-started-card"
+import { useSectionTour } from "@/hooks/use-section-tour"
+import { profileTour } from "@/lib/tours"
 import { PasskeyManager } from "@/components/auth/passkey-manager"
 import { ResidenceChangeCard } from "@/components/user/residence-change-card"
 import { SessionManager } from "@/components/auth/session-manager"
@@ -108,6 +110,7 @@ function HistoryRow({ log }: { log: ImpactPointLogDto }) {
 
 export default function ProfilePage() {
   const { user, isLoading } = useAuth()
+  useSectionTour(profileTour.key, profileTour.steps)
 
   const { data: reputation, isLoading: repLoading } = useQuery({
     queryKey: ["reputation-me"],
@@ -199,8 +202,10 @@ export default function ProfilePage() {
 
         {/* ── Overview: onboarding + verification ─────────── */}
         <TabsContent value="overview" className="mt-4 space-y-4">
-          <GettingStartedCard />
-          <div id="verification">
+          <div data-tour="getting-started">
+            <GettingStartedCard />
+          </div>
+          <div id="verification" data-tour="verification">
             <VerificationCard />
           </div>
         </TabsContent>

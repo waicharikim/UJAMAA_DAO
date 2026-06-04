@@ -9,6 +9,9 @@ import { useQuery } from "@tanstack/react-query"
 import { projectApi, ProjectListItemDto } from "@/lib/api"
 import { FolderOpen, Target, Users, TrendingUp, ArrowRight } from "lucide-react"
 import type { Project } from "@/lib/types/projects"
+import { useSectionTour } from "@/hooks/use-section-tour"
+import { projectsTour } from "@/lib/tours"
+import { TourButton } from "@/components/onboarding/tour-button"
 
 /** Maps the lean API DTO to the richer legacy Project shape expected by ProjectDashboard. */
 function toProject(p: ProjectListItemDto): Project {
@@ -55,6 +58,7 @@ function toProject(p: ProjectListItemDto): Project {
 
 export default function ProjectsPage() {
   const { user } = useAuth()
+  const { replay: replayTour } = useSectionTour(projectsTour.key, projectsTour.steps)
 
   const { data: result, isLoading } = useQuery({
     queryKey: ["projects"],
@@ -124,20 +128,26 @@ export default function ProjectsPage() {
         title="Project Management"
         description="Projects are launched from approved governance proposals."
         actions={
-          <Link
-            href="/proposals"
-            className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold transition-all hover:scale-[1.02] active:scale-[0.98]"
-            style={{ background: "#D4911E", color: "#0A1F14" }}
-          >
-            View Proposals
-            <ArrowRight className="h-4 w-4" />
-          </Link>
+          <div className="flex items-center gap-2">
+            <TourButton onClick={replayTour} />
+            <Link
+              href="/proposals"
+              data-tour="projects-cta"
+              className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold transition-all hover:scale-[1.02] active:scale-[0.98]"
+              style={{ background: "#D4911E", color: "#0A1F14" }}
+            >
+              View Proposals
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
         }
       />
 
       <StatsGrid stats={stats} />
 
-      <ProjectDashboard projects={projects} onCreateProject={() => window.location.href = "/proposals"} onViewProject={handleViewProject} />
+      <div data-tour="projects-list">
+        <ProjectDashboard projects={projects} onCreateProject={() => window.location.href = "/proposals"} onViewProject={handleViewProject} />
+      </div>
     </div>
   )
 }

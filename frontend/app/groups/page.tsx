@@ -11,6 +11,9 @@ import {
 } from "@/lib/api"
 import { useAuth } from "@/contexts/auth-context"
 import { useContextualNav } from "@/hooks/use-contextual-nav"
+import { useSectionTour } from "@/hooks/use-section-tour"
+import { communityTour } from "@/lib/tours"
+import { TourButton } from "@/components/onboarding/tour-button"
 import { PostCard, TYPE_CONFIG } from "@/components/feed/post-card"
 import { GroupTreasuryCard } from "@/components/groups/group-treasury-card"
 import {
@@ -911,6 +914,7 @@ export default function CommunityPage() {
   const [checkinOpen, setCheckinOpen] = useState(false)
   const [commMoreOpen, setCommMoreOpen] = useState(false)
   const queryClient = useQueryClient()
+  const { replay: replayTour } = useSectionTour(communityTour.key, communityTour.steps)
 
   // Resolve current hierarchy from context
   const homeHierarchy: HierarchyInfo = {
@@ -1040,13 +1044,17 @@ export default function CommunityPage() {
           onCheckin={() => setCheckinOpen(true)}
           onClearVisit={() => clearVisitMutation.mutate()}
         />
-        <Link
-          href="/groups/create"
-          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[12px] font-bold"
-          style={{ background: "#D4911E", color: "#0A1F14" }}
-        >
-          <Plus className="h-3.5 w-3.5" /> New Group
-        </Link>
+        <div className="flex items-center gap-2">
+          <TourButton onClick={replayTour} />
+          <Link
+            href="/groups/create"
+            data-tour="community-create-group"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[12px] font-bold"
+            style={{ background: "#D4911E", color: "#0A1F14" }}
+          >
+            <Plus className="h-3.5 w-3.5" /> New Group
+          </Link>
+        </div>
       </div>
 
       {/* Mobile context label — shows which hierarchy is active */}
@@ -1063,6 +1071,7 @@ export default function CommunityPage() {
         <span className="text-xs font-medium" style={{ color: "rgba(14,11,8,0.50)" }}>
           {levelName(effectiveLevel, h)}
         </span>
+        <span className="ml-auto"><TourButton onClick={replayTour} /></span>
       </div>
 
       {/* Hierarchy breadcrumb — desktop / hidden on mobile visiting (always ward) */}
@@ -1073,10 +1082,14 @@ export default function CommunityPage() {
       )}
 
       {/* Level hero */}
-      <LevelHero level={effectiveLevel} h={h} myGroups={myGroups} />
+      <div data-tour="community-hero">
+        <LevelHero level={effectiveLevel} h={h} myGroups={myGroups} />
+      </div>
 
       {/* Level content tabs */}
-      <LevelContent level={effectiveLevel} h={h} groupId={systemGroupId} />
+      <div data-tour="community-tabs">
+        <LevelContent level={effectiveLevel} h={h} groupId={systemGroupId} />
+      </div>
 
       {/* Divider */}
       <div className="pt-2">

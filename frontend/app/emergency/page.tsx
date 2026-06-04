@@ -21,6 +21,9 @@ import {
 } from "@/lib/api"
 import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/hooks/use-toast"
+import { useSectionTour } from "@/hooks/use-section-tour"
+import { emergencyTour } from "@/lib/tours"
+import { TourButton } from "@/components/onboarding/tour-button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -357,6 +360,7 @@ type TabKey = "active" | "all" | "mine"
 
 export default function EmergencyPage() {
   const { user } = useAuth()
+  const { replay: replayTour } = useSectionTour(emergencyTour.key, emergencyTour.steps)
   const [tab,          setTab]          = useState<TabKey>("active")
   const [typeFilter,   setTypeFilter]   = useState<string>("")
   const [reportOpen,   setReportOpen]   = useState(false)
@@ -409,14 +413,18 @@ export default function EmergencyPage() {
             Report and track emergencies in your ward community.
           </p>
         </div>
-        <button
-          onClick={() => setReportOpen(true)}
-          className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-all hover:opacity-90 flex-shrink-0"
-          style={{ background: "#B03A1E", color: "#fff" }}
-        >
-          <Plus className="h-4 w-4" />
-          Report
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <TourButton onClick={replayTour} />
+          <button
+            onClick={() => setReportOpen(true)}
+            data-tour="emergency-report"
+            className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-all hover:opacity-90"
+            style={{ background: "#B03A1E", color: "#fff" }}
+          >
+            <Plus className="h-4 w-4" />
+            Report
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -483,7 +491,7 @@ export default function EmergencyPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-3" data-tour="emergency-list">
           {displayed.map((alert) => (
             <AlertCard key={alert.id} alert={alert} currentUserId={user?.id} />
           ))}

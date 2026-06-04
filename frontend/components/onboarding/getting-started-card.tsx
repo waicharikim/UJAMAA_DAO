@@ -87,12 +87,16 @@ export function GettingStartedCard() {
   const completedKeys = new Set(
     (data.completions ?? []).filter((c) => c.completed).map((c) => c.tutorial?.key)
   )
-  const tutorials = (data.tutorials ?? []).map((t) => ({
-    ...t,
-    completed: completedKeys.has(t.key),
-    link: TUTORIAL_LINK[t.key] ?? "/dashboard",
-    opensWizard: WIZARD_KEYS.has(t.key),
-  }))
+  const tutorials = (data.tutorials ?? [])
+    // Contextual section tours (category TOUR, keys end in _tour) are ambient — they
+    // run in-place on first visit and don't belong in the first-steps checklist.
+    .filter((t) => !t.key.endsWith("_tour"))
+    .map((t) => ({
+      ...t,
+      completed: completedKeys.has(t.key),
+      link: TUTORIAL_LINK[t.key] ?? "/dashboard",
+      opensWizard: WIZARD_KEYS.has(t.key),
+    }))
 
   const incomplete = tutorials.filter((t) => !t.completed)
 

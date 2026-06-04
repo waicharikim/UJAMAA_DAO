@@ -29,6 +29,8 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { educationApi, onboardingApi, type EducationModuleDto, type EducationModuleDetailDto } from "@/lib/api"
 import { useAuth } from "@/contexts/auth-context"
+import { useSectionTour } from "@/hooks/use-section-tour"
+import { educationTour } from "@/lib/tours"
 
 // ─── Difficulty badge ──────────────────────────────────────
 const DIFFICULTY_STYLES: Record<string, { bg: string; text: string }> = {
@@ -600,6 +602,7 @@ export default function EducationPage() {
   const [difficulty, setDifficulty] = useState<string | undefined>()
   const [category, setCategory] = useState<string | undefined>()
   const [activeModule, setActiveModule] = useState<string | null>(null)
+  useSectionTour(educationTour.key, educationTour.steps)
 
   const { isAuthenticated, user } = useAuth()
   const verified = isAuthenticated && isVerified(user?.verificationLevel)
@@ -683,7 +686,7 @@ export default function EducationPage() {
       <MyModulesSection />
 
       {/* Difficulty filter */}
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-2 flex-wrap" data-tour="education-filters">
         <button
           onClick={() => setDifficulty(undefined)}
           className="rounded-full px-4 py-1.5 text-xs font-semibold transition-all"
@@ -741,6 +744,7 @@ export default function EducationPage() {
       </div>
 
       {/* Module grid */}
+      <div data-tour="education-modules">
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {[1, 2, 3, 4].map((i) => (
@@ -767,6 +771,7 @@ export default function EducationPage() {
           </div>
         </>
       )}
+      </div>
 
       {/* Detail drawer */}
       {activeModule && (

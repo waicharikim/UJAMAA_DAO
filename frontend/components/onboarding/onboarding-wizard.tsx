@@ -178,12 +178,31 @@ export function OnboardingWizard({ forceOpen, onClose }: OnboardingWizardProps) 
     },
   })
 
+  // Backend is the source of truth for whether the welcome was seen — survives
+  // container rebuilds (new user UUID), new devices, and cleared caches, where
+  // localStorage alone would wrongly replay the wizard.
+  const { data: progress, isLoading: progressLoading } = useQuery({
+    queryKey: ["onboarding-progress"],
+    queryFn: onboardingApi.getProgress,
+    enabled: isAuthenticated && forceOpen === undefined,
+    staleTime: 60_000,
+  })
+
+  const introCompletedOnServer = !!progress?.completions?.some(
+    (c) => c.tutorial.key === "platform_intro" && c.completed,
+  )
+
   useEffect(() => {
     if (forceOpen !== undefined) return
     if (!isAuthenticated || !user?.id) return
-    const seen = localStorage.getItem(`${STORAGE_KEY}_${user.id}`)
-    if (!seen) setVisible(true)
-  }, [isAuthenticated, user?.id, forceOpen])
+    if (progressLoading) return
+    // localStorage is an optimistic fast-path; the server record is authoritative.
+    const seenLocally = !!localStorage.getItem(`${STORAGE_KEY}_${user.id}`)
+    if (!introCompletedOnServer && !seenLocally) setVisible(true)
+    // If the server says it's done, keep localStorage in sync to avoid a flash next time.
+    if (introCompletedOnServer && !seenLocally) markSeen()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, user?.id, forceOpen, progressLoading, introCompletedOnServer])
 
   useEffect(() => {
     if (forceOpen === undefined) return

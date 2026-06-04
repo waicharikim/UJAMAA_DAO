@@ -20,6 +20,9 @@ import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { communityApi, treasuryApi, type WalletTransactionDto } from "@/lib/api"
 import { useAuth } from "@/contexts/auth-context"
+import { useSectionTour } from "@/hooks/use-section-tour"
+import { treasuryTour } from "@/lib/tours"
+import { TourButton } from "@/components/onboarding/tour-button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -236,6 +239,7 @@ function TxHistoryCard({
 
 export default function TreasuryPage() {
   const { user } = useAuth()
+  const { replay: replayTour } = useSectionTour(treasuryTour.key, treasuryTour.steps)
   const [page, setPage] = useState(1)
   const [fundOpen, setFundOpen] = useState(false)
 
@@ -281,8 +285,10 @@ export default function TreasuryPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <TourButton onClick={replayTour} />
           <button
             onClick={() => setFundOpen(true)}
+            data-tour="treasury-fund"
             className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition-all hover:opacity-80"
             style={{ background: "#1E3D2F", color: "#fff" }}
           >
@@ -320,7 +326,9 @@ export default function TreasuryPage() {
 
       {!isLoading && treasury && (
         <>
-          <TreasuryBalanceCards treasury={treasury} />
+          <div data-tour="treasury-overview">
+            <TreasuryBalanceCards treasury={treasury} />
+          </div>
 
           {txData && txData.pagination.total > 0 && (
             <div

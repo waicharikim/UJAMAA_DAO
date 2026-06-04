@@ -13,6 +13,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { marketplaceApi, type MarketplaceListingDto } from "@/lib/api"
 import { useAuth } from "@/contexts/auth-context"
+import { useSectionTour } from "@/hooks/use-section-tour"
+import { marketplaceTour } from "@/lib/tours"
+import { TourButton } from "@/components/onboarding/tour-button"
 
 // ─── Type filter ──────────────────────────────────────────
 type TypeFilter = "ALL" | "OFFER" | "REQUEST"
@@ -215,6 +218,7 @@ function CreateListingModal({ onClose }: { onClose: () => void }) {
 // ─── Main page ────────────────────────────────────────────
 export default function MarketplacePage() {
   const { isAuthenticated, user } = useAuth()
+  const { replay: replayTour } = useSectionTour(marketplaceTour.key, marketplaceTour.steps)
   const isCommunityVerified =
     user?.verificationLevel === "COMMUNITY_VERIFIED" ||
     user?.verificationLevel === "FULL_VERIFIED"
@@ -281,17 +285,21 @@ export default function MarketplacePage() {
             <h1 className="text-2xl font-serif font-bold text-white">Marketplace</h1>
             <p className="text-white/70 text-sm mt-0.5">Goods &amp; services by ward members</p>
           </div>
-          {isAuthenticated && isCommunityVerified && (
-            <Button
-              size="sm"
-              className="flex-shrink-0 font-semibold gap-1.5 self-end"
-              style={{ background: "rgba(255,255,255,0.15)", color: "#fff", border: "1px solid rgba(255,255,255,0.3)" }}
-              onClick={() => setShowCreate(true)}
-            >
-              <Plus className="h-4 w-4" />
-              List
-            </Button>
-          )}
+          <div className="flex items-center gap-2 self-end flex-shrink-0">
+            <TourButton onClick={replayTour} />
+            {isAuthenticated && isCommunityVerified && (
+              <Button
+                size="sm"
+                data-tour="marketplace-create"
+                className="font-semibold gap-1.5"
+                style={{ background: "rgba(255,255,255,0.15)", color: "#fff", border: "1px solid rgba(255,255,255,0.3)" }}
+                onClick={() => setShowCreate(true)}
+              >
+                <Plus className="h-4 w-4" />
+                List
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -363,7 +371,7 @@ export default function MarketplacePage() {
           </form>
 
           {/* Type chips + ward toggle */}
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap" data-tour="marketplace-filters">
             {(Object.keys(TYPE_LABELS) as TypeFilter[]).map((t) => (
               <button
                 key={t}

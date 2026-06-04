@@ -16,6 +16,8 @@ import { BarazaGroupsCard } from "@/components/integration/baraza-groups-card"
 import { SystemGroupsCard } from "@/components/community/system-groups-card"
 import { EmergencyAlertsCard } from "@/components/emergency/emergency-alerts-card"
 import { GettingStartedCard } from "@/components/onboarding/getting-started-card"
+import { useSectionTour } from "@/hooks/use-section-tour"
+import { dashboardTour } from "@/lib/tours"
 
 // ─── Stat card skeleton ───────────────────────────────────
 function StatSkeleton() {
@@ -470,6 +472,7 @@ function RolePanels({ isAdmin, isCompliance, isCoordinator }: { isAdmin: boolean
 // ─── Main dashboard ───────────────────────────────────────
 export function DashboardContent() {
   const { user, isAuthenticated } = useAuth()
+  useSectionTour(dashboardTour.key, dashboardTour.steps)
 
   const { data: prData, isLoading: prLoading } = useQuery({
     queryKey: ["pr-balance"],

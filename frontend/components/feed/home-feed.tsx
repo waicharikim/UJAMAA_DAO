@@ -558,17 +558,23 @@ export function HomeFeed({ embedded = false }: { embedded?: boolean }) {
       {!embedded && <StatsStrip />}
 
       {/* Filter pills — community options drive both filter and compose */}
-      <FilterPills
-        options={communityOptions}
-        active={activeCommunity}
-        onChange={setActiveCommunity}
-      />
+      <div data-tour="feed-filters">
+        <FilterPills
+          options={communityOptions}
+          active={activeCommunity}
+          onChange={setActiveCommunity}
+        />
+      </div>
 
       {/* Compose — scope locked to active filter */}
-      <ComposeBox activeCommunity={activeCommunity} queryKey={queryKey} />
+      <div data-tour="feed-compose">
+        <ComposeBox activeCommunity={activeCommunity} queryKey={queryKey} />
+      </div>
 
       {/* Quick action shortcuts — always visible */}
-      <QuickActions />
+      <div data-tour="quick-actions">
+        <QuickActions />
+      </div>
 
       {/* Feed */}
       <div

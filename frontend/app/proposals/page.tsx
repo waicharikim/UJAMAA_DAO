@@ -8,9 +8,13 @@ import { VotingProvider } from "@/contexts/voting-context"
 import { governanceApi } from "@/lib/api"
 import { useAuth } from "@/contexts/auth-context"
 import { Plus, Vote, TrendingUp, AlertCircle } from "lucide-react"
+import { useSectionTour } from "@/hooks/use-section-tour"
+import { governanceTour } from "@/lib/tours"
+import { TourButton } from "@/components/onboarding/tour-button"
 
 export default function ProposalsPage() {
   const { isAuthenticated, user } = useAuth()
+  const { replay: replayTour } = useSectionTour(governanceTour.key, governanceTour.steps)
   const canCreateProposal =
     user?.verificationLevel === "COMMUNITY_VERIFIED" ||
     user?.verificationLevel === "FULL_VERIFIED"
@@ -75,22 +79,28 @@ export default function ProposalsPage() {
           title="Governance Proposals"
           description="Participate in community governance by voting on proposals and creating new initiatives."
           actions={
-            canCreateProposal && (
-              <button
-                onClick={handleCreateProposal}
-                className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold transition-all hover:scale-[1.02] active:scale-[0.98]"
-                style={{ background: "#D4911E", color: "#0A1F14" }}
-              >
-                <Plus className="h-4 w-4" />
-                Create Proposal
-              </button>
-            )
+            <div className="flex items-center gap-2">
+              <TourButton onClick={replayTour} />
+              {canCreateProposal && (
+                <button
+                  onClick={handleCreateProposal}
+                  data-tour="create-proposal"
+                  className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold transition-all hover:scale-[1.02] active:scale-[0.98]"
+                  style={{ background: "#D4911E", color: "#0A1F14" }}
+                >
+                  <Plus className="h-4 w-4" />
+                  Create Proposal
+                </button>
+              )}
+            </div>
           }
         />
 
         <StatsGrid stats={stats} />
 
-        <FetchProposals onCreateProposal={handleCreateProposal} />
+        <div data-tour="proposal-list">
+          <FetchProposals onCreateProposal={handleCreateProposal} />
+        </div>
       </div>
     </VotingProvider>
   )
