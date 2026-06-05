@@ -6,6 +6,7 @@
 
 import { prisma } from '../../../core/database/client.js';
 import { logger } from '../../../core/logger/logger.js';
+import { ApiError } from '../../../core/errors/ApiError.js';
 import { integrationQueue } from '../../../core/queue/index.js';
 import {
   BotJobName,
@@ -36,6 +37,24 @@ class BarazaBotService {
     adminUserId: string,
     dto: RegisterBarazaGroupDto
   ): Promise<BarazaGroupRecord> {
+    // One canonical Baraza per community group + platform. If an active one already
+    // exists: same external group → idempotent (return it); a different group →
+    // reject, so a ward can't end up with rival Telegram chats fragmenting the
+    // conversation. (Deactivate the existing one first to switch.)
+    const existingActive = await prisma.barazaGroup.findFirst({
+      where: {
+        groupId: dto.groupId,
+        platform: dto.platform as any,
+        isActive: true,
+      },
+    });
+    if (existingActive) {
+      if (existingActive.externalId === dto.externalId) return existingActive;
+      throw ApiError.conflict(
+        `This community already has an active ${dto.platform} Baraza ("${existingActive.name}"). Deactivate it before registering a different group.`
+      );
+    }
+
     // For Telegram groups without an explicit invite link, auto-generate one via the Bot API
     let inviteLink = dto.inviteLink ?? undefined;
     if (dto.platform === 'TELEGRAM' && !inviteLink) {
