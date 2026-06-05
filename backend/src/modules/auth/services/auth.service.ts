@@ -82,11 +82,7 @@ function hasMissingRegistrationFields(params: SendMagicLinkDto): boolean {
   const { name, phoneNumber, primaryWardId, industryIds, goodsServiceIds } =
     params;
   return (
-    !name ||
-    !phoneNumber ||
-    !primaryWardId ||
-    !industryIds ||
-    !goodsServiceIds
+    !name || !phoneNumber || !primaryWardId || !industryIds || !goodsServiceIds
   );
 }
 
