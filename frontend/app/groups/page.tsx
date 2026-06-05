@@ -16,6 +16,7 @@ import { communityTour } from "@/lib/tours"
 import { TourButton } from "@/components/onboarding/tour-button"
 import { PostCard, TYPE_CONFIG } from "@/components/feed/post-card"
 import { GroupTreasuryCard } from "@/components/groups/group-treasury-card"
+import { WardBarazaCard } from "@/components/groups/ward-baraza-card"
 import {
   Home, Building2, Landmark, Globe, MapPin, Users, Plus, Search,
   ChevronRight, Trophy, Star, Zap, BarChart3, Medal, Award,
@@ -1085,6 +1086,11 @@ export default function CommunityPage() {
       <div data-tour="community-hero">
         <LevelHero level={effectiveLevel} h={h} myGroups={myGroups} />
       </div>
+
+      {/* Ward Baraza — the home group chat. Ward level only (upper levels stay in-app). */}
+      {effectiveLevel === "ward" && (
+        <WardBarazaCard wardGroupId={systemGroupId} wardName={h.wardName} />
+      )}
 
       {/* Level content tabs */}
       <div data-tour="community-tabs">
