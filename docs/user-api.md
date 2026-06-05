@@ -124,6 +124,19 @@ Select goods/services you can provide or request.
 
 ## Residence & Location
 
+#### `POST /users/me/location`
+Set the user's ward for the **first time**. Only succeeds when the user has no
+`primaryWardId` yet — otherwise returns `409` and points to the residence-change
+flow (so it can't be used to hop wards). On success, sets primary + origin and
+enrolls the user in their ward / constituency / county system groups (same path
+as registration). `secondaryWardId` is optional and defaults to the primary.
+**Auth:** `EMAIL_VERIFIED`
+**Rate limit:** 10/hr global + 5/hr per user
+
+**Body:** `{ "primaryWardId": "<uuid>", "secondaryWardId": "<uuid>"? }`
+
+---
+
 #### `GET /users/me/residence-change-requests`
 **Auth:** `COMMUNITY_VERIFIED`
 
