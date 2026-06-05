@@ -215,7 +215,9 @@ export function RegisterForm() {
         name: form.name.trim(),
         phoneNumber: form.phoneNumber.trim().replace(/\s+/g, '').replace(/^0/, '+254'),
         primaryWardId: form.primaryWardId,
-        secondaryWardId: form.secondaryWardId || undefined,
+        // Origin defaults to the home ward when not chosen — everyone belongs to
+        // two communities; they can point at the same place.
+        secondaryWardId: form.secondaryWardId || form.primaryWardId,
         industryIds: form.industryIds,
         goodsServiceIds: form.goodsServiceIds,
         messagingPlatforms: form.messagingPlatforms.length > 0 ? form.messagingPlatforms : undefined,
@@ -349,7 +351,7 @@ export function RegisterForm() {
             so you can follow and contribute there too.
           </p>
           <p className="text-xs mb-4" style={{ color: "rgba(14,11,8,0.38)" }}>
-            Optional — skip if you live where you grew up.
+            If you live where you're from, just skip this — we'll use your home community.
           </p>
           <WardCascade
             heading="Your root community"

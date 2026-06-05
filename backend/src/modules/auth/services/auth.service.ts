@@ -77,19 +77,14 @@ function isSignInWithNoAccount(params: SendMagicLinkDto): boolean {
 }
 
 function hasMissingRegistrationFields(params: SendMagicLinkDto): boolean {
-  const {
-    name,
-    phoneNumber,
-    primaryWardId,
-    secondaryWardId,
-    industryIds,
-    goodsServiceIds,
-  } = params;
+  // secondaryWardId (origin) is intentionally NOT required — it defaults to the
+  // primary ward when the user doesn't pick a separate origin (see registerNewUser).
+  const { name, phoneNumber, primaryWardId, industryIds, goodsServiceIds } =
+    params;
   return (
     !name ||
     !phoneNumber ||
     !primaryWardId ||
-    !secondaryWardId ||
     !industryIds ||
     !goodsServiceIds
   );
@@ -116,22 +111,15 @@ class AuthService {
       );
     }
     if (hasMissingRegistrationFields(params)) {
-      const {
-        name,
-        phoneNumber,
-        primaryWardId,
-        secondaryWardId,
-        industryIds,
-        goodsServiceIds,
-      } = params;
+      const { name, phoneNumber, primaryWardId, industryIds, goodsServiceIds } =
+        params;
       throw ApiError.validationError(
-        'New users must provide: name, phoneNumber, primaryWardId, secondaryWardId, industryIds, and goodsServiceIds',
+        'New users must provide: name, phoneNumber, primaryWardId, industryIds, and goodsServiceIds',
         {
           required: [
             'name',
             'phoneNumber',
             'primaryWardId',
-            'secondaryWardId',
             'industryIds',
             'goodsServiceIds',
           ],
@@ -139,7 +127,6 @@ class AuthService {
             name: !!name,
             phoneNumber: !!phoneNumber,
             primaryWardId: !!primaryWardId,
-            secondaryWardId: !!secondaryWardId,
             industryIds: !!industryIds,
             goodsServiceIds: !!goodsServiceIds,
           },
@@ -299,7 +286,13 @@ class AuthService {
       messagingPlatforms,
     } = params;
     this.assertRegistrationComplete(params);
-    await this.validateWards(primaryWardId!, secondaryWardId!);
+
+    // Everyone belongs to two communities: residence (primary) + origin (secondary).
+    // Origin is only "optional" in that it defaults to the residence ward when the
+    // user lives where they're from — it is never null.
+    const resolvedSecondaryWardId = secondaryWardId ?? primaryWardId!;
+
+    await this.validateWards(primaryWardId!, resolvedSecondaryWardId);
     await this.validateIndustriesAndGoods(industryIds!, goodsServiceIds!);
 
     const user = await this.createUserInTransaction(
@@ -307,7 +300,7 @@ class AuthService {
       name!,
       phoneNumber!,
       primaryWardId!,
-      secondaryWardId!,
+      resolvedSecondaryWardId,
       industryIds!,
       goodsServiceIds!,
       messagingPlatforms
@@ -323,7 +316,7 @@ class AuthService {
       {
         operationType: 'AUTH',
         userId: user.id,
-        metadata: { primaryWardId, secondaryWardId },
+        metadata: { primaryWardId, secondaryWardId: resolvedSecondaryWardId },
       },
       'New user created and verification email sent'
     );
@@ -331,11 +324,11 @@ class AuthService {
       userId: user.id,
       email,
       primaryWardId,
-      secondaryWardId,
+      secondaryWardId: resolvedSecondaryWardId,
     });
     await auditService.log(user.id, AuditAction.USER_CREATED, 'user', user.id, {
       primaryWardId,
-      secondaryWardId,
+      secondaryWardId: resolvedSecondaryWardId,
       registrationMethod: 'email',
     });
 
