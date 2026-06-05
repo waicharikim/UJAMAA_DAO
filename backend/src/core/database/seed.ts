@@ -699,7 +699,8 @@ const ONBOARDING_TUTORIALS_DATA = [
   {
     key: 'dashboard_tour',
     title: 'Home feed tour',
-    description: 'A quick walkthrough of the community feed on your home screen.',
+    description:
+      'A quick walkthrough of the community feed on your home screen.',
     category: 'TOUR',
     order: 20,
     ipReward: 0,
@@ -1665,82 +1666,70 @@ async function seedIndustriesAndGoods() {
 // 3. GEOGRAPHY — Full Kenya
 // ============================================================================
 
-function buildGeographyRecords(data: typeof countiesData) {
-  const countyCreates: { id: string; code: string; name: string }[] = [];
-  const constituencyCreates: {
-    id: string;
-    name: string;
-    countyId: string;
-  }[] = [];
-  const wardCreates: {
-    id: string;
-    name: string;
-    constituencyId: string;
-    countyId: string;
-    code: null;
-  }[] = [];
-  let counties = 0,
-    constituencies = 0,
-    wards = 0;
+async function seedGeography() {
+  console.log('Seeding Kenyan geography (idempotent)...');
 
-  for (const county of data) {
+  // CRITICAL: never delete + recreate geography. Wards are referenced by
+  // users.primaryWardId / secondaryWardId (FK ON DELETE SET NULL) and by
+  // group.wardId — so deleting a ward silently NULLs every user's location.
+  // (That is exactly what wiped real users on a prior re-seed.) Instead we
+  // upsert the hierarchy by its natural key and PRESERVE existing ids, so a
+  // re-seed never breaks those foreign keys.
+  let counties = 0;
+  let constituencies = 0;
+  let wards = 0;
+
+  for (const county of countiesData) {
     if (!county.code || !county.name) {
-      console.warn(`Skipping invalid county:`, county);
+      console.warn('Skipping invalid county:', county);
       continue;
     }
 
-    const countyId = uuidv4();
-    countyCreates.push({ id: countyId, code: county.code, name: county.name });
+    const countyRow = await prisma.county.upsert({
+      where: { code: county.code },
+      update: { name: county.name },
+      create: { id: uuidv4(), code: county.code, name: county.name },
+      select: { id: true },
+    });
     counties++;
 
     for (const cons of county.constituencies ?? []) {
       if (!cons.name) continue;
 
-      const consId = uuidv4();
-      constituencyCreates.push({ id: consId, name: cons.name, countyId });
+      const consRow = await prisma.constituency.upsert({
+        where: { name_countyId: { name: cons.name, countyId: countyRow.id } },
+        update: {},
+        create: { id: uuidv4(), name: cons.name, countyId: countyRow.id },
+        select: { id: true },
+      });
       constituencies++;
 
       const uniqueWards = [...new Set(cons.wards ?? [])].filter(Boolean);
-      for (const wardName of uniqueWards) {
-        wardCreates.push({
-          id: uuidv4(),
-          name: wardName,
-          constituencyId: consId,
-          countyId,
-          code: null,
+      // Ward has no composite unique key usable by upsert, so we create only
+      // the wards that don't already exist — existing ward ids are untouched.
+      const existing = await prisma.ward.findMany({
+        where: { constituencyId: consRow.id },
+        select: { name: true },
+      });
+      const existingNames = new Set(existing.map((w) => w.name));
+      const toCreate = uniqueWards.filter((name) => !existingNames.has(name));
+      if (toCreate.length > 0) {
+        await prisma.ward.createMany({
+          data: toCreate.map((name) => ({
+            id: uuidv4(),
+            name,
+            constituencyId: consRow.id,
+            countyId: countyRow.id,
+            code: null,
+          })),
         });
-        wards++;
       }
+      wards += uniqueWards.length;
     }
   }
 
-  return {
-    countyCreates,
-    constituencyCreates,
-    wardCreates,
-    counts: { counties, constituencies, wards },
-  };
-}
-
-async function seedGeography() {
-  console.log('Seeding Kenyan geography...');
-
-  // Clear existing data
-  await prisma.$transaction([
-    prisma.ward.deleteMany(),
-    prisma.constituency.deleteMany(),
-    prisma.county.deleteMany(),
-  ]);
-
-  const { countyCreates, constituencyCreates, wardCreates, counts } =
-    buildGeographyRecords(countiesData);
-
-  await prisma.county.createMany({ data: countyCreates });
-  await prisma.constituency.createMany({ data: constituencyCreates });
-  await prisma.ward.createMany({ data: wardCreates });
-
   console.log(
-    `Created ${counts.counties} counties, ${counts.constituencies} constituencies, ${counts.wards} wards`
+    `Geography ensured: ${counties} counties, ${constituencies} constituencies, ${wards} wards`
   );
 }
 
@@ -2559,24 +2548,36 @@ async function seedTestUsers() {
 // ============================================================================
 
 async function seedEducationModules() {
-  if (process.env.NODE_ENV === 'production') {
-    console.log('   Skipping education module seed in production');
-    return;
-  }
-
+  // These are real, foundational learning modules — they belong in production too
+  // (the Learn library + the contextual tours point here). Runs whenever the seed
+  // runs; the top-level guard still requires FORCE_SEED=true in production.
   console.log('   Seeding education modules...');
 
-  const admin = await prisma.user.findUnique({
-    where: { email: 'admin@ujamaa.test' },
-  });
-  if (!admin) {
-    console.warn('   admin@ujamaa.test not found — skipping education modules');
+  // Author resolution: the dev test admin if present, otherwise the first
+  // super_admin (the founder's account in production). Modules are attributed to it.
+  const creator =
+    (await prisma.user.findUnique({
+      where: { email: 'admin@ujamaa.test' },
+    })) ??
+    (await prisma.user.findFirst({
+      where: {
+        userRoles: {
+          some: { active: true, role: { name: 'system:super_admin' } },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    }));
+  if (!creator) {
+    console.warn(
+      '   No admin/super_admin user found — skipping education modules. ' +
+        'Create a super_admin first (e.g. make prod-make-admin), then re-run the seed.'
+    );
     return;
   }
 
   for (const mod of EDUCATION_MODULES_DATA) {
     const existing = await prisma.educationalModule.findFirst({
-      where: { title: mod.title, creatorId: admin.id },
+      where: { title: mod.title, creatorId: creator.id },
       select: { id: true },
     });
 
@@ -2594,13 +2595,13 @@ async function seedEducationModules() {
       const created = await prisma.educationalModule.create({
         data: {
           id: uuidv4(),
-          creatorId: admin.id,
+          creatorId: creator.id,
           ...mod,
           mediaUrls: [],
         },
       });
       await auditService.log(
-        admin.id,
+        creator.id,
         AuditAction.MODULE_PUBLISHED,
         'EducationModule',
         created.id,
