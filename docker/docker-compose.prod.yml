@@ -80,6 +80,13 @@ services:
       - AT_SENDER_ID=${AT_SENDER_ID:-}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET}
+      # AI inference — web runs the Baraza bot (Telegram webhook). Leave
+      # CLAUDE_BASE_URL empty for direct Anthropic, or set it to an Anthropic-
+      # compatible gateway (e.g. https://inference.do-ai.run for DigitalOcean).
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
+      - CLAUDE_BASE_URL=${CLAUDE_BASE_URL:-}
+      - BARAZA_AI_MODEL=${BARAZA_AI_MODEL:-claude-haiku-4-5-20251001}
+      - DELIBERATION_AI_MODEL=${DELIBERATION_AI_MODEL:-claude-haiku-4-5-20251001}
       - BUNI_CLIENT_ID=${BUNI_CLIENT_ID}
       - BUNI_CLIENT_SECRET=${BUNI_CLIENT_SECRET}
       - BUNI_BASE_URL=${BUNI_BASE_URL}
@@ -131,8 +138,13 @@ services:
       - UT_TOKEN_ADDRESS=${UT_TOKEN_ADDRESS:-}
       - GOVERNANCE_VOTING_ADDRESS=${GOVERNANCE_VOTING_ADDRESS:-}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      # AI inference — worker runs the deliberation-digest job (and baraza jobs).
+      # Same switch as web: empty CLAUDE_BASE_URL = direct Anthropic; set it to
+      # https://inference.do-ai.run to route through DigitalOcean.
       - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
+      - CLAUDE_BASE_URL=${CLAUDE_BASE_URL:-}
       - BARAZA_AI_MODEL=${BARAZA_AI_MODEL:-claude-haiku-4-5-20251001}
+      - DELIBERATION_AI_MODEL=${DELIBERATION_AI_MODEL:-claude-haiku-4-5-20251001}
       - BUNI_CLIENT_ID=${BUNI_CLIENT_ID}
       - BUNI_CLIENT_SECRET=${BUNI_CLIENT_SECRET}
       - BUNI_BASE_URL=${BUNI_BASE_URL}

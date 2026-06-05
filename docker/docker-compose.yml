@@ -97,9 +97,13 @@ services:
       # ── Telegram (webhook handler sends reply DMs from web service) ──────
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET:-}
-      # ── Baraza AI (Claude API) ───────────────────────────────────────────
+      # ── AI inference (Claude — Baraza bot + deliberation digest) ─────────
+      # CLAUDE_BASE_URL empty = direct Anthropic; set to an Anthropic-compatible
+      # gateway (e.g. https://inference.do-ai.run for DigitalOcean) to route there.
       - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
+      - CLAUDE_BASE_URL=${CLAUDE_BASE_URL:-}
       - BARAZA_AI_MODEL=${BARAZA_AI_MODEL:-claude-haiku-4-5-20251001}
+      - DELIBERATION_AI_MODEL=${DELIBERATION_AI_MODEL:-claude-haiku-4-5-20251001}
       # ── Sentry (error monitoring) ────────────────────────────────────────
       - SENTRY_DSN=${SENTRY_DSN:-}
       # ── Web Push (VAPID) ────────────────────────────────────────────────
@@ -232,6 +236,11 @@ services:
       - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET:-}
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
       - DISCORD_PUBLIC_KEY=${DISCORD_PUBLIC_KEY:-}
+      # ── AI inference (Claude — worker runs the deliberation-digest job) ──
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
+      - CLAUDE_BASE_URL=${CLAUDE_BASE_URL:-}
+      - BARAZA_AI_MODEL=${BARAZA_AI_MODEL:-claude-haiku-4-5-20251001}
+      - DELIBERATION_AI_MODEL=${DELIBERATION_AI_MODEL:-claude-haiku-4-5-20251001}
       # ── DataDog APM ──────────────────────────────────────────────────────
       - DD_AGENT_HOST=datadog
       - DD_TRACE_AGENT_PORT=8126
