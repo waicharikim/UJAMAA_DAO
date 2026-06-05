@@ -7,6 +7,7 @@ import { Sidebar } from "./sidebar"
 import { Topbar } from "./topbar"
 import { MobileBottomNav } from "./mobile-bottom-nav"
 import { OnboardingWizard } from "@/components/onboarding/onboarding-wizard"
+import { CompleteLocationPrompt } from "@/components/location/complete-location-prompt"
 import { BottomNavProvider } from "@/contexts/bottom-nav-context"
 
 interface AppShellProps {
@@ -41,6 +42,10 @@ export function AppShell({ children }: AppShellProps) {
 
         {/* Mobile floating pill nav */}
         <MobileBottomNav />
+
+        {/* Prompts users with no ward to set one (initial location). Takes
+            priority over the wizard, which assumes a ward already exists. */}
+        <CompleteLocationPrompt />
 
         {/* First-time walkthrough wizard — shown once to new users; sets both wizard + audit-gate keys */}
         <OnboardingWizard />

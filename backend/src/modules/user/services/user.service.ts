@@ -24,6 +24,7 @@ import { eventBus } from '../../../core/utils/eventBus.js';
 import { auditService } from '../../audit/services/audit.service.js';
 import { AuditAction } from '../../audit/types.js';
 import { globalImpactPointService } from '../../reputation/service/impactPoint.service.js';
+import { groupMembershipService } from '../../community/services/groupMembership.service.js';
 import { ImpactPointReason } from '../../reputation/types.js';
 import { VerificationLevel } from '../../../core/types/Ujamaadao.types.js';
 import {
@@ -661,6 +662,92 @@ class UserService {
     });
 
     return request;
+  }
+
+  /**
+   * Set the user's location for the FIRST time (initial set only).
+   *
+   * Self-serve path for users who registered without a ward (or whose ward was
+   * never set — e.g. a historic data wipe). It is intentionally NOT a way to
+   * change an existing ward: that must go through requestResidenceChange
+   * (cooldown + admin review) so the governance unit can't be hopped freely.
+   * If a primary ward already exists we reject and point at that flow.
+   *
+   * On success the user is enrolled into their ward / constituency / county
+   * governance groups, exactly like registration (idempotent, re-runnable).
+   */
+  async setInitialLocation(
+    userId: string,
+    primaryWardId: string,
+    secondaryWardId?: string
+  ) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { primaryWardId: true },
+    });
+    if (!user) throw ApiError.notFound('User');
+
+    if (user.primaryWardId) {
+      throw ApiError.conflict(
+        'You already have a registered ward. Use a residence-change request to move.'
+      );
+    }
+
+    const primaryWard = await prisma.ward.findUnique({
+      where: { id: primaryWardId },
+      select: { id: true },
+    });
+    if (!primaryWard) throw ApiError.notFound('Ward', primaryWardId);
+
+    if (secondaryWardId && secondaryWardId !== primaryWardId) {
+      const secondaryWard = await prisma.ward.findUnique({
+        where: { id: secondaryWardId },
+        select: { id: true },
+      });
+      if (!secondaryWard) throw ApiError.notFound('Ward', secondaryWardId);
+    }
+
+    // Default origin to residence when not provided, so onboarding completes.
+    const resolvedSecondary = secondaryWardId ?? primaryWardId;
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: { primaryWardId, secondaryWardId: resolvedSecondary },
+      select: { primaryWardId: true, secondaryWardId: true },
+    });
+
+    // Enrol into ward / constituency / county groups like registration does.
+    // Non-fatal on failure: the ward is set and enrolment is idempotent/re-runnable.
+    try {
+      await groupMembershipService.enrollInSystemGroups(
+        userId,
+        primaryWardId,
+        resolvedSecondary
+      );
+    } catch (error) {
+      logger.error(
+        {
+          operationType: 'USER_RESIDENCE',
+          userId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        'Initial location set but system-group enrolment failed (re-runnable)'
+      );
+    }
+
+    await auditService.log(
+      userId,
+      AuditAction.PROFILE_UPDATED,
+      'User',
+      userId,
+      {
+        action: 'initial_location_set',
+        primaryWardId,
+        secondaryWardId: resolvedSecondary,
+      }
+    );
+
+    return updated;
   }
 
   /**

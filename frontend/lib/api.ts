@@ -567,6 +567,17 @@ export const userApi = {
     }),
 
   /**
+   * POST /users/me/location
+   * Set your ward for the FIRST time (only works when you have no ward yet).
+   * Distinct from a residence change. `secondaryWardId` (origin) is optional.
+   */
+  setLocation: (data: { primaryWardId: string; secondaryWardId?: string }) =>
+    apiFetch<{ primaryWardId: string; secondaryWardId: string | null }>(
+      "/users/me/location",
+      { method: "POST", body: JSON.stringify(data) }
+    ),
+
+  /**
    * GET /users/me/residence-change-requests
    * List pending residence change requests. Requires COMMUNITY_VERIFIED.
    */

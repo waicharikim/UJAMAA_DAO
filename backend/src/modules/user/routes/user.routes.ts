@@ -23,6 +23,7 @@ import {
   selectIndustriesSchema,
   selectGoodsServicesSchema,
   requestResidenceChangeSchema,
+  setInitialLocationSchema,
   setTemporaryLocationSchema,
   vouchRequestSchema,
   paymentVerificationSchema,
@@ -58,6 +59,7 @@ import {
 import {
   requestResidenceChange,
   getMyResidenceChangeRequests,
+  setInitialLocation,
   setTemporaryLocation,
   clearTemporaryLocation,
 } from '../handlers/residence.handlers.js';
@@ -178,6 +180,23 @@ router.get(
   '/me/residence-change-requests',
   authorize({ verificationLevel: 'COMMUNITY_VERIFIED' }),
   asyncHandler(getMyResidenceChangeRequests)
+);
+
+// Initial location set (only when the user has no ward yet). Low bar on purpose:
+// a ward is normally chosen at registration (EMAIL_VERIFIED), and this lets users
+// who registered without one complete it themselves. The service rejects the call
+// if a ward already exists, so it can't bypass the gated residence-change flow.
+router.post(
+  '/me/location',
+  buildRateLimiter({ windowMs: 60 * 60 * 1000, max: 10 }), // global IP limit
+  buildRateLimiter({
+    windowMs: 60 * 60 * 1000,
+    max: 5,
+    keyGenerator: (req: any) => req.user?.userId || req.ip,
+  }), // per-user limit
+  authorize({ verificationLevel: 'EMAIL_VERIFIED' }),
+  validateRequest({ schema: setInitialLocationSchema, target: 'body' }),
+  asyncHandler(setInitialLocation)
 );
 
 router.post(

@@ -76,6 +76,36 @@ export async function getMyResidenceChangeRequests(
 }
 
 /**
+ * POST /users/me/location
+ * Set the user's ward for the FIRST time (initial set only — not a residence
+ * change). For users who registered without a ward / whose ward is unset.
+ */
+export async function setInitialLocation(req: AuthRequest, res: Response) {
+  const userId = req.user!.userId;
+  const { primaryWardId, secondaryWardId } = req.body;
+
+  try {
+    const result = await userService.setInitialLocation(
+      userId,
+      primaryWardId,
+      secondaryWardId
+    );
+
+    sendSuccess(res, result, 'Location set successfully', 200);
+  } catch (error) {
+    logger.error(
+      {
+        operationType: 'USER_RESIDENCE',
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      'Failed to set initial location'
+    );
+    throw error;
+  }
+}
+
+/**
  * POST /users/me/temporary-location
  * Set temporary location (for travelling)
  */

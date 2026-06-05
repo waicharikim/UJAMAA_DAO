@@ -114,6 +114,19 @@ export const setTemporaryLocationSchema = z.object({
   until: z.string().datetime(), // ISO 8601 date string
 });
 
+/**
+ * Set Initial Location Schema
+ *
+ * For users who registered without a ward (or whose ward is unset) to set it
+ * for the first time. This is an INITIAL set, not a residence change — changing
+ * an existing ward must go through requestResidenceChange (cooldown + review).
+ * `secondaryWardId` (origin) is optional; it defaults to the primary on the server.
+ */
+export const setInitialLocationSchema = z.object({
+  primaryWardId: z.string().uuid(),
+  secondaryWardId: z.string().uuid().optional(),
+});
+
 // New: Community Verification
 export const vouchRequestSchema = z.object({
   targetUserId: z.string().uuid(),
