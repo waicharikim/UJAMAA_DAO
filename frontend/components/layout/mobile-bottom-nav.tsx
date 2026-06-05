@@ -24,6 +24,7 @@ import {
   Coins,
   Bell,
   Flag,
+  LogOut,
 } from "lucide-react"
 import {
   Drawer,
@@ -31,6 +32,7 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer"
+import { useAuth } from "@/contexts/auth-context"
 
 const primaryNav = [
   { label: "Home",       href: "/dashboard", icon: Home         },
@@ -84,6 +86,7 @@ export function MobileBottomNav() {
   const router = useRouter()
   const { hasAnyRole } = useRole()
   const { contextualItems } = useBottomNav()
+  const { isAuthenticated, logout } = useAuth()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [fabOpen, setFabOpen] = useState(false)
   const [hidden, setHidden] = useState(false)
@@ -393,6 +396,25 @@ export function MobileBottomNav() {
                     <ChevronRight className="h-4 w-4 flex-shrink-0" style={{ color: "rgba(247,242,232,0.20)" }} />
                   </Link>
                 </div>
+              </div>
+            )}
+
+            {/* Sign out */}
+            {isAuthenticated && (
+              <div className="pt-3" style={{ borderTop: "1px solid rgba(247,242,232,0.07)" }}>
+                <button
+                  onClick={() => { setDrawerOpen(false); logout() }}
+                  className="w-full flex items-center gap-3.5 px-2 py-3 rounded-xl transition-all duration-150 active:scale-[0.99]"
+                  style={{ background: "rgba(176,58,30,0.06)", border: "1px solid rgba(176,58,30,0.16)" }}
+                >
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{ background: "rgba(176,58,30,0.16)" }}>
+                    <LogOut className="h-[18px] w-[18px]" style={{ color: "#E05A3A" }} />
+                  </div>
+                  <span className="flex-1 text-left text-[14px] font-medium" style={{ color: "rgba(247,242,232,0.78)" }}>
+                    Sign out
+                  </span>
+                </button>
               </div>
             )}
           </div>
