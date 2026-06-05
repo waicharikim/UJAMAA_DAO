@@ -281,6 +281,47 @@ export function MobileBottomNav() {
           </DrawerHeader>
 
           <div className="px-4 pb-10 mt-1 space-y-5">
+            {/* System / Admin — first for admins, so it's not buried */}
+            {showAdmin && (
+              <div>
+                <p
+                  className="px-1 pb-2 text-[9px] font-bold tracking-[2.5px] uppercase"
+                  style={{ color: "rgba(233,165,46,0.45)" }}
+                >
+                  System
+                </p>
+                <div className="space-y-0.5">
+                  <Link
+                    href="/admin"
+                    onClick={() => setDrawerOpen(false)}
+                    className="flex items-center gap-3.5 px-2 py-3 rounded-xl transition-all duration-150"
+                    style={{
+                      background: pathname.startsWith("/admin") ? "rgba(212,145,30,0.10)" : "transparent",
+                    }}
+                  >
+                    <div
+                      className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                      style={{
+                        background: pathname.startsWith("/admin") ? "rgba(212,145,30,0.18)" : "rgba(247,242,232,0.07)",
+                      }}
+                    >
+                      <Shield
+                        className="h-[18px] w-[18px]"
+                        style={{ color: pathname.startsWith("/admin") ? "#E9A52E" : "rgba(247,242,232,0.60)" }}
+                      />
+                    </div>
+                    <span
+                      className="flex-1 text-[14px] font-medium"
+                      style={{ color: pathname.startsWith("/admin") ? "#E9A52E" : "rgba(247,242,232,0.78)" }}
+                    >
+                      Admin
+                    </span>
+                    <ChevronRight className="h-4 w-4 flex-shrink-0" style={{ color: "rgba(247,242,232,0.20)" }} />
+                  </Link>
+                </div>
+              </div>
+            )}
+
             {drawerGroups.map((group) => (
               <div key={group.label}>
                 <p
@@ -358,46 +399,6 @@ export function MobileBottomNav() {
                 <ChevronRight className="h-4 w-4 flex-shrink-0" style={{ color: "rgba(247,242,232,0.20)" }} />
               </Link>
             </div>
-
-            {showAdmin && (
-              <div>
-                <p
-                  className="px-1 pb-2 text-[9px] font-bold tracking-[2.5px] uppercase"
-                  style={{ color: "rgba(233,165,46,0.45)" }}
-                >
-                  System
-                </p>
-                <div className="space-y-0.5">
-                  <Link
-                    href="/admin"
-                    onClick={() => setDrawerOpen(false)}
-                    className="flex items-center gap-3.5 px-2 py-3 rounded-xl transition-all duration-150"
-                    style={{
-                      background: pathname.startsWith("/admin") ? "rgba(212,145,30,0.10)" : "transparent",
-                    }}
-                  >
-                    <div
-                      className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                      style={{
-                        background: pathname.startsWith("/admin") ? "rgba(212,145,30,0.18)" : "rgba(247,242,232,0.07)",
-                      }}
-                    >
-                      <Shield
-                        className="h-[18px] w-[18px]"
-                        style={{ color: pathname.startsWith("/admin") ? "#E9A52E" : "rgba(247,242,232,0.60)" }}
-                      />
-                    </div>
-                    <span
-                      className="flex-1 text-[14px] font-medium"
-                      style={{ color: pathname.startsWith("/admin") ? "#E9A52E" : "rgba(247,242,232,0.78)" }}
-                    >
-                      Admin
-                    </span>
-                    <ChevronRight className="h-4 w-4 flex-shrink-0" style={{ color: "rgba(247,242,232,0.20)" }} />
-                  </Link>
-                </div>
-              </div>
-            )}
 
             {/* Sign out */}
             {isAuthenticated && (
