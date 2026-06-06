@@ -25,13 +25,24 @@ class AuditService {
     entityId?: string,
     metadata?: Record<string, any>
   ) {
+    // AuditLog.userId is a nullable UUID FK. System-initiated actions pass a
+    // non-UUID sentinel (e.g. 'system' from the election cron) — coerce those to
+    // a null actor (= system) and keep the original label in metadata, so the
+    // insert can't throw a UUID-cast error and abort the calling operation.
+    const isUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        userId
+      );
+    const actorId = isUuid ? userId : null;
+    const meta = isUuid ? metadata : { ...(metadata ?? {}), actor: userId };
+
     await prisma.auditLog.create({
       data: {
-        userId,
+        userId: actorId,
         action,
         entityType,
         entityId,
-        metadata: metadata ? JSON.parse(JSON.stringify(metadata)) : undefined,
+        metadata: meta ? JSON.parse(JSON.stringify(meta)) : undefined,
       },
     });
 
