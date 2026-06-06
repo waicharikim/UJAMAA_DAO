@@ -34,6 +34,14 @@ import { ParticipationRightsReason } from '../../modules/economy/types.js';
 import { groupService } from '../../modules/community/services/group.service.js';
 import { proposalAnnotationService } from '../../modules/governance/services/proposal-annotation.service.js';
 import { VoteOption } from '../../modules/governance/types.js';
+import { treasuryService } from '../../modules/treasury/services/treasury.service.js';
+import { commitmentService } from '../../modules/economy/services/commitment.service.js';
+import { CommitmentType } from '../../modules/economy/types.js';
+import { marketplaceService } from '../../modules/marketplace/services/marketplace.service.js';
+import { ListingType } from '../../modules/marketplace/types.js';
+import { educationService } from '../../modules/education/services/education.service.js';
+import { emergencyService } from '../../modules/emergency/services/emergency.service.js';
+import { EmergencyType } from '../../modules/emergency/types.js';
 
 // ── Guard ───────────────────────────────────────────────────────────────────
 if (process.env.NODE_ENV === 'production') {
@@ -603,6 +611,204 @@ async function annotate(
   }
 }
 
+// ── Phase 4: economy (treasury funding + dues) ───────────────────────────────
+
+async function phase4Economy(groups: { id: string; name: string }[]) {
+  console.log('\n━━ Phase 4: economy (treasury + dues) ━━');
+  const members = await communityMembers();
+
+  // Fund each voluntary-group treasury via simulated M-Pesa contributions.
+  for (const g of groups) {
+    const t = await prisma.groupTreasury
+      .findUnique({ where: { groupId: g.id }, select: { balance: true } })
+      .catch(() => null);
+    if (t && Number(t.balance) > 0) {
+      console.log(`   • ${g.name} treasury already funded`);
+      continue;
+    }
+    let total = 0;
+    for (let i = 0; i < Math.min(12, members.length); i++) {
+      const amt = 200 + (i % 4) * 150;
+      const ok = await treasuryService
+        .deposit(
+          g.id,
+          {
+            amount: amt,
+            description: 'M-Pesa contribution',
+            referenceType: 'MPESA',
+          },
+          members[i].id
+        )
+        .then(() => true)
+        .catch(() => false);
+      if (ok) total += amt;
+    }
+    console.log(`   ✓ ${g.name}: funded ~KES ${total}`);
+  }
+
+  // ~half the members opt into monthly dues at varied tiers.
+  let dues = 0;
+  for (let i = 0; i < members.length; i += 2) {
+    const m = members[i];
+    const has = await prisma.commitment
+      .findFirst({ where: { userId: m.id } })
+      .catch(() => null);
+    if (has) continue;
+    const amt = [200, 500, 1000][i % 3];
+    const ok = await commitmentService
+      .createCommitment(
+        m.id,
+        CommitmentType.DUES,
+        amt,
+        undefined,
+        'MONTHLY',
+        12,
+        groups[0]?.id
+      )
+      .then(() => true)
+      .catch(() => false);
+    if (ok) dues++;
+  }
+  console.log(`   ✓ dues commitments: +${dues} this run`);
+}
+
+// ── Phase 5: marketplace ─────────────────────────────────────────────────────
+
+async function phase5Marketplace() {
+  console.log('\n━━ Phase 5: marketplace ━━');
+  const members = await communityMembers();
+  const goods = await prisma.goodsService.findMany({
+    where: { active: true },
+    select: { id: true, name: true },
+    take: 12,
+  });
+  if (!goods.length) {
+    console.log('   ⚠ no goods/services seeded — skipping');
+    return;
+  }
+  const listings = [
+    {
+      t: ListingType.OFFER,
+      title: 'Fresh from my shamba',
+      desc: 'Weekly supply, fair prices for neighbours.',
+    },
+    {
+      t: ListingType.OFFER,
+      title: 'Skilled & available',
+      desc: 'Reliable, references from the estate.',
+    },
+    {
+      t: ListingType.REQUEST,
+      title: 'Looking for a supplier',
+      desc: 'Steady monthly need — let us talk.',
+    },
+    {
+      t: ListingType.REQUEST,
+      title: 'Need this done well',
+      desc: 'Quality matters more than the cheapest quote.',
+    },
+  ];
+  let made = 0;
+  for (let i = 0; i < Math.min(16, members.length); i++) {
+    const m = members[i];
+    const has = await prisma.marketplaceListing
+      .findFirst({ where: { sellerUserId: m.id } })
+      .catch(() => null);
+    if (has) continue;
+    const g = goods[i % goods.length];
+    const l = listings[i % listings.length];
+    const ok = await marketplaceService
+      .createListing(m.id, {
+        goodsServiceId: g.id,
+        title: `${l.title}: ${g.name}`,
+        description: l.desc,
+        type: l.t,
+        priceGuideKes:
+          l.t === ListingType.OFFER ? 100 + (i % 5) * 50 : undefined,
+      })
+      .then(() => true)
+      .catch(() => false);
+    if (ok) made++;
+  }
+  console.log(`   ✓ listings: +${made} this run`);
+}
+
+// ── Phase 6: education ───────────────────────────────────────────────────────
+
+async function phase6Education() {
+  console.log('\n━━ Phase 6: education ━━');
+  const members = await communityMembers();
+  const modules = await prisma.educationalModule.findMany({
+    where: { verified: true },
+    select: { id: true, title: true },
+  });
+  if (!modules.length) {
+    console.log('   ⚠ no education modules — run the seed first');
+    return;
+  }
+  let completions = 0;
+  // Each of the first ~12 members completes a few modules.
+  for (let i = 0; i < Math.min(12, members.length); i++) {
+    const m = members[i];
+    for (const mod of modules.slice(0, 3 + (i % 4))) {
+      const done = await prisma.userEducationalProgress
+        .findFirst({
+          where: { userId: m.id, moduleId: mod.id, status: 'COMPLETED' },
+        })
+        .catch(() => null);
+      if (done) continue;
+      // completeModule requires the module to have been started first.
+      await educationService.startModule(m.id, mod.id).catch(() => {});
+      const ok = await educationService
+        .completeModule(m.id, mod.id)
+        .then(() => true)
+        .catch(() => false);
+      if (ok) completions++;
+    }
+  }
+  console.log(
+    `   ✓ module completions: +${completions} this run (${modules.length} modules)`
+  );
+}
+
+// ── Phase 7: emergency ───────────────────────────────────────────────────────
+
+async function phase7Emergency(homeWardId: string) {
+  console.log('\n━━ Phase 7: emergency ━━');
+  const members = await communityMembers();
+  const reports = [
+    {
+      type: EmergencyType.FLOOD,
+      desc: 'Drainage blocked on Mtaa Lane — water rising near the shops after last night’s rain.',
+    },
+    {
+      type: EmergencyType.SECURITY,
+      desc: 'Group of strangers loitering near the school gate at night this week.',
+    },
+  ];
+  let made = 0;
+  for (let i = 0; i < reports.length; i++) {
+    const r = reports[i];
+    const exists = await prisma.emergencyAlert
+      .findFirst({ where: { description: r.desc } })
+      .catch(() => null);
+    if (exists) continue;
+    const ok = await emergencyService
+      .reportEmergency(members[i % members.length].id, {
+        type: r.type,
+        description: r.desc,
+        locationWardId: homeWardId,
+      })
+      .then(() => true)
+      .catch((e) => {
+        console.warn(`   ⚠ ${(e as Error).message}`);
+        return false;
+      });
+    if (ok) made++;
+  }
+  console.log(`   ✓ emergency reports: +${made} this run`);
+}
+
 // ── Orchestrator ─────────────────────────────────────────────────────────────
 
 async function main() {
@@ -610,6 +816,10 @@ async function main() {
   const { homeWard } = await phase1Cast();
   const groups = await phase2Groups(homeWard.id);
   if (groups[0]) await phase3Governance(groups[0]);
+  await phase4Economy(groups);
+  await phase5Marketplace();
+  await phase6Education();
+  await phase7Emergency(homeWard.id);
   console.log('\n✅ Simulation phase(s) complete.');
 }
 
