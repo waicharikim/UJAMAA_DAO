@@ -428,6 +428,9 @@ async function phase3Governance(group: { id: string; name: string }) {
     fundingAmountKes: number;
     creator: { id: string };
     target: Target;
+    rationale: string;
+    alternatives: string;
+    outcome?: string; // only for resolved (EXECUTED / REJECTED)
   }[] = [
     {
       title: 'Buy a shared 10,000L water tank',
@@ -436,6 +439,10 @@ async function phase3Governance(group: { id: string; name: string }) {
       description:
         'Install a communal water tank at the estate gate so households stop paying vendors per jerrican. Cheaper water, less queuing.',
       target: 'DRAFT',
+      rationale:
+        'Vendor water runs KES 20–30 a jerrican; a shared tank pays for itself within months and frees women and children from the daily queue.',
+      alternatives:
+        'Considered individual household tanks (too costly per family) and sinking a borehole (needs a permit and far more capital — revisit once the SACCO has reserves).',
     },
     {
       title: 'Hire an estate night security guard',
@@ -444,6 +451,10 @@ async function phase3Governance(group: { id: string; name: string }) {
       description:
         'Pool funds to hire a vetted night guard for the estate after the recent break-ins. Twelve-month contract, reviewed quarterly.',
       target: 'APPROVED',
+      rationale:
+        'Three break-ins in two months. A vetted night guard is the fastest, lowest-cost deterrent while we save for lighting and a gate.',
+      alternatives:
+        'CCTV (high upfront cost, needs power and someone to monitor) and a neighbourhood WhatsApp watch (already exists, not enough on its own).',
     },
     {
       title: 'Fund a youth coding bootcamp',
@@ -452,6 +463,10 @@ async function phase3Governance(group: { id: string; name: string }) {
       description:
         'A three-month coding bootcamp for 20 youth, run with the local IT hub. Laptops shared, trainers paid from the fund.',
       target: 'VOTING',
+      rationale:
+        'Twenty youth trained in three months with the local IT hub, at a fraction of private-college fees — skills that turn into income and keep talent in the ward.',
+      alternatives:
+        'Sponsoring individuals at private colleges (far costlier per head) and waiting for a government programme (no timeline).',
     },
     {
       title: 'Install solar street lights on Mtaa Lane',
@@ -460,6 +475,10 @@ async function phase3Governance(group: { id: string; name: string }) {
       description:
         'Six solar street lights along the dark stretch of Mtaa Lane to improve safety for women and traders at night.',
       target: 'VOTING',
+      rationale:
+        'The dark stretch of Mtaa Lane is where most night incidents happen. Solar means no wiring, no KPLC bill, and it keeps working during outages.',
+      alternatives:
+        'Grid-powered streetlights (monthly bill plus KPLC connection delays) and reflective signage (cheap but does nothing for safety).',
     },
     {
       title: 'Repair the estate access road',
@@ -468,6 +487,12 @@ async function phase3Governance(group: { id: string; name: string }) {
       description:
         'Grade and murram the access road before the rains. Quotes attached; work overseen by the projects committee.',
       target: 'EXECUTED',
+      rationale:
+        'The access road floods and potholes every rainy season, cutting off matatus and boda riders. Grading and murram before the rains protects everyone’s livelihood.',
+      alternatives:
+        'Full tarmac (around ten times the cost, needs county engagement) and patching potholes only (washes out within weeks).',
+      outcome:
+        'Passed with a strong majority. Work scheduled with the projects committee before the rains; contractor quotes shortlisted and the first grading is set for next month.',
     },
     {
       title: 'Buy branded SACCO merchandise',
@@ -476,6 +501,12 @@ async function phase3Governance(group: { id: string; name: string }) {
       description:
         'Branded T-shirts and caps for members. Nice-to-have, not essential right now.',
       target: 'REJECTED',
+      rationale:
+        'Branded shirts and caps would build identity and visibility at community events.',
+      alternatives:
+        'Put the same money toward the water tank or the road instead, and revisit merchandise once the essentials are funded.',
+      outcome:
+        'Voted down — members felt water and the road must come first. To be revisited after the priority projects are funded.',
     },
   ];
 
@@ -504,6 +535,22 @@ async function phase3Governance(group: { id: string; name: string }) {
         row = { id: (created as any).id as string };
       }
       const id = row.id;
+
+      // Ward Memory — rationale + alternatives (and outcome for resolved ones).
+      // Set directly (idempotent): these are author-provided text fields with no
+      // side effects, so a plain update keeps the sim simple.
+      await prisma.proposal
+        .update({
+          where: { id },
+          data: {
+            rationale: p.rationale,
+            alternatives: p.alternatives,
+            ...(p.outcome
+              ? { outcome: p.outcome, outcomeRecordedAt: new Date() }
+              : {}),
+          },
+        })
+        .catch(() => {});
 
       if (p.target === 'DRAFT') {
         console.log(`   ✓ DRAFT: ${p.title}`);
