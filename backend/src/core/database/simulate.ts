@@ -43,6 +43,7 @@ import { educationService } from '../../modules/education/services/education.ser
 import { emergencyService } from '../../modules/emergency/services/emergency.service.js';
 import { EmergencyType } from '../../modules/emergency/types.js';
 import { projectService } from '../../modules/projects/services/project.service.js';
+import { projectUpdateService } from '../../modules/projects/services/project-update.service.js';
 import { electionService } from '../../modules/elections/services/election.service.js';
 import { barazaBotService } from '../../modules/integration/services/baraza-bot.service.js';
 
@@ -859,10 +860,12 @@ async function phase7Emergency(homeWardId: string) {
   console.log(`   ✓ emergency reports: +${made} this run`);
 }
 
-// ── Phase 8: projects ────────────────────────────────────────────────────────
+// ── Phase 8: projects (full lifecycle) ───────────────────────────────────────
+
+const ok = <T>(p: Promise<T>) => p.then(() => true).catch(() => false);
 
 async function phase8Projects(group: { id: string; name: string }) {
-  console.log('\n━━ Phase 8: projects ━━');
+  console.log('\n━━ Phase 8: projects (full lifecycle) ━━');
   const passed = await prisma.proposal.findFirst({
     where: { title: 'Repair the estate access road', groupId: group.id },
     select: { id: true, creatorId: true },
@@ -871,14 +874,15 @@ async function phase8Projects(group: { id: string; name: string }) {
     console.log('   ⚠ passed proposal not found — run Phase 3 first');
     return;
   }
+  const leaderId = passed.creatorId; // project leader = the proposal's creator
 
+  // 1. Create-or-get the project (only its creator may).
   let project = await prisma.project
     .findFirst({ where: { proposalId: passed.id }, select: { id: true } })
     .catch(() => null);
   if (!project) {
-    // Only the proposal's creator may turn it into a project.
     const created = await projectService
-      .createFromProposal(passed.creatorId, { proposalId: passed.id })
+      .createFromProposal(leaderId, { proposalId: passed.id })
       .then((p) => ({ id: (p as any).id as string }))
       .catch((e) => {
         console.warn(`   ⚠ create: ${(e as Error).message}`);
@@ -890,19 +894,220 @@ async function phase8Projects(group: { id: string; name: string }) {
   } else {
     console.log('   • project already exists');
   }
-
+  const projectId = project.id;
   const members = await communityMembers();
+
+  // 2. Members join.
   let joined = 0;
-  for (let i = 0; i < Math.min(8, members.length); i++) {
-    if (
-      await projectService
-        .joinProject(members[i].id, project.id)
-        .then(() => true)
-        .catch(() => false)
-    )
+  for (let i = 0; i < Math.min(10, members.length); i++) {
+    if (await ok(projectService.joinProject(members[i].id, projectId)))
       joined++;
   }
-  console.log(`   ✓ members joined: +${joined} this run`);
+
+  // 3. Leader posts a project update.
+  await projectUpdateService
+    .create({
+      projectId,
+      authorId: leaderId,
+      content:
+        'Mobilising this week — grader booked and the murram supplier is confirmed. Asante to everyone who pledged. We start at the gate end on Saturday.',
+    })
+    .catch(() => {});
+
+  // 4. Ensure two milestones exist (the sim proposal carried none).
+  let milestones = await prisma.milestone
+    .findMany({
+      where: { projectId },
+      orderBy: { orderIndex: 'asc' },
+      select: { id: true, status: true },
+    })
+    .catch(() => [] as { id: string; status: string }[]);
+  if (milestones.length === 0) {
+    await prisma.milestone
+      .createMany({
+        data: [
+          {
+            id: uuidv4(),
+            projectId,
+            title: 'Grade and compact the roadbed',
+            description: 'Clear the verge, level, and compact before murram.',
+            orderIndex: 0,
+          },
+          {
+            id: uuidv4(),
+            projectId,
+            title: 'Lay murram and cut side drains',
+            description:
+              'Haul and spread murram, then cut drainage on both sides.',
+            orderIndex: 1,
+          },
+        ],
+      })
+      .catch(() => {});
+    milestones = await prisma.milestone
+      .findMany({
+        where: { projectId },
+        orderBy: { orderIndex: 'asc' },
+        select: { id: true, status: true },
+      })
+      .catch(() => []);
+  }
+  const m1 = milestones[0];
+  const m2 = milestones[1];
+
+  // 5. Milestone 1 — drive the whole flow.
+  if (m1) {
+    // start
+    if (m1.status === 'PENDING')
+      await projectService
+        .startMilestone(leaderId, { milestoneId: m1.id })
+        .catch(() => {});
+
+    // tasks: create → a member claims → completes
+    const taskSpecs = [
+      {
+        title: 'Clear bush and level the verge',
+        skill: 'CONSTRUCTION' as const,
+      },
+      { title: 'Operate the grader', skill: 'TRANSPORT' as const },
+    ];
+    for (let i = 0; i < taskSpecs.length; i++) {
+      const ts = taskSpecs[i];
+      let task = await prisma.task
+        .findFirst({
+          where: { milestoneId: m1.id, title: ts.title },
+          select: { id: true },
+        })
+        .catch(() => null);
+      if (!task) {
+        const created = await projectService
+          .createTask(leaderId, {
+            milestoneId: m1.id,
+            title: ts.title,
+            skillCategory: ts.skill,
+            maxAssignees: 2,
+          })
+          .then((t) => ({ id: t.id }))
+          .catch(() => null);
+        task = created;
+      }
+      if (task) {
+        const worker = members[i + 1];
+        await ok(projectService.claimTask(worker.id, task.id));
+        await ok(projectService.completeTask(worker.id, task.id));
+      }
+    }
+
+    // physical work logs
+    for (let i = 0; i < Math.min(4, members.length); i++) {
+      await projectService
+        .logWork(members[i].id, {
+          milestoneId: m1.id,
+          workType: 'MANUAL_LABOR',
+          description: 'Cleared and levelled the verge by hand.',
+          hours: 4,
+        })
+        .catch(() => {});
+    }
+
+    // QR work session (witness chain): create → members scan → attest → close
+    const session = await projectService
+      .createWorkSession(leaderId, { milestoneId: m1.id, durationMinutes: 120 })
+      .catch(() => null);
+    if (session && (session as any).qrSecret) {
+      const crew = members.slice(0, 5);
+      for (const w of crew)
+        await ok(projectService.scanQr(w.id, (session as any).qrSecret));
+      for (let i = 0; i < crew.length; i++)
+        await ok(
+          projectService.attestPresence(
+            crew[i].id,
+            (session as any).id,
+            crew[(i + 1) % crew.length].id
+          )
+        );
+      await projectService
+        .closeWorkSession((session as any).id)
+        .catch(() => {});
+    }
+
+    // submit → verify (leader can verify as project leader)
+    await projectService
+      .submitMilestone(leaderId, {
+        milestoneId: m1.id,
+        proofUrl: 'https://example.test/road-grading.jpg',
+        description:
+          'Roadbed graded and compacted end to end; photos attached.',
+      })
+      .catch(() => {});
+    await projectService
+      .verifyMilestone(leaderId, {
+        milestoneId: m1.id,
+        approved: true,
+        feedback: 'Clean grade — well compacted. Approved.',
+      })
+      .catch(() => {});
+  }
+
+  // 6. Milestone 2 — start + one open task, left in progress (for variety).
+  if (m2) {
+    if (m2.status === 'PENDING')
+      await projectService
+        .startMilestone(leaderId, { milestoneId: m2.id })
+        .catch(() => {});
+    const has = await prisma.task
+      .findFirst({ where: { milestoneId: m2.id }, select: { id: true } })
+      .catch(() => null);
+    if (!has)
+      await projectService
+        .createTask(leaderId, {
+          milestoneId: m2.id,
+          title: 'Haul and spread murram',
+          skillCategory: 'CONSTRUCTION',
+          maxAssignees: 3,
+        })
+        .catch(() => {});
+  }
+
+  // 7. Financial contributions (top up a few members' fiat UT, then contribute).
+  let contributed = 0;
+  for (let i = 0; i < Math.min(4, members.length); i++) {
+    await prisma.user
+      .update({
+        where: { id: members[i].id },
+        data: { fiatBackedUtBalance: { increment: 5000 } },
+      })
+      .catch(() => {});
+    if (
+      await ok(
+        projectService.contributeToProject(members[i].id, projectId, {
+          amount: 2000,
+        })
+      )
+    )
+      contributed++;
+  }
+
+  // Summary from the DB so we see exactly what landed.
+  const [taskCount, logCount, sessionCount, mStatuses] = await Promise.all([
+    prisma.task.count({ where: { milestone: { projectId } } }).catch(() => 0),
+    prisma.physicalWorkLog
+      .count({ where: { milestone: { projectId } } })
+      .catch(() => 0),
+    prisma.workSession
+      .count({ where: { milestone: { projectId } } })
+      .catch(() => 0),
+    prisma.milestone
+      .findMany({ where: { projectId }, select: { status: true } })
+      .catch(() => [] as { status: string }[]),
+  ]);
+  console.log(
+    `   ✓ +${joined} joined · ${mStatuses.length} milestones (${mStatuses
+      .map((m: { status: string }) => m.status)
+      .join(
+        ', '
+      )}) · ${taskCount} tasks · ${logCount} work logs · ${sessionCount} work sessions · ${contributed} contributions`
+  );
 }
 
 // ── Phase 9: elections ───────────────────────────────────────────────────────
