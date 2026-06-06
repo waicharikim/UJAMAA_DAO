@@ -4,6 +4,56 @@ import { useState } from "react"
 
 // ─── Test account catalogue ───────────────────────────────
 const TEST_ACCOUNTS = [
+  // ── Simulation (Kayole) — the living ecosystem from simulate.ts ──
+  {
+    email: "sim.njeri@kayole.test",
+    name: "Mama Njeri Kamau",
+    role: "Sim · SACCO Leader",
+    level: "FULL_VERIFIED",
+    levelColor: "#1D4731",
+  },
+  {
+    email: "sim.david@kayole.test",
+    name: "David Otieno",
+    role: "Sim · Ward Admin",
+    level: "FULL_VERIFIED",
+    levelColor: "#1D4731",
+  },
+  {
+    email: "sim.joseph@kayole.test",
+    name: "Joseph Kiprono",
+    role: "Sim · proposer / project owner",
+    level: "FULL_VERIFIED",
+    levelColor: "#1D4731",
+  },
+  {
+    email: "sim.faith@kayole.test",
+    name: "Faith Achieng",
+    role: "Sim · member / candidate / voter",
+    level: "COMMUNITY_VERIFIED",
+    levelColor: "#2A5240",
+  },
+  {
+    email: "sim.brian@kayole.test",
+    name: "Brian Kemboi",
+    role: "Sim · member",
+    level: "COMMUNITY_VERIFIED",
+    levelColor: "#2A5240",
+  },
+  {
+    email: "sim.sharon@kayole.test",
+    name: "Sharon Wangari",
+    role: "Sim · mid-funnel",
+    level: "PHONE_VERIFIED",
+    levelColor: "#7A4F1E",
+  },
+  {
+    email: "sim.cynthia@kayole.test",
+    name: "Cynthia Akinyi",
+    role: "Sim · new arrival",
+    level: "EMAIL_VERIFIED",
+    levelColor: "#B03A1E",
+  },
   {
     email: "admin@ujamaa.test",
     name: "System Administrator",
@@ -173,7 +223,7 @@ export default function DevLoginPage() {
             Account Switcher
           </h1>
           <p className="text-sm" style={{ color: "rgba(14,11,8,0.5)" }}>
-            Click any account to instantly log in. All 14 test users are pre-seeded across 3 geographic scopes.
+            Click any account to instantly log in. The top rows are the Kayole simulation cast; below are the original test users.
           </p>
         </div>
 
