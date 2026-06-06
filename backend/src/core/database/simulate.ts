@@ -42,6 +42,9 @@ import { ListingType } from '../../modules/marketplace/types.js';
 import { educationService } from '../../modules/education/services/education.service.js';
 import { emergencyService } from '../../modules/emergency/services/emergency.service.js';
 import { EmergencyType } from '../../modules/emergency/types.js';
+import { projectService } from '../../modules/projects/services/project.service.js';
+import { electionService } from '../../modules/elections/services/election.service.js';
+import { barazaBotService } from '../../modules/integration/services/baraza-bot.service.js';
 
 // ── Guard ───────────────────────────────────────────────────────────────────
 if (process.env.NODE_ENV === 'production') {
@@ -809,6 +812,212 @@ async function phase7Emergency(homeWardId: string) {
   console.log(`   ✓ emergency reports: +${made} this run`);
 }
 
+// ── Phase 8: projects ────────────────────────────────────────────────────────
+
+async function phase8Projects(group: { id: string; name: string }) {
+  console.log('\n━━ Phase 8: projects ━━');
+  const passed = await prisma.proposal.findFirst({
+    where: { title: 'Repair the estate access road', groupId: group.id },
+    select: { id: true, creatorId: true },
+  });
+  if (!passed) {
+    console.log('   ⚠ passed proposal not found — run Phase 3 first');
+    return;
+  }
+
+  let project = await prisma.project
+    .findFirst({ where: { proposalId: passed.id }, select: { id: true } })
+    .catch(() => null);
+  if (!project) {
+    // Only the proposal's creator may turn it into a project.
+    const created = await projectService
+      .createFromProposal(passed.creatorId, { proposalId: passed.id })
+      .then((p) => ({ id: (p as any).id as string }))
+      .catch((e) => {
+        console.warn(`   ⚠ create: ${(e as Error).message}`);
+        return null;
+      });
+    if (!created) return;
+    project = created;
+    console.log('   ✓ project created from the passed road proposal');
+  } else {
+    console.log('   • project already exists');
+  }
+
+  const members = await communityMembers();
+  let joined = 0;
+  for (let i = 0; i < Math.min(8, members.length); i++) {
+    if (
+      await projectService
+        .joinProject(members[i].id, project.id)
+        .then(() => true)
+        .catch(() => false)
+    )
+      joined++;
+  }
+  console.log(`   ✓ members joined: +${joined} this run`);
+}
+
+// ── Phase 9: elections ───────────────────────────────────────────────────────
+
+async function phase9Elections(group: { id: string; name: string }) {
+  console.log('\n━━ Phase 9: elections ━━');
+  const members = await communityMembers();
+
+  let election = await prisma.election
+    .findFirst({
+      where: { groupId: group.id, roleKey: 'LEADER' },
+      select: { id: true },
+    })
+    .catch(() => null);
+  if (!election) {
+    const created = await electionService
+      .createElection({
+        scope: 'GROUP',
+        roleKey: 'LEADER',
+        groupId: group.id,
+        termMonths: 12,
+      })
+      .catch((e) => {
+        console.warn(`   ⚠ schedule: ${(e as Error).message}`);
+        return null;
+      });
+    if (!created) return;
+    election = { id: created.id };
+    console.log('   ✓ election scheduled (SACCO leader)');
+  } else {
+    console.log('   • election already exists');
+  }
+  const eid = election.id;
+
+  // Open nominations directly (the cron windows are time-gated; the sim drives
+  // the status transitions and lets nominate/castVote run their real logic).
+  await prisma.election
+    .update({
+      where: { id: eid },
+      data: {
+        status: 'NOMINATIONS_OPEN',
+        nominationsOpenAt: new Date(Date.now() - 3600_000),
+      },
+    })
+    .catch(() => {});
+
+  for (const slug of ['faith', 'brian', 'samuel']) {
+    const u = await simUser(slug);
+    await electionService
+      .nominate(
+        u.id,
+        eid,
+        'I will serve our SACCO with transparency and a steady hand.'
+      )
+      .catch(() => {});
+  }
+
+  await prisma.election
+    .update({
+      where: { id: eid },
+      data: {
+        status: 'VOTING_OPEN',
+        votingOpenAt: new Date(Date.now() - 1800_000),
+      },
+    })
+    .catch(() => {});
+
+  const candidates = await prisma.electionCandidate
+    .findMany({ where: { electionId: eid }, select: { id: true } })
+    .catch(() => [] as { id: string }[]);
+  if (!candidates.length) {
+    console.log('   ⚠ no candidates registered');
+    return;
+  }
+
+  let votes = 0;
+  for (let i = 0; i < members.length; i++) {
+    const c = candidates[i % candidates.length];
+    if (
+      await electionService
+        .castVote(members[i].id, eid, c.id)
+        .then(() => true)
+        .catch(() => false)
+    )
+      votes++;
+  }
+  console.log(`   ✓ ${candidates.length} candidates, +${votes} votes this run`);
+}
+
+// ── Phase 10: baraza attendance ──────────────────────────────────────────────
+
+async function phase10Baraza(homeWardId: string) {
+  console.log('\n━━ Phase 10: baraza attendance ━━');
+  const wardGroup = await prisma.group.findFirst({
+    where: { wardId: homeWardId, systemType: 'WARD', isSystemGroup: true },
+    select: { id: true, name: true },
+  });
+  if (!wardGroup) {
+    console.log('   ⚠ ward system group not found');
+    return;
+  }
+  const admin = await simUser('david');
+  const externalGroupId = 'sim-kayole-baraza';
+
+  // Register the ward Baraza (idempotent — one-canonical guard returns existing).
+  await barazaBotService
+    .registerBarazaGroup(admin.id, {
+      groupId: wardGroup.id,
+      platform: 'TELEGRAM',
+      externalId: externalGroupId,
+      name: `${wardGroup.name} Baraza`,
+      inviteLink: 'https://t.me/+simKayoleBaraza',
+    })
+    .catch((e) => console.warn(`   ⚠ register: ${(e as Error).message}`));
+
+  // Give ~15 verified members a Telegram messaging profile (so attendance matches).
+  const members = await prisma.user.findMany({
+    where: {
+      email: { startsWith: 'sim.', endsWith: '@kayole.test' },
+      verificationLevel: { in: ['COMMUNITY_VERIFIED', 'FULL_VERIFIED'] },
+    },
+    select: { id: true, email: true },
+    take: 15,
+  });
+  const tgId = (e: string | null) =>
+    'tg-' + (e ?? '').replace('sim.', '').replace('@kayole.test', '');
+  for (const m of members) {
+    const has = await prisma.userMessagingProfile
+      .findFirst({ where: { userId: m.id, platform: 'TELEGRAM' } })
+      .catch(() => null);
+    if (!has) {
+      await prisma.userMessagingProfile
+        .create({
+          data: {
+            userId: m.id,
+            platform: 'TELEGRAM',
+            handle: tgId(m.email),
+            externalUserId: tgId(m.email),
+            isVerified: true,
+          },
+        })
+        .catch(() => {});
+    }
+  }
+
+  const n = await barazaBotService
+    .recordAttendance({
+      platform: 'TELEGRAM',
+      externalGroupId,
+      sessionDate: '2026-06-01',
+      attendeeExternalIds: members.map((m) => tgId(m.email)),
+      facilitatorExternalId: tgId(members[0].email),
+      reportedBy: admin.id,
+    })
+    .then((r) => (Array.isArray(r) ? r.length : 0))
+    .catch((e) => {
+      console.warn(`   ⚠ attendance: ${(e as Error).message}`);
+      return 0;
+    });
+  console.log(`   ✓ baraza session recorded — ${n} attendees matched`);
+}
+
 // ── Orchestrator ─────────────────────────────────────────────────────────────
 
 async function main() {
@@ -820,6 +1029,9 @@ async function main() {
   await phase5Marketplace();
   await phase6Education();
   await phase7Emergency(homeWard.id);
+  if (groups[0]) await phase8Projects(groups[0]);
+  if (groups[0]) await phase9Elections(groups[0]);
+  await phase10Baraza(homeWard.id);
   console.log('\n✅ Simulation phase(s) complete.');
 }
 
