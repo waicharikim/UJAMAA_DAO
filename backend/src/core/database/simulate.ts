@@ -46,6 +46,7 @@ import { projectService } from '../../modules/projects/services/project.service.
 import { projectUpdateService } from '../../modules/projects/services/project-update.service.js';
 import { electionService } from '../../modules/elections/services/election.service.js';
 import { barazaBotService } from '../../modules/integration/services/baraza-bot.service.js';
+import { userService } from '../../modules/user/services/user.service.js';
 
 // ── Guard ───────────────────────────────────────────────────────────────────
 if (process.env.NODE_ENV === 'production') {
@@ -1110,91 +1111,144 @@ async function phase8Projects(group: { id: string; name: string }) {
   );
 }
 
-// ── Phase 9: elections ───────────────────────────────────────────────────────
+// ── Phase 9: elections (full lifecycle) ──────────────────────────────────────
 
 async function phase9Elections(group: { id: string; name: string }) {
-  console.log('\n━━ Phase 9: elections ━━');
+  console.log('\n━━ Phase 9: elections (full lifecycle) ━━');
+  // Two elections: a leader race, and a treasurer race where one candidate
+  // withdraws. Each is driven create → nominate → (withdraw) → vote → tally.
+  await runElection(group, 'LEADER', ['faith', 'brian', 'samuel'], null);
+  await runElection(group, 'TREASURER', ['peter', 'diana', 'eric'], 'eric');
+}
+
+async function runElection(
+  group: { id: string },
+  roleKey: string,
+  candidateSlugs: string[],
+  withdrawSlug: string | null
+) {
   const members = await communityMembers();
 
-  let election = await prisma.election
-    .findFirst({
-      where: { groupId: group.id, roleKey: 'LEADER' },
-      select: { id: true },
-    })
+  let row = await prisma.election
+    .findFirst({ where: { groupId: group.id, roleKey }, select: { id: true } })
     .catch(() => null);
-  if (!election) {
-    const created = await electionService
+  if (!row) {
+    // createElection persists the row even though its 'system' audit actor
+    // throws — so create, ignore the throw, then re-find the row.
+    await electionService
       .createElection({
         scope: 'GROUP',
-        roleKey: 'LEADER',
+        roleKey,
         groupId: group.id,
         termMonths: 12,
       })
-      .catch((e) => {
-        console.warn(`   ⚠ schedule: ${(e as Error).message}`);
-        return null;
-      });
-    if (!created) return;
-    election = { id: created.id };
-    console.log('   ✓ election scheduled (SACCO leader)');
-  } else {
-    console.log('   • election already exists');
+      .catch(() => null);
+    row = await prisma.election
+      .findFirst({
+        where: { groupId: group.id, roleKey },
+        select: { id: true },
+      })
+      .catch(() => null);
+    if (!row) {
+      console.log(`   ⚠ ${roleKey}: could not create election`);
+      return;
+    }
+    console.log(`   ✓ ${roleKey} election scheduled`);
   }
-  const eid = election.id;
-
-  // Open nominations directly (the cron windows are time-gated; the sim drives
-  // the status transitions and lets nominate/castVote run their real logic).
-  await prisma.election
-    .update({
+  const eid = row.id;
+  const statusOf = async () =>
+    (await prisma.election.findUnique({
       where: { id: eid },
-      data: {
-        status: 'NOMINATIONS_OPEN',
-        nominationsOpenAt: new Date(Date.now() - 3600_000),
-      },
-    })
-    .catch(() => {});
+      select: { status: true },
+    }))!.status;
 
-  for (const slug of ['faith', 'brian', 'samuel']) {
-    const u = await simUser(slug);
-    await electionService
-      .nominate(
-        u.id,
-        eid,
-        'I will serve our SACCO with transparency and a steady hand.'
-      )
+  // PENDING → NOMINATIONS_OPEN
+  if ((await statusOf()) === 'PENDING')
+    await prisma.election
+      .update({
+        where: { id: eid },
+        data: {
+          status: 'NOMINATIONS_OPEN',
+          nominationsOpenAt: new Date(Date.now() - 3600_000),
+        },
+      })
       .catch(() => {});
-  }
 
-  await prisma.election
-    .update({
-      where: { id: eid },
-      data: {
-        status: 'VOTING_OPEN',
-        votingOpenAt: new Date(Date.now() - 1800_000),
-      },
-    })
-    .catch(() => {});
-
-  const candidates = await prisma.electionCandidate
-    .findMany({ where: { electionId: eid }, select: { id: true } })
-    .catch(() => [] as { id: string }[]);
-  if (!candidates.length) {
-    console.log('   ⚠ no candidates registered');
-    return;
-  }
-
-  let votes = 0;
-  for (let i = 0; i < members.length; i++) {
-    const c = candidates[i % candidates.length];
-    if (
+  // nominate + (one withdraws) while nominations are open
+  if ((await statusOf()) === 'NOMINATIONS_OPEN') {
+    for (const slug of candidateSlugs) {
+      const u = await simUser(slug);
       await electionService
-        .castVote(members[i].id, eid, c.id)
+        .nominate(
+          u.id,
+          eid,
+          'I will serve our SACCO with transparency and a steady hand.'
+        )
+        .catch(() => {});
+    }
+    if (withdrawSlug) {
+      const w = await simUser(withdrawSlug);
+      const ok = await electionService
+        .withdrawNomination(w.id, eid)
         .then(() => true)
-        .catch(() => false)
-    )
-      votes++;
+        .catch(() => false);
+      if (ok)
+        console.log(`   ↩ ${withdrawSlug} withdrew from the ${roleKey} race`);
+    }
   }
-  console.log(`   ✓ ${candidates.length} candidates, +${votes} votes this run`);
+
+  // NOMINATIONS_OPEN → VOTING_OPEN
+  if ((await statusOf()) === 'NOMINATIONS_OPEN')
+    await prisma.election
+      .update({
+        where: { id: eid },
+        data: {
+          status: 'VOTING_OPEN',
+          votingOpenAt: new Date(Date.now() - 1800_000),
+        },
+      })
+      .catch(() => {});
+
+  // vote once
+  if ((await statusOf()) === 'VOTING_OPEN') {
+    const candidates = await prisma.electionCandidate
+      .findMany({ where: { electionId: eid }, select: { id: true } })
+      .catch(() => [] as { id: string }[]);
+    const have = await prisma.electionVote
+      .count({ where: { electionId: eid } })
+      .catch(() => 0);
+    if (candidates.length && have === 0) {
+      let votes = 0;
+      for (let i = 0; i < members.length; i++) {
+        const c = candidates[i % candidates.length];
+        if (await ok(electionService.castVote(members[i].id, eid, c.id)))
+          votes++;
+      }
+      console.log(
+        `   ✓ ${roleKey}: ${candidates.length} candidates, ${votes} votes`
+      );
+    }
+  }
+
+  // VOTING_OPEN → tally + close (assigns the winner the role)
+  if ((await statusOf()) === 'VOTING_OPEN') {
+    await prisma.election
+      .update({
+        where: { id: eid },
+        data: { votingCloseAt: new Date(Date.now() - 60_000) },
+      })
+      .catch(() => {});
+    await electionService
+      .tallyAndClose(eid)
+      .then(() =>
+        console.log(`   ✓ ${roleKey}: tallied & closed → winner assigned`)
+      )
+      .catch((e) =>
+        console.warn(`   ⚠ ${roleKey} tally: ${(e as Error).message}`)
+      );
+  } else {
+    console.log(`   • ${roleKey}: at ${await statusOf()}`);
+  }
 }
 
 // ── Phase 10: baraza attendance ──────────────────────────────────────────────
@@ -1270,6 +1324,82 @@ async function phase10Baraza(homeWardId: string) {
   console.log(`   ✓ baraza session recorded — ${n} attendees matched`);
 }
 
+// ── Phase 11: verification (community vouching) ──────────────────────────────
+
+async function phase11Verification(homeWardId: string) {
+  console.log('\n━━ Phase 11: verification (vouching) ━━');
+  // Established community-verified members do the vouching.
+  const vouchers = (await communityMembers()).slice(0, 3);
+  if (vouchers.length < 3) {
+    console.log('   ⚠ need 3 community-verified vouchers — skipping');
+    return;
+  }
+
+  // Newcomers who arrive PHONE_VERIFIED and earn COMMUNITY via 3 neighbour vouches.
+  // (Kept out of the main CAST so Phase 1 never resets their progress.)
+  const journey = [
+    { slug: 'halima', name: 'Halima Yusuf', vouches: 3 }, // reaches the threshold
+    { slug: 'were', name: 'Otieno Were', vouches: 3 }, // reaches the threshold
+    { slug: 'njoki', name: 'Wairimu Njoki', vouches: 1 }, // still 1 of 3 (in progress)
+  ];
+
+  let promoted = 0;
+  for (let k = 0; k < journey.length; k++) {
+    const j = journey[k];
+    const u = await prisma.user.upsert({
+      where: { email: email(j.slug) },
+      update: {}, // never downgrade on re-run
+      create: {
+        id: uuidv4(),
+        email: email(j.slug),
+        name: j.name,
+        phoneNumber: `+25472${String(2000000 + k).padStart(8, '0')}`,
+        verificationLevel: 'PHONE_VERIFIED',
+        emailVerified: true,
+        phoneVerified: true,
+        primaryWardId: homeWardId,
+        secondaryWardId: homeWardId,
+      },
+      select: { id: true, verificationLevel: true },
+    });
+
+    if (
+      u.verificationLevel === 'COMMUNITY_VERIFIED' ||
+      u.verificationLevel === 'FULL_VERIFIED'
+    ) {
+      console.log(`   • ${j.name} already community-verified`);
+      continue;
+    }
+
+    await groupMembershipService
+      .enrollInSystemGroups(u.id, homeWardId, homeWardId)
+      .catch(() => {});
+    await userService.requestCommunityVerification(u.id).catch(() => {});
+
+    let got = 0;
+    for (let i = 0; i < j.vouches; i++) {
+      if (
+        await ok(
+          userService.vouchForUser(vouchers[i].id, {
+            targetUserId: u.id,
+            wardId: homeWardId,
+          })
+        )
+      )
+        got++;
+    }
+    const level = (
+      await prisma.user.findUnique({
+        where: { id: u.id },
+        select: { verificationLevel: true },
+      })
+    )?.verificationLevel;
+    if (level === 'COMMUNITY_VERIFIED') promoted++;
+    console.log(`   ✓ ${j.name}: ${got}/3 vouches → ${level}`);
+  }
+  console.log(`   ✓ verified via vouching this run: ${promoted}`);
+}
+
 // ── Orchestrator ─────────────────────────────────────────────────────────────
 
 async function main() {
@@ -1284,6 +1414,7 @@ async function main() {
   if (groups[0]) await phase8Projects(groups[0]);
   if (groups[0]) await phase9Elections(groups[0]);
   await phase10Baraza(homeWard.id);
+  await phase11Verification(homeWard.id);
   console.log('\n✅ Simulation phase(s) complete.');
 }
 
