@@ -105,6 +105,8 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
   const [outcomeText, setOutcomeText] = useState("")
   const [showOutcomeForm, setShowOutcomeForm] = useState(false)
   const [annotations, setAnnotations] = useState<ProposalAnnotationDto[]>([])
+  // Which opinion's span is highlighted in the proposal text (hover/tap in the list).
+  const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(null)
 
   const { data: proposal, isLoading, isError } = useQuery({
     queryKey: ["proposal", proposalId],
@@ -344,6 +346,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
               annotations={annotations}
               currentUserId={user?.id ?? null}
               canAnnotate={canAnnotate}
+              activeAnnotationId={activeAnnotationId}
               onCreated={handleAnnotationCreated}
               onDeleted={handleAnnotationDeleted}
               onReacted={handleAnnotationReacted}
@@ -743,6 +746,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
                     annotations={annotations}
                     currentUserId={user?.id ?? null}
                     canAnnotate={canAnnotate}
+                    activeAnnotationId={activeAnnotationId}
                     onCreated={handleAnnotationCreated}
                     onDeleted={handleAnnotationDeleted}
                     onReacted={handleAnnotationReacted}
@@ -761,6 +765,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
                     annotations={annotations}
                     currentUserId={user?.id ?? null}
                     canAnnotate={canAnnotate}
+                    activeAnnotationId={activeAnnotationId}
                     onCreated={handleAnnotationCreated}
                     onDeleted={handleAnnotationDeleted}
                     onReacted={handleAnnotationReacted}
@@ -908,6 +913,8 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
           proposalId={proposal.id}
           currentUserId={user?.id ?? null}
           canReact={canAnnotate}
+          activeAnnotationId={activeAnnotationId}
+          onHoverAnnotation={setActiveAnnotationId}
           onDeleted={handleAnnotationDeleted}
           onReacted={handleAnnotationReacted}
         />

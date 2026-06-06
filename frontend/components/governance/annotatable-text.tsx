@@ -13,6 +13,9 @@ interface AnnotatableTextProps {
   annotations: ProposalAnnotationDto[]
   currentUserId: string | null
   canAnnotate: boolean
+  /** Only this annotation's span is highlighted (driven by the opinions list);
+      the proposal text stays clean otherwise. */
+  activeAnnotationId?: string | null
   onCreated: (annotation: ProposalAnnotationDto) => void
   onDeleted: (annotationId: string) => void
   onReacted: (annotationId: string, upvotes: number, downvotes: number, myReaction: "UP" | "DOWN" | null) => void
@@ -80,6 +83,7 @@ export function AnnotatableText({
   annotations,
   currentUserId,
   canAnnotate,
+  activeAnnotationId = null,
   onCreated,
   onDeleted,
   onReacted,
@@ -95,9 +99,17 @@ export function AnnotatableText({
     [annotations, fieldKey]
   )
 
+  // Keep the proposal text clean: highlight ONLY the active annotation's span
+  // (set by hovering/tapping an opinion in the list). With at most one span,
+  // overlapping annotations can never garble the text.
+  const activeAnn = useMemo(
+    () => fieldAnnotations.find((a) => a.id === activeAnnotationId) ?? null,
+    [fieldAnnotations, activeAnnotationId]
+  )
+
   const segments = useMemo(
-    () => buildSegments(text, fieldAnnotations),
-    [text, fieldAnnotations]
+    () => buildSegments(text, activeAnn ? [activeAnn] : []),
+    [text, activeAnn]
   )
 
   const { mutate: createAnnotation, isPending: creating } = useMutation({
@@ -237,7 +249,8 @@ export function AnnotatableText({
           <MessageSquarePlus className="h-3.5 w-3.5 flex-shrink-0" style={{ color: "#C9922A" }} />
           <p className="text-[11px] leading-snug" style={{ color: "#9A6B1A" }}>
             <span className="font-semibold">Have an opinion?</span>
-            {" "}Long-press or highlight any part of the text below, then type your comment.
+            {" "}Highlight any part of the text below and add a comment — it's saved to
+            Community Opinions. The text stays clean; hover an opinion to see what it refers to.
           </p>
         </div>
       )}

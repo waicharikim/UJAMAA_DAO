@@ -10,6 +10,10 @@ interface AnnotationSidebarProps {
   proposalId: string
   currentUserId: string | null
   canReact: boolean
+  /** the opinion currently highlighted in the proposal text */
+  activeAnnotationId?: string | null
+  /** hover/tap an opinion to highlight its span in the text */
+  onHoverAnnotation?: (annotationId: string | null) => void
   onDeleted: (annotationId: string) => void
   onReacted: (annotationId: string, upvotes: number, downvotes: number, myReaction: "UP" | "DOWN" | null) => void
 }
@@ -25,6 +29,8 @@ export function AnnotationSidebar({
   proposalId,
   currentUserId,
   canReact,
+  activeAnnotationId = null,
+  onHoverAnnotation,
   onDeleted,
   onReacted,
 }: AnnotationSidebarProps) {
@@ -94,6 +100,8 @@ export function AnnotationSidebar({
                   annotation={ann}
                   currentUserId={currentUserId}
                   canReact={canReact}
+                  isActive={ann.id === activeAnnotationId}
+                  onHover={(on) => onHoverAnnotation?.(on ? ann.id : null)}
                   onDelete={() => deleteAnnotation(ann.id)}
                   onReact={(type) => react({ annotationId: ann.id, type })}
                 />
@@ -110,19 +118,29 @@ function AnnotationCard({
   annotation,
   currentUserId,
   canReact,
+  isActive,
+  onHover,
   onDelete,
   onReact,
 }: {
   annotation: ProposalAnnotationDto
   currentUserId: string | null
   canReact: boolean
+  isActive: boolean
+  onHover: (on: boolean) => void
   onDelete: () => void
   onReact: (type: "UP" | "DOWN" | null) => void
 }) {
   return (
     <div
-      className="px-4 py-3 space-y-2"
-      style={{ borderLeft: `3px solid ${annotation.color}` }}
+      className="px-4 py-3 space-y-2 transition-colors cursor-default"
+      style={{
+        borderLeft: `3px solid ${annotation.color}`,
+        background: isActive ? annotation.color + "12" : "transparent",
+      }}
+      onMouseEnter={() => onHover(true)}
+      onMouseLeave={() => onHover(false)}
+      onClick={() => onHover(!isActive)}
     >
       {/* Author row */}
       <div className="flex items-center gap-2">
