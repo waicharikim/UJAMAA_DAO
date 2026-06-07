@@ -9,6 +9,7 @@ import "../styles/globals.css"
 import { Providers } from "@/components/providers"
 import { AppShell } from "@/components/layout/app-shell"
 import { Toaster } from "@/components/ui/toaster"
+import { ChunkErrorReload } from "@/components/system/chunk-error-reload"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -95,6 +96,7 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="https://images.unsplash.com" />
       </head>
       <body className="font-sans bg-background text-foreground antialiased">
+        <ChunkErrorReload />
         <Providers>
           <AppShell>{children}</AppShell>
           <Toaster />

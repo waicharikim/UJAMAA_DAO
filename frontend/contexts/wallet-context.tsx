@@ -99,21 +99,36 @@ function PrivyWalletAdapter({ children }: { children: ReactNode }) {
   // When Privy connects a wallet:
   //   • No UjamaaDAO session → full wallet login via /auth/wallet/verify
   //   • Session exists       → link wallet via /auth/wallet/link (409 = already linked, ignored)
-  const linkedRef = useRef<string | null>(null)
+  //
+  // `attemptedRef` tracks addresses we've already started auth for, set *before*
+  // the async work — so dependency churn (e.g. a new `wallets` array identity)
+  // can't re-fire concurrent personal_sign popups or loop. A `cancelled` flag
+  // prevents state updates (via `login`) after unmount, which on mobile can
+  // happen during the wallet round-trip.
+  const attemptedRef = useRef<Set<string>>(new Set())
   useEffect(() => {
-    if (!walletAddress || linkedRef.current === walletAddress) return
+    // Wait until Privy has finished initialising before asking for a signature.
+    // Firing personal_sign mid-init (e.g. right after an OAuth redirect, before
+    // the embedded wallet is fully provisioned) can stack a broken signing modal
+    // over the app — a stuck dark overlay = black screen.
+    if (!ready) return
+    if (!walletAddress || attemptedRef.current.has(walletAddress)) return
     const wallet = wallets[0]
     if (!wallet) return
+
+    attemptedRef.current.add(walletAddress)
+    let cancelled = false
 
     ;(async () => {
       try {
         const { message } = await authApi.getWalletNonce(walletAddress)
         const provider = await wallet.getEthereumProvider()
-        const signature = await provider.request({
+        const signature = (await provider.request({
           method: "personal_sign",
           params: [message, walletAddress],
-        }) as string
+        })) as string
 
+        if (cancelled) return
         if (!tokenStore.getAccess()) {
           // No session — sign in with wallet
           await login(walletAddress, signature)
@@ -121,17 +136,22 @@ function PrivyWalletAdapter({ children }: { children: ReactNode }) {
           // Session exists — link wallet to existing account
           await authApi.linkWallet(walletAddress, signature)
         }
-        linkedRef.current = walletAddress
       } catch (err: any) {
-        // 409 = already linked — treat as success
-        if (err?.status === 409) {
-          linkedRef.current = walletAddress
-        } else {
+        // 409 = already linked — fine. Any other failure surfaces a toast via
+        // login()'s own catch. We deliberately leave the address marked
+        // attempted (don't auto-retry): Privy's useWallets() can return a new
+        // array identity each render, so retrying here risks a personal_sign
+        // popup loop. The user retries by reconnecting or refreshing.
+        if (err?.status !== 409) {
           console.warn("[wallet] backend auth failed", err)
         }
       }
     })()
-  }, [walletAddress, wallets, isAuthenticated, login])
+
+    return () => {
+      cancelled = true
+    }
+  }, [ready, walletAddress, wallets, login])
 
   const connectWallet = useCallback(async () => {
     privyConnect()

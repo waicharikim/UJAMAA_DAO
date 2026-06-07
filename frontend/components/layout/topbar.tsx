@@ -6,10 +6,11 @@ import { PanelLeft, Coins, Award, Zap, ChevronLeft } from "lucide-react"
 import dynamic from "next/dynamic"
 import { Button } from "@/components/ui/button"
 
-// Lazy-load WalletButton — keeps @privy-io/react-auth out of the topbar bundle
-const WalletButton = dynamic(
-  () => import("@/components/auth/wallet-button").then((m) => ({ default: m.WalletButton })),
-  { ssr: false, loading: () => <div className="h-8 w-20 rounded-full bg-[#C9922A]/10 animate-pulse" /> },
+// Lazy-load AccountMenu — keeps @privy-io/react-auth (used for wallet) out of
+// the topbar bundle. The avatar dropdown holds profile, wallet, and sign-out.
+const AccountMenu = dynamic(
+  () => import("@/components/layout/account-menu").then((m) => ({ default: m.AccountMenu })),
+  { ssr: false, loading: () => <div className="h-8 w-8 rounded-full bg-[#C9922A]/10 animate-pulse" /> },
 )
 import { NotificationsPopover } from "./notifications-popover"
 import { GlobalSearch } from "./global-search"
@@ -155,7 +156,7 @@ export function Topbar({ collapsed, onToggle }: TopbarProps) {
         ) : isAuthenticated ? (
           <>
             <NotificationsPopover />
-            <WalletButton />
+            <AccountMenu />
           </>
         ) : (
           <>

@@ -11,7 +11,6 @@ import {
   MoreHorizontal,
   Store,
   Landmark,
-  User,
   Shield,
   X,
   BookOpen,
@@ -34,11 +33,13 @@ import {
 } from "@/components/ui/drawer"
 import { useAuth } from "@/contexts/auth-context"
 
+// Profile moved to the top-right avatar menu (AccountMenu in the topbar);
+// Projects takes the freed slot here.
 const primaryNav = [
   { label: "Home",       href: "/dashboard", icon: Home         },
   { label: "Community",  href: "/groups",    icon: Users        },
   { label: "Governance", href: "/proposals", icon: Scale        },
-  { label: "Profile",    href: "/profile",   icon: User         },
+  { label: "Projects",   href: "/projects",  icon: Briefcase    },
 ]
 
 const drawerGroups = [

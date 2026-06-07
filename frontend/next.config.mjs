@@ -11,6 +11,11 @@ const withPWA = require("next-pwa")({
   disable: process.env.NODE_ENV === "development",
   register: true,
   skipWaiting: true,
+  // Purge precaches from previous builds so an installed PWA can't serve a
+  // stale HTML shell that points at JS chunks that no longer exist (which boots
+  // to a blank/black screen after a deploy). Pairs with the ChunkLoadError
+  // reload guard mounted in app/layout.tsx.
+  cleanupOutdatedCaches: true,
   customWorkerSrc: "worker",
   customWorkerDest: "public",
 })
@@ -40,33 +45,40 @@ const nextConfig = {
   // causing "module not found" errors when the path transform is applied.
   turbopack: {
     resolveAlias: {
-      unstorage: "./stubs/empty.js",
+      // NOTE: `unstorage` is NOT stubbed — it's a real (installed) dependency of
+      // @walletconnect/keyvaluestorage. Stubbing it with an empty object made
+      // `createStorage` undefined, so WalletConnect's storage threw on init and
+      // fell back to a degraded path — breaking MetaMask / WalletConnect connect
+      // in the installed PWA (black screen). Let the real module resolve.
       "x402/client": "./stubs/empty.js",
       "@base-org/account": "./stubs/empty.js",
     },
   },
   webpack: (config) => {
-    // Stub missing optional transitive deps from @privy-io/react-auth:
+    // Stub optional transitive deps from @privy-io/react-auth that we don't use:
     //
-    //   - unstorage: used by @walletconnect/core for KV storage (not needed)
     //   - x402/client: Privy payment-protocol feature (not used)
     //   - @base-org/account: Privy Coinbase smart-wallet; its viem dep fails ESM resolution
     //
+    // `unstorage` is deliberately NOT stubbed — WalletConnect needs its real
+    // `createStorage` (see the turbopack block above).
     config.resolve.alias = {
       ...config.resolve.alias,
-      unstorage: path.resolve(__dirname, "stubs/empty.js"),
       "x402/client": path.resolve(__dirname, "stubs/empty.js"),
       "@base-org/account": path.resolve(__dirname, "stubs/empty.js"),
     }
 
     // DelegatedActionsConsentScreen is a Privy UI component that imports
     // `CloudUpload` from lucide-react.  That icon was added ~v0.355 but our
-    // pinned version is 0.294.  We never use delegated-actions, so stub the
-    // whole component to prevent the missing-export compile error.
+    // pinned version is 0.294.  We never use delegated-actions, so stub it.
+    // NOTE: stub with a real no-op *component* (renders null), NOT an empty
+    // object — Privy renders this in its modal portal, and an empty object
+    // throws "Element type is invalid", crashing the modal and leaving a stuck
+    // dark backdrop over the app (black screen).
     config.plugins.push(
       new webpack.NormalModuleReplacementPlugin(
         /DelegatedActionsConsentScreen/,
-        path.resolve(__dirname, "stubs/empty.js"),
+        path.resolve(__dirname, "stubs/noop-component.js"),
       ),
     )
 
