@@ -43,7 +43,11 @@ import type {
   ScanQrResponseDto,
   AttestResponseDto,
 } from '../types.js';
-import { ProjectStatus, MilestoneStatus } from '../types.js';
+import {
+  ProjectStatus,
+  MilestoneStatus,
+  ProjectParticipation,
+} from '../types.js';
 import { getUtContract } from '../../../core/blockchain/client.js';
 import { workSessionService } from './work-session.service.js';
 import { workLogService } from './work-log.service.js';
@@ -196,6 +200,10 @@ export class ProjectService {
     if (!milestone) throw ApiError.notFound('Milestone');
     if (milestone.status !== MilestoneStatus.AWAITING_VERIFICATION)
       throw ApiError.badRequest('Milestone is not awaiting verification');
+    // Separation of duties: you may not sign off on your own submission. A
+    // single-leader group uses the platform VERIFIER role as the second party.
+    if (milestone.submittedById && milestone.submittedById === verifierId)
+      throw ApiError.forbidden('You cannot verify your own submission');
     await this.assertMilestoneVerifyAuth(verifierId, milestone.projectId);
     const newStatus = await this.applyMilestoneVerification(
       verifierId,
@@ -274,6 +282,10 @@ export class ProjectService {
     status?: string;
     limit?: number;
     offset?: number;
+    /** When set and no explicit owner filter is given, the list is scoped to
+     *  projects this viewer can actually reach (their groups + geographically
+     *  open projects in their area + their own). */
+    viewerId?: string;
   }): Promise<ListProjectsDto> {
     const {
       ownerGroupId,
@@ -281,12 +293,20 @@ export class ProjectService {
       status,
       limit = 20,
       offset = 0,
+      viewerId,
     } = params;
 
     const where: Record<string, unknown> = {};
     if (ownerGroupId) where.ownerGroupId = ownerGroupId;
     if (ownerUserId) where.ownerUserId = ownerUserId;
     if (status) where.status = status;
+
+    // Scope to the viewer when they didn't ask for a specific owner. An explicit
+    // ownerGroupId/ownerUserId filter (e.g. a group's own project page) keeps the
+    // transparent, unscoped behaviour.
+    if (viewerId && !ownerGroupId && !ownerUserId) {
+      where.OR = await this.buildViewerScope(viewerId);
+    }
 
     const [projects, total] = await Promise.all([
       prisma.project.findMany({
@@ -320,6 +340,7 @@ export class ProjectService {
         ownerGroupId: p.ownerGroupId,
         ownerUserId: p.ownerUserId,
         proposalId: p.proposalId,
+        participationScope: p.participationScope as ProjectParticipation,
         milestonesCount: p._count.milestones,
         completedMilestonesCount: completedMap[p.id] ?? 0,
         createdAt: p.createdAt.toISOString(),
@@ -356,7 +377,7 @@ export class ProjectService {
             user: { select: { id: true, name: true, avatarUrl: true } },
           },
         },
-        ownerGroup: { select: { id: true, name: true } },
+        ownerGroup: { select: { id: true, name: true, isSystemGroup: true } },
         ownerUser: { select: { id: true, name: true, avatarUrl: true } },
         proposal: { select: { id: true, title: true, status: true } },
         _count: { select: { milestones: true } },
@@ -380,6 +401,7 @@ export class ProjectService {
       ownerGroupId: project.ownerGroupId,
       ownerUserId: project.ownerUserId,
       proposalId: project.proposalId,
+      participationScope: project.participationScope as ProjectParticipation,
       milestonesCount: project._count.milestones,
       completedMilestonesCount,
       createdAt: project.createdAt.toISOString(),
@@ -429,7 +451,198 @@ export class ProjectService {
     if (!project) throw ApiError.notFound('Project');
     if (isProjectClosed(project.status))
       throw ApiError.badRequest('Cannot join a completed or cancelled project');
+    await this.assertCanParticipate(userId, projectId);
     return this.createProjectMembership(userId, projectId);
+  }
+
+  /**
+   * Set a project's participation scope (leader-only, gated at the route).
+   * Only meaningful for voluntary-group projects — a system group's project
+   * already reaches everyone in its tier, so widening it is rejected.
+   */
+  async setParticipationScope(
+    leaderId: string,
+    projectId: string,
+    scope: ProjectParticipation
+  ): Promise<{ projectId: string; participationScope: ProjectParticipation }> {
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: {
+        id: true,
+        status: true,
+        ownerGroup: { select: { isSystemGroup: true } },
+      },
+    });
+    if (!project) throw ApiError.notFound('Project');
+    if (isProjectClosed(project.status))
+      throw ApiError.badRequest(
+        'Cannot change a completed or cancelled project'
+      );
+    if (
+      scope !== ProjectParticipation.MEMBERS_ONLY &&
+      project.ownerGroup?.isSystemGroup
+    )
+      throw ApiError.badRequest(
+        'System-group projects already include everyone in their area'
+      );
+
+    await prisma.project.update({
+      where: { id: projectId },
+      data: { participationScope: scope },
+    });
+    return { projectId, participationScope: scope };
+  }
+
+  /**
+   * Gate on who may participate (join / claim / contribute) in a project.
+   *
+   * A project belongs to a group, and the group already encodes the right
+   * audience:
+   *  1. Members of the owning group may always participate. For system groups
+   *     (ward / constituency / county) every resident at that tier is an
+   *     auto-enrolled member, so this single check already covers community and
+   *     cross-ward projects.
+   *  2. A voluntary group may widen a project to its surrounding geography
+   *     (WARD / CONSTITUENCY / COUNTY) — anyone whose residence falls inside the
+   *     owning group's ward / constituency / county may then join, even if they
+   *     are not a formal member.
+   */
+  private async assertCanParticipate(
+    userId: string,
+    projectId: string
+  ): Promise<void> {
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: {
+        ownerGroupId: true,
+        participationScope: true,
+        ownerGroup: { select: { wardId: true } },
+      },
+    });
+    if (!project) throw ApiError.notFound('Project');
+
+    if (project.ownerGroupId) {
+      const membership = await prisma.groupMember.findUnique({
+        where: {
+          userId_groupId: { userId, groupId: project.ownerGroupId },
+        },
+        select: { active: true },
+      });
+      if (membership?.active) return;
+    }
+
+    if (
+      project.participationScope !== ProjectParticipation.MEMBERS_ONLY &&
+      project.ownerGroup?.wardId &&
+      (await this.isWithinProjectGeography(
+        userId,
+        project.ownerGroup.wardId,
+        project.participationScope as ProjectParticipation
+      ))
+    )
+      return;
+
+    throw ApiError.forbidden(
+      "You must belong to this project's group to participate"
+    );
+  }
+
+  /**
+   * Build the `OR` clauses that scope a project list to what a viewer can reach:
+   *  - projects of groups they actively belong to (spans their ward /
+   *    constituency / county system groups via auto-enrollment, plus voluntary
+   *    groups),
+   *  - geographically-open projects whose owning group's ward / constituency /
+   *    county matches the viewer's residence at that tier,
+   *  - projects they personally own.
+   */
+  private async buildViewerScope(
+    viewerId: string
+  ): Promise<Record<string, unknown>[]> {
+    const wardSelect = {
+      id: true,
+      constituencyId: true,
+      countyId: true,
+    } as const;
+    const [memberships, user] = await Promise.all([
+      prisma.groupMember.findMany({
+        where: { userId: viewerId, active: true },
+        select: { groupId: true },
+      }),
+      prisma.user.findUnique({
+        where: { id: viewerId },
+        select: {
+          primaryWard: { select: wardSelect },
+          secondaryWard: { select: wardSelect },
+        },
+      }),
+    ]);
+
+    const groupIds = memberships.map((m) => m.groupId);
+    const wards = [user?.primaryWard, user?.secondaryWard].filter(
+      (w): w is { id: string; constituencyId: string; countyId: string } =>
+        w != null
+    );
+    const wardIds = [...new Set(wards.map((w) => w.id))];
+    const constituencyIds = [...new Set(wards.map((w) => w.constituencyId))];
+    const countyIds = [...new Set(wards.map((w) => w.countyId))];
+
+    return [
+      { ownerGroupId: { in: groupIds } },
+      { ownerUserId: viewerId },
+      {
+        participationScope: ProjectParticipation.WARD,
+        ownerGroup: { wardId: { in: wardIds } },
+      },
+      {
+        participationScope: ProjectParticipation.CONSTITUENCY,
+        ownerGroup: { ward: { constituencyId: { in: constituencyIds } } },
+      },
+      {
+        participationScope: ProjectParticipation.COUNTY,
+        ownerGroup: { ward: { countyId: { in: countyIds } } },
+      },
+    ];
+  }
+
+  /** True when the user's primary/secondary ward falls inside the project's
+   *  geography at the requested tier. */
+  private async isWithinProjectGeography(
+    userId: string,
+    projectWardId: string,
+    scope: ProjectParticipation
+  ): Promise<boolean> {
+    const wardSelect = {
+      id: true,
+      constituencyId: true,
+      countyId: true,
+    } as const;
+    const [projectWard, user] = await Promise.all([
+      prisma.ward.findUnique({
+        where: { id: projectWardId },
+        select: wardSelect,
+      }),
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          primaryWard: { select: wardSelect },
+          secondaryWard: { select: wardSelect },
+        },
+      }),
+    ]);
+    if (!projectWard || !user) return false;
+
+    const userWards = [user.primaryWard, user.secondaryWard].filter(
+      (w): w is { id: string; constituencyId: string; countyId: string } =>
+        w != null
+    );
+
+    return userWards.some((w) => {
+      if (scope === ProjectParticipation.WARD) return w.id === projectWard.id;
+      if (scope === ProjectParticipation.CONSTITUENCY)
+        return w.constituencyId === projectWard.constituencyId;
+      return w.countyId === projectWard.countyId; // COUNTY
+    });
   }
 
   private async createProjectMembership(userId: string, projectId: string) {
@@ -777,6 +990,9 @@ export class ProjectService {
     });
     if (!task) throw ApiError.notFound('Task');
     this.assertTaskCompletable(task, userId);
+    // Defense-in-depth: a member could have been removed from the owning group
+    // after claiming. Re-check membership before crediting completion.
+    await this.assertProjectMember(userId, task.projectId);
 
     await prisma.task.update({
       where: { id: taskId },
@@ -942,6 +1158,7 @@ export class ProjectService {
       dueDate: m.dueDate?.toISOString() ?? null,
       orderIndex: m.orderIndex,
       proposalMilestoneId: m.proposalMilestoneId,
+      submittedById: m.submittedById ?? null,
       tasks:
         (m as any).tasks?.map((t: any) => ({
           id: t.id,

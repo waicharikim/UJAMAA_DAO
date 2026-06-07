@@ -85,10 +85,15 @@ async function seedTask(
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('POST /api/v1/projects/:projectId/join', () => {
-  it('returns 201 and adds user as CONTRIBUTOR', async () => {
+  it('returns 201 and adds a group member as CONTRIBUTOR', async () => {
     const owner = await createProjectUser('join-owner@example.com');
     const joiner = await createProjectUser('join-joiner@example.com');
-    const project = await seedProject(owner.id);
+    const group = await seedProjectGroup(owner.id);
+    // The joiner belongs to the owning group → may participate.
+    await prisma.groupMember.create({
+      data: { userId: joiner.id, groupId: group.id, role: 'MEMBER', active: true },
+    });
+    const project = await seedProject(owner.id, group.id);
     const token = makeProjectToken(joiner.id);
 
     const res = await request(app)
@@ -108,9 +113,31 @@ describe('POST /api/v1/projects/:projectId/join', () => {
     expect(membership!.role).toBe('CONTRIBUTOR');
   });
 
+  it('returns 403 if the user is not in the owning group', async () => {
+    const owner = await createProjectUser('join-outsider-owner@example.com');
+    const outsider = await createProjectUser('join-outsider@example.com');
+    const group = await seedProjectGroup(owner.id);
+    const project = await seedProject(owner.id, group.id);
+    const token = makeProjectToken(outsider.id);
+
+    const res = await request(app)
+      .post(`/api/v1/projects/${project.id}/join`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(403);
+    const membership = await prisma.projectMember.findUnique({
+      where: { projectId_userId: { projectId: project.id, userId: outsider.id } },
+    });
+    expect(membership).toBeNull();
+  });
+
   it('returns 409 if user is already a member', async () => {
     const owner = await createProjectUser('join-dup@example.com');
-    const project = await seedProject(owner.id);
+    // Owner is a member of the owning group (seedProjectGroup adds them) and is
+    // already a project member (seedProject), so the gate passes and the dup
+    // membership conflicts → 409.
+    const group = await seedProjectGroup(owner.id);
+    const project = await seedProject(owner.id, group.id);
     const token = makeProjectToken(owner.id);
 
     const res = await request(app)

@@ -353,6 +353,25 @@ router.post(
   asyncHandler(ProjectController.joinProject)
 );
 
+router.patch(
+  '/:projectId/participation',
+  validateRequest({
+    schema: z.object({ projectId: z.string().uuid() }),
+    target: 'params',
+  }),
+  validateRequest({
+    schema: z.object({
+      scope: z.enum(['MEMBERS_ONLY', 'WARD', 'CONSTITUENCY', 'COUNTY']),
+    }),
+    target: 'body',
+  }),
+  authorize({
+    scopeCheck: async (req) =>
+      roleService.isProjectLeader(req.user!.userId, req.params.projectId),
+  }),
+  asyncHandler(ProjectController.setParticipation)
+);
+
 router.post(
   '/:projectId/members',
   validateRequest({

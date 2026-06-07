@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react"
 import Link from "next/link"
 import { use } from "react"
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query"
-import { projectApi, userApi, projectUpdatesApi, type ProjectDetailDto, type ProjectMilestoneDto, type WorkLogResponseDto } from "@/lib/api"
+import { projectApi, userApi, projectUpdatesApi, type ProjectDetailDto, type ProjectMilestoneDto, type WorkLogResponseDto, type ParticipationScope } from "@/lib/api"
 import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -387,21 +387,30 @@ function MilestoneCard({
   milestone,
   isMember,
   isLeader,
+  isOwner,
+  currentUserId,
   projectId,
   projectMembers,
 }: {
   milestone: ProjectMilestoneDto
   isMember: boolean
   isLeader: boolean
+  isOwner: boolean
+  currentUserId: string | undefined
   projectId: string
   projectMembers: ProjectDetailDto["members"]
 }) {
   const [expanded, setExpanded] = useState(false)
   const cfg = MILESTONE_STATUS[milestone.status] ?? MILESTONE_STATUS.PENDING
-  const canStart    = isMember && milestone.status === "PENDING"
+  // You can't verify your own submission — a different leader (or a verifier)
+  // must sign off. Mirrors the backend separation-of-duties rule.
+  const ownSubmission = !!currentUserId && milestone.submittedById === currentUserId
+  const canStart    = isOwner && milestone.status === "PENDING"
   const canSubmit   = isMember && milestone.status === "IN_PROGRESS"
-  const canVerify   = isMember && milestone.status === "AWAITING_VERIFICATION"
+  const canVerify   = isOwner && milestone.status === "AWAITING_VERIFICATION" && !ownSubmission
   const canLogWork  = isMember && milestone.status === "IN_PROGRESS"
+  const awaitingIndependentVerifier =
+    isOwner && milestone.status === "AWAITING_VERIFICATION" && ownSubmission
   const hasWorkLogs = ["IN_PROGRESS", "AWAITING_VERIFICATION", "VERIFIED"].includes(milestone.status)
 
   return (
@@ -432,7 +441,7 @@ function MilestoneCard({
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             <StatusBadge status={milestone.status} config={MILESTONE_STATUS} />
-            {(canStart || canSubmit || canVerify || canLogWork || hasWorkLogs) && (
+            {(canStart || canSubmit || canVerify || canLogWork || hasWorkLogs || awaitingIndependentVerifier) && (
               <button
                 onClick={() => setExpanded(!expanded)}
                 className="p-1 rounded-lg hover:bg-black/5 transition-colors"
@@ -460,6 +469,15 @@ function MilestoneCard({
           {canStart   && <MilestoneStartButton milestoneId={milestone.id} projectId={projectId} />}
           {canSubmit  && <MilestoneSubmitForm  milestoneId={milestone.id} projectId={projectId} onClose={() => setExpanded(false)} />}
           {canVerify  && <MilestoneVerifyForm  milestoneId={milestone.id} projectId={projectId} onClose={() => setExpanded(false)} />}
+          {awaitingIndependentVerifier && (
+            <p
+              className="text-xs rounded-lg px-3 py-2"
+              style={{ background: "rgba(201,146,42,0.10)", color: "#8A6516" }}
+            >
+              You submitted this milestone, so it needs an independent verifier — a
+              co-leader or someone with the verifier role — to sign it off.
+            </p>
+          )}
           {canLogWork && <MilestoneLogHoursPanel milestoneId={milestone.id} />}
           {canLogWork && (
             <WorkSessionPanel
@@ -531,11 +549,13 @@ function ProjectHeaderCard({
   projectId,
   user,
   isMember,
+  isOwner,
 }: {
   project: ProjectDetailDto
   projectId: string
   user: { id: string } | null
   isMember: boolean
+  isOwner: boolean
 }) {
   const queryClient = useQueryClient()
   const { toast } = useToast()
@@ -555,6 +575,19 @@ function ProjectHeaderCard({
     },
     onError: (e: any) => toast({ title: "Failed", description: e?.message, variant: "destructive" }),
   })
+
+  const participationMutation = useMutation({
+    mutationFn: (scope: ParticipationScope) => projectApi.setParticipation(projectId, scope),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] })
+      toast({ title: "Participation updated ✓" })
+    },
+    onError: (e: any) => toast({ title: "Failed", description: e?.message, variant: "destructive" }),
+  })
+
+  // Only voluntary-group projects can be widened — a system group already
+  // spans everyone in its tier.
+  const canSetParticipation = isOwner && !!project.ownerGroup && !project.ownerGroup.isSystemGroup
 
   const contributeMutation = useMutation({
     mutationFn: () => projectApi.contribute(projectId, parseInt(contributeAmount, 10)),
@@ -656,6 +689,45 @@ function ProjectHeaderCard({
           </div>
         )}
 
+        {canSetParticipation && (
+          <div
+            className="mt-4 rounded-xl p-3"
+            style={{ background: "rgba(29,71,49,0.04)", border: "1px solid rgba(29,71,49,0.08)" }}
+          >
+            <p className="text-[11px] font-bold text-[#0E0B08]/55 uppercase tracking-wide mb-2">
+              Who can participate
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {([
+                { value: "MEMBERS_ONLY", label: "Members only" },
+                { value: "WARD", label: "Our ward" },
+                { value: "CONSTITUENCY", label: "Our constituency" },
+                { value: "COUNTY", label: "Our county" },
+              ] as { value: ParticipationScope; label: string }[]).map((opt) => {
+                const active = project.participationScope === opt.value
+                return (
+                  <button
+                    key={opt.value}
+                    onClick={() => !active && participationMutation.mutate(opt.value)}
+                    disabled={participationMutation.isPending}
+                    className="rounded-full px-3 py-1 text-[11px] font-semibold transition-all disabled:opacity-50"
+                    style={
+                      active
+                        ? { background: "#1D4731", color: "#fff" }
+                        : { background: "rgba(29,71,49,0.08)", color: "#1D4731" }
+                    }
+                  >
+                    {opt.label}
+                  </button>
+                )
+              })}
+            </div>
+            <p className="text-[10px] text-[#0E0B08]/40 mt-2">
+              Open this project beyond your group to invite neighbours in the wider area.
+            </p>
+          </div>
+        )}
+
         {showContributeForm && (
           <div className="mt-4 flex items-center gap-2">
             <input
@@ -697,11 +769,13 @@ function ProjectHeaderCard({
 // ── Tab panels ────────────────────────────────────────────
 
 function MilestonesTab({
-  milestones, isMember, isLeader, projectId, members,
+  milestones, isMember, isLeader, isOwner, currentUserId, projectId, members,
 }: {
   milestones: ProjectMilestoneDto[]
   isMember: boolean
   isLeader: boolean
+  isOwner: boolean
+  currentUserId: string | undefined
   projectId: string
   members: ProjectDetailDto["members"]
 }) {
@@ -725,6 +799,8 @@ function MilestonesTab({
             milestone={m}
             isMember={isMember}
             isLeader={isLeader}
+            isOwner={isOwner}
+            currentUserId={currentUserId}
             projectId={projectId}
             projectMembers={members}
           />
@@ -1168,6 +1244,9 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
   const isMember = project.members.some((m) => m.userId === user?.id)
   const isLeader = project.members.some((m) => m.userId === user?.id && m.role === "LEAD")
+  // Backend "project leader" = the project owner (ownerUserId). Use this for
+  // owner-gated actions (start/verify milestones) so the UI matches the API.
+  const isOwner = !!user?.id && project.ownerUserId === user.id
 
   return (
     <div className="px-4 md:px-8 py-6 max-w-3xl mx-auto space-y-6">
@@ -1179,7 +1258,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         All Projects
       </Link>
 
-      <ProjectHeaderCard project={project} projectId={id} user={user} isMember={isMember} />
+      <ProjectHeaderCard project={project} projectId={id} user={user} isMember={isMember} isOwner={isOwner} />
 
       <TabBar active={activeTab} onChange={setActiveTab} />
 
@@ -1188,12 +1267,14 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           milestones={project.milestones}
           isMember={isMember}
           isLeader={isLeader}
+          isOwner={isOwner}
+          currentUserId={user?.id}
           projectId={id}
           members={project.members}
         />
       )}
       {activeTab === "tasks" && (
-        <TaskBoard projectId={id} milestones={project.milestones} isLeader={isLeader} />
+        <TaskBoard projectId={id} milestones={project.milestones} isLeader={isLeader} isMember={isMember} />
       )}
       {activeTab === "team" && (
         <TeamTab

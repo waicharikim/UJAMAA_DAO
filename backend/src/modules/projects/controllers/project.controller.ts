@@ -10,6 +10,7 @@ import { AuthRequest } from '../../../core/types/Ujamaadao.types.js';
 import { sendSuccess, sendCreated } from '../../../core/utils/response.js';
 import { projectService } from '../services/project.service.js';
 import { projectUpdateService } from '../services/project-update.service.js';
+import { ProjectParticipation } from '../types.js';
 
 export class ProjectController {
   static async listProjects(req: AuthRequest, res: Response) {
@@ -21,6 +22,7 @@ export class ProjectController {
       status,
       limit: limit ? parseInt(limit, 10) : undefined,
       offset: offset ? parseInt(offset, 10) : undefined,
+      viewerId: req.user!.userId,
     });
     sendSuccess(res, result);
   }
@@ -82,6 +84,18 @@ export class ProjectController {
     const { projectId } = req.params;
     const result = await projectService.joinProject(userId, projectId);
     sendSuccess(res, result, 'Joined project', 201);
+  }
+
+  static async setParticipation(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const { projectId } = req.params;
+    const { scope } = req.body as { scope: ProjectParticipation };
+    const result = await projectService.setParticipationScope(
+      userId,
+      projectId,
+      scope
+    );
+    sendSuccess(res, result, 'Participation scope updated');
   }
 
   static async contribute(req: AuthRequest, res: Response) {

@@ -1262,10 +1262,13 @@ export interface ProjectMilestoneDto {
   dueDate: string | null
   orderIndex: number
   proposalMilestoneId: string | null
+  submittedById: string | null
   tasks: TaskDto[]
   createdAt: string
   updatedAt: string
 }
+
+export type ParticipationScope = "MEMBERS_ONLY" | "WARD" | "CONSTITUENCY" | "COUNTY"
 
 export interface ProjectListItemDto {
   id: string
@@ -1275,6 +1278,7 @@ export interface ProjectListItemDto {
   ownerGroupId: string | null
   ownerUserId: string | null
   proposalId: string | null
+  participationScope: ParticipationScope
   milestonesCount: number
   completedMilestonesCount: number
   createdAt: string
@@ -1289,7 +1293,7 @@ export interface ProjectDetailDto extends ProjectListItemDto {
     joinedAt: string
     user: { id: string; name: string | null; avatarUrl: string | null }
   }>
-  ownerGroup: { id: string; name: string } | null
+  ownerGroup: { id: string; name: string; isSystemGroup: boolean } | null
   ownerUser: { id: string; name: string | null; avatarUrl: string | null } | null
   proposal: { id: string; title: string; status: string } | null
 }
@@ -1403,6 +1407,15 @@ export const projectApi = {
 
   joinProject: (projectId: string): Promise<{ projectId: string; userId: string; role: string }> =>
     apiFetch(`/projects/${projectId}/join`, { method: "POST" }),
+
+  setParticipation: (
+    projectId: string,
+    scope: ParticipationScope,
+  ): Promise<{ projectId: string; participationScope: ParticipationScope }> =>
+    apiFetch(`/projects/${projectId}/participation`, {
+      method: "PATCH",
+      body: JSON.stringify({ scope }),
+    }),
 
   addMember: (projectId: string, dto: { userId: string; role?: "LEAD" | "MANAGER" | "CONTRIBUTOR" | "VIEWER" }) =>
     apiFetch<{ userId: string; role: string }>(`/projects/${projectId}/members`, {

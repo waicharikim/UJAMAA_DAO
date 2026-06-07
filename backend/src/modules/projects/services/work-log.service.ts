@@ -77,6 +77,10 @@ export class WorkLogService {
     if (!workLog) throw ApiError.notFound('Work log');
     if (workLog.verifiedAt)
       throw ApiError.conflict('Work log already verified');
+    // Separation of duties: you may not approve your own logged hours. A
+    // single-leader group uses the platform VERIFIER role as the second party.
+    if (workLog.userId === verifierId)
+      throw ApiError.forbidden('You cannot verify your own submission');
 
     const isLeader = await roleService.isProjectLeader(
       verifierId,

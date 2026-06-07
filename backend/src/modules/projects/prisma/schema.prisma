@@ -38,6 +38,17 @@ enum WorkSessionStatus {
   FLAGGED
 }
 
+// Who may participate (join/claim/contribute) in a project.
+// MEMBERS_ONLY = owning-group members only. WARD/CONSTITUENCY/COUNTY open the
+// project to anyone whose residence falls within the owning group's geography
+// at that tier (used by voluntary groups; system-group projects already span
+// their tier via auto-enrolled membership).
+enum ProjectParticipation {
+  MEMBERS_ONLY
+  WARD
+  CONSTITUENCY
+  COUNTY
+}
 
 model Project {
   id           String        @id @default(uuid()) @db.Uuid
@@ -48,6 +59,8 @@ model Project {
 
   ownerGroupId String? @db.Uuid
   ownerUserId  String? @db.Uuid
+
+  participationScope ProjectParticipation @default(MEMBERS_ONLY)
 
   // NEW: Link to original proposal
   proposalId   String?  @unique @db.Uuid

@@ -35,11 +35,13 @@ function TaskCard({
   task,
   userId,
   isLeader,
+  isMember,
   projectId,
 }: {
   task: TaskDto
   userId: string | undefined
   isLeader: boolean
+  isMember: boolean
   projectId: string
 }) {
   const queryClient = useQueryClient()
@@ -61,8 +63,10 @@ function TaskCard({
   })
 
   const isAssignedToMe = task.assignedTo?.id === userId
-  const canClaim = task.status === "TODO" && !!userId && !task.assignedTo
+  const canClaim = isMember && task.status === "TODO" && !!userId && !task.assignedTo
   const canComplete = task.status === "IN_PROGRESS" && isAssignedToMe
+  // An open task a non-member can't act on — nudge them to join first.
+  const showJoinHint = !isMember && task.status === "TODO" && !task.assignedTo
 
   return (
     <div
@@ -129,6 +133,12 @@ function TaskCard({
               ? "Mark as Done (+10 IP)"
               : "Claim Task"}
         </button>
+      )}
+
+      {showJoinHint && (
+        <p className="text-[10px] text-[#0E0B08]/40 text-center">
+          Join the project to claim this task
+        </p>
       )}
     </div>
   )
@@ -269,9 +279,10 @@ interface TaskBoardProps {
   projectId: string
   milestones: ProjectMilestoneDto[]
   isLeader: boolean
+  isMember: boolean
 }
 
-export default function TaskBoard({ projectId, milestones, isLeader }: TaskBoardProps) {
+export default function TaskBoard({ projectId, milestones, isLeader, isMember }: TaskBoardProps) {
   const { user } = useAuth()
   const [skillFilter, setSkillFilter] = useState<string>("")
   const [statusFilter, setStatusFilter] = useState<string>("")
@@ -401,6 +412,7 @@ export default function TaskBoard({ projectId, milestones, isLeader }: TaskBoard
                       task={task}
                       userId={user?.id}
                       isLeader={isLeader}
+                      isMember={isMember}
                       projectId={projectId}
                     />
                   ))}

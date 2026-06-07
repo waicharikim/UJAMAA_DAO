@@ -288,6 +288,27 @@ describe('verifyMilestone()', () => {
       })
     ).rejects.toMatchObject({ statusCode: 400 });
   });
+
+  it('throws 403 when the verifier is the submitter (no self-verification)', async () => {
+    const owner = await createProjectUser('self-verify@test.com');
+    const project = await seedProject(owner.id);
+    const milestone = await seedMilestone(project.id, 'M1', MilestoneStatus.AWAITING_VERIFICATION);
+    // Owner both submitted and tries to verify their own milestone.
+    await prisma.milestone.update({
+      where: { id: milestone.id },
+      data: { submittedById: owner.id },
+    });
+
+    await expect(
+      service.verifyMilestone(owner.id, {
+        milestoneId: milestone.id,
+        approved: true,
+      })
+    ).rejects.toMatchObject({ statusCode: 403 });
+
+    const unchanged = await prisma.milestone.findUnique({ where: { id: milestone.id } });
+    expect(unchanged?.status).toBe(MilestoneStatus.AWAITING_VERIFICATION);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

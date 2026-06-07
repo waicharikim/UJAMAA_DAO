@@ -22,6 +22,16 @@ export enum MilestoneStatus {
   REJECTED = 'REJECTED',
 }
 
+// Who may participate (join/claim/contribute) in a project. MEMBERS_ONLY = owning
+// group members only; WARD/CONSTITUENCY/COUNTY open it to anyone resident within
+// the owning group's geography at that tier (voluntary-group projects).
+export enum ProjectParticipation {
+  MEMBERS_ONLY = 'MEMBERS_ONLY',
+  WARD = 'WARD',
+  CONSTITUENCY = 'CONSTITUENCY',
+  COUNTY = 'COUNTY',
+}
+
 // ── Request DTOs ─────────────────────────────────────────────────────────────
 
 export interface CreateProjectFromProposalDto {
@@ -55,6 +65,7 @@ export interface MilestoneResponseDto {
   dueDate: string | null;
   orderIndex: number;
   proposalMilestoneId: string | null;
+  submittedById: string | null;
   tasks: TaskDto[];
   createdAt: string;
   updatedAt: string;
@@ -75,6 +86,7 @@ export interface ProjectDto {
   ownerGroupId: string | null;
   ownerUserId: string | null;
   proposalId: string | null;
+  participationScope: ProjectParticipation;
   milestonesCount: number;
   completedMilestonesCount: number;
   createdAt: string;
@@ -84,7 +96,7 @@ export interface ProjectDto {
 export interface ProjectDetailDto extends ProjectDto {
   milestones: MilestoneResponseDto[];
   members: ProjectMemberResponseDto[];
-  ownerGroup: { id: string; name: string } | null;
+  ownerGroup: { id: string; name: string; isSystemGroup: boolean } | null;
   ownerUser: {
     id: string;
     name: string | null;
