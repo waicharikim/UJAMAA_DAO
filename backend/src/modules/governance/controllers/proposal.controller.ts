@@ -169,6 +169,7 @@ export class ProposalController {
       callerContext: {
         roles: req.user!.roles ?? [],
         primaryWardId: req.user!.primaryWardId,
+        userId: req.user!.userId,
       },
     });
     sendSuccess(res, result, 'Proposals retrieved');

@@ -65,7 +65,7 @@ async function listProposals(params: {
   scope?: ProposalScope;
   limit?: number;
   offset?: number;
-  callerContext?: { roles: string[]; primaryWardId?: string };
+  callerContext?: { roles: string[]; primaryWardId?: string; userId?: string };
 }) {
   const {
     groupId,
@@ -76,6 +76,13 @@ async function listProposals(params: {
     callerContext,
   } = params;
 
+  // Scope the list when no specific group is requested:
+  //  - location admins → their administrative area (existing behaviour);
+  //  - a regular member with no explicit `scope` filter → their own communities
+  //    (the system groups they're auto-enrolled in across ward/constituency/
+  //    county/national + voluntary groups they joined), mirroring how the feed
+  //    and projects scope. An explicit `scope` (e.g. the platform-wide
+  //    /governance transparency view) opts out and stays global.
   let locationWhere: Prisma.ProposalWhereInput = {};
   if (!groupId && callerContext?.roles) {
     const roles = callerContext.roles;
@@ -84,24 +91,31 @@ async function listProposals(params: {
       roles.includes('system:super_admin') ||
       roles.includes('system:compliance_officer');
 
-    if (!isSuperAdmin && wardId) {
-      if (roles.includes('location:ward_admin')) {
-        locationWhere = { group: { wardId } };
-      } else if (roles.includes('location:constituency_admin')) {
-        const ward = await prisma.ward.findUnique({
-          where: { id: wardId },
-          select: { constituencyId: true },
-        });
-        if (ward?.constituencyId)
-          locationWhere = { group: { constituencyId: ward.constituencyId } };
-      } else if (roles.includes('location:county_admin')) {
-        const ward = await prisma.ward.findUnique({
-          where: { id: wardId },
-          select: { countyId: true },
-        });
-        if (ward?.countyId)
-          locationWhere = { group: { countyId: ward.countyId } };
-      }
+    if (isSuperAdmin) {
+      // sees everything
+    } else if (wardId && roles.includes('location:ward_admin')) {
+      locationWhere = { group: { wardId } };
+    } else if (wardId && roles.includes('location:constituency_admin')) {
+      const ward = await prisma.ward.findUnique({
+        where: { id: wardId },
+        select: { constituencyId: true },
+      });
+      if (ward?.constituencyId)
+        locationWhere = { group: { constituencyId: ward.constituencyId } };
+    } else if (wardId && roles.includes('location:county_admin')) {
+      const ward = await prisma.ward.findUnique({
+        where: { id: wardId },
+        select: { countyId: true },
+      });
+      if (ward?.countyId)
+        locationWhere = { group: { countyId: ward.countyId } };
+    } else if (!scope && callerContext.userId) {
+      // Regular member, no explicit scope → their communities only.
+      const memberships = await prisma.groupMember.findMany({
+        where: { userId: callerContext.userId, active: true },
+        select: { groupId: true },
+      });
+      locationWhere = { groupId: { in: memberships.map((m) => m.groupId) } };
     }
   }
 
