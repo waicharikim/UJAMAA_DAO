@@ -277,6 +277,7 @@ function ComposeBox({ activeCommunity, queryKey }: ComposeBoxProps) {
           <div className="flex-1 min-w-0">
             <textarea
               ref={textareaRef}
+              data-testid="compose-input"
               value={content}
               onChange={(e) => setContent(e.target.value)}
               onFocus={() => setFocused(true)}
@@ -307,6 +308,7 @@ function ComposeBox({ activeCommunity, queryKey }: ComposeBoxProps) {
               {500 - content.length}
             </span>
             <button
+              data-testid="compose-post"
               onClick={() => mutation.mutate()}
               disabled={!content.trim() || mutation.isPending}
               className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[12px] font-bold transition-all disabled:opacity-40"
@@ -378,6 +380,7 @@ function FilterPills({ options, active, onChange }: FilterPillsProps) {
         return (
           <button
             key={`${opt.scope}-${opt.wardId ?? ""}`}
+            data-testid={`pill-${opt.scope.toLowerCase()}`}
             onClick={() => onChange(opt)}
             className="flex-shrink-0 px-4 py-1.5 rounded-full text-[12px] font-semibold transition-all"
             style={
