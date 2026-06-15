@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useCallback } from "react"
+import { useCallback } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { onboardingApi } from "@/lib/api"
 import { useAuth } from "@/contexts/auth-context"
@@ -8,22 +8,18 @@ import type { TourStep } from "@/lib/tours/types"
 import "driver.js/dist/driver.css"
 import "@/styles/driver-theme.css"
 
-// Prevents a tour re-firing within the same page session (e.g. on remount) before
-// the server completion round-trips. Cleared on full reload, which is fine.
-const shownThisSession = new Set<string>()
-
 /**
  * Drives a contextual tour for a section.
  *
- * - Auto-starts once on a user's first visit (gated by backend completion, so it
- *   never replays across rebuilds/devices), then marks it complete.
- * - Returns `replay()` to start it on demand (the "?" affordance), which does NOT
- *   re-mark completion.
+ * Tours are **on-demand only** — triggered by the section's "?" tour button via
+ * the returned `replay()`. They do NOT auto-fire: a first-timer already sees the
+ * welcome wizard, and an auto-tour on every section stacked overlays that
+ * intercepted clicks (and felt intrusive). The library is still here so the
+ * affordance remains one tap away.
  */
 export function useSectionTour(tourKey: string, steps: TourStep[]) {
   const { isAuthenticated } = useAuth()
   const queryClient = useQueryClient()
-  const startedRef = useRef(false)
 
   const { data: progress } = useQuery({
     queryKey: ["onboarding-progress"],
@@ -32,7 +28,6 @@ export function useSectionTour(tourKey: string, steps: TourStep[]) {
     staleTime: 60_000,
   })
 
-  const loaded = progress !== undefined
   const completed = !!progress?.completions?.some(
     (c) => c.tutorial.key === tourKey && c.completed,
   )
@@ -81,18 +76,7 @@ export function useSectionTour(tourKey: string, steps: TourStep[]) {
     [steps, completeMutation],
   )
 
-  // Auto-start on first visit.
-  useEffect(() => {
-    if (!isAuthenticated || !loaded) return
-    if (completed || shownThisSession.has(tourKey) || startedRef.current) return
-    startedRef.current = true
-    shownThisSession.add(tourKey)
-    // Small delay so the section (and its data-tour anchors) have rendered.
-    const t = setTimeout(() => start(true), 700)
-    return () => clearTimeout(t)
-  }, [isAuthenticated, loaded, completed, tourKey, start])
-
-  // On-demand replay (does not re-mark completion).
+  // On-demand replay (does not re-mark completion). No auto-start.
   const replay = useCallback(() => start(false), [start])
 
   return { replay, completed }

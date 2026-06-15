@@ -45,27 +45,23 @@ const nextConfig = {
   // causing "module not found" errors when the path transform is applied.
   turbopack: {
     resolveAlias: {
-      // NOTE: `unstorage` is NOT stubbed — it's a real (installed) dependency of
-      // @walletconnect/keyvaluestorage. Stubbing it with an empty object made
-      // `createStorage` undefined, so WalletConnect's storage threw on init and
-      // fell back to a degraded path — breaking MetaMask / WalletConnect connect
-      // in the installed PWA (black screen). Let the real module resolve.
+      // NOTE: neither `unstorage` nor `@base-org/account` is stubbed — both are
+      // real, installed deps Privy probes at init. Stubbing them with an empty
+      // object made their exports `undefined`, so Privy threw on init
+      // (`createStorage`/`createBaseAccountSDK` "is not a function") — WalletConnect
+      // storage degraded and the Base connector logged a caught error. Let the
+      // real modules resolve. Only x402 (a Privy payments feature) stays stubbed.
       "x402/client": "./stubs/empty.js",
-      "@base-org/account": "./stubs/empty.js",
     },
   },
   webpack: (config) => {
-    // Stub optional transitive deps from @privy-io/react-auth that we don't use:
-    //
+    // Stub the one Privy optional dep we don't use:
     //   - x402/client: Privy payment-protocol feature (not used)
-    //   - @base-org/account: Privy Coinbase smart-wallet; its viem dep fails ESM resolution
-    //
-    // `unstorage` is deliberately NOT stubbed — WalletConnect needs its real
-    // `createStorage` (see the turbopack block above).
+    // `unstorage` and `@base-org/account` are deliberately NOT stubbed — Privy
+    // probes their real exports at init (see the turbopack block above).
     config.resolve.alias = {
       ...config.resolve.alias,
       "x402/client": path.resolve(__dirname, "stubs/empty.js"),
-      "@base-org/account": path.resolve(__dirname, "stubs/empty.js"),
     }
 
     // DelegatedActionsConsentScreen is a Privy UI component that imports

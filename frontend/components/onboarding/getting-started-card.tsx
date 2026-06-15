@@ -93,7 +93,12 @@ export function GettingStartedCard() {
     .filter((t) => !t.key.endsWith("_tour"))
     .map((t) => ({
       ...t,
-      completed: completedKeys.has(t.key),
+      // Reflect live real-world state immediately (e.g. already FULL_VERIFIED),
+      // not just server-persisted completions — the auto-complete mutation
+      // round-trip otherwise lags and shows an already-satisfied step.
+      completed:
+        completedKeys.has(t.key) ||
+        (!!user && AUTO_CONDITIONS[t.key]?.(user, data) === true),
       link: TUTORIAL_LINK[t.key] ?? "/dashboard",
       opensWizard: WIZARD_KEYS.has(t.key),
     }))
