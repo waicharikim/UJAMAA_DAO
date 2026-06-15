@@ -26,7 +26,18 @@ export class LocationImpactService {
   /**
    * Get impact for primary hierarchy (ward → constituency → county)
    */
-  async getPrimaryHierarchyImpact(userId: string, primaryWardId: string) {
+  async getPrimaryHierarchyImpact(userId: string, primaryWardId?: string | null) {
+    // The JWT doesn't carry primaryWardId, so callers often can't supply it —
+    // resolve it from the user record when missing.
+    if (!primaryWardId) {
+      const u = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { primaryWardId: true },
+      });
+      primaryWardId = u?.primaryWardId ?? null;
+    }
+    if (!primaryWardId) return null;
+
     const impacts = await prisma.userLocationImpact.findMany({
       where: { userId },
       include: {
@@ -86,7 +97,10 @@ export class LocationImpactService {
     wardId: string,
     amount: number,
     reason: ImpactPointReason,
-    metadata?: Record<string, any>
+    metadata?: Record<string, any>,
+    // When awarded as a side-effect of a global IP award, the GLOBAL log already
+    // records the action — skip the WARD log to avoid doubling the user's history.
+    skipLog = false
   ) {
     if (amount <= 0) return;
 
@@ -123,17 +137,19 @@ export class LocationImpactService {
         });
       }
 
-      // Log the award
-      await tx.impactPointLog.create({
-        data: {
-          userId,
-          amount,
-          reason,
-          scope: 'WARD',
-          scopedId: wardId,
-          metadata,
-        },
-      });
+      // Log the award (skipped when this is a side-effect of a global award)
+      if (!skipLog) {
+        await tx.impactPointLog.create({
+          data: {
+            userId,
+            amount,
+            reason,
+            scope: 'WARD',
+            scopedId: wardId,
+            metadata,
+          },
+        });
+      }
 
       logger.info(
         { userId, wardId, amount, newTier },

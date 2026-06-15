@@ -22,9 +22,9 @@ export class ReputationController {
     const [total, breakdown, hierarchy] = await Promise.all([
       globalImpactPointService.getTotal(userId),
       locationImpactService.getUserImpactBreakdown(userId),
-      primaryWardId
-        ? locationImpactService.getPrimaryHierarchyImpact(userId, primaryWardId)
-        : Promise.resolve(null),
+      // Pass the JWT's primaryWardId when present; the service resolves it from
+      // the user record otherwise (the token doesn't always carry it).
+      locationImpactService.getPrimaryHierarchyImpact(userId, primaryWardId),
     ]);
     sendSuccess(
       res,
