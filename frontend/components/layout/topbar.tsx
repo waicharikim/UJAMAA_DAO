@@ -146,8 +146,10 @@ export function Topbar({ collapsed, onToggle }: TopbarProps) {
         </div>
       )}
 
-      {/* Actions — skeleton during auth hydration */}
-      <div className="flex items-center gap-2">
+      {/* Actions — skeleton during auth hydration.
+          ml-auto right-aligns on mobile, where the flex-1 GlobalSearch (which
+          otherwise pushes these right) is hidden. */}
+      <div className="flex items-center gap-2 ml-auto">
         {isLoading ? (
           <div className="hidden md:flex items-center gap-2">
             <Skeleton className="h-7 w-16 rounded-full" />

@@ -22,7 +22,10 @@ The Project module manages the full lifecycle of projects created from approved 
 - Projects are only created from proposals in `APPROVED` status
 - Milestone start/verify requires project leader or verifier role
 - Work logging requires `COMMUNITY_VERIFIED`
-- Joining and contributing requires `COMMUNITY_VERIFIED`
+- **Participation (join/claim/complete/contribute) requires `COMMUNITY_VERIFIED` _and_ membership of the project's owning group.** The owning group already encodes the audience: a ward/constituency/county system-group project includes every resident of that tier (auto-enrolled), so cross-ward collaboration falls out of the same rule; a voluntary-group project includes only its members.
+- **Participation scope** (`participationScope`, default `MEMBERS_ONLY`): a voluntary group may widen a project to its surrounding geography — `WARD` / `CONSTITUENCY` / `COUNTY` — letting non-members resident in that tier participate. System-group projects keep `MEMBERS_ONLY` (their membership already spans the tier).
+- **Self-verification is blocked:** the member who submitted a milestone (or logged the hours) cannot verify it; a different leader or a holder of the `VERIFIER` role must.
+- `listProjects` (no explicit owner filter) is scoped to the viewer — projects of their groups (incl. ward/constituency/county system groups) + geographically-open projects in their area + their own. `getProject` detail stays readable for transparency; only actions are gated.
 - Contributions debit `fiatBackedUtBalance` from the member and credit the project's `GroupTreasury` (1 UT = 1 KES)
 - Task completion awards 10 Impact Points to the completer
 - QR work sessions: each checked-in member may attest up to 2 others (witness chain); attested members get `depth = attestor.depth + 1`
@@ -52,6 +55,8 @@ List projects with optional filters.
   - `status` (optional): `PLANNING | ACTIVE | ON_HOLD | CANCELLED | COMPLETED`
   - `limit` (optional, default 20, max 100)
   - `offset` (optional, default 0)
+- **Scoping:** When no explicit `ownerGroupId`/`ownerUserId` filter is given, results are scoped to the viewer (their groups + geographically-open projects in their area + their own). An explicit `ownerGroupId` filter (e.g. a group's own project page) returns that group's projects unscoped.
+- Each project object includes `participationScope` (`MEMBERS_ONLY | WARD | CONSTITUENCY | COUNTY`).
 - **Responses:**
   - `200 OK` — Paginated array of project objects
   - `401 Unauthorized`
@@ -149,7 +154,7 @@ Approve or reject a milestone submission. Requires project leader or verifier ro
 
 - **Responses:**
   - `200 OK` — Updated milestone
-  - `403 Forbidden` — Not leader or verifier
+  - `403 Forbidden` — Not leader or verifier, **or the verifier is the submitter (no self-verification)**
 
 ---
 
@@ -195,7 +200,7 @@ Approve or reject a work log. Requires project leader or verifier role.
 
 - **Responses:**
   - `200 OK` — Updated work log
-  - `403 Forbidden` — Not leader or verifier
+  - `403 Forbidden` — Not leader or verifier, **or the verifier logged the work (no self-verification)**
   - `404 Not Found`
 
 ---
@@ -214,12 +219,13 @@ List all work logs for a milestone.
 
 ### POST `/tasks/:taskId/claim`
 
-Claim an open task.
+Claim an open task. Requires membership of the project (join first).
 
-- **Auth required:** Yes
+- **Auth required:** Yes (`COMMUNITY_VERIFIED` + project member)
 - **Path Parameters:** `taskId` (cuid string)
 - **Responses:**
   - `200 OK` — Updated task object
+  - `403 Forbidden` — Not a project member
   - `409 Conflict` — Task already claimed
 
 ---
@@ -232,7 +238,7 @@ Mark a claimed task as complete. Awards 10 Impact Points to the completer.
 - **Path Parameters:** `taskId` (cuid string)
 - **Responses:**
   - `200 OK` — Updated task + awarded IP
-  - `403 Forbidden` — Task not claimed by this user
+  - `403 Forbidden` — Task not claimed by this user, or no longer a project member
 
 ---
 
@@ -366,14 +372,36 @@ Get a work session with all presence records.
 
 ### POST `/:projectId/join`
 
-Join a project as a participant. Requires `COMMUNITY_VERIFIED`.
+Join a project as a participant. Requires `COMMUNITY_VERIFIED` **and** eligibility for the project: either a member of the owning group, or — when the project's `participationScope` is `WARD`/`CONSTITUENCY`/`COUNTY` — resident within the owning group's geography at that tier.
 
 - **Auth required:** Yes (`COMMUNITY_VERIFIED`)
 - **Path Parameters:** `projectId` (UUID)
 - **Responses:**
   - `201 Created` — Project membership record
-  - `403 Forbidden` — Not community verified
+  - `400 Bad Request` — Project is completed/cancelled
+  - `403 Forbidden` — Not community verified, or not eligible for this project's group/scope
   - `409 Conflict` — Already a member
+
+---
+
+### PATCH `/:projectId/participation`
+
+Set who may participate in the project. **Leader-only** (project owner). Only meaningful for voluntary-group projects — system-group projects already span their tier, so widening them is rejected.
+
+- **Auth required:** Yes (project leader / owner)
+- **Path Parameters:** `projectId` (UUID)
+- **Request Body:**
+
+```json
+{
+  "scope": "MEMBERS_ONLY | WARD | CONSTITUENCY | COUNTY"
+}
+```
+
+- **Responses:**
+  - `200 OK` — `{ projectId, participationScope }`
+  - `400 Bad Request` — Project closed, or attempting to widen a system-group project
+  - `403 Forbidden` — Not the project leader
 
 ---
 
