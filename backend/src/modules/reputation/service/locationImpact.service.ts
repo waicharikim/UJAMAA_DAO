@@ -26,7 +26,10 @@ export class LocationImpactService {
   /**
    * Get impact for primary hierarchy (ward → constituency → county)
    */
-  async getPrimaryHierarchyImpact(userId: string, primaryWardId?: string | null) {
+  async getPrimaryHierarchyImpact(
+    userId: string,
+    primaryWardId?: string | null
+  ) {
     // The JWT doesn't carry primaryWardId, so callers often can't supply it —
     // resolve it from the user record when missing.
     if (!primaryWardId) {
