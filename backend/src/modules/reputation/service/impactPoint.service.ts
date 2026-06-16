@@ -23,7 +23,7 @@ export class GlobalImpactPointService {
   ) {
     if (amount <= 0) return;
 
-    const { log, primaryWardId } = await prisma.$transaction(
+    const log = await prisma.$transaction(
       async (tx: Prisma.TransactionClient) => {
         const entry = await tx.impactPointLog.create({
           data: {
@@ -41,26 +41,30 @@ export class GlobalImpactPointService {
           select: { primaryWardId: true },
         });
 
+        // Attribute the same points to the user's home ward — in the SAME
+        // transaction — so ward/constituency/county reputation
+        // (getPrimaryHierarchyImpact) and geo leaderboards populate. skipLog
+        // avoids doubling the IP history (the GLOBAL log above records it).
+        if (user.primaryWardId) {
+          await locationImpactService.awardWardPoints(
+            userId,
+            user.primaryWardId,
+            amount,
+            reason,
+            metadata,
+            true,
+            tx
+          );
+        }
+
         logger.info(
           { userId, amount, reason },
           '[IP] Global Impact Points awarded'
         );
 
-        return { log: entry, primaryWardId: user.primaryWardId };
+        return entry;
       }
     );
-
-    // Attribute the same points to the user's home ward so ward/constituency/
-    // county reputation (getPrimaryHierarchyImpact) and geo leaderboards
-    // populate. Side-effect of every global award; skipLog avoids doubling the
-    // user's IP history (the GLOBAL log above already records the action).
-    if (primaryWardId) {
-      await locationImpactService
-        .awardWardPoints(userId, primaryWardId, amount, reason, metadata, true)
-        .catch(() => {
-          /* non-critical — global award already succeeded */
-        });
-    }
 
     await auditService
       .log(userId, AuditAction.IP_AWARDED, 'User', userId, {

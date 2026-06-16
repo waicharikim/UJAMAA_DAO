@@ -343,7 +343,10 @@ describe('castVote()', () => {
 // tallyVotes()
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('tallyVotes()', () => {
+// tallyVotes awards PR + IP (incl. per-location impact) to every voter and the
+// creator, so it does real work per vote and runs slower than the 5s default
+// under test-DB load. Give the block headroom (documented flaky test).
+describe('tallyVotes()', { timeout: 20000 }, () => {
   it('marks proposal APPROVED when quorum met and yes > 50%', async () => {
     const creator = await createGovernanceUser('tally-creator@example.com');
     const voter = await createGovernanceUser('tally-voter@example.com');
@@ -499,8 +502,18 @@ describe('listProposals()', () => {
   it('returns all proposals with total count', async () => {
     const creator = await createGovernanceUser('list-creator@example.com');
     const group = await seedGovernanceGroup(creator.id);
-    await seedProposal(creator.id, group.id, ProposalStatus.DRAFT, 'Proposal One');
-    await seedProposal(creator.id, group.id, ProposalStatus.VOTING, 'Proposal Two');
+    await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.DRAFT,
+      'Proposal One'
+    );
+    await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.VOTING,
+      'Proposal Two'
+    );
 
     const result = await proposalService.listProposals({});
 
@@ -534,8 +547,18 @@ describe('listProposals()', () => {
       },
     });
 
-    await seedProposal(creator.id, groupA.id, ProposalStatus.DRAFT, 'Group A Proposal');
-    await seedProposal(creator.id, groupB.id, ProposalStatus.DRAFT, 'Group B Proposal');
+    await seedProposal(
+      creator.id,
+      groupA.id,
+      ProposalStatus.DRAFT,
+      'Group A Proposal'
+    );
+    await seedProposal(
+      creator.id,
+      groupB.id,
+      ProposalStatus.DRAFT,
+      'Group B Proposal'
+    );
 
     const result = await proposalService.listProposals({ groupId: groupA.id });
 
@@ -546,8 +569,18 @@ describe('listProposals()', () => {
   it('filters by status', async () => {
     const creator = await createGovernanceUser('list-status@example.com');
     const group = await seedGovernanceGroup(creator.id);
-    await seedProposal(creator.id, group.id, ProposalStatus.DRAFT, 'Draft Proposal');
-    await seedProposal(creator.id, group.id, ProposalStatus.VOTING, 'Voting Proposal');
+    await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.DRAFT,
+      'Draft Proposal'
+    );
+    await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.VOTING,
+      'Voting Proposal'
+    );
 
     const result = await proposalService.listProposals({
       status: ProposalStatus.VOTING,
@@ -594,9 +627,16 @@ describe('castVote() — additional', () => {
     const group = await seedGovernanceGroup(creator.id);
     await addGroupMember(voter.id, group.id);
     await awardPR(voter.id, 50);
-    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.VOTING);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.VOTING
+    );
 
-    await proposalService.castVote(voter.id, { proposalId: proposal.id, option: 'ABSTAIN' });
+    await proposalService.castVote(voter.id, {
+      proposalId: proposal.id,
+      option: 'ABSTAIN',
+    });
 
     const voteRow = await prisma.groupMemberVote.findFirst({
       where: { proposalId: proposal.id, memberId: voter.id },
@@ -617,8 +657,15 @@ describe('castVote() — additional', () => {
       data: { userId: voter.id, castFirstVote: false },
     });
 
-    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.VOTING);
-    await proposalService.castVote(voter.id, { proposalId: proposal.id, option: 'YES' });
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.VOTING
+    );
+    await proposalService.castVote(voter.id, {
+      proposalId: proposal.id,
+      option: 'YES',
+    });
 
     const progress = await prisma.onboardingProgress.findUnique({
       where: { userId: voter.id },
@@ -637,7 +684,11 @@ describe('castVote() — additional', () => {
       data: { userId: voter.id, castFirstVote: true },
     });
 
-    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.VOTING);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.VOTING
+    );
     // Should succeed without error even when castFirstVote=true already
     const result = await proposalService.castVote(voter.id, {
       proposalId: proposal.id,

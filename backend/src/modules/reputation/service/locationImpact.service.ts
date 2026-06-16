@@ -103,11 +103,14 @@ export class LocationImpactService {
     metadata?: Record<string, any>,
     // When awarded as a side-effect of a global IP award, the GLOBAL log already
     // records the action — skip the WARD log to avoid doubling the user's history.
-    skipLog = false
+    skipLog = false,
+    // When provided, run inside an existing transaction (one tx per award)
+    // rather than opening a new one — halves the DB work when called from award().
+    existingTx?: Prisma.TransactionClient
   ) {
     if (amount <= 0) return;
 
-    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const run = async (tx: Prisma.TransactionClient) => {
       // Use composite unique key userId_wardId
       const impact = await tx.userLocationImpact.upsert({
         where: {
@@ -160,7 +163,9 @@ export class LocationImpactService {
       );
 
       return impact;
-    });
+    };
+
+    return existingTx ? run(existingTx) : prisma.$transaction(run);
   }
 
   private calculateTier(points: number): string {
