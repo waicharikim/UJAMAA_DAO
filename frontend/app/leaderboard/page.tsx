@@ -123,9 +123,20 @@ export default function LeaderboardPage() {
   const [metric, setMetric] = useState<Metric>("combined")
   const [scope, setScope] = useState<Scope>("global")
 
+  // The leaderboard route is public, so ward/county scope must carry the
+  // viewer's own area id (otherwise the backend can't scope it and returns a
+  // global ranking).
+  const scopeId =
+    scope === "ward"
+      ? user?.primaryWardId
+      : scope === "county"
+        ? user?.primaryCountyId
+        : undefined
+
   const { data, isLoading } = useQuery({
-    queryKey: ["leaderboard", metric, scope],
-    queryFn: () => leaderboardApi.getLeaderboard({ metric, scope, limit: 50 }),
+    queryKey: ["leaderboard", metric, scope, scopeId],
+    queryFn: () => leaderboardApi.getLeaderboard({ metric, scope, scopeId, limit: 50 }),
+    enabled: scope === "global" || !!scopeId,
   })
 
   const myEntry = data?.entries.find((e) => e.userId === user?.id)

@@ -18,7 +18,7 @@ export class ReputationController {
    */
   static async getMyReputation(req: AuthRequest, res: Response) {
     const userId = req.user!.userId;
-    const primaryWardId = req.user!.primaryWardId;
+    const primaryWardId = req.user?.primaryWardId;
     const [total, breakdown, hierarchy] = await Promise.all([
       globalImpactPointService.getTotal(userId),
       locationImpactService.getUserImpactBreakdown(userId),
@@ -63,12 +63,35 @@ export class ReputationController {
     );
     const skip = (page - 1) * limit;
 
-    // Build location filter
+    // Build location filter. A ward/constituency/county leaderboard defaults to
+    // the *viewer's* own area when no explicit scopeId is supplied (the UI
+    // doesn't send one) — otherwise these tabs silently fell back to a global
+    // ranking. The viewer's constituency/county are resolved from their ward,
+    // since the JWT only carries primaryWardId.
     const locationFilter: any = {};
-    if (scope === 'ward' && scopeId) {
-      locationFilter.primaryWardId = scopeId;
-    } else if (scope === 'county' && scopeId) {
-      locationFilter.primaryWard = { countyId: scopeId };
+    if (scope === 'ward') {
+      const wardId = scopeId ?? req.user?.primaryWardId;
+      if (wardId) locationFilter.primaryWardId = wardId;
+    } else if (scope === 'constituency') {
+      let constituencyId = scopeId;
+      if (!constituencyId && req.user?.primaryWardId) {
+        const ward = await prisma.ward.findUnique({
+          where: { id: req.user?.primaryWardId },
+          select: { constituencyId: true },
+        });
+        constituencyId = ward?.constituencyId;
+      }
+      if (constituencyId) locationFilter.primaryWard = { constituencyId };
+    } else if (scope === 'county') {
+      let countyId = scopeId;
+      if (!countyId && req.user?.primaryWardId) {
+        const ward = await prisma.ward.findUnique({
+          where: { id: req.user?.primaryWardId },
+          select: { countyId: true },
+        });
+        countyId = ward?.countyId;
+      }
+      if (countyId) locationFilter.primaryWard = { countyId };
     }
 
     // Determine orderBy
