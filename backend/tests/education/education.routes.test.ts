@@ -31,36 +31,47 @@ vi.mock('../../src/core/utils/email.service.js', () => ({
 
 vi.mock('africastalking', () => ({
   default: vi.fn(() => ({
-    SMS: { send: vi.fn().mockResolvedValue({ SMSMessageData: { Recipients: [] } }) },
+    SMS: {
+      send: vi.fn().mockResolvedValue({ SMSMessageData: { Recipients: [] } }),
+    },
   })),
 }));
 
-vi.mock('../../src/modules/community/services/groupMembership.service.js', () => ({
-  groupMembershipService: {
-    enrollInSystemGroups: vi.fn().mockResolvedValue(undefined),
-    updateResidenceGroups: vi.fn().mockResolvedValue(undefined),
-    getUserGroups: vi.fn().mockResolvedValue([]),
-    getGroupMembers: vi.fn().mockResolvedValue([]),
-    getGroupById: vi.fn().mockResolvedValue(null),
-  },
-}));
+vi.mock(
+  '../../src/modules/community/services/groupMembership.service.js',
+  () => ({
+    groupMembershipService: {
+      enrollInSystemGroups: vi.fn().mockResolvedValue(undefined),
+      updateResidenceGroups: vi.fn().mockResolvedValue(undefined),
+      getUserGroups: vi.fn().mockResolvedValue([]),
+      getGroupMembers: vi.fn().mockResolvedValue([]),
+      getGroupById: vi.fn().mockResolvedValue(null),
+    },
+  })
+);
 
-vi.mock('../../src/modules/economy/services/participationRights.service.js', () => ({
-  participationRightsService: {
-    award: vi.fn().mockResolvedValue({ balance: 75 }),
-    spend: vi.fn().mockResolvedValue({ balance: 25 }),
-    getBalance: vi.fn().mockResolvedValue(50),
-    hasSufficient: vi.fn().mockResolvedValue(true),
-  },
-}));
+vi.mock(
+  '../../src/modules/economy/services/participationRights.service.js',
+  () => ({
+    participationRightsService: {
+      award: vi.fn().mockResolvedValue({ balance: 75 }),
+      spend: vi.fn().mockResolvedValue({ balance: 25 }),
+      getBalance: vi.fn().mockResolvedValue(50),
+      hasSufficient: vi.fn().mockResolvedValue(true),
+    },
+  })
+);
 
-vi.mock('../../src/modules/notifications/services/notification.service.js', () => ({
-  notificationService: {
-    send: vi.fn().mockResolvedValue(undefined),
-    getNotifications: vi.fn().mockResolvedValue([]),
-    markAsRead: vi.fn().mockResolvedValue(undefined),
-  },
-}));
+vi.mock(
+  '../../src/modules/notifications/services/notification.service.js',
+  () => ({
+    notificationService: {
+      send: vi.fn().mockResolvedValue(undefined),
+      getNotifications: vi.fn().mockResolvedValue([]),
+      markAsRead: vi.fn().mockResolvedValue(undefined),
+    },
+  })
+);
 
 vi.mock('../../src/modules/audit/services/audit.service.js', () => ({
   auditService: {
@@ -78,6 +89,7 @@ import {
   makeEmailVerifiedToken,
   seedModule,
   seedProgress,
+  seedAssessment,
   seedDraftModule,
   seedSubmittedModule,
   VALID_MODULE_DTO,
@@ -229,7 +241,7 @@ describe('POST /education/:moduleId/complete', () => {
     expect(res.status).toBe(401);
   });
 
-  it('200 marks module completed', async () => {
+  it('200 marks a no-quiz module completed and awards IP', async () => {
     const creator = await createEducationUser('route-complete-c@test.com');
     const user = await createEducationUser('route-complete-u@test.com');
     const mod = await seedModule(creator.id, { completionIP: 10 });
@@ -239,11 +251,35 @@ describe('POST /education/:moduleId/complete', () => {
     const res = await request(app)
       .post(`/api/v1/education/${mod.id}/complete`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ score: 90 });
+      .send({});
     expect(res.status).toBe(200);
     expect(res.body.data.status).toBe('COMPLETED');
-    expect(res.body.data.score).toBe(90);
     expect(res.body.data.ipAwarded).toBe(10);
+  });
+
+  it('200 awards a quiz module only when the quiz is passed', async () => {
+    const creator = await createEducationUser('route-quiz-c@test.com');
+    const user = await createEducationUser('route-quiz-u@test.com');
+    const mod = await seedModule(creator.id, { completionIP: 15 });
+    await seedAssessment(mod.id); // answer key [0,1,2]
+    await seedProgress(user.id, mod.id, 'IN_PROGRESS');
+    const token = makeEducationToken(user.id);
+
+    const fail = await request(app)
+      .post(`/api/v1/education/${mod.id}/complete`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ answers: [2, 2, 2] });
+    expect(fail.status).toBe(200);
+    expect(fail.body.data.passed).toBe(false);
+    expect(fail.body.data.ipAwarded).toBeUndefined();
+
+    const pass = await request(app)
+      .post(`/api/v1/education/${mod.id}/complete`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ answers: [0, 1, 2] });
+    expect(pass.status).toBe(200);
+    expect(pass.body.data.passed).toBe(true);
+    expect(pass.body.data.ipAwarded).toBe(15);
   });
 
   it('400 if module not started', async () => {
@@ -258,14 +294,14 @@ describe('POST /education/:moduleId/complete', () => {
     expect(res.status).toBe(400);
   });
 
-  it('400 for invalid score value', async () => {
-    const user = await createEducationUser('route-score-bad@test.com');
+  it('400 for invalid answers value', async () => {
+    const user = await createEducationUser('route-ans-bad@test.com');
     const token = makeEducationToken(user.id);
 
     const res = await request(app)
       .post('/api/v1/education/00000000-0000-0000-0000-000000000001/complete')
       .set('Authorization', `Bearer ${token}`)
-      .send({ score: 150 });
+      .send({ answers: 'not-an-array' });
     expect(res.status).toBe(400);
   });
 });
@@ -394,7 +430,9 @@ describe('GET /education/my-modules', () => {
 
 describe('GET /education/authorship-eligibility', () => {
   it('401 without token', async () => {
-    const res = await request(app).get('/api/v1/education/authorship-eligibility');
+    const res = await request(app).get(
+      '/api/v1/education/authorship-eligibility'
+    );
     expect(res.status).toBe(401);
   });
 
@@ -490,8 +528,9 @@ describe('POST /education', () => {
 
 describe('PATCH /education/:moduleId', () => {
   it('401 without token', async () => {
-    const res = await request(app)
-      .patch('/api/v1/education/00000000-0000-0000-0000-000000000001');
+    const res = await request(app).patch(
+      '/api/v1/education/00000000-0000-0000-0000-000000000001'
+    );
     expect(res.status).toBe(401);
   });
 
@@ -519,7 +558,7 @@ describe('PATCH /education/:moduleId', () => {
     expect(res.status).toBe(403);
   });
 
-  it('403 when editing another user\'s module', async () => {
+  it("403 when editing another user's module", async () => {
     const authorA = await createEligibleAuthor('rt-upd-owner-a@test.com');
     const authorB = await createEligibleAuthor('rt-upd-owner-b@test.com');
     const mod = await seedDraftModule(authorB.id);
@@ -553,8 +592,9 @@ describe('PATCH /education/:moduleId', () => {
 
 describe('POST /education/:moduleId/submit', () => {
   it('401 without token', async () => {
-    const res = await request(app)
-      .post('/api/v1/education/00000000-0000-0000-0000-000000000001/submit');
+    const res = await request(app).post(
+      '/api/v1/education/00000000-0000-0000-0000-000000000001/submit'
+    );
     expect(res.status).toBe(401);
   });
 
@@ -600,8 +640,9 @@ describe('POST /education/:moduleId/submit', () => {
 
 describe('DELETE /education/:moduleId', () => {
   it('401 without token', async () => {
-    const res = await request(app)
-      .delete('/api/v1/education/00000000-0000-0000-0000-000000000001');
+    const res = await request(app).delete(
+      '/api/v1/education/00000000-0000-0000-0000-000000000001'
+    );
     expect(res.status).toBe(401);
   });
 
@@ -616,7 +657,7 @@ describe('DELETE /education/:moduleId', () => {
     expect(res.status).toBe(403);
   });
 
-  it('403 when deleting another user\'s module', async () => {
+  it("403 when deleting another user's module", async () => {
     const userA = await createEducationUser('rt-del-owner-a@test.com');
     const userB = await createEducationUser('rt-del-owner-b@test.com');
     const mod = await seedDraftModule(userB.id);

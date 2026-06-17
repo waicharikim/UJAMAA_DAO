@@ -41,14 +41,19 @@ model EducationalModule {
 }
 
 model UserEducationalProgress {
-  id          String    @id @default(uuid()) @db.Uuid
-  userId      String    @db.Uuid
-  moduleId    String    @db.Uuid
-  status      String    @default("IN_PROGRESS")
-  progress    Int       @default(0)
-  startedAt   DateTime  @default(now())
-  completedAt DateTime?
-  score       Int?
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @db.Uuid
+  moduleId      String    @db.Uuid
+  status        String    @default("IN_PROGRESS")
+  progress      Int       @default(0)
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+  score         Int?
+  // Once-ever award guard: IP/PR for this module are paid at most once per user.
+  // Set via compare-and-swap so concurrent /complete calls cannot double-award.
+  rewardAwarded Boolean   @default(false)
+  // Number of comprehension-quiz attempts the user has used on this module.
+  attempts      Int       @default(0)
 
   user   User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   module EducationalModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)

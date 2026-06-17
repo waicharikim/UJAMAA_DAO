@@ -17,7 +17,12 @@ import {
 // ─────────────────────────────────────────────
 // Re-exports
 // ─────────────────────────────────────────────
-export { TEST_WARD_ID, TEST_WARD_ID_2, TEST_CONST_ID, seedLocation } from '../auth/helpers.js';
+export {
+  TEST_WARD_ID,
+  TEST_WARD_ID_2,
+  TEST_CONST_ID,
+  seedLocation,
+} from '../auth/helpers.js';
 export { makeUserToken } from '../user/helpers.js';
 
 // ─────────────────────────────────────────────
@@ -68,7 +73,10 @@ export async function createPhoneVerifiedUser(email: string, wardId?: string) {
  * COMMUNITY_VERIFIED user — can vouch for other users within the same ward.
  * Defaults to TEST_WARD_ID.
  */
-export async function createCommunityVerifiedVoucher(email: string, wardId?: string) {
+export async function createCommunityVerifiedVoucher(
+  email: string,
+  wardId?: string
+) {
   return prisma.user.create({
     data: {
       email,
@@ -96,10 +104,48 @@ export async function createFullyVerifiedVoucher(email: string) {
       phoneVerified: true,
       communityVerified: true,
       locationVerified: false,
-      walletAddress: `0x${email.replace(/[^a-z0-9]/gi, '').padEnd(40, '0').slice(0, 40)}`,
+      walletAddress: `0x${email
+        .replace(/[^a-z0-9]/gi, '')
+        .padEnd(40, '0')
+        .slice(0, 40)}`,
       primaryWardId: TEST_WARD_ID,
     },
   });
+}
+
+/**
+ * Location-admin voucher — holds `location:ward_admin` but is deliberately NOT
+ * community-verified, to prove the accountable bootstrap works without the admin
+ * having to be verified first. Defaults to TEST_WARD_ID.
+ */
+export async function createWardAdminVoucher(email: string, wardId?: string) {
+  const user = await prisma.user.create({
+    data: {
+      email,
+      name: 'Ward Admin Voucher',
+      verificationLevel: 'PHONE_VERIFIED',
+      emailVerified: true,
+      phoneVerified: true,
+      communityVerified: false,
+      locationVerified: false,
+      primaryWardId: wardId ?? TEST_WARD_ID,
+    },
+  });
+
+  const role = await prisma.role.upsert({
+    where: { name: 'location:ward_admin' },
+    update: {},
+    create: {
+      name: 'location:ward_admin',
+      description: 'Ward admin for tests',
+    },
+  });
+
+  await prisma.userRole.create({
+    data: { userId: user.id, roleId: role.id, active: true },
+  });
+
+  return user;
 }
 
 // ─────────────────────────────────────────────
@@ -137,7 +183,11 @@ export async function seedPaymentPendingRequest(userId: string) {
 /**
  * Create a communityVouch record linking voucher → target in a ward.
  */
-export async function seedVouch(targetUserId: string, voucherId: string, wardId: string) {
+export async function seedVouch(
+  targetUserId: string,
+  voucherId: string,
+  wardId: string
+) {
   return prisma.communityVouch.create({
     data: {
       userId: targetUserId,

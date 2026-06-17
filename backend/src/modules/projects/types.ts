@@ -34,8 +34,30 @@ export enum ProjectParticipation {
 
 // ── Request DTOs ─────────────────────────────────────────────────────────────
 
+// Full project-setup milestone (mirrors the ProposalMilestone schema) supplied
+// by the creator at the post-approval setup gate.
+export interface ProjectSetupMilestoneInput {
+  title: string;
+  description: string;
+  deliverables?: unknown[]; // [{ description, quantity, unit }]
+  budgetAmount: number;
+  laborHours?: number;
+  materials?: unknown[]; // [{ item, quantity, cost, unit }]
+  startOffset: number; // days from project start
+  duration: number; // days
+  dependencies?: string[]; // ProposalMilestone IDs (within this proposal)
+  verificationMethod: string; // PEER | SUPERVISOR | COMMUNITY_WITNESS | PHOTO_EVIDENCE
+  verifiersNeeded?: number;
+  verificationCriteria?: unknown[]; // [{ criterion, description, required }]
+  orderIndex?: number;
+}
+
 export interface CreateProjectFromProposalDto {
   proposalId: string;
+  // Optional project-setup payload: when provided, these milestones are written
+  // to the proposal and become the project's milestones. When omitted, the
+  // project inherits whatever milestones the proposal already had.
+  milestones?: ProjectSetupMilestoneInput[];
 }
 
 export interface StartMilestoneDto {

@@ -73,6 +73,10 @@ services:
       - SMTP_PASSWORD=${SMTP_PASSWORD}
       - SMTP_FROM=${SMTP_FROM}
       - RESEND_API_KEY=${RESEND_API_KEY}
+      # Comma-separated founder emails auto-verified at seed time (genesis
+      # verifiers — bootstrap community vouching). super_admins are always
+      # included automatically. Inherited by `docker exec ujamaa_web ... seed`.
+      - FOUNDER_EMAILS=${FOUNDER_EMAILS:-}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - ENABLE_SMS=${ENABLE_SMS:-false}
       - AT_API_KEY=${AT_API_KEY:-}

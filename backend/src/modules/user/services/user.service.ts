@@ -54,6 +54,19 @@ const VOUCH_THRESHOLD = 3;
 const VOUCH_WINDOW_DAYS = 7;
 const PAYMENT_AMOUNT_KES = 100;
 
+// Accountable per-ward bootstrap (breaks the cold-start vouching deadlock):
+// while a ward has fewer than VOUCH_THRESHOLD community-verified members, a
+// single vouch from one of these appointed location-admin roles verifies a
+// member. Once the ward seeds (>= VOUCH_THRESHOLD verified), the full 3-vouch
+// rule resumes. Every bootstrap vouch is audit-logged.
+const BOOTSTRAP_VOUCHER_ROLES = [
+  'location:ward_admin',
+  'location:constituency_admin',
+  'location:county_admin',
+  'system:county_coordinator',
+  'system:super_admin',
+];
+
 const VERIFICATION_LEVEL_ORDER: VerificationLevel[] = [
   'UNVERIFIED',
   'EMAIL_VERIFIED',
@@ -341,14 +354,24 @@ class UserService {
     }
   }
 
+  // Returns `{ bootstrap }` — true when this vouch is an accountable per-ward
+  // bootstrap (a location admin vouching into a ward that has not yet reached
+  // VOUCH_THRESHOLD verified members). Bootstrap vouches use a threshold of 1.
   private async assertVoucherCanVouch(
     voucherId: string,
     targetUserId: string,
     wardId: string
-  ): Promise<void> {
+  ): Promise<{ bootstrap: boolean }> {
     const voucher = await prisma.user.findUnique({
       where: { id: voucherId },
-      select: { verificationLevel: true, primaryWardId: true },
+      select: {
+        verificationLevel: true,
+        primaryWardId: true,
+        userRoles: {
+          where: { active: true },
+          select: { role: { select: { name: true } } },
+        },
+      },
     });
     if (!voucher) throw ApiError.notFound('Voucher user');
 
@@ -356,7 +379,17 @@ class UserService {
     const voucherIdx = VERIFICATION_LEVEL_ORDER.indexOf(
       voucher.verificationLevel as VerificationLevel
     );
-    if (voucherIdx < minIdx)
+    const isCommunityVerified = voucherIdx >= minIdx;
+
+    // Bootstrap: an appointed location admin, in a ward that is still unseeded.
+    const isBootstrapVoucher = voucher.userRoles.some((ur) =>
+      BOOTSTRAP_VOUCHER_ROLES.includes(ur.role.name)
+    );
+    const bootstrap = isBootstrapVoucher && (await this.isWardUnseeded(wardId));
+
+    // Normally only community-verified members may vouch. The accountable
+    // bootstrap is the sole exception (a trusted admin seeding an empty ward).
+    if (!isCommunityVerified && !bootstrap)
       throw ApiError.insufficientVerification(
         'Only community-verified users can vouch'
       );
@@ -367,8 +400,11 @@ class UserService {
     });
     if (!target) throw ApiError.notFound('Target user');
 
+    // FULL_VERIFIED users and bootstrap admins may vouch across wards; everyone
+    // else must vouch within their own ward.
     if (
       voucher.verificationLevel !== 'FULL_VERIFIED' &&
+      !bootstrap &&
       target.primaryWardId !== wardId
     )
       throw ApiError.geographicError('Vouch must be in same ward');
@@ -378,6 +414,19 @@ class UserService {
     });
     if (request === null || request.status !== 'VOUCHING')
       throw ApiError.conflict('No active vouching request');
+
+    return { bootstrap };
+  }
+
+  // A ward is "unseeded" until it has VOUCH_THRESHOLD community-verified members.
+  private async isWardUnseeded(wardId: string): Promise<boolean> {
+    const verified = await prisma.user.count({
+      where: {
+        primaryWardId: wardId,
+        verificationLevel: { in: ['COMMUNITY_VERIFIED', 'FULL_VERIFIED'] },
+      },
+    });
+    return verified < VOUCH_THRESHOLD;
   }
 
   /**
@@ -903,7 +952,11 @@ class UserService {
 
   async vouchForUser(voucherId: string, dto: VouchRequestDto) {
     const { targetUserId, wardId } = dto;
-    await this.assertVoucherCanVouch(voucherId, targetUserId, wardId);
+    const { bootstrap } = await this.assertVoucherCanVouch(
+      voucherId,
+      targetUserId,
+      wardId
+    );
 
     try {
       await prisma.communityVouch.create({
@@ -938,11 +991,23 @@ class UserService {
       where: { userId: targetUserId },
     });
 
-    if (vouchCount >= VOUCH_THRESHOLD) {
+    // Accountable bootstrap vouches only need 1; normal vouches need 3.
+    const needed = bootstrap ? 1 : VOUCH_THRESHOLD;
+
+    if (vouchCount >= needed) {
       await this.completeCommunityVerification(targetUserId);
+      if (bootstrap) {
+        await auditService.log(
+          voucherId,
+          AuditAction.COMMUNITY_VERIFIED,
+          'User',
+          targetUserId,
+          { reason: 'bootstrap_vouch', wardId, grantedBy: 'location_admin' }
+        );
+      }
     }
 
-    return { success: true, vouchCount, needed: VOUCH_THRESHOLD };
+    return { success: true, vouchCount, needed };
   }
 
   async processVerificationPayment(

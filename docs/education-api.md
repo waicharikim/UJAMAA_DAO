@@ -116,20 +116,48 @@ Mark a module as started.
 
 ### `POST /education/:moduleId/complete`
 
-Mark a module as completed. Awards earned UT (once per module per user — idempotent).
+Complete a module. IP/PR are awarded **at most once per module per user** (a
+once-ever `rewardAwarded` flag, race-safe), and only when the comprehension quiz
+(if the module has one) is passed.
 
 **Auth:** `EMAIL_VERIFIED`
 
-**Body:** _(no body required)_
+**Body:**
+- Modules **with** a quiz: `{ "answers": [0, 1, 2] }` — one selected option index
+  per question, in question order. The server grades against the stored answer
+  key (the client never sends a score). Omitting/short answers → `400`.
+- Modules **without** a quiz: no body required.
 
-**Response `200`:**
+Fetch the questions to render via `GET /education/:moduleId` → `assessment`
+(the correct-answer key is stripped server-side and never returned).
+
+**Response `200` (quiz passed, or no-quiz module):**
 ```json
 {
-  "success": true,
-  "reward": { "type": "UT", "amount": 5 },
-  "alreadyCompleted": false
+  "status": "COMPLETED",
+  "score": 67,
+  "ipAwarded": 25,
+  "passed": true,
+  "attemptsUsed": 1,
+  "attemptsRemaining": 4,
+  "passingScore": 60
 }
 ```
+
+**Response `200` (quiz failed — no award, stays `IN_PROGRESS`):**
+```json
+{
+  "status": "IN_PROGRESS",
+  "score": 33,
+  "passed": false,
+  "attemptsUsed": 1,
+  "attemptsRemaining": 4,
+  "passingScore": 60
+}
+```
+
+**Errors:** `400` (module not started / missing answers), `403` (no quiz
+attempts remaining — `maxAttempts` reached), `404` (module not found).
 
 ---
 

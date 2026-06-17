@@ -58,9 +58,13 @@ router.post(
       groupId: z.string().uuid(),
       title: z.string().min(10),
       description: z.string().min(50),
+      kind: z.enum(['POLICY', 'PROJECT']).optional(),
       fundingAmountKes: z.number().optional(),
       isEmergency: z.boolean().optional(),
       proposalScope: z.enum(['GROUP', 'COMMUNITY']).optional(),
+      // For COMMUNITY-scope proposals: which level of the group's geography the
+      // proposal targets (resolved to concrete IDs server-side).
+      targetLevel: z.enum(['WARD', 'CONSTITUENCY', 'COUNTY']).optional(),
       groupFundingAmount: z.number().optional(),
       locationFundingRequest: z.number().optional(),
     }),

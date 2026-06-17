@@ -9,6 +9,15 @@ enum ProposalType {
   EMERGENCY
 }
 
+// POLICY  = a community decision / rule change. No budget, never produces a
+//           project; on approval it is recorded and completed.
+// PROJECT = builds or funds something; on approval it must go through the
+//           project-setup gate (milestones + budget) before work starts.
+enum ProposalKind {
+  POLICY
+  PROJECT
+}
+
 enum ProposalStatus {
   DRAFT
   PENDING_REVIEW       // LEADER forwarded — awaiting location admin approval
@@ -36,9 +45,18 @@ model Proposal {
   title             String
   description       String         @db.Text
   proposalType      ProposalType
+  kind              ProposalKind   @default(PROJECT)
   status            ProposalStatus @default(DRAFT)
   groupId           String?        @db.Uuid
   creatorId         String         @db.Uuid
+
+  // TARGET AREA — for COMMUNITY-scope proposals, the geography whose residents
+  // are eligible to vote. Resolved at creation (from the group's affiliation
+  // for voluntary groups, or the system group's own location). Null = the
+  // proposal is internal (GROUP scope) or a genuine national/system proposal.
+  targetWardId         String? @db.Uuid
+  targetConstituencyId String? @db.Uuid
+  targetCountyId       String? @db.Uuid
   
   // FINANCIAL
   budget            Decimal?       @db.Decimal(20, 2)

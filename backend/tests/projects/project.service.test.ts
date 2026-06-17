@@ -12,7 +12,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import { prisma } from '../../src/core/database/client.js';
 import { ProjectService } from '../../src/modules/projects/services/project.service.js';
-import { ProjectStatus, MilestoneStatus } from '../../src/modules/projects/types.js';
+import { treasuryService } from '../../src/modules/treasury/services/treasury.service.js';
+import {
+  ProjectStatus,
+  MilestoneStatus,
+} from '../../src/modules/projects/types.js';
 import {
   createProjectUser,
   seedProjectGroup,
@@ -34,7 +38,9 @@ describe('createFromProposal()', () => {
     const group = await seedProjectGroup(creator.id);
     const proposal = await seedApprovedProposal(creator.id, group.id);
 
-    const project = await service.createFromProposal(creator.id, { proposalId: proposal.id });
+    const project = await service.createFromProposal(creator.id, {
+      proposalId: proposal.id,
+    });
 
     expect(project.proposalId).toBe(proposal.id);
     expect(project.ownerUserId).toBe(creator.id);
@@ -44,6 +50,20 @@ describe('createFromProposal()', () => {
       where: { projectId: project.id, userId: creator.id },
     });
     expect(member?.role).toBe('LEAD');
+  });
+
+  it('rejects creating a project from a POLICY proposal (400)', async () => {
+    const creator = await createProjectUser('policy-proj@test.com');
+    const group = await seedProjectGroup(creator.id);
+    const proposal = await seedApprovedProposal(creator.id, group.id);
+    await prisma.proposal.update({
+      where: { id: proposal.id },
+      data: { kind: 'POLICY' },
+    });
+
+    await expect(
+      service.createFromProposal(creator.id, { proposalId: proposal.id })
+    ).rejects.toMatchObject({ statusCode: 400 });
   });
 
   it('auto-creates milestones from linked ProposalMilestones', async () => {
@@ -83,7 +103,9 @@ describe('createFromProposal()', () => {
       ],
     });
 
-    const project = await service.createFromProposal(creator.id, { proposalId: proposal.id });
+    const project = await service.createFromProposal(creator.id, {
+      proposalId: proposal.id,
+    });
 
     const milestones = await prisma.milestone.findMany({
       where: { projectId: project.id },
@@ -94,6 +116,86 @@ describe('createFromProposal()', () => {
     expect(milestones[0].orderIndex).toBe(1);
     expect(milestones[1].title).toBe('Phase 2');
     expect(milestones[1].orderIndex).toBe(2);
+  });
+
+  it('setup gate: writes milestones from the payload and creates linked project milestones', async () => {
+    const creator = await createProjectUser('setup-milestones@test.com');
+    const group = await seedProjectGroup(creator.id);
+    const proposal = await seedApprovedProposal(creator.id, group.id);
+
+    const project = await service.createFromProposal(creator.id, {
+      proposalId: proposal.id,
+      milestones: [
+        {
+          title: 'Drill the borehole',
+          description: 'Hire a rig and drill to 80m.',
+          deliverables: [
+            { description: 'Borehole drilled', quantity: 1, unit: 'site' },
+          ],
+          budgetAmount: 6000,
+          startOffset: 0,
+          duration: 14,
+          verificationMethod: 'PHOTO_EVIDENCE',
+          verifiersNeeded: 2,
+          verificationCriteria: [{ criterion: 'Water flows', required: true }],
+          orderIndex: 0,
+        },
+        {
+          title: 'Install the pump',
+          description: 'Fit and commission the hand pump.',
+          budgetAmount: 2000,
+          startOffset: 14,
+          duration: 7,
+          verificationMethod: 'PEER',
+          orderIndex: 1,
+        },
+      ],
+    });
+
+    // ProposalMilestones written from the payload
+    const pms = await prisma.proposalMilestone.findMany({
+      where: { proposalId: proposal.id },
+      orderBy: { orderIndex: 'asc' },
+    });
+    expect(pms).toHaveLength(2);
+    expect(pms[0].title).toBe('Drill the borehole');
+    expect(Number(pms[0].budgetAmount)).toBe(6000);
+    expect(pms[0].verificationMethod).toBe('PHOTO_EVIDENCE');
+
+    // Project milestones created and linked back to the proposal milestones
+    const milestones = await prisma.milestone.findMany({
+      where: { projectId: project.id },
+      orderBy: { orderIndex: 'asc' },
+    });
+    expect(milestones).toHaveLength(2);
+    expect(milestones[0].proposalMilestoneId).toBe(pms[0].id);
+    expect(milestones[1].title).toBe('Install the pump');
+  });
+
+  it('does NOT debit the group treasury at setup (disbursement happens at EXECUTING)', async () => {
+    const creator = await createProjectUser('setup-nodebit@test.com');
+    const group = await seedProjectGroup(creator.id);
+    await treasuryService.deposit(group.id, { amount: 20000 }, creator.id);
+    const proposal = await prisma.proposal.create({
+      data: {
+        groupId: group.id,
+        creatorId: creator.id,
+        title: 'Funded project proposal',
+        description:
+          'A funded proposal used to confirm no debit at setup time.',
+        proposalType: 'COMMUNITY_INITIATIVE',
+        proposalScope: 'GROUP',
+        status: 'APPROVED',
+        groupFundingAmount: 8000,
+      },
+    });
+
+    await service.createFromProposal(creator.id, { proposalId: proposal.id });
+
+    const treasury = await prisma.groupTreasury.findUnique({
+      where: { groupId: group.id },
+    });
+    expect(Number(treasury!.balance)).toBe(20000); // unchanged — no debit at setup
   });
 
   it('throws 404 for unknown proposalId', async () => {
@@ -145,13 +247,21 @@ describe('startMilestone()', () => {
   it('transitions PENDING milestone to IN_PROGRESS and sets startedAt', async () => {
     const owner = await createProjectUser('owner@test.com');
     const project = await seedProject(owner.id);
-    const milestone = await seedMilestone(project.id, 'M1', MilestoneStatus.PENDING);
+    const milestone = await seedMilestone(
+      project.id,
+      'M1',
+      MilestoneStatus.PENDING
+    );
 
-    const result = await service.startMilestone(owner.id, { milestoneId: milestone.id });
+    const result = await service.startMilestone(owner.id, {
+      milestoneId: milestone.id,
+    });
 
     expect(result.status).toBe(MilestoneStatus.IN_PROGRESS);
 
-    const updated = await prisma.milestone.findUnique({ where: { id: milestone.id } });
+    const updated = await prisma.milestone.findUnique({
+      where: { id: milestone.id },
+    });
     expect(updated?.status).toBe(MilestoneStatus.IN_PROGRESS);
     expect(updated?.startedAt).toBeInstanceOf(Date);
   });
@@ -159,14 +269,20 @@ describe('startMilestone()', () => {
   it('throws 404 for unknown milestoneId', async () => {
     const owner = await createProjectUser('owner2@test.com');
     await expect(
-      service.startMilestone(owner.id, { milestoneId: '00000000-0000-0000-0000-000000000000' })
+      service.startMilestone(owner.id, {
+        milestoneId: '00000000-0000-0000-0000-000000000000',
+      })
     ).rejects.toMatchObject({ statusCode: 404 });
   });
 
   it('throws 400 if milestone is not PENDING', async () => {
     const owner = await createProjectUser('owner3@test.com');
     const project = await seedProject(owner.id);
-    const milestone = await seedMilestone(project.id, 'M2', MilestoneStatus.IN_PROGRESS);
+    const milestone = await seedMilestone(
+      project.id,
+      'M2',
+      MilestoneStatus.IN_PROGRESS
+    );
 
     await expect(
       service.startMilestone(owner.id, { milestoneId: milestone.id })
@@ -182,7 +298,11 @@ describe('submitMilestone()', () => {
   it('transitions IN_PROGRESS to AWAITING_VERIFICATION and stores proof', async () => {
     const owner = await createProjectUser('submitter@test.com');
     const project = await seedProject(owner.id);
-    const milestone = await seedMilestone(project.id, 'M1', MilestoneStatus.IN_PROGRESS);
+    const milestone = await seedMilestone(
+      project.id,
+      'M1',
+      MilestoneStatus.IN_PROGRESS
+    );
 
     const result = await service.submitMilestone(owner.id, {
       milestoneId: milestone.id,
@@ -192,7 +312,9 @@ describe('submitMilestone()', () => {
 
     expect(result.status).toBe(MilestoneStatus.AWAITING_VERIFICATION);
 
-    const updated = await prisma.milestone.findUnique({ where: { id: milestone.id } });
+    const updated = await prisma.milestone.findUnique({
+      where: { id: milestone.id },
+    });
     expect(updated?.submittedById).toBe(owner.id);
     expect(updated?.proofUrl).toBe('https://example.com/proof.jpg');
     expect(updated?.submittedAt).toBeInstanceOf(Date);
@@ -212,7 +334,11 @@ describe('submitMilestone()', () => {
   it('throws 400 if milestone is not IN_PROGRESS', async () => {
     const owner = await createProjectUser('submitter3@test.com');
     const project = await seedProject(owner.id);
-    const milestone = await seedMilestone(project.id, 'M1', MilestoneStatus.PENDING);
+    const milestone = await seedMilestone(
+      project.id,
+      'M1',
+      MilestoneStatus.PENDING
+    );
 
     await expect(
       service.submitMilestone(owner.id, {
@@ -233,7 +359,11 @@ describe('verifyMilestone()', () => {
     const owner = await createProjectUser('verifier@test.com');
     const submitter = await createProjectUser('sub@test.com');
     const project = await seedProject(owner.id);
-    const milestone = await seedMilestone(project.id, 'M1', MilestoneStatus.AWAITING_VERIFICATION);
+    const milestone = await seedMilestone(
+      project.id,
+      'M1',
+      MilestoneStatus.AWAITING_VERIFICATION
+    );
     await prisma.milestone.update({
       where: { id: milestone.id },
       data: { submittedById: submitter.id },
@@ -245,7 +375,9 @@ describe('verifyMilestone()', () => {
     });
 
     expect(result.status).toBe(MilestoneStatus.VERIFIED);
-    const updated = await prisma.milestone.findUnique({ where: { id: milestone.id } });
+    const updated = await prisma.milestone.findUnique({
+      where: { id: milestone.id },
+    });
     expect(updated?.verifiedById).toBe(owner.id);
     expect(updated?.verifiedAt).toBeInstanceOf(Date);
   });
@@ -253,7 +385,11 @@ describe('verifyMilestone()', () => {
   it('approved=false → REJECTED status, no rewards', async () => {
     const owner = await createProjectUser('verifier2@test.com');
     const project = await seedProject(owner.id);
-    const milestone = await seedMilestone(project.id, 'M1', MilestoneStatus.AWAITING_VERIFICATION);
+    const milestone = await seedMilestone(
+      project.id,
+      'M1',
+      MilestoneStatus.AWAITING_VERIFICATION
+    );
 
     const result = await service.verifyMilestone(owner.id, {
       milestoneId: milestone.id,
@@ -262,7 +398,9 @@ describe('verifyMilestone()', () => {
     });
 
     expect(result.status).toBe(MilestoneStatus.REJECTED);
-    const updated = await prisma.milestone.findUnique({ where: { id: milestone.id } });
+    const updated = await prisma.milestone.findUnique({
+      where: { id: milestone.id },
+    });
     expect(updated?.feedback).toBe('Not good enough');
   });
 
@@ -279,7 +417,11 @@ describe('verifyMilestone()', () => {
   it('throws 400 if milestone is not AWAITING_VERIFICATION', async () => {
     const owner = await createProjectUser('verifier4@test.com');
     const project = await seedProject(owner.id);
-    const milestone = await seedMilestone(project.id, 'M1', MilestoneStatus.PENDING);
+    const milestone = await seedMilestone(
+      project.id,
+      'M1',
+      MilestoneStatus.PENDING
+    );
 
     await expect(
       service.verifyMilestone(owner.id, {
@@ -292,7 +434,11 @@ describe('verifyMilestone()', () => {
   it('throws 403 when the verifier is the submitter (no self-verification)', async () => {
     const owner = await createProjectUser('self-verify@test.com');
     const project = await seedProject(owner.id);
-    const milestone = await seedMilestone(project.id, 'M1', MilestoneStatus.AWAITING_VERIFICATION);
+    const milestone = await seedMilestone(
+      project.id,
+      'M1',
+      MilestoneStatus.AWAITING_VERIFICATION
+    );
     // Owner both submitted and tries to verify their own milestone.
     await prisma.milestone.update({
       where: { id: milestone.id },
@@ -306,7 +452,9 @@ describe('verifyMilestone()', () => {
       })
     ).rejects.toMatchObject({ statusCode: 403 });
 
-    const unchanged = await prisma.milestone.findUnique({ where: { id: milestone.id } });
+    const unchanged = await prisma.milestone.findUnique({
+      where: { id: milestone.id },
+    });
     expect(unchanged?.status).toBe(MilestoneStatus.AWAITING_VERIFICATION);
   });
 });

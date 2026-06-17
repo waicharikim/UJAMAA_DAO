@@ -7,16 +7,18 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/auth-context"
-import { governanceApi, communityApi, projectApi, onboardingApi, type ProposalAnnotationDto } from "@/lib/api"
+import { governanceApi, communityApi, onboardingApi, type ProposalAnnotationDto } from "@/lib/api"
 import { AnnotatableText } from "@/components/governance/annotatable-text"
 import { AnnotationSidebar } from "@/components/governance/annotation-sidebar"
 import { DeliberationHighlights } from "@/components/governance/deliberation-highlights"
 import { DeliberationSummary } from "@/components/governance/deliberation-summary"
+import { ProjectSetupEditor } from "@/components/projects/project-setup-editor"
 import { useSectionTour } from "@/hooks/use-section-tour"
 import { proposalDetailTour } from "@/lib/tours"
 import {
   ArrowLeft,
   Loader2,
+  Check,
   CheckCircle,
   XCircle,
   MinusCircle,
@@ -104,6 +106,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
   const [memoryAlternatives, setMemoryAlternatives] = useState("")
   const [outcomeText, setOutcomeText] = useState("")
   const [showOutcomeForm, setShowOutcomeForm] = useState(false)
+  const [policyOutcome, setPolicyOutcome] = useState("")
   const [annotations, setAnnotations] = useState<ProposalAnnotationDto[]>([])
   // Which opinion's span is highlighted in the proposal text (hover/tap in the list).
   const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(null)
@@ -241,14 +244,26 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
     onError: (err: any) => toast({ title: "Tally failed", description: err?.message, variant: "destructive" }),
   })
 
-  const { mutate: launchProject, isPending: launching } = useMutation({
-    mutationFn: () => projectApi.createFromProposal(proposalId),
+  // PROJECT proposals: start execution (disburses funds) after the project is set up.
+  const { mutate: startExecution, isPending: startingExecution } = useMutation({
+    mutationFn: () => governanceApi.updateProgress(proposalId, "EXECUTING"),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["projects"] })
-      toast({ title: "Project launched" })
-      window.location.href = "/projects"
+      invalidate()
+      toast({ title: "Execution started" })
     },
-    onError: (err: any) => toast({ title: "Failed to launch project", description: err?.message, variant: "destructive" }),
+    onError: (err: any) =>
+      toast({ title: "Failed to start execution", description: err?.message, variant: "destructive" }),
+  })
+
+  // POLICY proposals: record the decision and complete.
+  const { mutate: completePolicy, isPending: completingPolicy } = useMutation({
+    mutationFn: () => governanceApi.updateProgress(proposalId, "COMPLETED", policyOutcome.trim()),
+    onSuccess: () => {
+      invalidate()
+      toast({ title: "Decision recorded", description: "The policy has been completed." })
+    },
+    onError: (err: any) =>
+      toast({ title: "Failed to record decision", description: err?.message, variant: "destructive" }),
   })
 
   const { mutate: saveMemory, isPending: savingMemory } = useMutation({
@@ -646,28 +661,103 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
       )}
 
       {/* Launch project */}
-      {proposal.status === "APPROVED" && (
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-4 md:p-6 space-y-3">
-            <div className="flex items-center gap-2">
-              <Briefcase className="h-4 w-4 text-tea-green" />
-              <h2 className="text-sm font-bold text-[#0A1F14]">Launch Project</h2>
-            </div>
-            <p className="text-xs text-warm-gray leading-relaxed">
-              This proposal has been approved. Launch a project to start tracking milestones.
-            </p>
-            <button
-              onClick={() => launchProject()}
-              disabled={launching}
-              className="w-full flex items-center justify-center gap-2 rounded-full py-2.5 text-sm font-bold transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ background: "#1D4731", color: "#fff" }}
-            >
-              {launching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Briefcase className="h-4 w-4" />}
-              {launching ? "Launching…" : "Launch Project"}
-            </button>
-          </CardContent>
-        </Card>
-      )}
+      {proposal.status === "APPROVED" && (() => {
+        const isPolicy = proposal.kind === "POLICY"
+        const isCreator = proposal.creatorId === user?.id
+        const canManage = isCreator || isLeader
+
+        // POLICY — record the decision and complete (no project, no budget).
+        if (isPolicy) {
+          return (
+            <Card className="border-0 shadow-sm">
+              <CardContent className="p-4 md:p-6 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Check className="h-4 w-4 text-tea-green" />
+                  <h2 className="text-sm font-bold text-[#0A1F14]">Record the decision</h2>
+                </div>
+                <p className="text-xs text-warm-gray leading-relaxed">
+                  This policy passed. Record what the community decided to complete it. There is no budget or project.
+                </p>
+                {canManage ? (
+                  <>
+                    <textarea
+                      value={policyOutcome}
+                      onChange={(e) => setPolicyOutcome(e.target.value)}
+                      rows={3}
+                      placeholder="e.g. The ward adopted the no-littering by-law; fines apply near the market from next month."
+                      className="w-full rounded-lg border border-cream bg-white px-3 py-2 text-sm text-[#0A1F14] placeholder:text-warm-gray/60 focus:outline-none focus:ring-2 focus:ring-amber/40 resize-none"
+                    />
+                    <button
+                      onClick={() => completePolicy()}
+                      disabled={completingPolicy || policyOutcome.trim().length < 10}
+                      className="w-full flex items-center justify-center gap-2 rounded-full py-2.5 text-sm font-bold transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{ background: "#1D4731", color: "#fff" }}
+                    >
+                      {completingPolicy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                      {completingPolicy ? "Recording…" : "Record decision & complete"}
+                    </button>
+                  </>
+                ) : (
+                  <p className="text-xs text-warm-gray">The proposer or a group leader will record the decision.</p>
+                )}
+              </CardContent>
+            </Card>
+          )
+        }
+
+        // PROJECT, already set up — start execution (disburses funds).
+        if (proposal.project) {
+          return (
+            <Card className="border-0 shadow-sm">
+              <CardContent className="p-4 md:p-6 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Briefcase className="h-4 w-4 text-tea-green" />
+                  <h2 className="text-sm font-bold text-[#0A1F14]">Project ready</h2>
+                </div>
+                <p className="text-xs text-warm-gray leading-relaxed">
+                  The project is set up with milestones.{" "}
+                  <Link href={`/projects/${proposal.project.id}`} className="text-amber underline underline-offset-2">
+                    View project →
+                  </Link>
+                </p>
+                {canManage && (
+                  <button
+                    onClick={() => startExecution()}
+                    disabled={startingExecution}
+                    className="w-full flex items-center justify-center gap-2 rounded-full py-2.5 text-sm font-bold transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{ background: "#1D4731", color: "#fff" }}
+                  >
+                    {startingExecution ? <Loader2 className="h-4 w-4 animate-spin" /> : <Briefcase className="h-4 w-4" />}
+                    {startingExecution ? "Starting…" : "Start execution"}
+                  </button>
+                )}
+              </CardContent>
+            </Card>
+          )
+        }
+
+        // PROJECT, not yet set up — the setup gate (full milestone editor).
+        return (
+          <Card className="border-0 shadow-sm">
+            <CardContent className="p-4 md:p-6 space-y-3">
+              <div className="flex items-center gap-2">
+                <Briefcase className="h-4 w-4 text-tea-green" />
+                <h2 className="text-sm font-bold text-[#0A1F14]">Set up the project</h2>
+              </div>
+              <p className="text-xs text-warm-gray leading-relaxed">
+                This proposal passed. Define the project&apos;s milestones and budget before execution can begin.
+              </p>
+              {isCreator ? (
+                <ProjectSetupEditor proposalId={proposalId} onDone={invalidate} />
+              ) : (
+                <p className="text-xs text-warm-gray">
+                  The proposer needs to set up the project before it can start.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )
+      })()}
 
       {/* Cast vote */}
       {proposal.status === "VOTING" && (

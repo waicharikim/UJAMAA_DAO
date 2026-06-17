@@ -10,26 +10,25 @@ import { communityApi, governanceApi } from "@/lib/api"
 import { ArrowLeft, ArrowRight, Check, Loader2 } from "lucide-react"
 import Link from "next/link"
 
-type ProposalType = "COMMUNITY_INITIATIVE" | "MAJOR_PROJECT" | "STRATEGIC_DECISION" | "EMERGENCY"
+type ProposalKind = "PROJECT" | "POLICY"
 type ProposalScope = "GROUP" | "COMMUNITY"
+type TargetLevel = "WARD" | "CONSTITUENCY" | "COUNTY"
 
-const PROPOSAL_TYPE_META: Record<ProposalType, { label: string; description: string }> = {
-  COMMUNITY_INITIATIVE: {
-    label: "Community Initiative",
-    description: "A practical project or service improvement for the ward.",
+const KIND_META: Record<ProposalKind, { label: string; description: string }> = {
+  PROJECT: {
+    label: "Project",
+    description: "Builds or funds something — has a budget and, once approved, becomes a project with milestones.",
   },
-  MAJOR_PROJECT: {
-    label: "Major Project",
-    description: "Large-scale infrastructure or multi-phase work requiring detailed planning.",
+  POLICY: {
+    label: "Policy / Decision",
+    description: "A community rule or decision. No budget, no project — once passed it is recorded as a decision.",
   },
-  STRATEGIC_DECISION: {
-    label: "Strategic Decision",
-    description: "A policy, direction, or governance matter for the group or location.",
-  },
-  EMERGENCY: {
-    label: "Emergency",
-    description: "Urgent action required — shorter review and voting window.",
-  },
+}
+
+const TARGET_LEVEL_META: Record<TargetLevel, string> = {
+  WARD: "Ward — only your ward's residents vote",
+  CONSTITUENCY: "Constituency — all wards in the constituency vote",
+  COUNTY: "County — the whole county votes",
 }
 
 const STEPS = ["Group & Type", "Problem & Solution", "Budget & Submit"] as const
@@ -90,8 +89,10 @@ function CreateProposalForm() {
 
   // Step 1
   const [groupId, setGroupId] = useState(searchParams.get("groupId") ?? "")
-  const [proposalType, setProposalType] = useState<ProposalType>("COMMUNITY_INITIATIVE")
+  const [kind, setKind] = useState<ProposalKind>("PROJECT")
+  const [isEmergency, setIsEmergency] = useState(false)
   const [proposalScope, setProposalScope] = useState<ProposalScope>("COMMUNITY")
+  const [targetLevel, setTargetLevel] = useState<TargetLevel>("WARD")
   const [title, setTitle] = useState("")
 
   // Step 2
@@ -116,7 +117,12 @@ function CreateProposalForm() {
   const isVoluntary = !!selectedGroup?.voluntaryType
   const hasLocation = !!(selectedGroup?.ward || selectedGroup?.constituency || selectedGroup?.county)
   const isGroupScoped = proposalScope === "GROUP"
-  const isDetailedType = proposalType === "MAJOR_PROJECT" || proposalType === "STRATEGIC_DECISION"
+  const isProject = kind === "PROJECT"
+  // Show the execution timeline/team fields for projects (policies don't execute).
+  const isDetailedType = isProject
+  // The public-target picker is only meaningful for community-scope proposals
+  // whose group actually has a location to target.
+  const showTargetPicker = !isGroupScoped && hasLocation
 
   // Compiled description sent to backend
   function buildDescription(): string {
@@ -137,11 +143,16 @@ function CreateProposalForm() {
         groupId,
         title: title.trim(),
         description: buildDescription(),
-        ...(fundingAmountKes ? { fundingAmountKes: Number(fundingAmountKes) } : {}),
-        ...(proposalType === "EMERGENCY" ? { isEmergency: true } : {}),
+        kind,
+        ...(isEmergency ? { isEmergency: true } : {}),
         proposalScope,
-        ...(groupFundingAmount ? { groupFundingAmount: Number(groupFundingAmount) } : {}),
-        ...(!isGroupScoped && locationFundingRequest ? { locationFundingRequest: Number(locationFundingRequest) } : {}),
+        ...(showTargetPicker ? { targetLevel } : {}),
+        // Funding only applies to projects — policies carry no budget.
+        ...(isProject && fundingAmountKes ? { fundingAmountKes: Number(fundingAmountKes) } : {}),
+        ...(isProject && groupFundingAmount ? { groupFundingAmount: Number(groupFundingAmount) } : {}),
+        ...(isProject && !isGroupScoped && locationFundingRequest
+          ? { locationFundingRequest: Number(locationFundingRequest) }
+          : {}),
       }),
     onSuccess: () => {
       toast({ title: "Proposal created", description: "It is now a draft — your group leader can forward it for review." })
@@ -263,25 +274,57 @@ function CreateProposalForm() {
                 </Field>
               )}
 
-              <Field label="Proposal Type *" hint="Choose what kind of action this is.">
+              <Field label="What kind of proposal? *" hint="This decides whether it becomes a funded project or a recorded decision.">
                 <div className="grid grid-cols-1 gap-2">
-                  {(Object.keys(PROPOSAL_TYPE_META) as ProposalType[]).map((type) => (
+                  {(Object.keys(KIND_META) as ProposalKind[]).map((k) => (
                     <button
-                      key={type}
+                      key={k}
                       type="button"
-                      onClick={() => setProposalType(type)}
+                      onClick={() => setKind(k)}
                       className={`rounded-lg border px-4 py-2.5 text-left transition-all ${
-                        proposalType === type
+                        kind === k
                           ? "border-amber bg-amber/10 ring-1 ring-amber"
                           : "border-cream bg-white hover:border-amber/40"
                       }`}
                     >
-                      <span className="text-sm font-semibold text-[#0A1F14]">{PROPOSAL_TYPE_META[type].label}</span>
-                      <span className="ml-2 text-xs text-warm-gray">{PROPOSAL_TYPE_META[type].description}</span>
+                      <span className="text-sm font-semibold text-[#0A1F14]">{KIND_META[k].label}</span>
+                      <span className="ml-2 text-xs text-warm-gray">{KIND_META[k].description}</span>
                     </button>
                   ))}
                 </div>
               </Field>
+
+              {showTargetPicker && (
+                <Field
+                  label="Who votes on this? *"
+                  hint="Public proposals are decided by the residents of the area you target."
+                >
+                  <select
+                    value={targetLevel}
+                    onChange={(e) => setTargetLevel(e.target.value as TargetLevel)}
+                    className={inputCls}
+                  >
+                    {(Object.keys(TARGET_LEVEL_META) as TargetLevel[]).map((lvl) => (
+                      <option key={lvl} value={lvl}>
+                        {TARGET_LEVEL_META[lvl]}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              )}
+
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isEmergency}
+                  onChange={(e) => setIsEmergency(e.target.checked)}
+                  className="h-4 w-4 rounded border-cream accent-amber"
+                />
+                <span className="text-sm text-[#0A1F14]">
+                  Urgent / emergency
+                  <span className="ml-1 text-xs text-warm-gray">— shorter review and voting window</span>
+                </span>
+              </label>
 
               <Field
                 label="Title *"
@@ -388,10 +431,19 @@ function CreateProposalForm() {
             <>
               <div className="rounded-lg bg-cream/50 border border-cream px-4 py-3 text-xs text-warm-gray space-y-1">
                 <p className="font-semibold text-[#0A1F14] text-sm">{title}</p>
-                <p>Type: {PROPOSAL_TYPE_META[proposalType].label} · Scope: {isGroupScoped ? "Internal" : "Public"}</p>
+                <p>{KIND_META[kind].label}{isEmergency ? " · Urgent" : ""} · {isGroupScoped ? "Internal" : "Public"}</p>
                 {selectedGroup && <p>Group: {selectedGroup.groupName}</p>}
               </div>
 
+              {!isProject && (
+                <div className="rounded-lg bg-cream/50 border border-cream px-4 py-3 text-sm text-warm-gray">
+                  This is a <strong className="text-[#0A1F14]">policy / decision</strong> — it carries no budget and
+                  creates no project. If it passes, it is recorded as a community decision with an outcome note.
+                </div>
+              )}
+
+              {isProject && (
+              <>
               <Field
                 label="Total budget needed (KES)"
                 hint="The full cost of this proposal. Leave blank if no funding is needed."
@@ -449,6 +501,8 @@ function CreateProposalForm() {
                     </Field>
                   )}
                 </div>
+              )}
+              </>
               )}
 
               <p className="text-xs text-warm-gray pt-2">

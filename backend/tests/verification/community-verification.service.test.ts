@@ -34,6 +34,7 @@ import {
   createPhoneVerifiedUser,
   createCommunityVerifiedVoucher,
   createFullyVerifiedVoucher,
+  createWardAdminVoucher,
   seedVouchingRequest,
   seedPaymentPendingRequest,
   seedVouch,
@@ -86,7 +87,9 @@ describe('requestCommunityVerification()', () => {
       },
     });
 
-    await expect(userService.requestCommunityVerification(user.id)).rejects.toMatchObject({
+    await expect(
+      userService.requestCommunityVerification(user.id)
+    ).rejects.toMatchObject({
       statusCode: 403,
     });
   });
@@ -95,7 +98,9 @@ describe('requestCommunityVerification()', () => {
     const user = await createPhoneVerifiedUser('rcv-dup-vouch@test.com');
     await seedVouchingRequest(user.id);
 
-    await expect(userService.requestCommunityVerification(user.id)).rejects.toMatchObject({
+    await expect(
+      userService.requestCommunityVerification(user.id)
+    ).rejects.toMatchObject({
       statusCode: 409,
     });
   });
@@ -104,7 +109,9 @@ describe('requestCommunityVerification()', () => {
     const user = await createPhoneVerifiedUser('rcv-dup-pay@test.com');
     await seedPaymentPendingRequest(user.id);
 
-    await expect(userService.requestCommunityVerification(user.id)).rejects.toMatchObject({
+    await expect(
+      userService.requestCommunityVerification(user.id)
+    ).rejects.toMatchObject({
       statusCode: 409,
     });
   });
@@ -117,7 +124,9 @@ describe('requestCommunityVerification()', () => {
 describe('vouchForUser()', () => {
   it('first vouch succeeds and returns vouchCount:1 without completing verification', async () => {
     const target = await createPhoneVerifiedUser('vouch-target-1@test.com');
-    const voucher = await createCommunityVerifiedVoucher('vouch-giver-1@test.com');
+    const voucher = await createCommunityVerifiedVoucher(
+      'vouch-giver-1@test.com'
+    );
     await seedVouchingRequest(target.id);
 
     const result = await userService.vouchForUser(voucher.id, {
@@ -136,9 +145,15 @@ describe('vouchForUser()', () => {
 
   it('third vouch auto-completes verification to COMMUNITY_VERIFIED', async () => {
     const target = await createPhoneVerifiedUser('vouch-target-3@test.com');
-    const voucher1 = await createCommunityVerifiedVoucher('vouch-giver-3a@test.com');
-    const voucher2 = await createCommunityVerifiedVoucher('vouch-giver-3b@test.com');
-    const voucher3 = await createCommunityVerifiedVoucher('vouch-giver-3c@test.com');
+    const voucher1 = await createCommunityVerifiedVoucher(
+      'vouch-giver-3a@test.com'
+    );
+    const voucher2 = await createCommunityVerifiedVoucher(
+      'vouch-giver-3b@test.com'
+    );
+    const voucher3 = await createCommunityVerifiedVoucher(
+      'vouch-giver-3c@test.com'
+    );
     await seedVouchingRequest(target.id);
     await seedVouch(target.id, voucher1.id, TEST_WARD_ID);
     await seedVouch(target.id, voucher2.id, TEST_WARD_ID);
@@ -177,8 +192,14 @@ describe('vouchForUser()', () => {
 
   it('blocks cross-ward vouch for COMMUNITY_VERIFIED voucher with 403', async () => {
     // target is in TEST_WARD_ID; voucher passes TEST_WARD_ID_2 in DTO → mismatch
-    const target = await createPhoneVerifiedUser('vouch-target-cw@test.com', TEST_WARD_ID);
-    const voucher = await createCommunityVerifiedVoucher('vouch-giver-cw@test.com', TEST_WARD_ID);
+    const target = await createPhoneVerifiedUser(
+      'vouch-target-cw@test.com',
+      TEST_WARD_ID
+    );
+    const voucher = await createCommunityVerifiedVoucher(
+      'vouch-giver-cw@test.com',
+      TEST_WARD_ID
+    );
     await seedVouchingRequest(target.id);
 
     await expect(
@@ -191,7 +212,10 @@ describe('vouchForUser()', () => {
 
   it('FULL_VERIFIED voucher can vouch across wards', async () => {
     // target in TEST_WARD_ID_2, voucher in TEST_WARD_ID — allowed for FULL_VERIFIED
-    const target = await createPhoneVerifiedUser('vouch-target-fw@test.com', TEST_WARD_ID_2);
+    const target = await createPhoneVerifiedUser(
+      'vouch-target-fw@test.com',
+      TEST_WARD_ID_2
+    );
     const voucher = await createFullyVerifiedVoucher('vouch-giver-fw@test.com');
     await seedVouchingRequest(target.id);
 
@@ -206,7 +230,9 @@ describe('vouchForUser()', () => {
 
   it('blocks duplicate vouch from same voucher with 409', async () => {
     const target = await createPhoneVerifiedUser('vouch-target-dup@test.com');
-    const voucher = await createCommunityVerifiedVoucher('vouch-giver-dup@test.com');
+    const voucher = await createCommunityVerifiedVoucher(
+      'vouch-giver-dup@test.com'
+    );
     await seedVouchingRequest(target.id);
     await seedVouch(target.id, voucher.id, TEST_WARD_ID);
 
@@ -220,7 +246,9 @@ describe('vouchForUser()', () => {
 
   it('blocks vouch when no active request exists for target', async () => {
     const target = await createPhoneVerifiedUser('vouch-target-noreq@test.com');
-    const voucher = await createCommunityVerifiedVoucher('vouch-giver-noreq@test.com');
+    const voucher = await createCommunityVerifiedVoucher(
+      'vouch-giver-noreq@test.com'
+    );
     // No verification request seeded for target
 
     await expect(
@@ -229,6 +257,74 @@ describe('vouchForUser()', () => {
         wardId: TEST_WARD_ID,
       })
     ).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  // ── Accountable per-ward bootstrap (cold-start deadlock fix) ───────────────
+
+  it('bootstrap: a single location-admin vouch verifies a member in an unseeded ward', async () => {
+    // Ward has 0 community-verified members → unseeded. The admin is only
+    // PHONE_VERIFIED, proving the bootstrap does not require a verified admin.
+    const target = await createPhoneVerifiedUser('boot-target@test.com');
+    const admin = await createWardAdminVoucher('boot-admin@test.com');
+    await seedVouchingRequest(target.id);
+
+    const result = await userService.vouchForUser(admin.id, {
+      targetUserId: target.id,
+      wardId: TEST_WARD_ID,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.vouchCount).toBe(1);
+    expect(result.needed).toBe(1); // lowered threshold
+
+    const updated = await prisma.user.findUnique({ where: { id: target.id } });
+    expect(updated?.verificationLevel).toBe('COMMUNITY_VERIFIED');
+    expect(updated?.communityVerified).toBe(true);
+  });
+
+  it('no bootstrap once the ward is seeded: an unverified admin can no longer vouch (403)', async () => {
+    // Seed the ward with 3 community-verified members → seeded, fallback off.
+    // The bootstrap privilege is strictly gated to the unseeded window, so an
+    // admin who never got community-verified is now held to the normal rule.
+    await createCommunityVerifiedVoucher('seed-a@test.com');
+    await createCommunityVerifiedVoucher('seed-b@test.com');
+    await createCommunityVerifiedVoucher('seed-c@test.com');
+
+    const target = await createPhoneVerifiedUser('boot-seeded-target@test.com');
+    const admin = await createWardAdminVoucher('boot-seeded-admin@test.com');
+    await seedVouchingRequest(target.id);
+
+    await expect(
+      userService.vouchForUser(admin.id, {
+        targetUserId: target.id,
+        wardId: TEST_WARD_ID,
+      })
+    ).rejects.toMatchObject({ statusCode: 403 });
+
+    const updated = await prisma.user.findUnique({ where: { id: target.id } });
+    expect(updated?.verificationLevel).toBe('PHONE_VERIFIED'); // not completed
+  });
+
+  it('a community-verified admin still vouches normally once the ward is seeded', async () => {
+    // Sanity: seeding the ward must not break the normal vouch path.
+    await createCommunityVerifiedVoucher('seed2-a@test.com');
+    await createCommunityVerifiedVoucher('seed2-b@test.com');
+    const voucher = await createCommunityVerifiedVoucher('seed2-c@test.com');
+
+    const target = await createPhoneVerifiedUser('boot-norm-target@test.com');
+    await seedVouchingRequest(target.id);
+
+    const result = await userService.vouchForUser(voucher.id, {
+      targetUserId: target.id,
+      wardId: TEST_WARD_ID,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.needed).toBe(3); // full requirement in a seeded ward
+    expect(result.vouchCount).toBe(1); // only 1 of 3 so far → not completed
+
+    const updated = await prisma.user.findUnique({ where: { id: target.id } });
+    expect(updated?.verificationLevel).toBe('PHONE_VERIFIED');
   });
 });
 

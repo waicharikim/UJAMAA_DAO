@@ -11,6 +11,7 @@ import {
   createEligibleAuthor,
   seedModule,
   seedProgress,
+  seedAssessment,
   seedDraftModule,
   seedSubmittedModule,
   seedRejectedModule,
@@ -106,6 +107,21 @@ describe('EducationService.getModule', () => {
       service.getModule('00000000-0000-0000-0000-000000000000')
     ).rejects.toMatchObject({ statusCode: 404 });
   });
+
+  it('serves quiz questions WITHOUT the answer key', async () => {
+    const creator = await createEducationUser('getmod-quiz@test.com');
+    const mod = await seedModule(creator.id);
+    await seedAssessment(mod.id);
+
+    const result = await service.getModule(mod.id);
+    expect(result.assessment).not.toBeNull();
+    expect(result.assessment!.questions.length).toBe(3);
+    for (const q of result.assessment!.questions) {
+      expect(q).toHaveProperty('prompt');
+      expect(q).toHaveProperty('options');
+      expect(q).not.toHaveProperty('answer'); // answer key never leaks
+    }
+  });
 });
 
 // ─────────────────────────────────────────────
@@ -146,9 +162,9 @@ describe('EducationService.startModule', () => {
     const user = await createEducationUser('start-unv-user@test.com');
     const mod = await seedModule(creator.id, { verified: false });
 
-    await expect(
-      service.startModule(user.id, mod.id)
-    ).rejects.toMatchObject({ statusCode: 404 });
+    await expect(service.startModule(user.id, mod.id)).rejects.toMatchObject({
+      statusCode: 404,
+    });
   });
 });
 
@@ -157,21 +173,20 @@ describe('EducationService.startModule', () => {
 // ─────────────────────────────────────────────
 
 describe('EducationService.completeModule', () => {
-  it('marks module COMPLETED and sets completedAt', async () => {
+  it('marks a no-quiz module COMPLETED and awards IP once', async () => {
     const creator = await createEducationUser('complete-creator@test.com');
     const user = await createEducationUser('complete-user@test.com');
     const mod = await seedModule(creator.id, { completionIP: 10 });
     await seedProgress(user.id, mod.id, 'IN_PROGRESS');
 
-    const result = await service.completeModule(user.id, mod.id, { score: 85 });
+    const result = await service.completeModule(user.id, mod.id);
     expect(result.status).toBe('COMPLETED');
     expect(result.progress).toBe(100);
-    expect(result.score).toBe(85);
     expect(result.completedAt).not.toBeNull();
     expect(result.ipAwarded).toBe(10);
   });
 
-  it('is idempotent — second call returns existing COMPLETED record', async () => {
+  it('is idempotent — second call returns existing COMPLETED record, no re-award', async () => {
     const creator = await createEducationUser('complete-idem-c@test.com');
     const user = await createEducationUser('complete-idem-u@test.com');
     const mod = await seedModule(creator.id);
@@ -179,6 +194,7 @@ describe('EducationService.completeModule', () => {
 
     const result = await service.completeModule(user.id, mod.id);
     expect(result.status).toBe('COMPLETED');
+    expect(result.ipAwarded).toBeUndefined();
   });
 
   it('throws 400 if module was never started', async () => {
@@ -186,9 +202,9 @@ describe('EducationService.completeModule', () => {
     const user = await createEducationUser('complete-nostart-u@test.com');
     const mod = await seedModule(creator.id);
 
-    await expect(
-      service.completeModule(user.id, mod.id)
-    ).rejects.toMatchObject({ statusCode: 400 });
+    await expect(service.completeModule(user.id, mod.id)).rejects.toMatchObject(
+      { statusCode: 400 }
+    );
   });
 
   it('throws 404 for unknown module', async () => {
@@ -196,6 +212,93 @@ describe('EducationService.completeModule', () => {
     await expect(
       service.completeModule(user.id, '00000000-0000-0000-0000-000000000000')
     ).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  // ── Comprehension gate (Rule 5 — no farming) ──────────────────────────────
+
+  it('awards IP only when the quiz is passed', async () => {
+    const creator = await createEducationUser('quiz-pass-c@test.com');
+    const user = await createEducationUser('quiz-pass-u@test.com');
+    const mod = await seedModule(creator.id, { completionIP: 20 });
+    await seedAssessment(mod.id); // answer key [0,1,2], passingScore 60
+    await seedProgress(user.id, mod.id, 'IN_PROGRESS');
+
+    const result = await service.completeModule(user.id, mod.id, {
+      answers: [0, 1, 0], // 2/3 correct = 67% → pass
+    });
+    expect(result.passed).toBe(true);
+    expect(result.status).toBe('COMPLETED');
+    expect(result.ipAwarded).toBe(20);
+
+    const fresh = await prisma.user.findUnique({ where: { id: user.id } });
+    expect(fresh!.globalImpactPoints).toBe(20);
+  });
+
+  it('does NOT award when the quiz is failed, and stays IN_PROGRESS', async () => {
+    const creator = await createEducationUser('quiz-fail-c@test.com');
+    const user = await createEducationUser('quiz-fail-u@test.com');
+    const mod = await seedModule(creator.id, { completionIP: 20 });
+    await seedAssessment(mod.id);
+    await seedProgress(user.id, mod.id, 'IN_PROGRESS');
+
+    const result = await service.completeModule(user.id, mod.id, {
+      answers: [2, 2, 2], // 1/3 correct = 33% → fail
+    });
+    expect(result.passed).toBe(false);
+    expect(result.status).toBe('IN_PROGRESS');
+    expect(result.ipAwarded).toBeUndefined();
+    expect(result.attemptsUsed).toBe(1);
+    expect(result.attemptsRemaining).toBe(4);
+
+    const fresh = await prisma.user.findUnique({ where: { id: user.id } });
+    expect(fresh!.globalImpactPoints).toBe(0);
+  });
+
+  it('rejects completion of a quiz module without answers (400)', async () => {
+    const creator = await createEducationUser('quiz-noans-c@test.com');
+    const user = await createEducationUser('quiz-noans-u@test.com');
+    const mod = await seedModule(creator.id);
+    await seedAssessment(mod.id);
+    await seedProgress(user.id, mod.id, 'IN_PROGRESS');
+
+    await expect(service.completeModule(user.id, mod.id)).rejects.toMatchObject(
+      { statusCode: 400 }
+    );
+  });
+
+  it('never re-awards IP/PR on a second pass (replay-proof)', async () => {
+    const creator = await createEducationUser('quiz-replay-c@test.com');
+    const user = await createEducationUser('quiz-replay-u@test.com');
+    const mod = await seedModule(creator.id, { completionIP: 20 });
+    await seedAssessment(mod.id);
+    await seedProgress(user.id, mod.id, 'IN_PROGRESS');
+
+    const first = await service.completeModule(user.id, mod.id, {
+      answers: [0, 1, 2],
+    });
+    expect(first.ipAwarded).toBe(20);
+
+    const second = await service.completeModule(user.id, mod.id, {
+      answers: [0, 1, 2],
+    });
+    expect(second.ipAwarded).toBeUndefined();
+
+    const fresh = await prisma.user.findUnique({ where: { id: user.id } });
+    expect(fresh!.globalImpactPoints).toBe(20); // not 40
+  });
+
+  it('enforces maxAttempts on the quiz', async () => {
+    const creator = await createEducationUser('quiz-cap-c@test.com');
+    const user = await createEducationUser('quiz-cap-u@test.com');
+    const mod = await seedModule(creator.id);
+    await seedAssessment(mod.id, { maxAttempts: 2 });
+    await seedProgress(user.id, mod.id, 'IN_PROGRESS');
+
+    await service.completeModule(user.id, mod.id, { answers: [2, 2, 2] }); // fail 1
+    await service.completeModule(user.id, mod.id, { answers: [2, 2, 2] }); // fail 2
+    await expect(
+      service.completeModule(user.id, mod.id, { answers: [0, 1, 2] })
+    ).rejects.toMatchObject({ statusCode: 403 });
   });
 });
 
@@ -230,7 +333,9 @@ describe('EducationService.submitReview', () => {
     await service.submitReview(u1.id, mod.id, { rating: 4 });
     await service.submitReview(u2.id, mod.id, { rating: 2 });
 
-    const updated = await prisma.educationalModule.findUnique({ where: { id: mod.id } });
+    const updated = await prisma.educationalModule.findUnique({
+      where: { id: mod.id },
+    });
     expect(Number(updated?.averageRating)).toBe(3);
   });
 
@@ -259,7 +364,9 @@ describe('EducationService.submitReview', () => {
   it('throws 404 for unknown module', async () => {
     const user = await createEducationUser('review-404@test.com');
     await expect(
-      service.submitReview(user.id, '00000000-0000-0000-0000-000000000000', { rating: 5 })
+      service.submitReview(user.id, '00000000-0000-0000-0000-000000000000', {
+        rating: 5,
+      })
     ).rejects.toMatchObject({ statusCode: 404 });
   });
 });
@@ -399,7 +506,9 @@ describe('EducationService.createModule', () => {
   it('persists the module to the database', async () => {
     const author = await createEligibleAuthor('create-persist@test.com');
     const result = await service.createModule(author.id, VALID_MODULE_DTO);
-    const inDb = await prisma.educationalModule.findUnique({ where: { id: result.id } });
+    const inDb = await prisma.educationalModule.findUnique({
+      where: { id: result.id },
+    });
     expect(inDb).not.toBeNull();
     expect(inDb!.title).toBe(VALID_MODULE_DTO.title);
   });
@@ -421,12 +530,14 @@ describe('EducationService.updateModule', () => {
   it('updates title and content on own DRAFT', async () => {
     const author = await createEligibleAuthor('upd-ok@test.com');
     const mod = await seedDraftModule(author.id);
-    const result = await service.updateModule(author.id, mod.id, { title: 'Revised Title Here' });
+    const result = await service.updateModule(author.id, mod.id, {
+      title: 'Revised Title Here',
+    });
     expect(result.title).toBe('Revised Title Here');
     expect(result.status).toBe('DRAFT');
   });
 
-  it('throws 403 for a different user\'s module', async () => {
+  it("throws 403 for a different user's module", async () => {
     const authorA = await createEligibleAuthor('upd-owner-a@test.com');
     const authorB = await createEligibleAuthor('upd-owner-b@test.com');
     const mod = await seedDraftModule(authorB.id);
@@ -468,17 +579,17 @@ describe('EducationService.submitModule', () => {
   it('throws 400 if already submitted (pending review)', async () => {
     const author = await createEligibleAuthor('submit-dup@test.com');
     const mod = await seedSubmittedModule(author.id);
-    await expect(
-      service.submitModule(author.id, mod.id)
-    ).rejects.toMatchObject({ statusCode: 400 });
+    await expect(service.submitModule(author.id, mod.id)).rejects.toMatchObject(
+      { statusCode: 400 }
+    );
   });
 
   it('throws 400 if already approved', async () => {
     const author = await createEligibleAuthor('submit-approved@test.com');
     const mod = await seedModule(author.id, { verified: true });
-    await expect(
-      service.submitModule(author.id, mod.id)
-    ).rejects.toMatchObject({ statusCode: 400 });
+    await expect(service.submitModule(author.id, mod.id)).rejects.toMatchObject(
+      { statusCode: 400 }
+    );
   });
 
   it('allows re-submitting a rejected module', async () => {
@@ -489,7 +600,7 @@ describe('EducationService.submitModule', () => {
     expect(result.rejectionReason).toBeNull();
   });
 
-  it('throws 403 for a different user\'s module', async () => {
+  it("throws 403 for a different user's module", async () => {
     const authorA = await createEligibleAuthor('submit-owner-a@test.com');
     const authorB = await createEligibleAuthor('submit-owner-b@test.com');
     const mod = await seedDraftModule(authorB.id);
@@ -508,7 +619,9 @@ describe('EducationService.deleteModule', () => {
     const author = await createEligibleAuthor('del-ok@test.com');
     const mod = await seedDraftModule(author.id);
     await service.deleteModule(author.id, mod.id);
-    const inDb = await prisma.educationalModule.findUnique({ where: { id: mod.id } });
+    const inDb = await prisma.educationalModule.findUnique({
+      where: { id: mod.id },
+    });
     expect(inDb).toBeNull();
   });
 
@@ -516,11 +629,13 @@ describe('EducationService.deleteModule', () => {
     const author = await createEligibleAuthor('del-submitted@test.com');
     const mod = await seedSubmittedModule(author.id);
     await service.deleteModule(author.id, mod.id);
-    const inDb = await prisma.educationalModule.findUnique({ where: { id: mod.id } });
+    const inDb = await prisma.educationalModule.findUnique({
+      where: { id: mod.id },
+    });
     expect(inDb).toBeNull();
   });
 
-  it('throws 403 for a different user\'s module', async () => {
+  it("throws 403 for a different user's module", async () => {
     const authorA = await createEducationUser('del-owner-a@test.com');
     const authorB = await createEducationUser('del-owner-b@test.com');
     const mod = await seedDraftModule(authorB.id);
@@ -532,9 +647,9 @@ describe('EducationService.deleteModule', () => {
   it('throws 400 for an approved module', async () => {
     const author = await createEducationUser('del-approved@test.com');
     const mod = await seedModule(author.id, { verified: true });
-    await expect(
-      service.deleteModule(author.id, mod.id)
-    ).rejects.toMatchObject({ statusCode: 400 });
+    await expect(service.deleteModule(author.id, mod.id)).rejects.toMatchObject(
+      { statusCode: 400 }
+    );
   });
 });
 
@@ -553,7 +668,10 @@ describe('EducationService.getMyModules', () => {
     const author = await createEligibleAuthor('mymod-all@test.com');
     const draft = await seedDraftModule(author.id, 'My Draft');
     const submitted = await seedSubmittedModule(author.id);
-    const approved = await seedModule(author.id, { verified: true, title: 'My Approved' });
+    const approved = await seedModule(author.id, {
+      verified: true,
+      title: 'My Approved',
+    });
 
     const result = await service.getMyModules(author.id);
     // createEligibleAuthor seeds 3 prerequisite APPROVED modules; plus draft/submitted/approved = 6 total

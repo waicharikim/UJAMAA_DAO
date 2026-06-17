@@ -11,7 +11,12 @@ Community verification is required to access most platform features. Users progr
 
 **Path A — Vouching:** Three `COMMUNITY_VERIFIED` ward members vouch for the user. The user must be `PHONE_VERIFIED` first.
 
-**Path B — M-Pesa payment:** If the vouching period expires (or the user prefers), they pay via M-Pesa STK push. This immediately promotes them to `COMMUNITY_VERIFIED`.
+**Path B — M-Pesa payment:** If the vouching period expires (or the user prefers), they pay via M-Pesa STK push. This immediately promotes them to `COMMUNITY_VERIFIED`. This is the path that scales without dependencies — it works in any ward with no existing verified members.
+
+**Cold-start / genesis.** Vouching requires existing `COMMUNITY_VERIFIED` members, so a brand-new platform (or a brand-new ward) would otherwise deadlock. Two mechanisms break it:
+
+- **Genesis verifiers** (seed): every `system:super_admin` plus any account whose email is in the `FOUNDER_EMAILS` env var is auto-verified at seed time (idempotent). These are the first vouchers.
+- **Accountable per-ward bootstrap:** while a ward has **fewer than 3** community-verified members, a **single vouch from an appointed location admin** (`location:ward_admin` / `constituency_admin` / `county_admin`, `system:county_coordinator`, `system:super_admin`) verifies a member. Once the ward reaches 3 verified members, the full 3-vouch rule resumes. Every bootstrap vouch is audit-logged (`COMMUNITY_VERIFIED`, `reason: "bootstrap_vouch"`). The lowered threshold is strictly gated on the unseeded-ward check — an admin who is not itself community-verified loses vouching ability once the ward seeds.
 
 ---
 
@@ -20,7 +25,8 @@ Community verification is required to access most platform features. Users progr
 ```
 EMAIL_VERIFIED → PHONE_VERIFIED → COMMUNITY_VERIFIED
                                       ↑
-                              (3 vouches OR M-Pesa payment)
+              (3 vouches  OR  1 location-admin vouch while ward unseeded
+                          OR  M-Pesa payment)
 ```
 
 A nightly job (`checkVouchingTimeouts`) moves users from `VOUCHING` → `PAYMENT_PENDING` when the vouch window expires.

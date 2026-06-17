@@ -162,6 +162,27 @@ export async function seedProposal(
   });
 }
 
+/**
+ * Seed a minimal Project linked to a proposal, so the proposal can pass the
+ * APPROVED → EXECUTING setup gate (which now requires a project to exist).
+ */
+export async function seedProjectForProposal(
+  proposalId: string,
+  ownerUserId: string,
+  groupId?: string
+) {
+  return prisma.project.create({
+    data: {
+      proposalId,
+      ownerUserId,
+      ownerGroupId: groupId ?? null,
+      title: 'Test Project',
+      description: 'A project seeded to satisfy the execution setup gate.',
+      status: 'PLANNING',
+    },
+  });
+}
+
 // ─────────────────────────────────────────────
 // JWT helper
 // ─────────────────────────────────────────────

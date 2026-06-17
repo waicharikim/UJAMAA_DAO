@@ -38,15 +38,18 @@ vi.mock('africastalking', () => ({
   })),
 }));
 
-vi.mock('../../src/modules/community/services/groupMembership.service.js', () => ({
-  groupMembershipService: {
-    enrollInSystemGroups: vi.fn().mockResolvedValue(undefined),
-    updateResidenceGroups: vi.fn().mockResolvedValue(undefined),
-    getUserGroups: vi.fn().mockResolvedValue([]),
-    getGroupMembers: vi.fn().mockResolvedValue([]),
-    getGroupById: vi.fn().mockResolvedValue(null),
-  },
-}));
+vi.mock(
+  '../../src/modules/community/services/groupMembership.service.js',
+  () => ({
+    groupMembershipService: {
+      enrollInSystemGroups: vi.fn().mockResolvedValue(undefined),
+      updateResidenceGroups: vi.fn().mockResolvedValue(undefined),
+      getUserGroups: vi.fn().mockResolvedValue([]),
+      getGroupMembers: vi.fn().mockResolvedValue([]),
+      getGroupById: vi.fn().mockResolvedValue(null),
+    },
+  })
+);
 
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 import request from 'supertest';
@@ -65,6 +68,7 @@ import {
   seedGovernanceGroup,
   addGroupMember,
   seedProposal,
+  seedProjectForProposal,
   makeGovernanceToken,
 } from './helpers.js';
 
@@ -83,7 +87,11 @@ describe('POST /:proposalId/cancel', () => {
     const creator = await createGovernanceUser('cancel-draft@example.com');
     const token = makeGovernanceToken(creator.id);
     const group = await seedGovernanceGroup(creator.id);
-    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.DRAFT);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.DRAFT
+    );
 
     const res = await request(app)
       .post(`${BASE}/${proposal.id}/cancel`)
@@ -91,7 +99,9 @@ describe('POST /:proposalId/cancel', () => {
 
     expect(res.status).toBe(200);
 
-    const updated = await prisma.proposal.findUnique({ where: { id: proposal.id } });
+    const updated = await prisma.proposal.findUnique({
+      where: { id: proposal.id },
+    });
     expect(updated!.status).toBe(ProposalStatus.CANCELLED);
   });
 
@@ -99,7 +109,11 @@ describe('POST /:proposalId/cancel', () => {
     const creator = await createGovernanceUser('cancel-pending@example.com');
     const token = makeGovernanceToken(creator.id);
     const group = await seedGovernanceGroup(creator.id);
-    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.PENDING_REVIEW);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.PENDING_REVIEW
+    );
 
     const res = await request(app)
       .post(`${BASE}/${proposal.id}/cancel`)
@@ -107,7 +121,9 @@ describe('POST /:proposalId/cancel', () => {
 
     expect(res.status).toBe(200);
 
-    const updated = await prisma.proposal.findUnique({ where: { id: proposal.id } });
+    const updated = await prisma.proposal.findUnique({
+      where: { id: proposal.id },
+    });
     expect(updated!.status).toBe(ProposalStatus.CANCELLED);
   });
 
@@ -117,7 +133,11 @@ describe('POST /:proposalId/cancel', () => {
     const memberToken = makeGovernanceToken(member.id);
     const group = await seedGovernanceGroup(creator.id);
     await addGroupMember(member.id, group.id);
-    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.DRAFT);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.DRAFT
+    );
 
     const res = await request(app)
       .post(`${BASE}/${proposal.id}/cancel`)
@@ -130,7 +150,11 @@ describe('POST /:proposalId/cancel', () => {
     const creator = await createGovernanceUser('cancel-voting@example.com');
     const token = makeGovernanceToken(creator.id);
     const group = await seedGovernanceGroup(creator.id);
-    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.VOTING);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.VOTING
+    );
 
     const res = await request(app)
       .post(`${BASE}/${proposal.id}/cancel`)
@@ -168,14 +192,20 @@ describe('POST /:proposalId/resubmit', () => {
     const creator = await createGovernanceUser('route-resub-ok@example.com');
     const token = makeGovernanceToken(creator.id);
     const group = await seedGovernanceGroup(creator.id);
-    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.REJECTED);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.REJECTED
+    );
 
     const res = await request(app)
       .post(`${BASE}/${proposal.id}/resubmit`)
       .set('Authorization', `Bearer ${token}`);
 
     expect(res.status).toBe(200);
-    const updated = await prisma.proposal.findUnique({ where: { id: proposal.id } });
+    const updated = await prisma.proposal.findUnique({
+      where: { id: proposal.id },
+    });
     expect(updated!.status).toBe(ProposalStatus.DRAFT);
     expect(updated!.resubmissionCount).toBe(1);
   });
@@ -185,7 +215,11 @@ describe('POST /:proposalId/resubmit', () => {
     const other = await createGovernanceUser('route-resub-other@example.com');
     const otherToken = makeGovernanceToken(other.id);
     const group = await seedGovernanceGroup(creator.id);
-    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.REJECTED);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.REJECTED
+    );
 
     const res = await request(app)
       .post(`${BASE}/${proposal.id}/resubmit`)
@@ -195,10 +229,16 @@ describe('POST /:proposalId/resubmit', () => {
   });
 
   it('returns 400 when proposal is not REJECTED', async () => {
-    const creator = await createGovernanceUser('route-resub-status@example.com');
+    const creator = await createGovernanceUser(
+      'route-resub-status@example.com'
+    );
     const token = makeGovernanceToken(creator.id);
     const group = await seedGovernanceGroup(creator.id);
-    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.DRAFT);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.DRAFT
+    );
 
     const res = await request(app)
       .post(`${BASE}/${proposal.id}/resubmit`)
@@ -216,7 +256,8 @@ describe('POST /:proposalId/resubmit', () => {
         groupId: group.id,
         creatorId: creator.id,
         title: 'Route cap test proposal for resubmission limit',
-        description: 'Testing that the 3-resubmission cap is enforced at the route level.',
+        description:
+          'Testing that the 3-resubmission cap is enforced at the route level.',
         proposalType: 'COMMUNITY_INITIATIVE',
         proposalScope: 'GROUP',
         status: ProposalStatus.REJECTED,
@@ -248,7 +289,12 @@ describe('PATCH /:proposalId/progress', () => {
     const creator = await createGovernanceUser('progress-exec@example.com');
     const token = makeGovernanceToken(creator.id);
     const group = await seedGovernanceGroup(creator.id);
-    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.APPROVED);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.APPROVED
+    );
+    await seedProjectForProposal(proposal.id, creator.id, group.id);
 
     const res = await request(app)
       .patch(`${BASE}/${proposal.id}/progress`)
@@ -257,7 +303,9 @@ describe('PATCH /:proposalId/progress', () => {
 
     expect(res.status).toBe(200);
 
-    const updated = await prisma.proposal.findUnique({ where: { id: proposal.id } });
+    const updated = await prisma.proposal.findUnique({
+      where: { id: proposal.id },
+    });
     expect(updated!.status).toBe(ProposalStatus.EXECUTING);
   });
 
@@ -265,7 +313,11 @@ describe('PATCH /:proposalId/progress', () => {
     const creator = await createGovernanceUser('progress-done@example.com');
     const token = makeGovernanceToken(creator.id);
     const group = await seedGovernanceGroup(creator.id);
-    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.EXECUTING);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.EXECUTING
+    );
 
     const res = await request(app)
       .patch(`${BASE}/${proposal.id}/progress`)
@@ -274,17 +326,26 @@ describe('PATCH /:proposalId/progress', () => {
 
     expect(res.status).toBe(200);
 
-    const updated = await prisma.proposal.findUnique({ where: { id: proposal.id } });
+    const updated = await prisma.proposal.findUnique({
+      where: { id: proposal.id },
+    });
     expect(updated!.status).toBe(ProposalStatus.COMPLETED);
   });
 
   it('returns 200 when group leader (not creator) moves APPROVED → EXECUTING', async () => {
-    const creator = await createGovernanceUser('progress-leader-creator@example.com');
+    const creator = await createGovernanceUser(
+      'progress-leader-creator@example.com'
+    );
     const leader = await createGovernanceUser('progress-leader@example.com');
     const leaderToken = makeGovernanceToken(leader.id);
     const group = await seedGovernanceGroup(creator.id);
     await addGroupMember(leader.id, group.id, 'LEADER');
-    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.APPROVED);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.APPROVED
+    );
+    await seedProjectForProposal(proposal.id, creator.id, group.id);
 
     const res = await request(app)
       .patch(`${BASE}/${proposal.id}/progress`)
@@ -295,12 +356,18 @@ describe('PATCH /:proposalId/progress', () => {
   });
 
   it('returns 403 when a plain member (not creator, not leader) calls progress', async () => {
-    const creator = await createGovernanceUser('progress-creator-only@example.com');
+    const creator = await createGovernanceUser(
+      'progress-creator-only@example.com'
+    );
     const member = await createGovernanceUser('progress-member@example.com');
     const memberToken = makeGovernanceToken(member.id);
     const group = await seedGovernanceGroup(creator.id);
     await addGroupMember(member.id, group.id);
-    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.APPROVED);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.APPROVED
+    );
 
     const res = await request(app)
       .patch(`${BASE}/${proposal.id}/progress`)
@@ -311,10 +378,16 @@ describe('PATCH /:proposalId/progress', () => {
   });
 
   it('returns 400 for invalid transition DRAFT → EXECUTING', async () => {
-    const creator = await createGovernanceUser('progress-bad-trans@example.com');
+    const creator = await createGovernanceUser(
+      'progress-bad-trans@example.com'
+    );
     const token = makeGovernanceToken(creator.id);
     const group = await seedGovernanceGroup(creator.id);
-    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.DRAFT);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.DRAFT
+    );
 
     const res = await request(app)
       .patch(`${BASE}/${proposal.id}/progress`)
@@ -325,10 +398,16 @@ describe('PATCH /:proposalId/progress', () => {
   });
 
   it('returns 400 when status field is missing', async () => {
-    const creator = await createGovernanceUser('progress-no-status@example.com');
+    const creator = await createGovernanceUser(
+      'progress-no-status@example.com'
+    );
     const token = makeGovernanceToken(creator.id);
     const group = await seedGovernanceGroup(creator.id);
-    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.APPROVED);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.APPROVED
+    );
 
     const res = await request(app)
       .patch(`${BASE}/${proposal.id}/progress`)
@@ -376,6 +455,7 @@ describe('PATCH /:proposalId/progress — treasury disbursement', () => {
     const group = await seedGovernanceGroup(creator.id);
     await treasuryService.deposit(group.id, { amount: 50000 }, creator.id);
     const proposal = await seedFundedProposal(creator.id, group.id, 10000);
+    await seedProjectForProposal(proposal.id, creator.id, group.id);
 
     const res = await request(app)
       .patch(`${BASE}/${proposal.id}/progress`)
@@ -384,11 +464,17 @@ describe('PATCH /:proposalId/progress — treasury disbursement', () => {
 
     expect(res.status).toBe(200);
 
-    const treasury = await prisma.groupTreasury.findUnique({ where: { groupId: group.id } });
+    const treasury = await prisma.groupTreasury.findUnique({
+      where: { groupId: group.id },
+    });
     expect(Number(treasury!.balance)).toBe(40000);
 
     const txn = await prisma.walletTransaction.findFirst({
-      where: { treasuryId: treasury!.id, referenceType: 'PROPOSAL', proposalId: proposal.id },
+      where: {
+        treasuryId: treasury!.id,
+        referenceType: 'PROPOSAL',
+        proposalId: proposal.id,
+      },
     });
     expect(txn).not.toBeNull();
     expect(txn!.transactionType).toBe('DEBIT');
@@ -399,7 +485,12 @@ describe('PATCH /:proposalId/progress — treasury disbursement', () => {
     const creator = await createGovernanceUser('disburse-null@example.com');
     const token = makeGovernanceToken(creator.id);
     const group = await seedGovernanceGroup(creator.id);
-    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.APPROVED);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.APPROVED
+    );
+    await seedProjectForProposal(proposal.id, creator.id, group.id);
 
     const res = await request(app)
       .patch(`${BASE}/${proposal.id}/progress`)
@@ -407,16 +498,21 @@ describe('PATCH /:proposalId/progress — treasury disbursement', () => {
       .send({ status: 'EXECUTING' });
 
     expect(res.status).toBe(200);
-    const treasury = await prisma.groupTreasury.findUnique({ where: { groupId: group.id } });
+    const treasury = await prisma.groupTreasury.findUnique({
+      where: { groupId: group.id },
+    });
     expect(treasury).toBeNull();
   });
 
   it('returns 400 when treasury has insufficient funds for disbursement', async () => {
-    const creator = await createGovernanceUser('disburse-insufficient@example.com');
+    const creator = await createGovernanceUser(
+      'disburse-insufficient@example.com'
+    );
     const token = makeGovernanceToken(creator.id);
     const group = await seedGovernanceGroup(creator.id);
     await treasuryService.deposit(group.id, { amount: 500 }, creator.id);
     const proposal = await seedFundedProposal(creator.id, group.id, 10000);
+    await seedProjectForProposal(proposal.id, creator.id, group.id);
 
     const res = await request(app)
       .patch(`${BASE}/${proposal.id}/progress`)
@@ -424,15 +520,20 @@ describe('PATCH /:proposalId/progress — treasury disbursement', () => {
       .send({ status: 'EXECUTING' });
 
     expect(res.status).toBe(400);
-    const updated = await prisma.proposal.findUnique({ where: { id: proposal.id } });
+    const updated = await prisma.proposal.findUnique({
+      where: { id: proposal.id },
+    });
     expect(updated!.status).toBe(ProposalStatus.APPROVED);
   });
 
   it('returns 400 when group has no treasury and groupFundingAmount > 0', async () => {
-    const creator = await createGovernanceUser('disburse-no-treasury@example.com');
+    const creator = await createGovernanceUser(
+      'disburse-no-treasury@example.com'
+    );
     const token = makeGovernanceToken(creator.id);
     const group = await seedGovernanceGroup(creator.id);
     const proposal = await seedFundedProposal(creator.id, group.id, 5000);
+    await seedProjectForProposal(proposal.id, creator.id, group.id);
 
     const res = await request(app)
       .patch(`${BASE}/${proposal.id}/progress`)
@@ -443,7 +544,9 @@ describe('PATCH /:proposalId/progress — treasury disbursement', () => {
   });
 
   it('does not re-debit treasury on EXECUTING → COMPLETED transition', async () => {
-    const creator = await createGovernanceUser('disburse-completed@example.com');
+    const creator = await createGovernanceUser(
+      'disburse-completed@example.com'
+    );
     const token = makeGovernanceToken(creator.id);
     const group = await seedGovernanceGroup(creator.id);
     await treasuryService.deposit(group.id, { amount: 50000 }, creator.id);
@@ -466,7 +569,9 @@ describe('PATCH /:proposalId/progress — treasury disbursement', () => {
       .send({ status: 'COMPLETED' });
 
     expect(res.status).toBe(200);
-    const treasury = await prisma.groupTreasury.findUnique({ where: { groupId: group.id } });
+    const treasury = await prisma.groupTreasury.findUnique({
+      where: { groupId: group.id },
+    });
     expect(Number(treasury!.balance)).toBe(50000);
   });
 });
@@ -479,9 +584,16 @@ describe('cancelProposal()', () => {
   it('cancels a DRAFT proposal and sets status to CANCELLED', async () => {
     const creator = await createGovernanceUser('svc-cancel-draft@example.com');
     const group = await seedGovernanceGroup(creator.id);
-    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.DRAFT);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.DRAFT
+    );
 
-    const result = await proposalService.cancelProposal(creator.id, proposal.id);
+    const result = await proposalService.cancelProposal(
+      creator.id,
+      proposal.id
+    );
 
     expect(result.status).toBe(ProposalStatus.CANCELLED);
 
@@ -492,9 +604,16 @@ describe('cancelProposal()', () => {
   it('cancels a PENDING_REVIEW proposal', async () => {
     const creator = await createGovernanceUser('svc-cancel-review@example.com');
     const group = await seedGovernanceGroup(creator.id);
-    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.PENDING_REVIEW);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.PENDING_REVIEW
+    );
 
-    const result = await proposalService.cancelProposal(creator.id, proposal.id);
+    const result = await proposalService.cancelProposal(
+      creator.id,
+      proposal.id
+    );
 
     expect(result.status).toBe(ProposalStatus.CANCELLED);
   });
@@ -503,7 +622,11 @@ describe('cancelProposal()', () => {
     const creator = await createGovernanceUser('svc-cancel-403-c@example.com');
     const other = await createGovernanceUser('svc-cancel-403-o@example.com');
     const group = await seedGovernanceGroup(creator.id);
-    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.DRAFT);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.DRAFT
+    );
 
     await expect(
       proposalService.cancelProposal(other.id, proposal.id)
@@ -513,7 +636,11 @@ describe('cancelProposal()', () => {
   it('throws 400 when trying to cancel a VOTING proposal', async () => {
     const creator = await createGovernanceUser('svc-cancel-voting@example.com');
     const group = await seedGovernanceGroup(creator.id);
-    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.VOTING);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.VOTING
+    );
 
     await expect(
       proposalService.cancelProposal(creator.id, proposal.id)
@@ -538,11 +665,20 @@ describe('updateProgress()', () => {
   it('advances APPROVED → EXECUTING (creator)', async () => {
     const creator = await createGovernanceUser('svc-prog-exec@example.com');
     const group = await seedGovernanceGroup(creator.id);
-    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.APPROVED);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.APPROVED
+    );
+    await seedProjectForProposal(proposal.id, creator.id, group.id);
 
-    const result = await proposalService.updateProgress(creator.id, proposal.id, {
-      status: 'EXECUTING',
-    });
+    const result = await proposalService.updateProgress(
+      creator.id,
+      proposal.id,
+      {
+        status: 'EXECUTING',
+      }
+    );
 
     expect(result.status).toBe(ProposalStatus.EXECUTING);
   });
@@ -550,12 +686,20 @@ describe('updateProgress()', () => {
   it('advances EXECUTING → COMPLETED (creator)', async () => {
     const creator = await createGovernanceUser('svc-prog-done@example.com');
     const group = await seedGovernanceGroup(creator.id);
-    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.EXECUTING);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.EXECUTING
+    );
 
-    const result = await proposalService.updateProgress(creator.id, proposal.id, {
-      status: 'COMPLETED',
-      note: 'Borehole drilled and commissioned',
-    });
+    const result = await proposalService.updateProgress(
+      creator.id,
+      proposal.id,
+      {
+        status: 'COMPLETED',
+        note: 'Borehole drilled and commissioned',
+      }
+    );
 
     expect(result.status).toBe(ProposalStatus.COMPLETED);
     // note is stored in the outcome field
@@ -568,11 +712,20 @@ describe('updateProgress()', () => {
     const leader = await createGovernanceUser('svc-prog-ldr-l@example.com');
     const group = await seedGovernanceGroup(creator.id);
     await addGroupMember(leader.id, group.id, 'LEADER');
-    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.APPROVED);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.APPROVED
+    );
+    await seedProjectForProposal(proposal.id, creator.id, group.id);
 
-    const result = await proposalService.updateProgress(leader.id, proposal.id, {
-      status: 'EXECUTING',
-    });
+    const result = await proposalService.updateProgress(
+      leader.id,
+      proposal.id,
+      {
+        status: 'EXECUTING',
+      }
+    );
 
     expect(result.status).toBe(ProposalStatus.EXECUTING);
   });
@@ -582,21 +735,132 @@ describe('updateProgress()', () => {
     const outsider = await createGovernanceUser('svc-prog-403-o@example.com');
     const group = await seedGovernanceGroup(creator.id);
     await addGroupMember(outsider.id, group.id); // MEMBER, not LEADER
-    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.APPROVED);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.APPROVED
+    );
 
     await expect(
-      proposalService.updateProgress(outsider.id, proposal.id, { status: 'EXECUTING' })
+      proposalService.updateProgress(outsider.id, proposal.id, {
+        status: 'EXECUTING',
+      })
     ).rejects.toMatchObject({ statusCode: 403 });
   });
 
   it('throws 400 for an invalid transition (DRAFT → EXECUTING)', async () => {
     const creator = await createGovernanceUser('svc-prog-400@example.com');
     const group = await seedGovernanceGroup(creator.id);
-    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.DRAFT);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.DRAFT
+    );
 
     await expect(
-      proposalService.updateProgress(creator.id, proposal.id, { status: 'EXECUTING' })
+      proposalService.updateProgress(creator.id, proposal.id, {
+        status: 'EXECUTING',
+      })
     ).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  // ── POLICY proposals: decision recorded, never executed ───────────────────
+
+  it('POLICY: completes APPROVED → COMPLETED with a required outcome note', async () => {
+    const creator = await createGovernanceUser('svc-policy-done@example.com');
+    const group = await seedGovernanceGroup(creator.id);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.APPROVED
+    );
+    await prisma.proposal.update({
+      where: { id: proposal.id },
+      data: { kind: 'POLICY' },
+    });
+
+    const result = await proposalService.updateProgress(
+      creator.id,
+      proposal.id,
+      {
+        status: 'COMPLETED',
+        note: 'The no-littering by-law was adopted by community vote.',
+      }
+    );
+
+    expect(result.status).toBe(ProposalStatus.COMPLETED);
+    const db = await prisma.proposal.findUnique({ where: { id: proposal.id } });
+    expect(db!.outcome).toBe(
+      'The no-littering by-law was adopted by community vote.'
+    );
+  });
+
+  it('POLICY: rejects completion without an outcome note (400)', async () => {
+    const creator = await createGovernanceUser('svc-policy-noout@example.com');
+    const group = await seedGovernanceGroup(creator.id);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.APPROVED
+    );
+    await prisma.proposal.update({
+      where: { id: proposal.id },
+      data: { kind: 'POLICY' },
+    });
+
+    await expect(
+      proposalService.updateProgress(creator.id, proposal.id, {
+        status: 'COMPLETED',
+      })
+    ).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it('POLICY: cannot be EXECUTED (400)', async () => {
+    const creator = await createGovernanceUser('svc-policy-exec@example.com');
+    const group = await seedGovernanceGroup(creator.id);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.APPROVED
+    );
+    await prisma.proposal.update({
+      where: { id: proposal.id },
+      data: { kind: 'POLICY' },
+    });
+
+    await expect(
+      proposalService.updateProgress(creator.id, proposal.id, {
+        status: 'EXECUTING',
+      })
+    ).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it('PROJECT: blocked from EXECUTING until a project is set up (400)', async () => {
+    const creator = await createGovernanceUser('svc-gate-noproj@example.com');
+    const group = await seedGovernanceGroup(creator.id);
+    // PROJECT-kind (default), APPROVED, but no project created yet.
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.APPROVED
+    );
+
+    await expect(
+      proposalService.updateProgress(creator.id, proposal.id, {
+        status: 'EXECUTING',
+      })
+    ).rejects.toMatchObject({ statusCode: 400 });
+
+    // After the setup gate (a project exists), the transition succeeds.
+    await seedProjectForProposal(proposal.id, creator.id, group.id);
+    const result = await proposalService.updateProgress(
+      creator.id,
+      proposal.id,
+      {
+        status: 'EXECUTING',
+      }
+    );
+    expect(result.status).toBe(ProposalStatus.EXECUTING);
   });
 });
 
@@ -608,7 +872,11 @@ describe('processTallyProposals()', () => {
   it('tallies an expired VOTING proposal — quorum met → APPROVED', async () => {
     const creator = await createGovernanceUser('tally-job-ok@example.com');
     const group = await seedGovernanceGroup(creator.id);
-    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.VOTING);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.VOTING
+    );
 
     // Move voting end to the past so the job picks it up
     await prisma.proposal.update({
@@ -630,19 +898,27 @@ describe('processTallyProposals()', () => {
 
     await processTallyProposals();
 
-    const updated = await prisma.proposal.findUnique({ where: { id: proposal.id } });
+    const updated = await prisma.proposal.findUnique({
+      where: { id: proposal.id },
+    });
     expect(updated!.status).toBe(ProposalStatus.APPROVED);
   });
 
   it('does not tally a VOTING proposal whose votingEndsAt is in the future', async () => {
     const creator = await createGovernanceUser('tally-job-future@example.com');
     const group = await seedGovernanceGroup(creator.id);
-    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.VOTING);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.VOTING
+    );
     // votingEndsAt is set to +7 days by seedProposal — leave it unchanged
 
     await processTallyProposals();
 
-    const unchanged = await prisma.proposal.findUnique({ where: { id: proposal.id } });
+    const unchanged = await prisma.proposal.findUnique({
+      where: { id: proposal.id },
+    });
     expect(unchanged!.status).toBe(ProposalStatus.VOTING);
   });
 
@@ -660,7 +936,11 @@ describe('processExpireProposalReview()', () => {
   it('auto-rejects a PENDING_REVIEW proposal older than 30 days', async () => {
     const creator = await createGovernanceUser('expire-job-old@example.com');
     const group = await seedGovernanceGroup(creator.id);
-    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.PENDING_REVIEW);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.PENDING_REVIEW
+    );
 
     // Set updatedAt to 31 days ago via raw SQL (Prisma @updatedAt cannot be set directly)
     const pastDate = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
@@ -668,7 +948,9 @@ describe('processExpireProposalReview()', () => {
 
     await processExpireProposalReview();
 
-    const updated = await prisma.proposal.findUnique({ where: { id: proposal.id } });
+    const updated = await prisma.proposal.findUnique({
+      where: { id: proposal.id },
+    });
     expect(updated!.status).toBe(ProposalStatus.REJECTED);
     expect(updated!.reviewNote).toContain('expired');
   });
@@ -676,12 +958,18 @@ describe('processExpireProposalReview()', () => {
   it('does not reject a recent PENDING_REVIEW proposal', async () => {
     const creator = await createGovernanceUser('expire-job-new@example.com');
     const group = await seedGovernanceGroup(creator.id);
-    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.PENDING_REVIEW);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.PENDING_REVIEW
+    );
     // updatedAt is just set to now() — within 30-day window
 
     await processExpireProposalReview();
 
-    const unchanged = await prisma.proposal.findUnique({ where: { id: proposal.id } });
+    const unchanged = await prisma.proposal.findUnique({
+      where: { id: proposal.id },
+    });
     expect(unchanged!.status).toBe(ProposalStatus.PENDING_REVIEW);
   });
 
@@ -698,9 +986,16 @@ describe('resubmitProposal()', () => {
   it('resets a REJECTED proposal to DRAFT and increments resubmissionCount', async () => {
     const creator = await createGovernanceUser('resub-basic@example.com');
     const group = await seedGovernanceGroup(creator.id);
-    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.REJECTED);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.REJECTED
+    );
 
-    const result = await proposalService.resubmitProposal(creator.id, proposal.id);
+    const result = await proposalService.resubmitProposal(
+      creator.id,
+      proposal.id
+    );
 
     expect(result.status).toBe(ProposalStatus.DRAFT);
     expect(result.resubmissionCount).toBe(1);
@@ -727,7 +1022,10 @@ describe('resubmitProposal()', () => {
       },
     });
 
-    const result = await proposalService.resubmitProposal(creator.id, proposal.id);
+    const result = await proposalService.resubmitProposal(
+      creator.id,
+      proposal.id
+    );
 
     expect(result.votesFor).toBe(0);
     expect(result.votesAgainst).toBe(0);
@@ -739,10 +1037,16 @@ describe('resubmitProposal()', () => {
   });
 
   it('throws 403 if a non-creator tries to resubmit', async () => {
-    const creator = await createGovernanceUser('resub-auth-creator@example.com');
+    const creator = await createGovernanceUser(
+      'resub-auth-creator@example.com'
+    );
     const other = await createGovernanceUser('resub-auth-other@example.com');
     const group = await seedGovernanceGroup(creator.id);
-    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.REJECTED);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.REJECTED
+    );
 
     await expect(
       proposalService.resubmitProposal(other.id, proposal.id)
@@ -752,7 +1056,11 @@ describe('resubmitProposal()', () => {
   it('throws 400 if proposal is not REJECTED', async () => {
     const creator = await createGovernanceUser('resub-status@example.com');
     const group = await seedGovernanceGroup(creator.id);
-    const proposal = await seedProposal(creator.id, group.id, ProposalStatus.DRAFT);
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.DRAFT
+    );
 
     await expect(
       proposalService.resubmitProposal(creator.id, proposal.id)
@@ -767,7 +1075,8 @@ describe('resubmitProposal()', () => {
         groupId: group.id,
         creatorId: creator.id,
         title: 'Resubmission cap test proposal',
-        description: 'Testing that the 3-resubmission cap is enforced correctly.',
+        description:
+          'Testing that the 3-resubmission cap is enforced correctly.',
         proposalType: 'COMMUNITY_INITIATIVE',
         proposalScope: 'GROUP',
         status: ProposalStatus.REJECTED,

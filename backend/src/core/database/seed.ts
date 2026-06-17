@@ -1512,6 +1512,315 @@ This transparency is the core promise of the community economy. It transforms "t
   },
 ];
 
+// ============================================================================
+// EDUCATION COMPREHENSION QUIZZES
+// One short quiz per module, keyed by module title. A learner must score at
+// least `passingScore`% (here 60% = 2 of 3) to earn IP/PR — this is the
+// comprehension gate that stops users from scrolling past content for points.
+// `answer` is the 0-based index of the correct option; it is NEVER served to
+// clients (education.service strips it). Drafted from each module's content —
+// review before launch.
+// ============================================================================
+
+type SeedQuizQuestion = {
+  prompt: string;
+  options: string[];
+  answer: number;
+};
+type SeedQuiz = {
+  passingScore: number;
+  maxAttempts: number;
+  questions: SeedQuizQuestion[];
+};
+
+const EDUCATION_QUIZZES_DATA: Record<string, SeedQuiz> = {
+  'What is UjamaaDAO?': {
+    passingScore: 60,
+    maxAttempts: 5,
+    questions: [
+      {
+        prompt: 'What does the Swahili word "Ujamaa" mean?',
+        options: [
+          'Independence',
+          'Familyhood and cooperative economics',
+          'Private ownership',
+          'Taxation',
+        ],
+        answer: 1,
+      },
+      {
+        prompt: 'How can a member become community-verified?',
+        options: [
+          'By paying KES 1,000',
+          'By three neighbours vouching, or a one-time KES 100 payment',
+          'By winning an election',
+          'Automatically on sign-up',
+        ],
+        answer: 1,
+      },
+      {
+        prompt:
+          'Wards are the smallest unit of government UjamaaDAO serves. How many are there in Kenya?',
+        options: ['47', '290', '1,450', 'Over 10,000'],
+        answer: 2,
+      },
+    ],
+  },
+  'Understanding Participation Rights (PR)': {
+    passingScore: 60,
+    maxAttempts: 5,
+    questions: [
+      {
+        prompt: 'Why is PR non-transferable between users?',
+        options: [
+          'So it can be sold for profit',
+          'To stop wealthy members buying influence and keep every vote genuine',
+          'Because the blockchain forbids transfers',
+          'So administrators can redistribute it',
+        ],
+        answer: 1,
+      },
+      {
+        prompt: 'What is the maximum PR balance a member can hold?',
+        options: ['100', '250', '500', 'Unlimited'],
+        answer: 2,
+      },
+      {
+        prompt: 'How much PR does casting a single vote cost?',
+        options: ['1 PR', '5 PR', '50 PR', 'It is free'],
+        answer: 1,
+      },
+    ],
+  },
+  'How Governance Works': {
+    passingScore: 60,
+    maxAttempts: 5,
+    questions: [
+      {
+        prompt: 'How much PR does it cost to create a ward-level proposal?',
+        options: ['5 PR', '50 PR', '100 PR', '200 PR'],
+        answer: 1,
+      },
+      {
+        prompt: 'Which two conditions must be met for a proposal to pass?',
+        options: [
+          'A large budget and a manager',
+          'Quorum and an approval threshold',
+          'Admin sign-off and a payment',
+          'Blockchain confirmation and an email',
+        ],
+        answer: 1,
+      },
+      {
+        prompt: 'What happens once a proposal passes its vote?',
+        options: [
+          'It is deleted from the record',
+          'It becomes an approved project broken into verifiable milestones',
+          'Funds are sent directly to the proposer',
+          'Nothing further happens',
+        ],
+        answer: 1,
+      },
+    ],
+  },
+  'Reading Your Ward Budget': {
+    passingScore: 60,
+    maxAttempts: 5,
+    questions: [
+      {
+        prompt:
+          'Which law gives you the right to request public financial documents?',
+        options: [
+          'Community Land Act 2016',
+          'Access to Information Act 2016',
+          'Employment Act 2007',
+          'Public Procurement Act 2015',
+        ],
+        answer: 1,
+      },
+      {
+        prompt:
+          'Above what contract value must procurement be openly (competitively) tendered?',
+        options: ['KES 50,000', 'KES 100,000', 'KES 500,000', 'KES 5 million'],
+        answer: 2,
+      },
+      {
+        prompt:
+          'A large gap between the budgeted allocation and actual expenditure is a sign of what?',
+        options: [
+          'The ward is wealthy',
+          'Funds were not spent, or not spent on what was budgeted',
+          'The budget was too small',
+          'Nothing unusual',
+        ],
+        answer: 1,
+      },
+    ],
+  },
+  'Community Health: Prevention Over Cure': {
+    passingScore: 60,
+    maxAttempts: 5,
+    questions: [
+      {
+        prompt:
+          'What is the single highest-impact health intervention a community can make?',
+        options: [
+          'Building a hospital',
+          'Improving access to clean water',
+          'Buying more medicine',
+          'Banning cooking fires',
+        ],
+        answer: 1,
+      },
+      {
+        prompt: 'When is the BCG vaccine (against tuberculosis) given?',
+        options: ['At birth', 'At 9 months', 'At 5 years', 'Only when sick'],
+        answer: 0,
+      },
+      {
+        prompt: 'What most reduces a mother’s risk of dying in childbirth?',
+        options: [
+          'Delivering at home',
+          'Delivering at a health facility with a skilled attendant',
+          'Avoiding antenatal clinics',
+          'Taking herbs',
+        ],
+        answer: 1,
+      },
+    ],
+  },
+  'Smallholder Farming: Soil, Water, and Markets': {
+    passingScore: 60,
+    maxAttempts: 5,
+    questions: [
+      {
+        prompt: 'What is the most cost-effective way to restore soil health?',
+        options: [
+          'Buying more artificial fertiliser',
+          'Making and applying compost',
+          'Deep ploughing every season',
+          'Burning all crop residue',
+        ],
+        answer: 1,
+      },
+      {
+        prompt: 'What is a zai pit used for?',
+        options: [
+          'Storing harvested grain',
+          'Concentrating water and nutrients at the plant’s root zone',
+          'Composting kitchen waste',
+          'Trapping crop pests',
+        ],
+        answer: 1,
+      },
+      {
+        prompt:
+          'How can smallholder farmers get better prices for their crops?',
+        options: [
+          'Sell individually right after harvest',
+          'Form a group to sell in bulk and time their sales',
+          'Always accept the middleman’s first offer',
+          'Plant only a single crop',
+        ],
+        answer: 1,
+      },
+    ],
+  },
+  'Emergency Preparedness at the Ward Level': {
+    passingScore: 60,
+    maxAttempts: 5,
+    questions: [
+      {
+        prompt:
+          'What is the main reason prepared communities recover faster from disasters?',
+        options: [
+          'They have more money',
+          'Organisation — they know who to call, where to go, and who needs help first',
+          'Government always rescues them',
+          'They have a larger population',
+        ],
+        answer: 1,
+      },
+      {
+        prompt: 'Why does a ward keep a "vulnerable persons register"?',
+        options: [
+          'For tax purposes',
+          'To know who cannot self-evacuate and needs help first',
+          'To assign blame after a disaster',
+          'To collect dues',
+        ],
+        answer: 1,
+      },
+      {
+        prompt: 'Why is a communication tree useful during an emergency?',
+        options: [
+          'It is cheaper than calling',
+          'Phone networks may be congested, so it still spreads information when direct calls fail',
+          'It records people’s votes',
+          'It is required by law',
+        ],
+        answer: 1,
+      },
+    ],
+  },
+  'Know Your Rights: Land, Labour, and Local Governance': {
+    passingScore: 60,
+    maxAttempts: 5,
+    questions: [
+      {
+        prompt:
+          'After how many years of continuous use (without the owner acting) might you claim adverse possession?',
+        options: ['2 years', '5 years', '12 years', '30 years'],
+        answer: 2,
+      },
+      {
+        prompt:
+          'Within how many days must a public body respond to an Access to Information request?',
+        options: ['7 days', '21 days', '60 days', '90 days'],
+        answer: 1,
+      },
+      {
+        prompt:
+          'How many residents must sign a petition to the County Assembly?',
+        options: ['At least 3', 'At least 10', 'At least 50', 'At least 100'],
+        answer: 1,
+      },
+    ],
+  },
+  'The Community Economy: Utility Tokens and the Ward Treasury': {
+    passingScore: 60,
+    maxAttempts: 5,
+    questions: [
+      {
+        prompt:
+          'What is the key difference between fiat-backed UT and earned UT?',
+        options: [
+          'They are exactly the same',
+          'Fiat-backed UT can be withdrawn to M-Pesa; earned UT cannot',
+          'Earned UT is always worth more',
+          'Only administrators can hold fiat-backed UT',
+        ],
+        answer: 1,
+      },
+      {
+        prompt: 'What share of a member’s dues goes to the ward treasury?',
+        options: ['5%', '15%', '50%', '70%'],
+        answer: 3,
+      },
+      {
+        prompt: 'How can money in a ward treasury be disbursed?',
+        options: [
+          'Any administrator can withdraw it',
+          'Only through an approved governance proposal',
+          'By whoever paid the most dues',
+          'It is paid out automatically each month',
+        ],
+        answer: 1,
+      },
+    ],
+  },
+};
+
 const ROLE_COVERAGE_USERS_DATA: TestUser[] = [
   {
     email: 'compliance@ujamaa.test',
@@ -1961,6 +2270,90 @@ async function seedTestAdmin() {
 
   console.log(
     `   Created admin@ujamaa.test with super admin + ward admin roles`
+  );
+}
+
+// ============================================================================
+// 8a. GENESIS VERIFIERS — bootstrap community verification
+// ============================================================================
+//
+// Community verification requires 3 vouches from members who are already
+// COMMUNITY_VERIFIED (see assertVoucherCanVouch). At launch there are zero
+// verified members, so the very first users can never be vouched — a deadlock.
+//
+// Genesis breaks the deadlock by auto-verifying a trusted founder cohort:
+//   • every system:super_admin, plus
+//   • any account whose email is listed in the FOUNDER_EMAILS env var
+//     (comma-separated). Set it at deploy time — no code change required.
+//
+// These accounts become COMMUNITY_VERIFIED and can then vouch for real members,
+// who in turn can vouch for others. Idempotent: re-running only promotes
+// accounts that are not already verified, so it heals founders who register
+// after the first seed.
+async function seedGenesisVerifiers() {
+  console.log('   Seeding genesis verifiers...');
+
+  const founderEmails = (process.env.FOUNDER_EMAILS ?? '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter((e) => e.length > 0);
+
+  const superAdmins = await prisma.user.findMany({
+    where: {
+      userRoles: {
+        some: { active: true, role: { name: 'system:super_admin' } },
+      },
+    },
+    select: { id: true, email: true, verificationLevel: true },
+  });
+
+  const founders = founderEmails.length
+    ? await prisma.user.findMany({
+        where: { email: { in: founderEmails } },
+        select: { id: true, email: true, verificationLevel: true },
+      })
+    : [];
+
+  // Union by id; remember why each was selected for the audit trail.
+  const byId = new Map<
+    string,
+    { id: string; email: string | null; verificationLevel: string; via: string }
+  >();
+  for (const u of superAdmins) byId.set(u.id, { ...u, via: 'super_admin' });
+  for (const u of founders)
+    if (!byId.has(u.id)) byId.set(u.id, { ...u, via: 'founder_email' });
+
+  const ALREADY_VERIFIED = ['COMMUNITY_VERIFIED', 'FULL_VERIFIED'];
+  let promoted = 0;
+
+  for (const u of byId.values()) {
+    if (ALREADY_VERIFIED.includes(u.verificationLevel)) continue;
+
+    await prisma.user.update({
+      where: { id: u.id },
+      data: {
+        verificationLevel: 'COMMUNITY_VERIFIED',
+        communityVerified: true,
+        // A genesis verifier must clear the lower gates too, so the account is a
+        // valid voucher and can use everyday features immediately.
+        emailVerified: true,
+        phoneVerified: true,
+      },
+    });
+
+    await auditService.log(u.id, AuditAction.COMMUNITY_VERIFIED, 'User', u.id, {
+      reason: 'genesis',
+      via: u.via,
+      grantedBy: 'seed:genesis',
+    });
+    promoted++;
+  }
+
+  const founderNote = founderEmails.length
+    ? `${founders.length} founder account(s) matched`
+    : 'no FOUNDER_EMAILS set';
+  console.log(
+    `   Genesis verifiers: promoted ${promoted} (of ${byId.size} candidate(s); ${founderNote})`
   );
 }
 
@@ -2581,7 +2974,9 @@ async function seedEducationModules() {
       select: { id: true },
     });
 
+    let moduleId: string;
     if (existing) {
+      moduleId = existing.id;
       await prisma.educationalModule.update({
         where: { id: existing.id },
         data: {
@@ -2600,6 +2995,7 @@ async function seedEducationModules() {
           mediaUrls: [],
         },
       });
+      moduleId = created.id;
       await auditService.log(
         creator.id,
         AuditAction.MODULE_PUBLISHED,
@@ -2608,10 +3004,39 @@ async function seedEducationModules() {
         { title: mod.title }
       );
     }
+
+    // Comprehension quiz (idempotent — one assessment per module).
+    const quiz = EDUCATION_QUIZZES_DATA[mod.title];
+    if (quiz) {
+      const existingQuiz = await prisma.educationalAssessment.findFirst({
+        where: { moduleId },
+        select: { id: true },
+      });
+      if (existingQuiz) {
+        await prisma.educationalAssessment.update({
+          where: { id: existingQuiz.id },
+          data: {
+            questions: quiz.questions,
+            passingScore: quiz.passingScore,
+            maxAttempts: quiz.maxAttempts,
+          },
+        });
+      } else {
+        await prisma.educationalAssessment.create({
+          data: {
+            moduleId,
+            questions: quiz.questions,
+            passingScore: quiz.passingScore,
+            maxAttempts: quiz.maxAttempts,
+          },
+        });
+      }
+    }
   }
 
   console.log(
-    `   Created/ensured ${EDUCATION_MODULES_DATA.length} education modules`
+    `   Created/ensured ${EDUCATION_MODULES_DATA.length} education modules ` +
+      `(+ ${Object.keys(EDUCATION_QUIZZES_DATA).length} comprehension quizzes)`
   );
 }
 
@@ -2709,6 +3134,7 @@ async function main() {
     await seedOnboardingTutorials();
     await seedTestAdmin();
     await seedTestUsers();
+    await seedGenesisVerifiers();
     await seedEducationModules();
 
     console.log('\n✅ Core seeding completed successfully!');

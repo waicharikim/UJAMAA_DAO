@@ -17,9 +17,11 @@ export interface CreateProposalDto {
   groupId: string;
   title: string;
   description: string;
+  kind?: 'POLICY' | 'PROJECT';
   fundingAmountKes?: number;
   isEmergency?: boolean;
   proposalScope?: 'GROUP' | 'COMMUNITY';
+  targetLevel?: 'WARD' | 'CONSTITUENCY' | 'COUNTY';
   groupFundingAmount?: number;
   locationFundingRequest?: number;
 }

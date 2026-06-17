@@ -5,6 +5,7 @@
  */
 
 import { prisma } from '../../../core/database/client.js';
+import { Prisma } from '@prisma/client';
 import { participationRightsService } from '../../economy/services/participationRights.service.js';
 import { globalImpactPointService } from '../../reputation/service/impactPoint.service.js';
 import { roleService } from '../../../core/services/role.service.js';
@@ -54,17 +55,6 @@ import { workLogService } from './work-log.service.js';
 
 const DEFAULT_REWARDS = { IP: 50, PR: 25 };
 
-function hasNoGroupFunding(proposal: {
-  groupFundingAmount: unknown;
-  groupId: string | null;
-}): boolean {
-  return (
-    !proposal.groupFundingAmount ||
-    Number(proposal.groupFundingAmount) <= 0 ||
-    !proposal.groupId
-  );
-}
-
 function isProjectClosed(status: string): boolean {
   return status === 'CANCELLED' || status === 'COMPLETED';
 }
@@ -87,6 +77,17 @@ export class ProjectService {
     if (existing)
       throw ApiError.conflict('Project already exists for this proposal');
 
+    // Project-setup gate: when the creator supplies milestones, they replace the
+    // proposal's milestones and become the project's plan (full editor). When
+    // omitted, the project inherits whatever the proposal already had.
+    if (dto.milestones?.length) {
+      await this.writeProposalMilestones(dto.proposalId, dto.milestones);
+    }
+    const milestones = await prisma.proposalMilestone.findMany({
+      where: { proposalId: dto.proposalId },
+      orderBy: { orderIndex: 'asc' },
+    });
+
     const project = await prisma.project.create({
       data: {
         proposalId: dto.proposalId,
@@ -102,7 +103,7 @@ export class ProjectService {
       data: { projectId: project.id, userId, role: 'LEAD' },
     });
 
-    await this.createMilestonesFromProposal(project.id, proposal!.milestones);
+    await this.createMilestonesFromProposal(project.id, milestones);
 
     logger.info(
       { userId, proposalId: dto.proposalId, projectId: project.id },
@@ -117,8 +118,41 @@ export class ProjectService {
       { proposalId: dto.proposalId, title: project.title }
     );
 
-    await this.tryDebitGroupTreasury(proposal!, project.id, userId);
+    // NOTE: treasury is NOT debited here. Disbursement happens once, when the
+    // proposal transitions APPROVED → EXECUTING (proposal-lifecycle service),
+    // which now requires this project to exist first.
     return project;
+  }
+
+  // Replace the proposal's milestones with a setup payload (full editor).
+  // Safe to delete first: no project/Milestone rows link to them yet (the
+  // caller has already confirmed no project exists for this proposal).
+  private async writeProposalMilestones(
+    proposalId: string,
+    milestones: NonNullable<CreateProjectFromProposalDto['milestones']>
+  ): Promise<void> {
+    await prisma.proposalMilestone.deleteMany({ where: { proposalId } });
+    await prisma.proposalMilestone.createMany({
+      data: milestones.map((m, i) => ({
+        proposalId,
+        title: m.title,
+        description: m.description,
+        deliverables: (m.deliverables ?? []) as Prisma.InputJsonValue,
+        budgetAmount: m.budgetAmount,
+        laborHours: m.laborHours ?? null,
+        materials: (m.materials ?? undefined) as
+          | Prisma.InputJsonValue
+          | undefined,
+        startOffset: m.startOffset,
+        duration: m.duration,
+        dependencies: m.dependencies ?? [],
+        verificationMethod: m.verificationMethod,
+        verifiersNeeded: m.verifiersNeeded ?? 1,
+        verificationCriteria: (m.verificationCriteria ??
+          []) as Prisma.InputJsonValue,
+        orderIndex: m.orderIndex ?? i,
+      })),
+    });
   }
 
   /**
@@ -1046,10 +1080,18 @@ export class ProjectService {
   }
 
   private assertProposalForNewProject(
-    proposal: { status: string; creatorId: string | null } | null,
+    proposal: {
+      status: string;
+      creatorId: string | null;
+      kind?: string;
+    } | null,
     userId: string
   ): void {
     if (!proposal) throw ApiError.notFound('Proposal');
+    if (proposal.kind === 'POLICY')
+      throw ApiError.badRequest(
+        'Policy proposals are decisions and do not create projects.'
+      );
     if (proposal.status !== 'APPROVED')
       throw ApiError.badRequest('Proposal must be approved');
     if (proposal.creatorId !== userId)
@@ -1090,35 +1132,6 @@ export class ProjectService {
       );
     if (task.status !== 'IN_PROGRESS')
       throw ApiError.badRequest('Task must be in progress to mark as done');
-  }
-
-  private async tryDebitGroupTreasury(
-    proposal: {
-      groupFundingAmount: unknown;
-      groupId: string | null;
-      title: string;
-    },
-    projectId: string,
-    userId: string
-  ) {
-    if (hasNoGroupFunding(proposal)) return;
-    try {
-      await treasuryService.withdraw(
-        proposal.groupId!,
-        {
-          amount: Number(proposal.groupFundingAmount),
-          description: `Project funding: ${proposal.title}`,
-          projectId,
-          referenceType: 'PROJECT_FUNDING',
-        },
-        userId
-      );
-    } catch (err) {
-      logger.warn(
-        { groupId: proposal.groupId, projectId, err },
-        '[PROJECT] Treasury debit failed — project still created'
-      );
-    }
   }
 
   private async awardMilestoneVerificationRewards(

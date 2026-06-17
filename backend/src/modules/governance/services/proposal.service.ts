@@ -23,6 +23,7 @@ async function getProposal(proposalId: string, currentUserId?: string) {
         },
       },
       votes: { select: { vote: true, voteWeight: true } },
+      project: { select: { id: true } },
       annotations: {
         include: {
           author: { select: { id: true, name: true } },

@@ -23,6 +23,8 @@ import type {
   UpdateModuleDto,
   ModuleStatus,
   AuthorshipEligibilityDto,
+  QuizQuestion,
+  QuizQuestionPublic,
 } from '../types.js';
 
 // IP required to author modules, tiered by days on platform
@@ -50,6 +52,51 @@ function deriveStatus(m: {
   if (m.rejectionReason) return 'REJECTED';
   if (m.submittedAt) return 'SUBMITTED';
   return 'DRAFT';
+}
+
+// ── Quiz helpers ──────────────────────────────────────────────────────────────
+
+// Parse the stored assessment.questions Json into the canonical quiz shape.
+// Tolerates malformed/legacy data by returning [] (treated as "no quiz").
+function parseQuestions(raw: unknown): QuizQuestion[] {
+  if (!Array.isArray(raw)) return [];
+  const out: QuizQuestion[] = [];
+  for (const q of raw) {
+    if (
+      q &&
+      typeof q === 'object' &&
+      typeof (q as any).prompt === 'string' &&
+      Array.isArray((q as any).options) &&
+      (q as any).options.every((o: unknown) => typeof o === 'string') &&
+      Number.isInteger((q as any).answer)
+    ) {
+      out.push({
+        prompt: (q as any).prompt,
+        options: (q as any).options,
+        answer: (q as any).answer,
+      });
+    }
+  }
+  return out;
+}
+
+// Strip the answer key before serving questions to clients.
+function toPublicQuestions(raw: unknown): QuizQuestionPublic[] {
+  return parseQuestions(raw).map((q) => ({
+    prompt: q.prompt,
+    options: q.options,
+  }));
+}
+
+// Grade submitted answers (option indices, in question order) against the key.
+// Returns a percentage score rounded to the nearest integer.
+function gradeAnswers(questions: QuizQuestion[], answers: number[]): number {
+  if (questions.length === 0) return 0;
+  let correct = 0;
+  for (let i = 0; i < questions.length; i++) {
+    if (answers[i] === questions[i].answer) correct++;
+  }
+  return Math.round((correct / questions.length) * 100);
 }
 
 function mapModule(m: any): EducationModuleDto {
@@ -144,13 +191,26 @@ export class EducationService {
           score: prog.score,
           startedAt: prog.startedAt.toISOString(),
           completedAt: prog.completedAt?.toISOString() ?? null,
+          rewardAwarded: prog.rewardAwarded,
+          attempts: prog.attempts,
         };
       }
     }
 
+    const rawAssessment = module.assessments[0] ?? null;
+    const assessment = rawAssessment
+      ? {
+          id: rawAssessment.id,
+          passingScore: rawAssessment.passingScore,
+          maxAttempts: rawAssessment.maxAttempts,
+          // Strip the answer key — clients must never see correct answers.
+          questions: toPublicQuestions(rawAssessment.questions),
+        }
+      : null;
+
     return {
       ...mapModule(module),
-      assessment: module.assessments[0] ?? null,
+      assessment,
       userProgress,
     };
   }
@@ -183,7 +243,13 @@ export class EducationService {
     };
   }
 
-  // ── Complete module + award IP ──────────────────────────────────────────────
+  // ── Complete module + award IP/PR (gated by comprehension quiz) ──────────────
+  //
+  // Two anti-abuse invariants (Rule 5 — no farming):
+  //  1. IP/PR are paid AT MOST ONCE per (user, module), enforced by a
+  //     compare-and-swap on `rewardAwarded` — race-safe and replay-proof.
+  //  2. When the module has a comprehension quiz, the award only fires when the
+  //     server-graded score meets `passingScore`. The client never sends a score.
 
   async completeModule(
     userId: string,
@@ -192,7 +258,15 @@ export class EducationService {
   ): Promise<ProgressDto> {
     const module = await prisma.educationalModule.findUnique({
       where: { id: moduleId },
-      select: { id: true, verified: true, completionIP: true },
+      select: {
+        id: true,
+        verified: true,
+        completionIP: true,
+        assessments: {
+          select: { questions: true, passingScore: true, maxAttempts: true },
+          take: 1,
+        },
+      },
     });
     if (!module) throw ApiError.notFound('Module not found');
 
@@ -201,59 +275,152 @@ export class EducationService {
     });
     if (!existing)
       throw ApiError.badRequest('Module not started — call start first');
-    if (existing.status === 'COMPLETED') {
+
+    // Already paid — idempotent, never re-award (defends against replay).
+    if (existing.rewardAwarded) {
+      return this.toProgressDto(existing, { ipAwarded: undefined });
+    }
+
+    const assessment = module.assessments[0] ?? null;
+    const questions = assessment ? parseQuestions(assessment.questions) : [];
+
+    // ── Quiz path: grade, gate, and cap attempts ──────────────────────────────
+    if (assessment && questions.length > 0) {
+      const passingScore = assessment.passingScore;
+      const maxAttempts = assessment.maxAttempts;
+
+      if (existing.attempts >= maxAttempts) {
+        throw ApiError.forbidden(
+          `No quiz attempts remaining (${existing.attempts}/${maxAttempts}).`
+        );
+      }
+
+      const answers = dto.answers;
+      if (!Array.isArray(answers) || answers.length !== questions.length) {
+        throw ApiError.badRequest(
+          `Answer all ${questions.length} quiz question(s) before completing.`
+        );
+      }
+
+      const score = gradeAnswers(questions, answers);
+      const attemptsUsed = existing.attempts + 1;
+      const bestScore = Math.max(existing.score ?? 0, score);
+      const passed = score >= passingScore;
+
+      if (!passed) {
+        // Record the attempt + best score; no award, stays IN_PROGRESS.
+        const failed = await prisma.userEducationalProgress.update({
+          where: { id: existing.id },
+          data: { attempts: attemptsUsed, score: bestScore },
+        });
+        return {
+          ...this.toProgressDto(failed, { ipAwarded: undefined }),
+          passed: false,
+          attemptsUsed,
+          attemptsRemaining: Math.max(0, maxAttempts - attemptsUsed),
+          passingScore,
+        };
+      }
+
+      // Passed — record the passing attempt before the award CAS.
+      await prisma.userEducationalProgress.update({
+        where: { id: existing.id },
+        data: { attempts: attemptsUsed, score: bestScore },
+      });
+
+      const result = await this.awardCompletion(userId, moduleId, {
+        score: bestScore,
+        completionIP: module.completionIP,
+        progressId: existing.id,
+      });
       return {
-        id: existing.id,
-        userId: existing.userId,
-        moduleId: existing.moduleId,
-        status: existing.status,
-        progress: existing.progress,
-        score: existing.score,
-        startedAt: existing.startedAt.toISOString(),
-        completedAt: existing.completedAt?.toISOString() ?? null,
+        ...result,
+        passed: true,
+        attemptsUsed,
+        attemptsRemaining: Math.max(0, maxAttempts - attemptsUsed),
+        passingScore,
       };
     }
 
-    const updated = await prisma.userEducationalProgress.update({
-      where: { userId_moduleId: { userId, moduleId } },
+    // ── No-quiz path: mark complete and award once ────────────────────────────
+    return this.awardCompletion(userId, moduleId, {
+      score: existing.score,
+      completionIP: module.completionIP,
+      progressId: existing.id,
+    });
+  }
+
+  // Compare-and-swap the once-ever award flag, then pay IP/PR only if THIS call
+  // won the swap. Concurrent /complete calls therefore award at most once.
+  private async awardCompletion(
+    userId: string,
+    moduleId: string,
+    opts: { score: number | null; completionIP: number; progressId: string }
+  ): Promise<ProgressDto> {
+    const swap = await prisma.userEducationalProgress.updateMany({
+      where: { id: opts.progressId, rewardAwarded: false },
       data: {
         status: 'COMPLETED',
         progress: 100,
         completedAt: new Date(),
-        score: dto.score ?? null,
+        score: opts.score,
+        rewardAwarded: true,
       },
     });
 
-    // Award IP for completing the module
-    const ipAmount = module.completionIP;
+    const fresh = await prisma.userEducationalProgress.findUniqueOrThrow({
+      where: { id: opts.progressId },
+    });
+
+    // Lost the race (someone already awarded) — return without paying again.
+    if (swap.count === 0) {
+      return this.toProgressDto(fresh, { ipAwarded: undefined });
+    }
+
+    const ipAmount = opts.completionIP;
     if (ipAmount > 0) {
       await ipService.award(
         userId,
         ipAmount,
         ImpactPointReason.EDUCATION_MODULE_COMPLETED,
-        {
-          moduleId,
-        }
+        { moduleId }
       );
     }
 
-    // Award PR for completing an educational module
     await participationRightsService
       .award(userId, 5, ParticipationRightsReason.EDUCATION_MODULE_COMPLETED, {
         moduleId,
       })
       .catch(() => {});
 
-    return {
-      id: updated.id,
-      userId: updated.userId,
-      moduleId: updated.moduleId,
-      status: updated.status,
-      progress: updated.progress,
-      score: updated.score,
-      startedAt: updated.startedAt.toISOString(),
-      completedAt: updated.completedAt?.toISOString() ?? null,
+    return this.toProgressDto(fresh, {
       ipAwarded: ipAmount > 0 ? ipAmount : undefined,
+    });
+  }
+
+  private toProgressDto(
+    p: {
+      id: string;
+      userId: string;
+      moduleId: string;
+      status: string;
+      progress: number;
+      score: number | null;
+      startedAt: Date;
+      completedAt: Date | null;
+    },
+    extra: { ipAwarded?: number }
+  ): ProgressDto {
+    return {
+      id: p.id,
+      userId: p.userId,
+      moduleId: p.moduleId,
+      status: p.status,
+      progress: p.progress,
+      score: p.score,
+      startedAt: p.startedAt.toISOString(),
+      completedAt: p.completedAt?.toISOString() ?? null,
+      ipAwarded: extra.ipAwarded,
     };
   }
 

@@ -35,10 +35,18 @@ APPROVED | REJECTED
   │           ▼ (creator resubmits — up to 3 times)
   │         DRAFT  ← resubmissionCount incremented; reviewNote kept so creator sees why it was rejected
   ▼
-EXECUTING ──► COMPLETED   (optional outcome tracking)
+ (by kind)
+  ├─ PROJECT: set up project (milestones) → EXECUTING → COMPLETED
+  └─ POLICY:  COMPLETED  (decision recorded — outcome note required, no project, no budget)
 ```
 
+**Proposal kind (`POLICY` vs `PROJECT`)** — chosen at creation (default `PROJECT`):
+- **POLICY** — a community decision / rule change. Carries no budget (funding fields are stripped on create). On approval it goes straight `APPROVED → COMPLETED` via `PATCH /:proposalId/progress` with a **required outcome note** (ward memory). It can never be EXECUTED and never creates a project.
+- **PROJECT** — builds or funds something. After approval the creator must run the **project-setup gate** (`POST /projects/from-proposal` with milestones) before the proposal can move `APPROVED → EXECUTING`. Treasury disbursement happens **once**, on the EXECUTING transition (the setup step itself does not debit).
+
 **Shortcut for voluntary GROUP-scope proposals:** DRAFT → APPROVED_FOR_VOTING directly (no location admin review step).
+
+**Target area (COMMUNITY scope):** a public proposal is resolved at creation to a concrete target geography (`targetWardId` / `targetConstituencyId` / `targetCountyId`) from the group's affiliation and the chosen `targetLevel`. Only residents of that area may vote. A genuinely national proposal (system group, no location) has no target and is open to all; a voluntary group with no location affiliation cannot create a public proposal.
 
 **Rejection and resubmission:**
 - A `REJECT` decision requires a `note` (minimum 10 characters).
@@ -128,11 +136,13 @@ Create a new proposal. Initial status is `DRAFT`.
 | `groupId` | string (UUID) | Yes | Group this proposal belongs to |
 | `title` | string (min 10) | Yes | |
 | `description` | string (min 50) | Yes | |
-| `proposalType` | string (enum) | Yes | e.g. `COMMUNITY_INITIATIVE`, `INFRASTRUCTURE`, `POLICY` |
-| `scope` | `GROUP` \| `COMMUNITY` | No | Default `GROUP` |
-| `fundingAmountKes` | number | No | |
-| `groupFundingAmount` | number | No | Group's share of co-funded proposal |
-| `locationFundingRequest` | number | No | Amount requested from location treasury |
+| `kind` | `POLICY` \| `PROJECT` | No | Default `PROJECT`. `POLICY` strips all funding fields and never creates a project. |
+| `isEmergency` | boolean | No | Sets `proposalType` to `EMERGENCY` |
+| `proposalScope` | `GROUP` \| `COMMUNITY` | No | Default `GROUP` (when `groupId` present) |
+| `targetLevel` | `WARD` \| `CONSTITUENCY` \| `COUNTY` | No | For COMMUNITY scope: which level of the group's geography to target (defaults to the group's anchor level). Resolved to concrete target IDs server-side. |
+| `fundingAmountKes` | number | No | Ignored for `POLICY` |
+| `groupFundingAmount` | number | No | Group's share of co-funded proposal (ignored for `POLICY`) |
+| `locationFundingRequest` | number | No | Amount requested from location treasury (ignored for `POLICY`) |
 | `rationale` | string | No | Why this proposal is needed |
 | `alternatives` | string | No | Alternatives considered |
 

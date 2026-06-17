@@ -203,7 +203,11 @@ class ProposalVotingService {
   private async assertVoteEligibility(
     proposal: {
       proposalScope: ProposalScope;
+      targetWardId?: string | null;
+      targetConstituencyId?: string | null;
+      targetCountyId?: string | null;
       group: {
+        voluntaryType?: string | null;
         wardId: string | null;
         constituencyId: string | null;
         countyId: string | null;
@@ -217,37 +221,56 @@ class ProposalVotingService {
         throw ApiError.forbidden('Not a member of this group');
       return;
     }
+
     const group = proposal.group;
-    // National COMMUNITY proposals — any user can vote
-    if (!group?.wardId && !group?.constituencyId && !group?.countyId) return;
+
+    // Effective target area: the proposal's own target, falling back to the
+    // group's location for proposals created before targets existed (legacy).
+    const targetWardId = proposal.targetWardId ?? group?.wardId ?? null;
+    const targetConstituencyId =
+      proposal.targetConstituencyId ?? group?.constituencyId ?? null;
+    const targetCountyId = proposal.targetCountyId ?? group?.countyId ?? null;
+
+    // No target at all = a genuine national proposal — only legitimate for
+    // system groups. A voluntary group must always be scoped to a real area
+    // (defensive: closes the "anyone votes" hole for location-less voluntary
+    // public proposals).
+    if (!targetWardId && !targetConstituencyId && !targetCountyId) {
+      if (group?.voluntaryType)
+        throw ApiError.forbidden(
+          'This community proposal has no target area and cannot be voted on.'
+        );
+      return; // national / platform-wide
+    }
+
     if (!userPrimaryWardId)
       throw ApiError.forbidden(
         'You must have a primary ward set to vote on this community proposal'
       );
-    if (group?.wardId) {
-      if (userPrimaryWardId !== group.wardId)
+
+    if (targetWardId) {
+      if (userPrimaryWardId !== targetWardId)
         throw ApiError.forbidden(
           'You must be a ward resident to vote on this proposal'
         );
       return;
     }
-    if (group?.constituencyId || group?.countyId) {
-      const userWard = await prisma.ward.findUnique({
-        where: { id: userPrimaryWardId },
-        select: { constituencyId: true, countyId: true },
-      });
-      if (
-        group.constituencyId &&
-        userWard?.constituencyId !== group.constituencyId
-      )
-        throw ApiError.forbidden(
-          'You must be a constituency resident to vote on this proposal'
-        );
-      if (group.countyId && userWard?.countyId !== group.countyId)
-        throw ApiError.forbidden(
-          'You must be a county resident to vote on this proposal'
-        );
-    }
+
+    const userWard = await prisma.ward.findUnique({
+      where: { id: userPrimaryWardId },
+      select: { constituencyId: true, countyId: true },
+    });
+    if (
+      targetConstituencyId &&
+      userWard?.constituencyId !== targetConstituencyId
+    )
+      throw ApiError.forbidden(
+        'You must be a constituency resident to vote on this proposal'
+      );
+    if (targetCountyId && userWard?.countyId !== targetCountyId)
+      throw ApiError.forbidden(
+        'You must be a county resident to vote on this proposal'
+      );
   }
 
   private async anchorVoteOnChain(

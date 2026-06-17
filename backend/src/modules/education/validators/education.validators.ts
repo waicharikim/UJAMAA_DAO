@@ -19,7 +19,10 @@ export const listModulesSchema = z.object({
 });
 
 export const completeModuleSchema = z.object({
-  score: z.number().int().min(0).max(100).optional(),
+  // Selected option index for each question, in question order.
+  // Required only for modules that have a comprehension quiz; the server
+  // grades these against the stored answer key (the client never sends a score).
+  answers: z.array(z.number().int().min(0)).max(50).optional(),
 });
 
 export const submitReviewSchema = z.object({

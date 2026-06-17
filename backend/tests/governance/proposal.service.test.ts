@@ -78,6 +78,43 @@ describe('createProposal()', () => {
     expect(proposal.status).toBe(ProposalStatus.DRAFT);
   });
 
+  it('creates a POLICY proposal with no budget (kind=POLICY strips funding)', async () => {
+    const creator = await createGovernanceUser('policy-creator@example.com');
+    const group = await seedGovernanceGroup(creator.id);
+    await awardPR(creator.id, 200);
+
+    const proposal = await proposalService.createProposal(creator.id, {
+      groupId: group.id,
+      kind: 'POLICY',
+      title: 'Adopt a no-littering by-law for the ward',
+      description:
+        'We propose a community rule that fines littering near the market. This is a policy decision and requires no budget or project.',
+      fundingAmountKes: 5000, // must be ignored for a policy
+      groupFundingAmount: 5000,
+    });
+
+    expect(proposal.kind).toBe('POLICY');
+    expect(proposal.budget).toBeNull();
+    expect(proposal.groupFundingAmount).toBeNull();
+  });
+
+  it('defaults kind to PROJECT and keeps the budget', async () => {
+    const creator = await createGovernanceUser('project-creator@example.com');
+    const group = await seedGovernanceGroup(creator.id);
+    await awardPR(creator.id, 200);
+
+    const proposal = await proposalService.createProposal(creator.id, {
+      groupId: group.id,
+      title: 'Build a borehole for the ward',
+      description:
+        'A project proposal to drill a borehole. This should default to PROJECT kind and retain its budget.',
+      fundingAmountKes: 8000,
+    });
+
+    expect(proposal.kind).toBe('PROJECT');
+    expect(Number(proposal.budget)).toBe(8000);
+  });
+
   it('throws 404 when group does not exist', async () => {
     const creator = await createGovernanceUser('no-group@example.com');
     await awardPR(creator.id, 200);
@@ -700,6 +737,87 @@ describe('castVote() — additional', () => {
       where: { userId: voter.id },
     });
     expect(progress!.castFirstVote).toBe(true); // unchanged
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// castVote() — COMMUNITY target-area eligibility (#6)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('castVote() — community target eligibility', () => {
+  const WARD_A = 'aaaaaaaa-0000-4000-8000-000000000a01';
+  const WARD_B = 'aaaaaaaa-0000-4000-8000-000000000b02';
+
+  async function seedCommunityVotingProposal(
+    creatorId: string,
+    groupId: string
+  ) {
+    const proposal = await seedProposal(
+      creatorId,
+      groupId,
+      ProposalStatus.VOTING,
+      'Community-wide proposal targeting a ward',
+      'COMMUNITY'
+    );
+    await prisma.proposal.update({
+      where: { id: proposal.id },
+      data: { targetWardId: WARD_A },
+    });
+    return proposal;
+  }
+
+  it('allows a resident of the target ward to vote', async () => {
+    const creator = await createGovernanceUser('ct-res-c@example.com');
+    const voter = await createGovernanceUser('ct-res-v@example.com');
+    const group = await seedGovernanceGroup(creator.id);
+    await awardPR(voter.id, 50);
+    const proposal = await seedCommunityVotingProposal(creator.id, group.id);
+
+    const result = await proposalService.castVote(
+      voter.id,
+      { proposalId: proposal.id, option: 'YES' },
+      WARD_A
+    );
+    expect(result.weight).toBeDefined();
+  });
+
+  it('blocks a non-resident of the target ward (403)', async () => {
+    const creator = await createGovernanceUser('ct-non-c@example.com');
+    const voter = await createGovernanceUser('ct-non-v@example.com');
+    const group = await seedGovernanceGroup(creator.id);
+    await awardPR(voter.id, 50);
+    const proposal = await seedCommunityVotingProposal(creator.id, group.id);
+
+    await expect(
+      proposalService.castVote(
+        voter.id,
+        { proposalId: proposal.id, option: 'YES' },
+        WARD_B
+      )
+    ).rejects.toMatchObject({ statusCode: 403 });
+  });
+
+  it('blocks voting on a location-less voluntary community proposal (closes "anyone votes" hole)', async () => {
+    const creator = await createGovernanceUser('ct-hole-c@example.com');
+    const voter = await createGovernanceUser('ct-hole-v@example.com');
+    const group = await seedGovernanceGroup(creator.id); // voluntary, no location
+    await awardPR(voter.id, 50);
+    // COMMUNITY scope, no target area set, voluntary group → must be blocked.
+    const proposal = await seedProposal(
+      creator.id,
+      group.id,
+      ProposalStatus.VOTING,
+      'Location-less voluntary community proposal',
+      'COMMUNITY'
+    );
+
+    await expect(
+      proposalService.castVote(
+        voter.id,
+        { proposalId: proposal.id, option: 'YES' },
+        WARD_A
+      )
+    ).rejects.toMatchObject({ statusCode: 403 });
   });
 });
 

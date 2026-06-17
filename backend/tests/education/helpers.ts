@@ -63,17 +63,33 @@ export async function seedProgress(
       status,
       progress: status === 'COMPLETED' ? 100 : 0,
       completedAt: status === 'COMPLETED' ? new Date() : null,
+      // A COMPLETED module has already paid out — mirror the once-ever guard so
+      // re-completing a pre-existing completion never re-awards (see migration).
+      rewardAwarded: status === 'COMPLETED',
     },
   });
 }
 
-export async function seedAssessment(moduleId: string) {
+// Canonical quiz shape: { prompt, options: string[], answer: numeric index }.
+// Default answer key is [0, 1, 2] → submit [0,1,0] to pass (2/3), [2,2,2] to fail.
+export async function seedAssessment(
+  moduleId: string,
+  overrides: {
+    passingScore?: number;
+    maxAttempts?: number;
+    questions?: Array<{ prompt: string; options: string[]; answer: number }>;
+  } = {}
+) {
   return prisma.educationalAssessment.create({
     data: {
       moduleId,
-      questions: [{ q: 'What is Ujamaa?', options: ['A', 'B'], answer: 'A' }],
-      passingScore: 70,
-      maxAttempts: 3,
+      questions: overrides.questions ?? [
+        { prompt: 'Q1', options: ['A', 'B', 'C'], answer: 0 },
+        { prompt: 'Q2', options: ['A', 'B', 'C'], answer: 1 },
+        { prompt: 'Q3', options: ['A', 'B', 'C'], answer: 2 },
+      ],
+      passingScore: overrides.passingScore ?? 60,
+      maxAttempts: overrides.maxAttempts ?? 5,
     },
   });
 }
@@ -95,7 +111,10 @@ export async function createEligibleAuthor(email: string) {
     },
   });
   for (let i = 0; i < 3; i++) {
-    const mod = await seedModule(author.id, { verified: true, title: `Prereq Module ${i}` });
+    const mod = await seedModule(author.id, {
+      verified: true,
+      title: `Prereq Module ${i}`,
+    });
     await seedProgress(author.id, mod.id, 'COMPLETED');
   }
   return author;
@@ -104,7 +123,10 @@ export async function createEligibleAuthor(email: string) {
 // ─── Module state seeders ─────────────────────────────────────────────────────
 
 /** Unverified draft — no submittedAt, no rejectionReason. */
-export async function seedDraftModule(creatorId: string, title = 'Draft Module') {
+export async function seedDraftModule(
+  creatorId: string,
+  title = 'Draft Module'
+) {
   return prisma.educationalModule.create({
     data: {
       creatorId,
@@ -164,7 +186,8 @@ export async function seedRejectedModule(creatorId: string) {
 /** Valid CreateModuleDto — satisfies all validators (title ≥5, desc ≥20, content ≥100). */
 export const VALID_MODULE_DTO = {
   title: 'Ward Budget Fundamentals',
-  description: 'Learn how ward development funds are allocated and tracked by county governments.',
+  description:
+    'Learn how ward development funds are allocated and tracked by county governments.',
   content:
     'Ward development funds are allocated annually by county governments. This module explains the allocation formula, how to access expenditure reports, and how community members can participate in budget review meetings.',
   duration: 25,

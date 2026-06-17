@@ -1069,6 +1069,7 @@ export interface ProposalDto {
   title: string
   description: string
   proposalType: string
+  kind?: "POLICY" | "PROJECT"
   status: ProposalStatus
   proposalScope: ProposalScope
   groupId: string | null
@@ -1093,6 +1094,7 @@ export interface ProposalDto {
     voluntaryType?: string | null
   } | null
   votesSummary?: { total: number; yesWeight: number; noWeight: number }
+  project?: { id: string } | null
   _count?: { votes: number }
   // Ward Memory Layer
   rationale?: string | null
@@ -1116,9 +1118,11 @@ export const governanceApi = {
     groupId: string
     title: string
     description: string
+    kind?: "POLICY" | "PROJECT"
     fundingAmountKes?: number
     isEmergency?: boolean
     proposalScope?: ProposalScope
+    targetLevel?: "WARD" | "CONSTITUENCY" | "COUNTY"
     groupFundingAmount?: number
     locationFundingRequest?: number
   }) =>
@@ -1346,6 +1350,23 @@ export interface WorkLogResponseDto {
   createdAt: string
 }
 
+// Full project-setup milestone supplied at the post-approval setup gate (#4).
+export interface ProjectSetupMilestone {
+  title: string
+  description: string
+  deliverables?: { description: string; quantity?: number; unit?: string }[]
+  budgetAmount: number
+  laborHours?: number
+  materials?: { item: string; quantity?: number; cost?: number; unit?: string }[]
+  startOffset: number
+  duration: number
+  dependencies?: string[]
+  verificationMethod: "PEER" | "SUPERVISOR" | "COMMUNITY_WITNESS" | "PHOTO_EVIDENCE"
+  verifiersNeeded?: number
+  verificationCriteria?: { criterion: string; description?: string; required?: boolean }[]
+  orderIndex?: number
+}
+
 export const projectApi = {
   getProjects: (params?: {
     ownerGroupId?: string
@@ -1359,10 +1380,10 @@ export const projectApi = {
   getProject: (id: string): Promise<ProjectDetailDto> =>
     apiFetch<ProjectDetailDto>(`/projects/${id}`),
 
-  createFromProposal: (proposalId: string) =>
+  createFromProposal: (proposalId: string, milestones?: ProjectSetupMilestone[]) =>
     apiFetch<unknown>("/projects/from-proposal", {
       method: "POST",
-      body: JSON.stringify({ proposalId }),
+      body: JSON.stringify(milestones?.length ? { proposalId, milestones } : { proposalId }),
     }),
 
   startMilestone: (milestoneId: string) =>
@@ -1533,12 +1554,17 @@ export interface CreateModuleDto {
   completionIP?: number
 }
 
+export interface QuizQuestionPublic {
+  prompt: string
+  options: string[]
+}
+
 export interface EducationModuleDetailDto extends EducationModuleDto {
   assessment: {
     id: string
     passingScore: number
     maxAttempts: number
-    questions: unknown
+    questions: QuizQuestionPublic[]
   } | null
   userProgress: {
     status: string
@@ -1546,6 +1572,8 @@ export interface EducationModuleDetailDto extends EducationModuleDto {
     score: number | null
     startedAt: string
     completedAt: string | null
+    rewardAwarded: boolean
+    attempts: number
   } | null
 }
 
@@ -1559,6 +1587,11 @@ export interface EducationProgressDto {
   startedAt: string
   completedAt: string | null
   ipAwarded?: number
+  // Quiz feedback (present when the module has a comprehension quiz)
+  passed?: boolean
+  attemptsUsed?: number
+  attemptsRemaining?: number
+  passingScore?: number
 }
 
 export interface EducationReviewDto {
@@ -1589,10 +1622,10 @@ export const educationApi = {
   startModule: (moduleId: string): Promise<EducationProgressDto> =>
     apiFetch<EducationProgressDto>(`/education/${moduleId}/start`, { method: "POST" }),
 
-  completeModule: (moduleId: string, score?: number): Promise<EducationProgressDto> =>
+  completeModule: (moduleId: string, answers?: number[]): Promise<EducationProgressDto> =>
     apiFetch<EducationProgressDto>(`/education/${moduleId}/complete`, {
       method: "POST",
-      body: JSON.stringify(score !== undefined ? { score } : {}),
+      body: JSON.stringify(answers !== undefined ? { answers } : {}),
     }),
 
   submitReview: (moduleId: string, dto: { rating: number; comment?: string }): Promise<EducationReviewDto> =>

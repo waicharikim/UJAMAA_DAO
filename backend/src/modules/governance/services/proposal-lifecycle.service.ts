@@ -3,6 +3,7 @@ import {
   ProposalStatus,
   ProposalType,
   ProposalScope,
+  ProposalKind,
 } from '@prisma/client';
 import { prisma } from '../../../core/database/client.js';
 import { participationRightsService } from '../../economy/services/participationRights.service.js';
@@ -206,22 +207,40 @@ class ProposalLifecycleService {
       { groupId: dto.groupId, scope, title: dto.title }
     );
 
+    const kind = (dto.kind as ProposalKind) ?? ProposalKind.PROJECT;
+    const isPolicy = kind === ProposalKind.POLICY;
+
+    const proposalScope =
+      (dto.proposalScope as ProposalScope) ??
+      (dto.groupId ? ProposalScope.GROUP : ProposalScope.COMMUNITY);
+
+    // For COMMUNITY-scope proposals, resolve the geography whose residents may
+    // vote. National/system proposals (no group affiliation) stay unscoped.
+    const target = await this.resolveTargetArea(
+      group,
+      proposalScope,
+      dto.targetLevel
+    );
+
     const proposal = await prisma.proposal.create({
       data: {
         groupId: dto.groupId,
         creatorId: userId,
         title: dto.title,
         description: dto.description,
-        budget: dto.fundingAmountKes,
+        kind,
+        // Policy proposals never carry a budget — they are decisions, not spends.
+        budget: isPolicy ? null : dto.fundingAmountKes,
         proposalType: dto.isEmergency
           ? ProposalType.EMERGENCY
           : ProposalType.COMMUNITY_INITIATIVE,
         status: ProposalStatus.DRAFT,
-        proposalScope:
-          (dto.proposalScope as ProposalScope) ??
-          (dto.groupId ? ProposalScope.GROUP : ProposalScope.COMMUNITY),
-        groupFundingAmount: dto.groupFundingAmount,
-        locationFundingRequest: dto.locationFundingRequest,
+        proposalScope,
+        groupFundingAmount: isPolicy ? null : dto.groupFundingAmount,
+        locationFundingRequest: isPolicy ? null : dto.locationFundingRequest,
+        targetWardId: target.targetWardId,
+        targetConstituencyId: target.targetConstituencyId,
+        targetCountyId: target.targetCountyId,
       },
     });
 
@@ -434,6 +453,81 @@ class ProposalLifecycleService {
         .catch(() => {});
     }
     return updated;
+  }
+
+  // Resolve the concrete target geography for a COMMUNITY-scope proposal.
+  // - GROUP scope → no target (internal vote among members).
+  // - COMMUNITY scope, group has a location → resolve to the chosen level
+  //   (defaults to the group's own anchor level), filling in parent IDs.
+  // - COMMUNITY scope, no location:
+  //     • voluntary group → reject (must affiliate first)
+  //     • system group    → national proposal, no target (anyone may vote).
+  private async resolveTargetArea(
+    group: ProposalWithGroup['group'],
+    proposalScope: ProposalScope,
+    targetLevel?: 'WARD' | 'CONSTITUENCY' | 'COUNTY'
+  ): Promise<{
+    targetWardId: string | null;
+    targetConstituencyId: string | null;
+    targetCountyId: string | null;
+  }> {
+    const none = {
+      targetWardId: null,
+      targetConstituencyId: null,
+      targetCountyId: null,
+    };
+    if (proposalScope !== ProposalScope.COMMUNITY) return none;
+
+    let wardId = group?.wardId ?? null;
+    let constituencyId = group?.constituencyId ?? null;
+    let countyId = group?.countyId ?? null;
+
+    const hasLocation = !!(wardId || constituencyId || countyId);
+    if (!hasLocation) {
+      // Voluntary groups must be affiliated; system groups are national.
+      this.assertVoluntaryLocationAffiliation(group);
+      return none;
+    }
+
+    // Fill in the parent hierarchy from whatever anchor the group has.
+    if (wardId && (!constituencyId || !countyId)) {
+      const ward = await prisma.ward.findUnique({
+        where: { id: wardId },
+        select: { constituencyId: true, countyId: true },
+      });
+      constituencyId = constituencyId ?? ward?.constituencyId ?? null;
+      countyId = countyId ?? ward?.countyId ?? null;
+    } else if (constituencyId && !countyId) {
+      const c = await prisma.constituency.findUnique({
+        where: { id: constituencyId },
+        select: { countyId: true },
+      });
+      countyId = countyId ?? c?.countyId ?? null;
+    }
+
+    const level =
+      targetLevel ??
+      (wardId ? 'WARD' : constituencyId ? 'CONSTITUENCY' : 'COUNTY');
+
+    if (level === 'WARD') {
+      if (!wardId)
+        throw ApiError.badRequest(
+          'This group is not affiliated with a ward — choose a constituency or county scope.'
+        );
+      return { ...none, targetWardId: wardId };
+    }
+    if (level === 'CONSTITUENCY') {
+      if (!constituencyId)
+        throw ApiError.badRequest(
+          'No constituency affiliation could be resolved for this group.'
+        );
+      return { ...none, targetConstituencyId: constituencyId };
+    }
+    if (!countyId)
+      throw ApiError.badRequest(
+        'No county affiliation could be resolved for this group.'
+      );
+    return { ...none, targetCountyId: countyId };
   }
 
   private assertVoluntaryLocationAffiliation(
@@ -689,21 +783,48 @@ class ProposalLifecycleService {
         status: true,
         groupId: true,
         title: true,
+        kind: true,
         groupFundingAmount: true,
+        project: { select: { id: true } },
       },
     });
     if (!proposal) throw ApiError.notFound('Proposal');
 
-    const validTransitions: Record<string, string[]> = {
-      APPROVED: ['EXECUTING'],
-      EXECUTING: ['COMPLETED'],
-    };
+    const isPolicy = proposal.kind === ProposalKind.POLICY;
+
+    // Policy proposals are decisions, not work: they complete straight from
+    // APPROVED and are never EXECUTED. Project proposals run APPROVED →
+    // EXECUTING → COMPLETED.
+    const validTransitions: Record<string, string[]> = isPolicy
+      ? { APPROVED: ['COMPLETED'] }
+      : { APPROVED: ['EXECUTING'], EXECUTING: ['COMPLETED'] };
     if (!validTransitions[proposal.status as string]?.includes(dto.status))
       throw ApiError.badRequest(
-        `Cannot transition from ${proposal.status} to ${dto.status}`
+        isPolicy && dto.status === 'EXECUTING'
+          ? 'Policy proposals are recorded as decisions, not executed.'
+          : `Cannot transition from ${proposal.status} to ${dto.status}`
+      );
+
+    // Completing a policy must record what was decided (ward memory).
+    if (isPolicy && dto.status === 'COMPLETED' && !dto.note?.trim())
+      throw ApiError.badRequest(
+        'Recording the decision outcome is required to complete a policy proposal.'
       );
 
     await this.assertCreatorOrLeaderAuth(userId, proposal, 'update progress');
+
+    // Project proposals must pass through the setup gate (define milestones →
+    // a project exists) before execution can start. This also makes the
+    // disbursement below the single, coordinated treasury debit.
+    if (
+      !isPolicy &&
+      proposal.status === ProposalStatus.APPROVED &&
+      dto.status === 'EXECUTING' &&
+      !proposal.project
+    )
+      throw ApiError.badRequest(
+        'Set up the project (define its milestones) before starting execution.'
+      );
 
     const fundAmount =
       dto.status === 'EXECUTING' && proposal.groupId

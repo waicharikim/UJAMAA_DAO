@@ -209,6 +209,11 @@ function ModuleDrawer({
   const queryClient = useQueryClient()
   const [reviewForm, setReviewForm] = useState({ rating: 0, comment: "" })
   const [showReview, setShowReview] = useState(false)
+  // Quiz state: questionIndex → selected option index
+  const [answers, setAnswers] = useState<Record<number, number>>({})
+  const [quizResult, setQuizResult] = useState<
+    { passed: boolean; score: number | null; attemptsRemaining?: number; passingScore?: number } | null
+  >(null)
 
   const { data: mod, isLoading } = useQuery<EducationModuleDetailDto>({
     queryKey: ["education-module", moduleId],
@@ -225,15 +230,29 @@ function ModuleDrawer({
   })
 
   const completeMutation = useMutation({
-    mutationFn: () => educationApi.completeModule(moduleId),
-    onSuccess: () => {
+    mutationFn: (answersArr?: number[]) => educationApi.completeModule(moduleId, answersArr),
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["education-module", moduleId] })
       queryClient.invalidateQueries({ queryKey: ["education-modules"] })
       queryClient.invalidateQueries({ queryKey: ["education-my-progress"] })
       queryClient.invalidateQueries({ queryKey: ["onboarding-progress"] })
-      refreshUser()
-      // Mark learn_basics tutorial complete (fire-and-forget)
-      onboardingApi.completeTutorial("learn_basics").catch(() => {})
+      // data.passed is undefined for no-quiz modules (always a completion).
+      const didComplete = data.passed !== false
+      setQuizResult(
+        data.passed === undefined
+          ? null
+          : {
+              passed: data.passed,
+              score: data.score,
+              attemptsRemaining: data.attemptsRemaining,
+              passingScore: data.passingScore,
+            },
+      )
+      if (didComplete) {
+        refreshUser()
+        // Mark learn_basics tutorial complete (fire-and-forget)
+        onboardingApi.completeTutorial("learn_basics").catch(() => {})
+      }
     },
   })
 
@@ -252,6 +271,17 @@ function ModuleDrawer({
   const progress = mod?.userProgress
   const isStarted = !!progress
   const isCompleted = progress?.status === "COMPLETED"
+  const questions = mod?.assessment?.questions ?? []
+  const hasQuiz = questions.length > 0
+  const allAnswered = questions.every((_, i) => answers[i] !== undefined)
+  const attemptsLeft = mod?.assessment
+    ? Math.max(0, mod.assessment.maxAttempts - (progress?.attempts ?? 0))
+    : undefined
+  const submitQuiz = () => {
+    if (!allAnswered) return
+    setQuizResult(null)
+    completeMutation.mutate(questions.map((_, i) => answers[i]))
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4" style={{ background: "rgba(0,0,0,0.45)" }}>
@@ -368,9 +398,84 @@ function ModuleDrawer({
                   </button>
                 )}
 
-                {isStarted && !isCompleted && (
+                {isStarted && !isCompleted && hasQuiz && (
+                  <div className="space-y-4">
+                    <div
+                      className="rounded-xl p-4 space-y-1"
+                      style={{ background: "rgba(30,61,47,0.06)", border: "1px solid rgba(30,61,47,0.15)" }}
+                    >
+                      <p className="text-sm font-semibold text-[#1E3D2F]">Comprehension check</p>
+                      <p className="text-xs text-[#0E0B08]/55">
+                        Answer the questions below to earn your {mod.completionIP} IP. You need{" "}
+                        {mod.assessment!.passingScore}% to pass
+                        {typeof attemptsLeft === "number" && (
+                          <> · {attemptsLeft} attempt{attemptsLeft === 1 ? "" : "s"} left</>
+                        )}
+                        .
+                      </p>
+                    </div>
+
+                    {questions.map((q, qi) => (
+                      <div key={qi} className="space-y-2">
+                        <p className="text-sm font-medium text-[#0E0B08]">
+                          {qi + 1}. {q.prompt}
+                        </p>
+                        <div className="space-y-1.5">
+                          {q.options.map((opt, oi) => {
+                            const selected = answers[qi] === oi
+                            return (
+                              <button
+                                key={oi}
+                                type="button"
+                                onClick={() => setAnswers((a) => ({ ...a, [qi]: oi }))}
+                                className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-colors"
+                                style={{
+                                  background: selected ? "rgba(30,61,47,0.1)" : "rgba(26,18,11,0.03)",
+                                  border: `1px solid ${selected ? "rgba(30,61,47,0.4)" : "rgba(26,18,11,0.08)"}`,
+                                  color: "#0E0B08",
+                                }}
+                              >
+                                <span
+                                  className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border"
+                                  style={{ borderColor: selected ? "#1E3D2F" : "rgba(26,18,11,0.3)" }}
+                                >
+                                  {selected && <span className="h-2 w-2 rounded-full" style={{ background: "#1E3D2F" }} />}
+                                </span>
+                                {opt}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+
+                    {quizResult && !quizResult.passed && (
+                      <div
+                        className="rounded-xl p-3 text-sm"
+                        style={{ background: "rgba(180,50,40,0.08)", border: "1px solid rgba(180,50,40,0.2)", color: "#9B2C20" }}
+                      >
+                        You scored {quizResult.score}% — {quizResult.passingScore}% needed to pass.{" "}
+                        {quizResult.attemptsRemaining && quizResult.attemptsRemaining > 0
+                          ? `Review the content and try again (${quizResult.attemptsRemaining} attempt${quizResult.attemptsRemaining === 1 ? "" : "s"} left).`
+                          : "No attempts remaining."}
+                      </div>
+                    )}
+
+                    <button
+                      onClick={submitQuiz}
+                      disabled={completeMutation.isPending || !allAnswered || attemptsLeft === 0}
+                      className="w-full flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold transition-all hover:opacity-90 active:scale-[0.99] disabled:opacity-50"
+                      style={{ background: "#C9922A", color: "#fff" }}
+                    >
+                      <CheckCircle className="h-4 w-4" />
+                      {completeMutation.isPending ? "Checking…" : "Submit answers"}
+                    </button>
+                  </div>
+                )}
+
+                {isStarted && !isCompleted && !hasQuiz && (
                   <button
-                    onClick={() => completeMutation.mutate()}
+                    onClick={() => completeMutation.mutate(undefined)}
                     disabled={completeMutation.isPending}
                     className="w-full flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold transition-all hover:opacity-90 active:scale-[0.99]"
                     style={{ background: "#C9922A", color: "#fff" }}

@@ -1648,6 +1648,15 @@ enum ProposalType {
   EMERGENCY
 }
 
+// POLICY  = a community decision / rule change. No budget, never produces a
+//           project; on approval it is recorded and completed.
+// PROJECT = builds or funds something; on approval it must go through the
+//           project-setup gate (milestones + budget) before work starts.
+enum ProposalKind {
+  POLICY
+  PROJECT
+}
+
 enum ProposalStatus {
   DRAFT
   PENDING_REVIEW       // LEADER forwarded — awaiting location admin approval
@@ -1675,9 +1684,18 @@ model Proposal {
   title             String
   description       String         @db.Text
   proposalType      ProposalType
+  kind              ProposalKind   @default(PROJECT)
   status            ProposalStatus @default(DRAFT)
   groupId           String?        @db.Uuid
   creatorId         String         @db.Uuid
+
+  // TARGET AREA — for COMMUNITY-scope proposals, the geography whose residents
+  // are eligible to vote. Resolved at creation (from the group's affiliation
+  // for voluntary groups, or the system group's own location). Null = the
+  // proposal is internal (GROUP scope) or a genuine national/system proposal.
+  targetWardId         String? @db.Uuid
+  targetConstituencyId String? @db.Uuid
+  targetCountyId       String? @db.Uuid
   
   // FINANCIAL
   budget            Decimal?       @db.Decimal(20, 2)
@@ -2598,14 +2616,19 @@ model EducationalModule {
 }
 
 model UserEducationalProgress {
-  id          String    @id @default(uuid()) @db.Uuid
-  userId      String    @db.Uuid
-  moduleId    String    @db.Uuid
-  status      String    @default("IN_PROGRESS")
-  progress    Int       @default(0)
-  startedAt   DateTime  @default(now())
-  completedAt DateTime?
-  score       Int?
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @db.Uuid
+  moduleId      String    @db.Uuid
+  status        String    @default("IN_PROGRESS")
+  progress      Int       @default(0)
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+  score         Int?
+  // Once-ever award guard: IP/PR for this module are paid at most once per user.
+  // Set via compare-and-swap so concurrent /complete calls cannot double-award.
+  rewardAwarded Boolean   @default(false)
+  // Number of comprehension-quiz attempts the user has used on this module.
+  attempts      Int       @default(0)
 
   user   User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   module EducationalModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)

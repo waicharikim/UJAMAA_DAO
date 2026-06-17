@@ -45,11 +45,33 @@ router.get(
   asyncHandler(ProjectController.getProject)
 );
 
+const setupMilestoneSchema = z.object({
+  title: z.string().min(3).max(200),
+  description: z.string().min(1),
+  deliverables: z.array(z.any()).optional(),
+  budgetAmount: z.number().min(0),
+  laborHours: z.number().int().min(0).optional(),
+  materials: z.array(z.any()).optional(),
+  startOffset: z.number().int().min(0),
+  duration: z.number().int().min(1),
+  dependencies: z.array(z.string().uuid()).optional(),
+  verificationMethod: z.enum([
+    'PEER',
+    'SUPERVISOR',
+    'COMMUNITY_WITNESS',
+    'PHOTO_EVIDENCE',
+  ]),
+  verifiersNeeded: z.number().int().min(1).optional(),
+  verificationCriteria: z.array(z.any()).optional(),
+  orderIndex: z.number().int().min(0).optional(),
+});
+
 router.post(
   '/from-proposal',
   validateRequest({
     schema: z.object({
       proposalId: z.string().uuid(),
+      milestones: z.array(setupMilestoneSchema).max(30).optional(),
     }),
     target: 'body',
   }),

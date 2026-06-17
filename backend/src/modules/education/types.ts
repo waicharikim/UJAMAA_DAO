@@ -19,7 +19,22 @@ export interface ListModulesDto {
 }
 
 export interface CompleteModuleDto {
-  score?: number;
+  // Selected option index per question, in question order. Graded server-side.
+  answers?: number[];
+}
+
+// A single quiz question as stored (with the correct answer key).
+// NEVER serialize `answer` to clients — use QuizQuestionPublic for that.
+export interface QuizQuestion {
+  prompt: string;
+  options: string[];
+  answer: number; // index into options
+}
+
+// Quiz question shape served to clients — answer key stripped.
+export interface QuizQuestionPublic {
+  prompt: string;
+  options: string[];
 }
 
 export interface SubmitReviewDto {
@@ -98,7 +113,7 @@ export interface EducationModuleDetailDto extends EducationModuleDto {
     id: string;
     passingScore: number;
     maxAttempts: number;
-    questions: unknown;
+    questions: QuizQuestionPublic[]; // answer key stripped
   } | null;
   userProgress?: {
     status: string;
@@ -106,6 +121,8 @@ export interface EducationModuleDetailDto extends EducationModuleDto {
     score: number | null;
     startedAt: string;
     completedAt: string | null;
+    rewardAwarded: boolean;
+    attempts: number;
   } | null;
 }
 
@@ -126,6 +143,11 @@ export interface ProgressDto {
   startedAt: string;
   completedAt: string | null;
   ipAwarded?: number;
+  // Quiz feedback (present when the module has a comprehension quiz)
+  passed?: boolean;
+  attemptsUsed?: number;
+  attemptsRemaining?: number;
+  passingScore?: number;
 }
 
 export interface ReviewDto {
