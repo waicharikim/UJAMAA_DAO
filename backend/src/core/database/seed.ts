@@ -2834,7 +2834,13 @@ async function enrollAllUsersIntoSystemGroups(
   let enrolled = 0;
   for (const { userId, primary, secondary } of allUsersForEnrollment) {
     try {
-      await groupMembershipService.enrollInSystemGroups(
+      // updateResidenceGroups (not enrollInSystemGroups) so re-seeding is
+      // idempotent: it deactivates the user's stale auto-enrolled memberships
+      // first, then re-enrols only the current primary/secondary hierarchy.
+      // Without this, repeated seeds (especially across the pre-idempotent
+      // geography era when ward IDs shifted) accumulated test accounts into
+      // dozens of unrelated communities (>7 system groups).
+      await groupMembershipService.updateResidenceGroups(
         userId,
         primary,
         secondary
