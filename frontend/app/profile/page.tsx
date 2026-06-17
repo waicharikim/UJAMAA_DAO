@@ -64,12 +64,18 @@ function HierarchyCard({ hierarchy, global: globalPts }: { hierarchy: Reputation
           <Award className="h-4 w-4" style={{ color: "#C9922A" }} />
           Impact by Level
         </CardTitle>
+        <p className="text-xs text-[#0E0B08]/45 leading-relaxed">
+          <strong className="text-[#C9922A]">Global</strong> is your cumulative total across everything.
+          The ward / constituency / county bars show where that impact was earned.
+        </p>
       </CardHeader>
       <CardContent className="space-y-3">
         <HierarchyBar label={`${hierarchy.ward.name} (Ward)`} points={hierarchy.ward.points} max={max} color="#1A6B3C" />
         <HierarchyBar label={`${hierarchy.constituency.name} (Constituency)`} points={hierarchy.constituency.points} max={max} color="#7A4F1E" />
         <HierarchyBar label={`${hierarchy.county.name} (County)`} points={hierarchy.county.points} max={max} color="#B03A1E" />
-        <HierarchyBar label="Global" points={globalPts} max={max} color="#C9922A" />
+        <div className="border-t border-cream pt-3">
+          <HierarchyBar label="Global (cumulative)" points={globalPts} max={max} color="#C9922A" />
+        </div>
       </CardContent>
     </Card>
   )

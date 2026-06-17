@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { CheckCircle, Circle, ArrowRight, Sparkles, PlayCircle } from "lucide-react"
+import { CheckCircle, Circle, ArrowRight, Sparkles, PlayCircle, X } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -46,6 +46,18 @@ export function GettingStartedCard() {
   const router = useRouter()
   const firedRef = useRef<Set<string>>(new Set())
   const [wizardOpen, setWizardOpen] = useState(false)
+  // Some tutorials have no auto-complete condition or completion event, so the
+  // checklist could otherwise never clear. Let the user dismiss it for good.
+  const [dismissed, setDismissed] = useState(false)
+  useEffect(() => {
+    if (typeof window !== "undefined" && localStorage.getItem("gettingStartedDismissed") === "1") {
+      setDismissed(true)
+    }
+  }, [])
+  const dismiss = () => {
+    if (typeof window !== "undefined") localStorage.setItem("gettingStartedDismissed", "1")
+    setDismissed(true)
+  }
 
   const { data, isLoading } = useQuery({
     queryKey: ["onboarding-progress"],
@@ -82,7 +94,7 @@ export function GettingStartedCard() {
     }
   }, [data, user]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!isAuthenticated || isLoading || !data) return null
+  if (!isAuthenticated || isLoading || !data || dismissed) return null
 
   const completedKeys = new Set(
     (data.completions ?? []).filter((c) => c.completed).map((c) => c.tutorial?.key)
@@ -127,12 +139,20 @@ export function GettingStartedCard() {
             Getting started
             {totalPR > 0 && (
               <span
-                className="ml-auto text-xs font-semibold rounded-full px-2 py-0.5"
+                className="text-xs font-semibold rounded-full px-2 py-0.5"
                 style={{ background: "rgba(201,146,42,0.12)", color: "#C9922A" }}
               >
                 +{totalPR} PR available
               </span>
             )}
+            <button
+              onClick={dismiss}
+              aria-label="Dismiss getting started"
+              className="ml-auto rounded-full p-1 hover:bg-black/5 transition-colors"
+              style={{ color: "rgba(14,11,8,0.4)" }}
+            >
+              <X className="h-4 w-4" />
+            </button>
           </CardTitle>
 
           {/* Replay intro button */}

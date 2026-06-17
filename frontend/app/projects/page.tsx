@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
 import { PageHeader } from "@/components/layout/page-header"
 import { StatsGrid } from "@/components/layout/stats-grid"
@@ -67,7 +68,19 @@ export default function ProjectsPage() {
     enabled: !!user,
   })
 
-  const projects = (result?.projects ?? []).map(toProject)
+  const [communityFilter, setCommunityFilter] = useState("ALL")
+
+  const rawProjects = result?.projects ?? []
+  // Distinct owning communities (system groups are wards/constituencies/counties,
+  // so this doubles as a location filter).
+  const communities = Array.from(
+    new Set(rawProjects.map((p) => p.ownerGroupName).filter((n): n is string => !!n)),
+  ).sort()
+  const filteredRaw =
+    communityFilter === "ALL"
+      ? rawProjects
+      : rawProjects.filter((p) => p.ownerGroupName === communityFilter)
+  const projects = filteredRaw.map(toProject)
 
   const handleViewProject = (projectId: string) => {
     window.location.href = `/projects/${projectId}`
@@ -144,6 +157,24 @@ export default function ProjectsPage() {
       />
 
       <StatsGrid stats={stats} />
+
+      {communities.length > 1 && (
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium text-warm-gray">Community / location:</label>
+          <select
+            value={communityFilter}
+            onChange={(e) => setCommunityFilter(e.target.value)}
+            className="h-9 rounded-lg border border-cream bg-white px-3 text-sm text-[#0A1F14] focus:outline-none focus:ring-2 focus:ring-amber/40"
+          >
+            <option value="ALL">All communities</option>
+            {communities.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <div data-tour="projects-list">
         <ProjectDashboard projects={projects} onCreateProject={() => window.location.href = "/proposals"} onViewProject={handleViewProject} />

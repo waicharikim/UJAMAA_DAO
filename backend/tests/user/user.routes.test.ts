@@ -18,26 +18,36 @@ vi.mock('../../src/core/utils/email.service.js', () => ({
   sendLoginEmail: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock('../../src/modules/community/services/groupMembership.service.js', () => ({
-  groupMembershipService: {
-    enrollInSystemGroups: vi.fn().mockResolvedValue(undefined),
-  },
-}));
+vi.mock(
+  '../../src/modules/community/services/groupMembership.service.js',
+  () => ({
+    groupMembershipService: {
+      enrollInSystemGroups: vi.fn().mockResolvedValue(undefined),
+    },
+  })
+);
 
-vi.mock('../../src/modules/economy/services/participationRights.service.js', () => ({
-  participationRightsService: { award: vi.fn().mockResolvedValue(undefined) },
-}));
+vi.mock(
+  '../../src/modules/economy/services/participationRights.service.js',
+  () => ({
+    participationRightsService: { award: vi.fn().mockResolvedValue(undefined) },
+  })
+);
 
 vi.mock('africastalking', () => ({
   default: vi.fn(() => ({
-    SMS: { send: vi.fn().mockResolvedValue({ SMSMessageData: { Recipients: [] } }) },
+    SMS: {
+      send: vi.fn().mockResolvedValue({ SMSMessageData: { Recipients: [] } }),
+    },
   })),
 }));
 
 vi.mock('ethers', () => ({
   ethers: {
     isAddress: vi.fn().mockReturnValue(true),
-    verifyMessage: vi.fn().mockReturnValue('0xaabbccddeeaabbccddeeaabbccddeeaabbccddee'),
+    verifyMessage: vi
+      .fn()
+      .mockReturnValue('0xaabbccddeeaabbccddeeaabbccddeeaabbccddee'),
   },
 }));
 
@@ -143,7 +153,9 @@ describe('User Routes', () => {
     });
 
     it('returns 401 with no token', async () => {
-      const res = await request(app).patch(`${BASE}/me/profile`).send({ name: 'Alice' });
+      const res = await request(app)
+        .patch(`${BASE}/me/profile`)
+        .send({ name: 'Alice' });
       expect(res.status).toBe(401);
     });
 
@@ -378,7 +390,10 @@ describe('User Routes', () => {
     });
 
     it('selects industries for COMMUNITY_VERIFIED user', async () => {
-      const user = await createUser('ind-community@test.com', 'COMMUNITY_VERIFIED');
+      const user = await createUser(
+        'ind-community@test.com',
+        'COMMUNITY_VERIFIED'
+      );
       const token = makeUserToken(user.id, 'COMMUNITY_VERIFIED');
 
       const res = await request(app)
@@ -392,12 +407,17 @@ describe('User Routes', () => {
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       // selectIndustries returns { success: true } — verify DB
-      const saved = await prisma.userIndustry.findMany({ where: { userId: user.id } });
+      const saved = await prisma.userIndustry.findMany({
+        where: { userId: user.id },
+      });
       expect(saved.length).toBe(2);
     });
 
     it('rejects more than 3 industries', async () => {
-      const user = await createUser('ind-toomany@test.com', 'COMMUNITY_VERIFIED');
+      const user = await createUser(
+        'ind-toomany@test.com',
+        'COMMUNITY_VERIFIED'
+      );
       const token = makeUserToken(user.id, 'COMMUNITY_VERIFIED');
 
       // Need 4 industries — seed two more
@@ -412,7 +432,12 @@ describe('User Routes', () => {
         .post(`${BASE}/me/industries`)
         .set('Authorization', `Bearer ${token}`)
         .send({
-          industryIds: [TEST_INDUSTRY_ID, TEST_INDUSTRY_ID_2, extra1.id, extra2.id],
+          industryIds: [
+            TEST_INDUSTRY_ID,
+            TEST_INDUSTRY_ID_2,
+            extra1.id,
+            extra2.id,
+          ],
         });
 
       expect(res.status).toBe(400);
@@ -460,13 +485,20 @@ describe('User Routes', () => {
       const res = await request(app)
         .post(`${BASE}/me/goods-services`)
         .set('Authorization', `Bearer ${token}`)
-        .send({ goodsServiceIds: [TEST_GS_ID], canProvide: [true], canRequest: [false] });
+        .send({
+          goodsServiceIds: [TEST_GS_ID],
+          canProvide: [true],
+          canRequest: [false],
+        });
 
       expect(res.status).toBe(403);
     });
 
     it('selects goods-services for COMMUNITY_VERIFIED user', async () => {
-      const user = await createUser('gs-community@test.com', 'COMMUNITY_VERIFIED');
+      const user = await createUser(
+        'gs-community@test.com',
+        'COMMUNITY_VERIFIED'
+      );
       const token = makeUserToken(user.id, 'COMMUNITY_VERIFIED');
 
       const res = await request(app)
@@ -482,8 +514,32 @@ describe('User Routes', () => {
       expect(res.body.success).toBe(true);
     });
 
+    it('rejects more than 10 goods-services (hard cap)', async () => {
+      const user = await createUser('gs-cap@test.com', 'COMMUNITY_VERIFIED');
+      const token = makeUserToken(user.id, 'COMMUNITY_VERIFIED');
+      const ids = Array.from(
+        { length: 11 },
+        (_, i) =>
+          `00000000-0000-4000-8000-0000000000${(i + 10).toString().padStart(2, '0')}`
+      );
+
+      const res = await request(app)
+        .post(`${BASE}/me/goods-services`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          goodsServiceIds: ids,
+          canProvide: ids.map(() => true),
+          canRequest: ids.map(() => false),
+        });
+
+      expect(res.status).toBe(400);
+    });
+
     it('rejects mismatched array lengths', async () => {
-      const user = await createUser('gs-mismatch@test.com', 'COMMUNITY_VERIFIED');
+      const user = await createUser(
+        'gs-mismatch@test.com',
+        'COMMUNITY_VERIFIED'
+      );
       const token = makeUserToken(user.id, 'COMMUNITY_VERIFIED');
 
       const res = await request(app)
@@ -660,8 +716,14 @@ describe('User Routes', () => {
     });
 
     it('returns public profile for COMMUNITY_VERIFIED viewer', async () => {
-      const target = await createUser('pub-target@test.com', 'COMMUNITY_VERIFIED');
-      const viewer = await createUser('pub-viewer@test.com', 'COMMUNITY_VERIFIED');
+      const target = await createUser(
+        'pub-target@test.com',
+        'COMMUNITY_VERIFIED'
+      );
+      const viewer = await createUser(
+        'pub-viewer@test.com',
+        'COMMUNITY_VERIFIED'
+      );
       const token = makeUserToken(viewer.id, 'COMMUNITY_VERIFIED');
 
       const res = await request(app)
@@ -675,7 +737,10 @@ describe('User Routes', () => {
     });
 
     it('returns 400 for non-UUID userId', async () => {
-      const viewer = await createUser('bad-viewer@test.com', 'COMMUNITY_VERIFIED');
+      const viewer = await createUser(
+        'bad-viewer@test.com',
+        'COMMUNITY_VERIFIED'
+      );
       const token = makeUserToken(viewer.id, 'COMMUNITY_VERIFIED');
 
       const res = await request(app)

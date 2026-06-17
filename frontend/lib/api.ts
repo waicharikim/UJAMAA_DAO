@@ -1280,6 +1280,7 @@ export interface ProjectListItemDto {
   description: string | null
   status: "PLANNING" | "ACTIVE" | "ON_HOLD" | "CANCELLED" | "COMPLETED"
   ownerGroupId: string | null
+  ownerGroupName: string | null
   ownerUserId: string | null
   proposalId: string | null
   participationScope: ParticipationScope

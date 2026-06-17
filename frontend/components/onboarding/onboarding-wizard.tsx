@@ -268,26 +268,30 @@ export function OnboardingWizard({ forceOpen, onClose }: OnboardingWizardProps) 
         )}
 
         <div className="p-5 pt-7 sm:p-8 sm:pt-10">
-          <div
-            className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center mb-4 sm:mb-6"
-            style={{ background: current.iconBg }}
-          >
-            <Icon className="h-7 w-7 sm:h-8 sm:w-8" style={{ color: current.iconColor }} />
-          </div>
-
-          <h2 className="text-lg sm:text-xl font-bold mb-2 sm:mb-3" style={{ color: "#0E0B08" }}>
-            {current.title}
-          </h2>
-          <p className="text-sm leading-relaxed mb-4 sm:mb-5" style={{ color: "rgba(14,11,8,0.65)" }}>
-            {current.body}
-          </p>
-
-          {/* Slide 2 custom content — communities list */}
-          {current.customContent && user?.id && (
-            <div className="mb-5 sm:mb-6">
-              <CommunitiesSlide userId={user.id} />
+          {/* Fixed-height content area keeps the dots + Continue button in the
+              same place across slides (no jumping to reach the button). */}
+          <div className="min-h-[280px] sm:min-h-[300px] flex flex-col">
+            <div
+              className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center mb-4 sm:mb-6"
+              style={{ background: current.iconBg }}
+            >
+              <Icon className="h-7 w-7 sm:h-8 sm:w-8" style={{ color: current.iconColor }} />
             </div>
-          )}
+
+            <h2 className="text-lg sm:text-xl font-bold mb-2 sm:mb-3" style={{ color: "#0E0B08" }}>
+              {current.title}
+            </h2>
+            <p className="text-sm leading-relaxed mb-4 sm:mb-5" style={{ color: "rgba(14,11,8,0.65)" }}>
+              {current.body}
+            </p>
+
+            {/* Slide 2 custom content — communities list */}
+            {current.customContent && user?.id && (
+              <div className="mb-5 sm:mb-6">
+                <CommunitiesSlide userId={user.id} />
+              </div>
+            )}
+          </div>
 
           {/* Slide dots */}
           <div className="flex gap-1.5 mb-4 sm:mb-6">

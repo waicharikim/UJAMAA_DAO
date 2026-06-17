@@ -135,6 +135,9 @@ export function RegisterForm() {
   const [counties, setCounties] = useState<RefItem[]>([])
   const [industries, setIndustries] = useState<RefItem[]>([])
   const [goodsServices, setGoodsServices] = useState<RefItem[]>([])
+  const [showAllIndustries, setShowAllIndustries] = useState(false)
+  const [showAllServices, setShowAllServices] = useState(false)
+  const MAX_SERVICES = 10
 
   const [form, setForm] = useState<FormData>({
     email: "",
@@ -375,15 +378,17 @@ export function RegisterForm() {
               <span className="font-normal text-slate-400">(pick 1–3)</span>
             </p>
             <p className="text-xs text-warm-gray mb-3">What sector do you work in?</p>
-            <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto">
-              {industries.map((ind) => {
+            <div className="flex flex-wrap gap-2">
+              {(showAllIndustries ? industries : industries.slice(0, 12)).map((ind) => {
                 const selected = form.industryIds.includes(ind.id)
+                const atCap = !selected && form.industryIds.length >= 3
                 return (
                   <button
                     key={ind.id}
                     type="button"
+                    disabled={atCap}
                     onClick={() => toggleMulti("industryIds", ind.id, 3)}
-                    className="text-xs px-3 py-1.5 rounded-full border font-medium transition-all"
+                    className="text-xs px-3 py-1.5 rounded-full border font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                     style={{
                       background: selected ? "#D4911E" : "transparent",
                       borderColor: selected ? "#D4911E" : "rgba(26,18,11,0.15)",
@@ -394,24 +399,41 @@ export function RegisterForm() {
                   </button>
                 )
               })}
+              {!showAllIndustries && industries.length > 12 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllIndustries(true)}
+                  className="text-xs px-3 py-1.5 rounded-full border border-dashed font-medium text-chai"
+                  style={{ borderColor: "rgba(26,18,11,0.25)" }}
+                >
+                  + {industries.length - 12} more
+                </button>
+              )}
             </div>
           </div>
 
           <div>
             <p className="text-sm font-semibold text-chai mb-1">
               Goods &amp; services{" "}
-              <span className="font-normal text-slate-400">(pick at least 1)</span>
+              <span className="font-normal text-slate-400">(pick 1–{MAX_SERVICES})</span>
             </p>
-            <p className="text-xs text-warm-gray mb-3">What can you offer or need in the community?</p>
-            <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
-              {goodsServices.map((gs) => {
+            <p className="text-xs text-warm-gray mb-3">
+              What can you offer or need in the community?{" "}
+              <span className={form.goodsServiceIds.length >= MAX_SERVICES ? "text-[#38A063] font-semibold" : ""}>
+                {form.goodsServiceIds.length}/{MAX_SERVICES} selected
+              </span>
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {(showAllServices ? goodsServices : goodsServices.slice(0, 16)).map((gs) => {
                 const selected = form.goodsServiceIds.includes(gs.id)
+                const atCap = !selected && form.goodsServiceIds.length >= MAX_SERVICES
                 return (
                   <button
                     key={gs.id}
                     type="button"
-                    onClick={() => toggleMulti("goodsServiceIds", gs.id, 20)}
-                    className="text-xs px-3 py-1.5 rounded-full border font-medium transition-all"
+                    disabled={atCap}
+                    onClick={() => toggleMulti("goodsServiceIds", gs.id, MAX_SERVICES)}
+                    className="text-xs px-3 py-1.5 rounded-full border font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                     style={{
                       background: selected ? "#38A063" : "transparent",
                       borderColor: selected ? "#38A063" : "rgba(26,18,11,0.15)",
@@ -422,6 +444,16 @@ export function RegisterForm() {
                   </button>
                 )
               })}
+              {!showAllServices && goodsServices.length > 16 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllServices(true)}
+                  className="text-xs px-3 py-1.5 rounded-full border border-dashed font-medium text-chai"
+                  style={{ borderColor: "rgba(26,18,11,0.25)" }}
+                >
+                  + {goodsServices.length - 16} more
+                </button>
+              )}
             </div>
           </div>
         </div>

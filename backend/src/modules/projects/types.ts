@@ -106,6 +106,7 @@ export interface ProjectDto {
   description: string | null;
   status: ProjectStatus;
   ownerGroupId: string | null;
+  ownerGroupName: string | null;
   ownerUserId: string | null;
   proposalId: string | null;
   participationScope: ProjectParticipation;

@@ -79,7 +79,7 @@ export const selectGoodsServicesSchema = z
     goodsServiceIds: z
       .array(z.string().uuid())
       .min(1, 'At least one good/service required')
-      .max(20, 'Maximum 20 goods/services allowed'),
+      .max(10, 'You can select up to 10 goods/services'),
     canProvide: z.array(z.boolean()),
     canRequest: z.array(z.boolean()),
   })

@@ -135,6 +135,14 @@ function GroupHeader({ group, groupId }: { group: GroupDetailDto; groupId: strin
       style={{ background: "#fff", borderBottom: "1px solid rgba(14,11,8,0.06)" }}
     >
       <div className="max-w-3xl mx-auto">
+        <Link
+          href="/groups"
+          className="inline-flex items-center gap-1 text-xs font-medium mb-3 hover:opacity-70 transition-opacity"
+          style={{ color: "rgba(14,11,8,0.5)" }}
+        >
+          <ChevronLeft className="h-3.5 w-3.5" />
+          Back to communities
+        </Link>
         <div className="flex items-start gap-4">
           {/* Icon */}
           <div

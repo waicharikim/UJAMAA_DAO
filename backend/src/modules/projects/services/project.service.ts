@@ -345,7 +345,10 @@ export class ProjectService {
     const [projects, total] = await Promise.all([
       prisma.project.findMany({
         where,
-        include: { _count: { select: { milestones: true } } },
+        include: {
+          _count: { select: { milestones: true } },
+          ownerGroup: { select: { name: true } },
+        },
         orderBy: { createdAt: 'desc' },
         take: limit,
         skip: offset,
@@ -372,6 +375,7 @@ export class ProjectService {
         description: p.description,
         status: p.status as ProjectStatus,
         ownerGroupId: p.ownerGroupId,
+        ownerGroupName: p.ownerGroup?.name ?? null,
         ownerUserId: p.ownerUserId,
         proposalId: p.proposalId,
         participationScope: p.participationScope as ProjectParticipation,
@@ -433,6 +437,7 @@ export class ProjectService {
       description: project.description,
       status: project.status as ProjectStatus,
       ownerGroupId: project.ownerGroupId,
+      ownerGroupName: project.ownerGroup?.name ?? null,
       ownerUserId: project.ownerUserId,
       proposalId: project.proposalId,
       participationScope: project.participationScope as ProjectParticipation,
