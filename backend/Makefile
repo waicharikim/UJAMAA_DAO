@@ -5,6 +5,11 @@ COMPOSE_FILE := ../docker/docker-compose.yml
 COMPOSE_PROD := ../docker/docker-compose.prod.yml
 ENV_FILE     := ../docker/.env.prod
 
+# Build cache toggle for prod builds. Default is a clean --no-cache build.
+# Pass CACHE=1 for a fast cached rebuild (reuses completed layers — handy after
+# a cancelled build, e.g. `make prod-rebuild-web CACHE=1`).
+BUILD_FLAGS := $(if $(CACHE),,--no-cache)
+
 # Default target
 help:
 	@echo "Ujamaa DAO - Docker Management"
@@ -97,22 +102,22 @@ prod-make-admin:
 		 WHERE u.email = '$(EMAIL)';"
 
 prod-build:
-	@echo "Building production images..."
-	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) build --no-cache
+	@echo "Building production images... (CACHE=1 for a cached build)"
+	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) build $(BUILD_FLAGS)
 
 prod-rebuild-web:
-	@echo "Rebuilding and restarting web service..."
-	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) build --no-cache web
+	@echo "Rebuilding and restarting web service... (CACHE=1 for a cached build)"
+	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) build $(BUILD_FLAGS) web
 	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) up -d web
 
 prod-rebuild-worker:
-	@echo "Rebuilding and restarting worker service..."
-	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) build --no-cache worker
+	@echo "Rebuilding and restarting worker service... (CACHE=1 for a cached build)"
+	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) build $(BUILD_FLAGS) worker
 	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) up -d worker
 
 prod-rebuild-frontend:
-	@echo "Rebuilding and restarting frontend service..."
-	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) build --no-cache frontend
+	@echo "Rebuilding and restarting frontend service... (CACHE=1 for a cached build)"
+	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) build $(BUILD_FLAGS) frontend
 	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) up -d frontend
 
 # Common operations
