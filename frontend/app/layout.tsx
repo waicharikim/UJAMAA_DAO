@@ -10,6 +10,7 @@ import { Providers } from "@/components/providers"
 import { AppShell } from "@/components/layout/app-shell"
 import { Toaster } from "@/components/ui/toaster"
 import { ChunkErrorReload } from "@/components/system/chunk-error-reload"
+import { EarlyErrorBoot } from "@/components/system/early-error-boot"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -90,6 +91,10 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} ${cormorant.variable}`}>
       <head>
+        {/* First in <head>: catches bundle parse/load failures on old engines
+            before the Sentry browser SDK can load, and shows a fallback instead
+            of a white screen. */}
+        <EarlyErrorBoot />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link rel="preconnect" href="https://images.unsplash.com" />
