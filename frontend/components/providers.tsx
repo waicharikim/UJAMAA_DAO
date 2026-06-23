@@ -8,10 +8,10 @@ import { RoleProvider } from "@/contexts/role-context"
 import { NotificationProvider } from "@/contexts/notification-context"
 import { LanguageProvider } from "@/contexts/language-context"
 
-// @privy-io/react-auth calls useContext at module-load time which breaks
-// SSR/static-generation. next/dynamic with ssr:false ensures the module is
-// never evaluated on the server. Children always render (WalletContext has
-// safe defaults so useWallet() works without a provider during SSR).
+// The wallet stack (wagmi + Coinbase Smart Wallet) is browser-only and uses
+// WebAuthn/passkeys, so it must not run during SSR/static generation.
+// next/dynamic with ssr:false keeps it client-only. Children always render
+// (WalletContext has safe defaults so useWallet() works without a provider).
 const WalletProvider = dynamic(
   () => import("@/contexts/wallet-context").then((m) => ({ default: m.WalletProvider })),
   { ssr: false },

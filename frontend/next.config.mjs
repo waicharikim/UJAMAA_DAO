@@ -5,7 +5,6 @@ import { withSentryConfig } from "@sentry/nextjs"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const require = createRequire(import.meta.url)
-const webpack = require("webpack")
 
 // Explicit runtime caching. The default next-pwa cache can serve a stale HTML
 // shell on slow networks, which then points at JS chunks that no longer exist
@@ -103,53 +102,6 @@ const nextConfig = {
       { protocol: "https", hostname: "lh3.googleusercontent.com" },
       { protocol: "https", hostname: "*.googleusercontent.com" },
     ],
-  },
-  // Prevent @privy-io/react-auth (browser-only) from being bundled server-side.
-  // Components that use it are all "use client" + ssr:false, so this package
-  // is never actually executed on the server — but Turbopack's static analysis
-  // still tries to initialise it, triggering "Cannot read properties of null
-  // (reading 'useContext')". Marking it external skips that initialisation.
-  serverExternalPackages: ["@privy-io/react-auth"],
-  // Turbopack equivalents of the webpack stubs below (used by `next dev --turbopack`)
-  // NOTE: modularizeImports for lucide-react was removed — Privy imports icons
-  // (e.g. FingerprintIcon) that don't exist in our pinned lucide-react v0.294,
-  // causing "module not found" errors when the path transform is applied.
-  turbopack: {
-    resolveAlias: {
-      // NOTE: neither `unstorage` nor `@base-org/account` is stubbed — both are
-      // real, installed deps Privy probes at init. Stubbing them with an empty
-      // object made their exports `undefined`, so Privy threw on init
-      // (`createStorage`/`createBaseAccountSDK` "is not a function") — WalletConnect
-      // storage degraded and the Base connector logged a caught error. Let the
-      // real modules resolve. Only x402 (a Privy payments feature) stays stubbed.
-      "x402/client": "./stubs/empty.js",
-    },
-  },
-  webpack: (config) => {
-    // Stub the one Privy optional dep we don't use:
-    //   - x402/client: Privy payment-protocol feature (not used)
-    // `unstorage` and `@base-org/account` are deliberately NOT stubbed — Privy
-    // probes their real exports at init (see the turbopack block above).
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      "x402/client": path.resolve(__dirname, "stubs/empty.js"),
-    }
-
-    // DelegatedActionsConsentScreen is a Privy UI component that imports
-    // `CloudUpload` from lucide-react.  That icon was added ~v0.355 but our
-    // pinned version is 0.294.  We never use delegated-actions, so stub it.
-    // NOTE: stub with a real no-op *component* (renders null), NOT an empty
-    // object — Privy renders this in its modal portal, and an empty object
-    // throws "Element type is invalid", crashing the modal and leaving a stuck
-    // dark backdrop over the app (black screen).
-    config.plugins.push(
-      new webpack.NormalModuleReplacementPlugin(
-        /DelegatedActionsConsentScreen/,
-        path.resolve(__dirname, "stubs/noop-component.js"),
-      ),
-    )
-
-    return config
   },
 }
 

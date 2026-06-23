@@ -6,8 +6,8 @@ import { PanelLeft, Coins, Award, Zap, ChevronLeft } from "lucide-react"
 import dynamic from "next/dynamic"
 import { Button } from "@/components/ui/button"
 
-// Lazy-load AccountMenu — keeps @privy-io/react-auth (used for wallet) out of
-// the topbar bundle. The avatar dropdown holds profile, wallet, and sign-out.
+// Lazy-load AccountMenu — keeps the wallet stack (wagmi/Coinbase) out of the
+// topbar bundle. The avatar dropdown holds profile, wallet, and sign-out.
 const AccountMenu = dynamic(
   () => import("@/components/layout/account-menu").then((m) => ({ default: m.AccountMenu })),
   { ssr: false, loading: () => <div className="h-8 w-8 rounded-full bg-[#C9922A]/10 animate-pulse" /> },
