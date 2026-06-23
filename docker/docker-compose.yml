@@ -79,6 +79,12 @@ services:
       - DASHBOARD_PASSWORD=admin123
       - BASE_URL=http://localhost:4000
       - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
+      # Blockchain — web verifies wallet signatures (ERC-1271/6492) via viem,
+      # which needs an RPC to the chain where smart accounts live (Base Sepolia).
+      - BASE_RPC_URL=${BASE_RPC_URL:-https://sepolia.base.org}
+      - PR_TOKEN_ADDRESS=${PR_TOKEN_ADDRESS:-}
+      - UT_TOKEN_ADDRESS=${UT_TOKEN_ADDRESS:-}
+      - GOVERNANCE_VOTING_ADDRESS=${GOVERNANCE_VOTING_ADDRESS:-}
       - SMTP_HOST=mailhog
       - SMTP_PORT=1025
       - SMTP_USER=

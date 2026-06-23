@@ -54,6 +54,15 @@ const ethereumSignatureSchema = z
   .string()
   .regex(/^0x[a-fA-F0-9]{130}$/i, 'Invalid Ethereum signature');
 
+// Smart-account (ERC-1271 / ERC-6492) signatures are variable length and far
+// longer than a fixed 65-byte EOA signature. Accept any hex blob within a sane
+// range so a Coinbase Smart Wallet can link; EOA sigs (132 chars) still pass.
+const accountSignatureSchema = z
+  .string()
+  .regex(/^0x[a-fA-F0-9]+$/i, 'Invalid signature')
+  .min(132, 'Signature too short')
+  .max(100002, 'Signature too long'); // ERC-6492-wrapped sigs (factory + calldata + sig) are long
+
 // ============================================================================
 // MAGIC LINK VALIDATORS
 // ============================================================================
@@ -135,10 +144,13 @@ export const walletNonceSchema = z.object({
 
 export const walletVerifySchema = z.object({
   walletAddress: ethereumAddressSchema,
-  signature: ethereumSignatureSchema,
+  signature: accountSignatureSchema, // EOA or smart-account (ERC-1271/6492) signature
 });
 
-export const walletLinkSchema = walletVerifySchema;
+export const walletLinkSchema = z.object({
+  walletAddress: ethereumAddressSchema,
+  signature: accountSignatureSchema,
+});
 
 // ============================================================================
 // PHONE VALIDATION SCHEMAS

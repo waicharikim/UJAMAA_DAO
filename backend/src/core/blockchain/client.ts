@@ -49,6 +49,29 @@ function isPlaceholderKey(key: string): boolean {
 let provider: ethers.JsonRpcProvider | null = null;
 let signer: ethers.Wallet | null = null;
 
+/**
+ * Read-only provider for on-chain reads that don't need the minter key
+ * (e.g. ERC-1271 smart-account signature verification). Only requires
+ * BASE_RPC_URL. Returns null when no RPC is configured.
+ */
+let readProvider: ethers.JsonRpcProvider | null = null;
+export function getReadProvider(): ethers.JsonRpcProvider | null {
+  if (readProvider) return readProvider;
+  if (provider) {
+    readProvider = provider;
+    return readProvider;
+  }
+  const rpcUrl = process.env.BASE_RPC_URL;
+  if (!rpcUrl) return null;
+  try {
+    readProvider = new ethers.JsonRpcProvider(rpcUrl);
+    return readProvider;
+  } catch (err) {
+    logger.warn({ err }, '[Blockchain] Failed to initialise read provider');
+    return null;
+  }
+}
+
 function getSignerAndProvider(): {
   provider: ethers.JsonRpcProvider;
   signer: ethers.Wallet;

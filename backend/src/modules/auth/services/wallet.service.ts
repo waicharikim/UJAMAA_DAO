@@ -27,6 +27,7 @@ import {
   getPrContract,
   getUtContract,
 } from '../../../core/blockchain/client.js';
+import { verifyErc1271Signature } from '../../../core/blockchain/erc1271.js';
 import { userService } from '../../user/services/user.service.js';
 import {
   WalletAuthResult,
@@ -131,33 +132,20 @@ class WalletService {
       );
     }
 
-    // Verify signature
+    // Verify signature — EOA or smart-account (ERC-1271 / ERC-6492).
     const message = this.buildSignatureMessage(storedNonce.nonce);
-    let recoveredAddress: string;
+    const ownsAddress = await this.verifyOwnership(
+      normalizedAddress,
+      message,
+      signature
+    );
 
-    try {
-      recoveredAddress = ethers.verifyMessage(message, signature);
-    } catch (error) {
+    if (!ownsAddress) {
       await this.trackWalletLoginEvent(
         null,
         normalizedAddress,
         false,
-        'Invalid signature format',
-        context
-      );
-      throw ApiError.authenticationError(
-        'Invalid signature format',
-        undefined,
-        correlationId
-      );
-    }
-
-    if (recoveredAddress.toLowerCase() !== normalizedAddress) {
-      await this.trackWalletLoginEvent(
-        null,
-        normalizedAddress,
-        false,
-        'Signature mismatch',
+        'Signature verification failed',
         context
       );
 
@@ -165,12 +153,11 @@ class WalletService {
         'Wallet signature verification failed',
         'AUTH_FAILURE',
         'HIGH',
-        'Signature does not match wallet address',
+        'Signature does not prove control of the wallet address',
         {
           ipAddress: context?.ipAddress,
           metadata: {
             walletAddress: normalizedAddress,
-            recoveredAddress,
             correlationId,
           },
         }
@@ -505,32 +492,27 @@ class WalletService {
       );
     }
 
-    // Verify signature
+    // Verify signature — accepts both an EOA signature (recovered ECDSA) and a
+    // smart-account (passkey) signature (ERC-1271). This lets a Coinbase Smart
+    // Wallet link its address without any change to the nonce/replay flow.
     const message = this.buildSignatureMessage(storedNonce.nonce);
-    let recovered: string;
+    const ownsAddress = await this.verifyOwnership(
+      normalizedAddress,
+      message,
+      signature
+    );
 
-    try {
-      recovered = ethers.verifyMessage(message, signature);
-    } catch (error) {
-      throw ApiError.authenticationError(
-        'Invalid signature format',
-        undefined,
-        correlationId
-      );
-    }
-
-    if (recovered.toLowerCase() !== normalizedAddress) {
+    if (!ownsAddress) {
       logSecurityEvent(
         'Wallet link signature verification failed',
         'AUTH_FAILURE',
         'MEDIUM',
-        'Signature mismatch during wallet link',
+        'Signature verification failed during wallet link',
         {
           userId,
           ipAddress: context?.ipAddress,
           metadata: {
             walletAddress: normalizedAddress,
-            recoveredAddress: recovered,
             correlationId,
           },
         }
@@ -787,6 +769,31 @@ class WalletService {
    */
   private buildSignatureMessage(nonce: string): string {
     return `Welcome to UjamaaDAO!\n\nSign this message to authenticate.\n\nNonce: ${nonce}\n\nThis request will not trigger a blockchain transaction or cost any gas fees.`;
+  }
+
+  /**
+   * Verify a signed message proves control of `address`, supporting both:
+   *   1. EOA wallets — recover the signer off-chain (ethers.verifyMessage).
+   *   2. Smart accounts (e.g. Coinbase Smart Wallet / passkey) — ERC-1271
+   *      on-chain `isValidSignature` against the deployed account.
+   * Returns false (never throws) when neither path validates.
+   */
+  private async verifyOwnership(
+    address: string,
+    message: string,
+    signature: string
+  ): Promise<boolean> {
+    // 1) EOA fast path — pure off-chain recovery, no RPC.
+    try {
+      const recovered = ethers.verifyMessage(message, signature);
+      if (recovered.toLowerCase() === address.toLowerCase()) return true;
+    } catch {
+      // Not a recoverable ECDSA signature (likely a smart-account/passkey
+      // signature) — fall through to ERC-1271.
+    }
+
+    // 2) Smart-account path — ERC-1271 isValidSignature on the deployed account.
+    return verifyErc1271Signature(address, message, signature);
   }
 
   /**

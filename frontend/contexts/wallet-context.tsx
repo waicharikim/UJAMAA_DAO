@@ -1,48 +1,51 @@
 "use client"
 
 /**
- * WalletContext — wraps Privy for onchain wallet connectivity.
+ * WalletContext — Coinbase Smart Wallet (passkey-secured self-custody).
  *
- * Env var required: NEXT_PUBLIC_PRIVY_APP_ID
- * Get yours at https://dashboard.privy.io
+ * The signer is the user's device passkey (Face ID / fingerprint); the platform
+ * never holds a key and cannot sign for them. Magic-link stays the primary auth;
+ * the smart account links to the session via /auth/wallet/link.
  *
- * When the App ID is present the real PrivyProvider is rendered.
- * When it is missing, a graceful stub is shown instead (build still works).
- *
- * ADR-009: Privy chosen (phone-primary, zero-crypto UX, gasless Pimlico, Base)
+ * POPUP RULE: Coinbase opens a popup (keys.coinbase.com) for connect and sign,
+ * and browsers only allow a popup that is triggered DIRECTLY by a user gesture.
+ * So the whole connect→sign→link sequence runs inside ONE click handler
+ * (`connectWallet`), never from a background effect. There is no deploy popup:
+ * the backend verifies counterfactual (undeployed) accounts via ERC-6492, so the
+ * account never has to be deployed before linking.
  */
 
 import {
   createContext,
   useContext,
   useCallback,
-  useEffect,
-  useRef,
   type ReactNode,
 } from "react"
 import {
-  PrivyProvider,
-  usePrivy,
-  useWallets,
-  useConnectWallet,
-  useLogout,
-} from "@privy-io/react-auth"
-import { useToast } from "@/hooks/use-toast"
+  WagmiProvider,
+  useAccount,
+  useConnect,
+  useDisconnect,
+  useSignMessage,
+} from "wagmi"
+import { wagmiConfig } from "@/lib/wagmi"
 import { authApi, tokenStore } from "@/lib/api"
 import { useAuth } from "@/contexts/auth-context"
 
-// ── Shared interface ──────────────────────────────────────────────────────────
+// ── Shared interface (unchanged — consumers rely on this shape) ───────────────
 
 export interface WalletContextType {
-  /** Primary connected wallet address, or null */
+  /** Primary connected smart-account address, or null */
   walletAddress: string | null
-  /** True when at least one wallet is connected */
+  /** True when a smart account is connected */
   isConnected: boolean
-  /** True while Privy is still initialising */
+  /** True while a connection is in flight */
   isConnecting: boolean
-  /** Open the Privy connect / create wallet modal */
+  /** Step 1: connect the Coinbase Smart Wallet (popup 1). Call from a click. */
   connectWallet: () => Promise<void>
-  /** Disconnect wallet (logs out of Privy; UjamaaDAO session stays) */
+  /** Step 2: sign the nonce + link to the session (popup 2). Call from a click. */
+  linkAccount: () => Promise<void>
+  /** Disconnect the smart account (UjamaaDAO session stays) */
   disconnectWallet: () => Promise<void>
 }
 
@@ -51,31 +54,66 @@ const WalletContext = createContext<WalletContextType>({
   isConnected: false,
   isConnecting: false,
   connectWallet: async () => {},
+  linkAccount: async () => {},
   disconnectWallet: async () => {},
 })
 
-// ── Stub — no Privy App ID ────────────────────────────────────────────────────
+// ── Inner adapter (inside WagmiProvider) ──────────────────────────────────────
 
-function StubWalletProvider({ children }: { children: ReactNode }) {
-  const { toast } = useToast()
+function WalletAdapter({ children }: { children: ReactNode }) {
+  const { address, isConnected, isConnecting } = useAccount()
+  const { connectAsync, connectors } = useConnect()
+  const { disconnectAsync } = useDisconnect()
+  const { signMessageAsync } = useSignMessage()
+  const { login } = useAuth()
 
+  // Step 1 — connect only (popup 1). Two-click flow: this is its own gesture, so
+  // the connect popup is reliably allowed. No sign here.
   const connectWallet = useCallback(async () => {
-    toast({
-      title: "Wallet not configured",
-      description:
-        "Add NEXT_PUBLIC_PRIVY_APP_ID to frontend/.env.local to enable wallet connection.",
-      variant: "destructive",
-    })
-  }, [toast])
+    try {
+      if (!isConnected) {
+        await connectAsync({ connector: connectors[0] })
+      }
+    } catch (err: any) {
+      console.warn("[wallet] connect failed", err)
+    }
+  }, [isConnected, connectAsync, connectors])
+
+  // Step 2 — sign the nonce + link (popup 2). Its own gesture (a separate button
+  // click), so the sign popup is reliably allowed. Device-passkey sig is verified
+  // by the backend (ERC-1271/6492 — no deploy needed).
+  const linkAccount = useCallback(async () => {
+    const addr = address as string | undefined
+    if (!addr) return
+    try {
+      const { message } = await authApi.getWalletNonce(addr)
+      const signature = await signMessageAsync({ message })
+      if (!tokenStore.getAccess()) {
+        await login(addr, signature)
+      } else {
+        await authApi.linkWallet(addr, signature)
+      }
+    } catch (err: any) {
+      // 409 = already linked — fine. Anything else surfaces upstream.
+      if (err?.status !== 409) {
+        console.warn("[wallet] link failed", err)
+      }
+    }
+  }, [address, signMessageAsync, login])
+
+  const disconnectWallet = useCallback(async () => {
+    await disconnectAsync()
+  }, [disconnectAsync])
 
   return (
     <WalletContext.Provider
       value={{
-        walletAddress: null,
-        isConnected: false,
-        isConnecting: false,
+        walletAddress: address ?? null,
+        isConnected,
+        isConnecting,
         connectWallet,
-        disconnectWallet: async () => {},
+        linkAccount,
+        disconnectWallet,
       }}
     >
       {children}
@@ -83,121 +121,13 @@ function StubWalletProvider({ children }: { children: ReactNode }) {
   )
 }
 
-// ── Real Privy adapter ────────────────────────────────────────────────────────
-
-function PrivyWalletAdapter({ children }: { children: ReactNode }) {
-  const { ready } = usePrivy()
-  const { wallets } = useWallets()
-  const { connectWallet: privyConnect } = useConnectWallet()
-  const { logout } = useLogout()
-  const { isAuthenticated, login } = useAuth()
-
-  const walletAddress = wallets[0]?.address ?? null
-  const isConnected = wallets.length > 0
-  const isConnecting = !ready
-
-  // When Privy connects a wallet:
-  //   • No UjamaaDAO session → full wallet login via /auth/wallet/verify
-  //   • Session exists       → link wallet via /auth/wallet/link (409 = already linked, ignored)
-  //
-  // `attemptedRef` tracks addresses we've already started auth for, set *before*
-  // the async work — so dependency churn (e.g. a new `wallets` array identity)
-  // can't re-fire concurrent personal_sign popups or loop. A `cancelled` flag
-  // prevents state updates (via `login`) after unmount, which on mobile can
-  // happen during the wallet round-trip.
-  const attemptedRef = useRef<Set<string>>(new Set())
-  useEffect(() => {
-    // Wait until Privy has finished initialising before asking for a signature.
-    // Firing personal_sign mid-init (e.g. right after an OAuth redirect, before
-    // the embedded wallet is fully provisioned) can stack a broken signing modal
-    // over the app — a stuck dark overlay = black screen.
-    if (!ready) return
-    if (!walletAddress || attemptedRef.current.has(walletAddress)) return
-    const wallet = wallets[0]
-    if (!wallet) return
-
-    attemptedRef.current.add(walletAddress)
-    let cancelled = false
-
-    ;(async () => {
-      try {
-        const { message } = await authApi.getWalletNonce(walletAddress)
-        const provider = await wallet.getEthereumProvider()
-        const signature = (await provider.request({
-          method: "personal_sign",
-          params: [message, walletAddress],
-        })) as string
-
-        if (cancelled) return
-        if (!tokenStore.getAccess()) {
-          // No session — sign in with wallet
-          await login(walletAddress, signature)
-        } else {
-          // Session exists — link wallet to existing account
-          await authApi.linkWallet(walletAddress, signature)
-        }
-      } catch (err: any) {
-        // 409 = already linked — fine. Any other failure surfaces a toast via
-        // login()'s own catch. We deliberately leave the address marked
-        // attempted (don't auto-retry): Privy's useWallets() can return a new
-        // array identity each render, so retrying here risks a personal_sign
-        // popup loop. The user retries by reconnecting or refreshing.
-        if (err?.status !== 409) {
-          console.warn("[wallet] backend auth failed", err)
-        }
-      }
-    })()
-
-    return () => {
-      cancelled = true
-    }
-  }, [ready, walletAddress, wallets, login])
-
-  const connectWallet = useCallback(async () => {
-    privyConnect()
-  }, [privyConnect])
-
-  const disconnectWallet = useCallback(async () => {
-    await logout()
-  }, [logout])
-
-  return (
-    <WalletContext.Provider
-      value={{ walletAddress, isConnected, isConnecting, connectWallet, disconnectWallet }}
-    >
-      {children}
-    </WalletContext.Provider>
-  )
-}
-
-// ── Provider (auto-selects real vs stub) ──────────────────────────────────────
+// ── Provider ──────────────────────────────────────────────────────────────────
 
 export function WalletProvider({ children }: { children: ReactNode }) {
-  const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID
-
-  if (!appId) {
-    return <StubWalletProvider>{children}</StubWalletProvider>
-  }
-
   return (
-    <PrivyProvider
-      appId={appId}
-      config={{
-        // Appearance — matches Chai palette
-        appearance: {
-          theme: "dark",
-          accentColor: "#D4911E",
-        },
-        // Login options shown in the Privy modal
-        loginMethods: ["email", "wallet", "google"],
-        // Auto-create an embedded wallet for users who log in without one
-        embeddedWallets: {
-          ethereum: { createOnLogin: "users-without-wallets" },
-        },
-      }}
-    >
-      <PrivyWalletAdapter>{children}</PrivyWalletAdapter>
-    </PrivyProvider>
+    <WagmiProvider config={wagmiConfig}>
+      <WalletAdapter>{children}</WalletAdapter>
+    </WagmiProvider>
   )
 }
 

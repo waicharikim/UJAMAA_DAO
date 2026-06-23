@@ -4,149 +4,228 @@ pragma solidity ^0.8.24;
 import "forge-std/Test.sol";
 import "../src/GovernanceVoting.sol";
 
+/// Minimal PR token stub — only `balanceOf` is read by GovernanceVoting.
+contract MockPrToken {
+    mapping(address => uint256) public balanceOf;
+
+    function setBalance(address account, uint256 amount) external {
+        balanceOf[account] = amount;
+    }
+}
+
 contract GovernanceVotingTest is Test {
     GovernanceVoting voting;
-    address admin   = address(1);
+    MockPrToken pr;
+
+    address admin    = address(1);
     address recorder = address(2);
-    address voter1  = address(3);
-    address voter2  = address(4);
+    address voter1   = address(3);
+    address voter2   = address(4);
 
     bytes32 constant PROPOSAL_A = keccak256("proposal-uuid-aaa");
     bytes32 constant PROPOSAL_B = keccak256("proposal-uuid-bbb");
 
     function setUp() public {
+        pr = new MockPrToken();
+        pr.setBalance(voter1, 100);
+        pr.setBalance(voter2, 75);
+
         vm.startPrank(admin);
-        voting = new GovernanceVoting(admin);
+        voting = new GovernanceVoting(admin, address(pr));
         voting.grantRole(voting.RECORDER_ROLE(), recorder);
         vm.stopPrank();
     }
 
-    function test_RecordYesVote() public {
+    function _open(bytes32 proposalId) internal {
         vm.prank(recorder);
-        voting.recordVote(PROPOSAL_A, voter1, 0, 100);
+        voting.openProposal(proposalId);
+    }
+
+    // ── Voting window ─────────────────────────────────────────────────────────
+
+    function test_OpenProposal() public {
+        vm.prank(recorder);
+        vm.expectEmit(true, false, false, true);
+        emit GovernanceVoting.ProposalOpened(PROPOSAL_A, block.timestamp);
+        voting.openProposal(PROPOSAL_A);
+        assertEq(voting.proposalStatus(PROPOSAL_A), 1);
+    }
+
+    function test_RevertOpenTwice() public {
+        _open(PROPOSAL_A);
+        vm.prank(recorder);
+        vm.expectRevert("Already initialised");
+        voting.openProposal(PROPOSAL_A);
+    }
+
+    function test_RevertOpenUnauthorized() public {
+        vm.prank(voter1);
+        vm.expectRevert();
+        voting.openProposal(PROPOSAL_A);
+    }
+
+    function test_CloseProposal() public {
+        _open(PROPOSAL_A);
+        vm.prank(recorder);
+        voting.closeProposal(PROPOSAL_A);
+        assertEq(voting.proposalStatus(PROPOSAL_A), 2);
+    }
+
+    // ── User-signed voting ────────────────────────────────────────────────────
+
+    function test_CastYesVote() public {
+        _open(PROPOSAL_A);
+        vm.prank(voter1);
+        voting.castVote(PROPOSAL_A, 0);
 
         GovernanceVoting.VoteRecord memory r = voting.getVote(PROPOSAL_A, voter1);
         assertEq(r.voter, voter1);
         assertEq(r.option, 0);
-        assertEq(r.weight, 100);
+        assertEq(r.weight, 100); // weight = caller's PR balance
         assertGt(r.timestamp, 0);
     }
 
-    function test_RecordNoVote() public {
-        vm.prank(recorder);
-        voting.recordVote(PROPOSAL_A, voter1, 1, 50);
-
-        GovernanceVoting.VoteRecord memory r = voting.getVote(PROPOSAL_A, voter1);
-        assertEq(r.option, 1);
+    function test_CastNoVote() public {
+        _open(PROPOSAL_A);
+        vm.prank(voter1);
+        voting.castVote(PROPOSAL_A, 1);
+        assertEq(voting.getVote(PROPOSAL_A, voter1).option, 1);
     }
 
-    function test_RecordAbstainVote() public {
-        vm.prank(recorder);
-        voting.recordVote(PROPOSAL_A, voter1, 2, 0);
-
-        GovernanceVoting.VoteRecord memory r = voting.getVote(PROPOSAL_A, voter1);
-        assertEq(r.option, 2);
+    function test_CastAbstainVote() public {
+        _open(PROPOSAL_A);
+        vm.prank(voter1);
+        voting.castVote(PROPOSAL_A, 2);
+        assertEq(voting.getVote(PROPOSAL_A, voter1).option, 2);
     }
 
-    function test_VoteCountIncrements() public {
-        vm.startPrank(recorder);
-        voting.recordVote(PROPOSAL_A, voter1, 0, 100);
-        voting.recordVote(PROPOSAL_A, voter2, 1, 75);
-        vm.stopPrank();
+    function test_VoteCountAndVoters() public {
+        _open(PROPOSAL_A);
+        vm.prank(voter1);
+        voting.castVote(PROPOSAL_A, 0);
+        vm.prank(voter2);
+        voting.castVote(PROPOSAL_A, 1);
 
         assertEq(voting.voteCount(PROPOSAL_A), 2);
-    }
-
-    function test_GetVotersReturnsAll() public {
-        vm.startPrank(recorder);
-        voting.recordVote(PROPOSAL_A, voter1, 0, 100);
-        voting.recordVote(PROPOSAL_A, voter2, 1, 75);
-        vm.stopPrank();
-
         address[] memory v = voting.getVoters(PROPOSAL_A);
-        assertEq(v.length, 2);
         assertEq(v[0], voter1);
         assertEq(v[1], voter2);
     }
 
-    function test_VotesAreIsolatedByProposal() public {
-        vm.prank(recorder);
-        voting.recordVote(PROPOSAL_A, voter1, 0, 100);
-
-        // voter1 can vote on a different proposal
-        vm.prank(recorder);
-        voting.recordVote(PROPOSAL_B, voter1, 1, 100);
+    function test_VotesIsolatedByProposal() public {
+        _open(PROPOSAL_A);
+        _open(PROPOSAL_B);
+        vm.prank(voter1);
+        voting.castVote(PROPOSAL_A, 0);
+        vm.prank(voter1);
+        voting.castVote(PROPOSAL_B, 1);
 
         assertEq(voting.getVote(PROPOSAL_A, voter1).option, 0);
         assertEq(voting.getVote(PROPOSAL_B, voter1).option, 1);
-        assertEq(voting.voteCount(PROPOSAL_A), 1);
-        assertEq(voting.voteCount(PROPOSAL_B), 1);
     }
 
-    function test_RevertOnDuplicateVote() public {
-        vm.prank(recorder);
-        voting.recordVote(PROPOSAL_A, voter1, 0, 100);
-
-        vm.prank(recorder);
-        vm.expectRevert("Already voted");
-        voting.recordVote(PROPOSAL_A, voter1, 1, 100);
-    }
-
-    function test_RevertOnInvalidOption() public {
-        vm.prank(recorder);
-        vm.expectRevert("Invalid vote option");
-        voting.recordVote(PROPOSAL_A, voter1, 3, 100);
-    }
-
-    function test_RevertWhenNotRecorder() public {
+    function test_RevertDuplicateVote() public {
+        _open(PROPOSAL_A);
         vm.prank(voter1);
-        vm.expectRevert();
-        voting.recordVote(PROPOSAL_A, voter1, 0, 100);
+        voting.castVote(PROPOSAL_A, 0);
+        vm.prank(voter1);
+        vm.expectRevert("Already voted");
+        voting.castVote(PROPOSAL_A, 1);
+    }
+
+    function test_RevertInvalidOption() public {
+        _open(PROPOSAL_A);
+        vm.prank(voter1);
+        vm.expectRevert("Invalid vote option");
+        voting.castVote(PROPOSAL_A, 3);
+    }
+
+    function test_RevertVotingNotOpen() public {
+        // never opened
+        vm.prank(voter1);
+        vm.expectRevert("Voting not open");
+        voting.castVote(PROPOSAL_A, 0);
+    }
+
+    function test_RevertAfterClose() public {
+        _open(PROPOSAL_A);
+        vm.prank(recorder);
+        voting.closeProposal(PROPOSAL_A);
+        vm.prank(voter1);
+        vm.expectRevert("Voting not open");
+        voting.castVote(PROPOSAL_A, 0);
+    }
+
+    function test_RevertNoParticipationRights() public {
+        _open(PROPOSAL_A);
+        // voter with zero PR cannot vote
+        address poor = address(99);
+        vm.prank(poor);
+        vm.expectRevert("No participation rights");
+        voting.castVote(PROPOSAL_A, 0);
+    }
+
+    /// @dev THE trustless property: nobody can vote on another account's behalf.
+    ///      castVote has no `voter` param — the platform (recorder/admin) calling
+    ///      it can only ever record a vote for ITSELF (and needs its own PR).
+    function test_PlatformCannotForgeAnothersVote() public {
+        _open(PROPOSAL_A);
+
+        // Recorder tries to vote — it has no PR, so it cannot even vote for itself.
+        vm.prank(recorder);
+        vm.expectRevert("No participation rights");
+        voting.castVote(PROPOSAL_A, 0);
+
+        // And voter1's slot remains empty: the platform never touched it.
+        assertEq(voting.getVote(PROPOSAL_A, voter1).timestamp, 0);
+        assertEq(voting.voteCount(PROPOSAL_A), 0);
     }
 
     function test_EmitsVoteCastEvent() public {
-        vm.prank(recorder);
+        _open(PROPOSAL_A);
+        vm.prank(voter1);
         vm.expectEmit(true, true, false, true);
         emit GovernanceVoting.VoteCast(PROPOSAL_A, voter1, 0, 100, block.timestamp);
-        voting.recordVote(PROPOSAL_A, voter1, 0, 100);
+        voting.castVote(PROPOSAL_A, 0);
     }
 
-    // ── recordResult tests ───────────────────────────────────────────────────
+    // ── Tally attestation ──────────────────────────────────────────────────────
 
-    function test_RecordApprovedResult() public {
+    function test_RecordResultAfterClose() public {
+        _open(PROPOSAL_A);
+        vm.prank(recorder);
+        voting.closeProposal(PROPOSAL_A);
+
         vm.prank(recorder);
         voting.recordResult(PROPOSAL_A, 1);
-
-        GovernanceVoting.ProposalResult memory r = voting.getResult(PROPOSAL_A);
-        assertEq(r.outcome, 1);
-        assertGt(r.timestamp, 0);
+        assertEq(voting.getResult(PROPOSAL_A).outcome, 1);
     }
 
-    function test_RecordRejectedResult() public {
+    function test_RevertResultWhenNotClosed() public {
+        _open(PROPOSAL_A);
         vm.prank(recorder);
-        voting.recordResult(PROPOSAL_A, 2);
-
-        GovernanceVoting.ProposalResult memory r = voting.getResult(PROPOSAL_A);
-        assertEq(r.outcome, 2);
+        vm.expectRevert("Voting not closed");
+        voting.recordResult(PROPOSAL_A, 1);
     }
 
-    function test_RevertOnDuplicateResult() public {
+    function test_RevertDuplicateResult() public {
+        _open(PROPOSAL_A);
+        vm.prank(recorder);
+        voting.closeProposal(PROPOSAL_A);
         vm.prank(recorder);
         voting.recordResult(PROPOSAL_A, 1);
-
         vm.prank(recorder);
         vm.expectRevert("Result already recorded");
         voting.recordResult(PROPOSAL_A, 2);
     }
 
-    function test_RevertOnInvalidOutcome() public {
+    function test_RevertInvalidOutcome() public {
+        _open(PROPOSAL_A);
+        vm.prank(recorder);
+        voting.closeProposal(PROPOSAL_A);
         vm.prank(recorder);
         vm.expectRevert("Invalid outcome");
         voting.recordResult(PROPOSAL_A, 0);
-
-        vm.prank(recorder);
-        vm.expectRevert("Invalid outcome");
-        voting.recordResult(PROPOSAL_A, 3);
     }
 
     function test_ResultUnauthorized() public {
@@ -155,14 +234,27 @@ contract GovernanceVotingTest is Test {
         voting.recordResult(PROPOSAL_A, 1);
     }
 
-    function test_EmitsProposalResultRecordedEvent() public {
-        vm.prank(recorder);
-        vm.expectEmit(true, false, false, true);
-        emit GovernanceVoting.ProposalResultRecorded(PROPOSAL_A, 1, block.timestamp);
-        voting.recordResult(PROPOSAL_A, 1);
+    // ── Opinions (user-authored) ───────────────────────────────────────────────
+
+    function test_RecordOpinionByAuthor() public {
+        bytes32 h = keccak256("annotation-1");
+        vm.prank(voter1);
+        vm.expectEmit(true, true, true, true);
+        emit GovernanceVoting.OpinionAnchored(PROPOSAL_A, h, voter1, block.timestamp);
+        voting.recordOpinion(PROPOSAL_A, h);
+        assertEq(voting.opinions(h), PROPOSAL_A);
     }
 
-    // ── recordMemory tests ───────────────────────────────────────────────────
+    function test_RevertDuplicateOpinion() public {
+        bytes32 h = keccak256("annotation-1");
+        vm.prank(voter1);
+        voting.recordOpinion(PROPOSAL_A, h);
+        vm.prank(voter2);
+        vm.expectRevert("Opinion already anchored");
+        voting.recordOpinion(PROPOSAL_A, h);
+    }
+
+    // ── Ward-memory (platform-recorded) ────────────────────────────────────────
 
     function test_RecordMemory() public {
         bytes32 memoryHash = keccak256("ward-memory-record-1");
@@ -170,37 +262,17 @@ contract GovernanceVotingTest is Test {
         vm.expectEmit(true, true, true, true);
         emit GovernanceVoting.MemoryAnchored(PROPOSAL_A, memoryHash, recorder, block.timestamp);
         voting.recordMemory(PROPOSAL_A, memoryHash);
-
         assertEq(voting.memories(PROPOSAL_A), memoryHash);
     }
 
     function test_RecordMemoryOverwrites() public {
         bytes32 firstHash  = keccak256("ward-memory-record-1");
         bytes32 secondHash = keccak256("ward-memory-record-corrected");
-
         vm.prank(recorder);
         voting.recordMemory(PROPOSAL_A, firstHash);
-        assertEq(voting.memories(PROPOSAL_A), firstHash);
-
-        // Re-recording (outcome corrected) overwrites the mapping and emits again.
         vm.prank(recorder);
-        vm.expectEmit(true, true, true, true);
-        emit GovernanceVoting.MemoryAnchored(PROPOSAL_A, secondHash, recorder, block.timestamp);
         voting.recordMemory(PROPOSAL_A, secondHash);
         assertEq(voting.memories(PROPOSAL_A), secondHash);
-    }
-
-    function test_RecordMemoryIsolatedByProposal() public {
-        bytes32 hashA = keccak256("memory-a");
-        bytes32 hashB = keccak256("memory-b");
-
-        vm.prank(recorder);
-        voting.recordMemory(PROPOSAL_A, hashA);
-        vm.prank(recorder);
-        voting.recordMemory(PROPOSAL_B, hashB);
-
-        assertEq(voting.memories(PROPOSAL_A), hashA);
-        assertEq(voting.memories(PROPOSAL_B), hashB);
     }
 
     function test_RecordMemoryUnauthorized() public {

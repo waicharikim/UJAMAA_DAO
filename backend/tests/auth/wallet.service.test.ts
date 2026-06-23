@@ -12,6 +12,10 @@ vi.mock('ethers', () => ({
   },
 }));
 
+vi.mock('../../src/core/blockchain/erc1271.js', () => ({
+  verifyErc1271Signature: vi.fn().mockResolvedValue(false),
+}));
+
 vi.mock('../../src/modules/community/services/groupMembership.service.js', () => ({
   groupMembershipService: { enrollInSystemGroups: vi.fn().mockResolvedValue(undefined) },
 }));
@@ -29,6 +33,7 @@ vi.mock('../../src/core/utils/email.service.js');
 // ── Now import the service (ethers mock is already in place) ─────────────────
 import { walletService } from '../../src/modules/auth/services/wallet.service.js';
 import { ethers } from 'ethers';
+import { verifyErc1271Signature } from '../../src/core/blockchain/erc1271.js';
 
 const VALID_ADDRESS = '0xaabbccddeeaabbccddeeaabbccddeeaabbccddee';
 const DUMMY_SIG = '0x' + 'a'.repeat(130);
@@ -39,6 +44,7 @@ describe('WalletService', () => {
     // Reset all mocks between tests
     vi.mocked(ethers.isAddress).mockReturnValue(true);
     vi.mocked(ethers.verifyMessage).mockReturnValue(VALID_ADDRESS);
+    vi.mocked(verifyErc1271Signature).mockResolvedValue(false);
   });
 
   // ── 1. generateNonce (valid address) ─────────────────────────────────────
@@ -148,6 +154,43 @@ describe('WalletService', () => {
 
     const updated = await prisma.user.findUnique({ where: { id: user.id } });
     expect(updated!.walletAddress).toBe(linkAddress.toLowerCase());
+  });
+
+  // ── 7b. linkWallet (smart account via ERC-1271) ───────────────────────────
+  it('links a smart-account (passkey) wallet via ERC-1271 when EOA recovery does not match', async () => {
+    const user = await createTestUser('wallet-aa-link@ujamaa.test');
+    const smartAccount = '0x1234123412341234123412341234123412341234';
+
+    vi.mocked(ethers.isAddress).mockReturnValue(true);
+    // EOA recovery yields a different address (it's not an EOA signature) ...
+    vi.mocked(ethers.verifyMessage).mockReturnValue(
+      '0x0000000000000000000000000000000000000000'
+    );
+    // ... but the deployed smart account validates it via ERC-1271.
+    vi.mocked(verifyErc1271Signature).mockResolvedValue(true);
+
+    await walletService.generateNonce(smartAccount);
+    const result = await walletService.linkWallet(user.id, smartAccount, DUMMY_SIG);
+
+    expect(result.walletAddress).toBe(smartAccount.toLowerCase());
+    expect(verifyErc1271Signature).toHaveBeenCalled();
+  });
+
+  // ── 7c. linkWallet (neither EOA nor ERC-1271 validates) ───────────────────
+  it('rejects a wallet link when neither EOA recovery nor ERC-1271 validates', async () => {
+    const user = await createTestUser('wallet-aa-reject@ujamaa.test');
+    const addr = '0x9999888877776666555544443333222211110000';
+
+    vi.mocked(ethers.isAddress).mockReturnValue(true);
+    vi.mocked(ethers.verifyMessage).mockReturnValue(
+      '0xdeaddeaddeaddeaddeaddeaddeaddeaddeaddead'
+    );
+    vi.mocked(verifyErc1271Signature).mockResolvedValue(false);
+
+    await walletService.generateNonce(addr);
+    await expect(
+      walletService.linkWallet(user.id, addr, DUMMY_SIG)
+    ).rejects.toMatchObject({ statusCode: 401 });
   });
 
   // ── 8. linkWallet (wallet already linked to another user) ────────────────

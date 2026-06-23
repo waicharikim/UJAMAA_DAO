@@ -34,7 +34,7 @@ contract Deploy is Script {
 
         PrToken prToken = new PrToken(minter);
         UtToken utToken = new UtToken(minter);
-        GovernanceVoting governance = new GovernanceVoting(minter);
+        GovernanceVoting governance = new GovernanceVoting(minter, address(prToken));
 
         vm.stopBroadcast();
 

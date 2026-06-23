@@ -28,17 +28,32 @@ function shortAddress(addr: string) {
 export function AccountMenu() {
   const router = useRouter()
   const { user, logout, refreshUser } = useAuth()
-  const { walletAddress, isConnected, isConnecting, connectWallet, disconnectWallet } = useWallet()
+  const { walletAddress, isConnected, isConnecting, connectWallet, linkAccount, disconnectWallet } =
+    useWallet()
   const [copied, setCopied] = useState(false)
+  const [linking, setLinking] = useState(false)
 
   const displayName = user?.username ?? user?.email ?? "Account"
   const initial = (displayName[0] ?? "U").toUpperCase()
 
+  // Backend-linked = the session has this wallet bound to it.
+  const isLinked = isConnected && !!user?.walletAddress
+
+  // Step 1 — connect only (its own click → its own popup).
   const handleConnect = async () => {
     await connectWallet()
-    // Give the auto-link effect a moment to persist the wallet, then refresh so
-    // walletAddress + verificationLevel propagate to the auth context.
-    setTimeout(() => refreshUser().catch(() => {}), 1500)
+  }
+
+  // Step 2 — sign + link (a separate click → a separate popup), then refresh so
+  // walletAddress + verificationLevel propagate to the auth context.
+  const handleFinish = async () => {
+    setLinking(true)
+    try {
+      await linkAccount()
+      setTimeout(() => refreshUser().catch(() => {}), 1200)
+    } finally {
+      setLinking(false)
+    }
   }
 
   const handleCopy = async () => {
@@ -101,15 +116,17 @@ export function AccountMenu() {
           </Link>
         </DropdownMenuItem>
 
-        {/* Wallet */}
-        {isConnected && walletAddress ? (
+        {/* Wallet — 3-state: connect (popup 1) → finish setup (popup 2) → linked */}
+        {isLinked ? (
           <>
             <DropdownMenuItem onClick={handleCopy} className="cursor-pointer">
               <span
                 className="h-2 w-2 rounded-full mr-2 flex-shrink-0"
                 style={{ background: "#38A063", boxShadow: "0 0 6px rgba(56,160,99,0.6)" }}
               />
-              <span className="flex-1 font-mono text-[12px]">{shortAddress(walletAddress)}</span>
+              <span className="flex-1 font-mono text-[12px]">
+                {walletAddress ? shortAddress(walletAddress) : "Wallet"}
+              </span>
               {copied ? <Check className="h-3.5 w-3.5 text-leaf" /> : <Copy className="h-3.5 w-3.5 opacity-60" />}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={disconnectWallet} className="cursor-pointer text-ember">
@@ -117,7 +134,25 @@ export function AccountMenu() {
               Disconnect wallet
             </DropdownMenuItem>
           </>
+        ) : isConnected ? (
+          // Connected but not yet linked — step 2 (its own click → sign popup)
+          <DropdownMenuItem
+            onSelect={(e) => {
+              e.preventDefault()
+              handleFinish()
+            }}
+            disabled={linking}
+            className="cursor-pointer"
+          >
+            {linking ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Wallet className="h-4 w-4 mr-2" />
+            )}
+            {linking ? "Finishing…" : "Finish wallet setup"}
+          </DropdownMenuItem>
         ) : (
+          // Not connected — step 1 (its own click → connect popup)
           <DropdownMenuItem
             onSelect={(e) => {
               e.preventDefault()

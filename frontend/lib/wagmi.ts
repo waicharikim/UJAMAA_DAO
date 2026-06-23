@@ -1,34 +1,26 @@
-// Mock wagmi configuration for demonstration
-export const config = {
-  chains: [
-    { id: 1, name: "Ethereum" },
-    { id: 11155111, name: "Sepolia" },
-  ],
+import { http, createConfig } from "wagmi"
+import { baseSepolia } from "wagmi/chains"
+import { coinbaseWallet } from "wagmi/connectors"
+
+// Coinbase Smart Wallet — passkey-secured self-custody smart account.
+// `preference: "smartWalletOnly"` forces the passkey smart-wallet flow (no
+// browser-extension / EOA path), which is the trustless, mobile-native account
+// we want: the signer is a device passkey, so the platform can never sign for
+// the user. Gasless sponsorship (Pimlico paymaster) is wired at the call site
+// via EIP-5792 capabilities in a later step.
+export const wagmiConfig = createConfig({
+  chains: [baseSepolia],
   connectors: [
-    { id: "injected", name: "MetaMask" },
-    { id: "walletConnect", name: "WalletConnect" },
+    coinbaseWallet({
+      appName: "UjamaaDAO",
+      preference: "smartWalletOnly",
+    }),
   ],
-}
-
-// Mock hooks for demonstration
-export const useAccount = () => ({
-  address: "0x1234567890123456789012345678901234567890",
-  isConnected: false,
-})
-
-export const useConnect = () => ({
-  connect: (connector: any) => console.log("Connecting to", connector.name),
-  connectors: config.connectors,
-  isPending: false,
-})
-
-export const useDisconnect = () => ({
-  disconnect: () => console.log("Disconnecting wallet"),
-})
-
-export const useSignMessage = () => ({
-  signMessageAsync: async ({ message }: { message: string }) => {
-    // Mock signature for demonstration
-    return "0xmocksignature1234567890abcdef"
+  transports: {
+    [baseSepolia.id]: http(
+      process.env.NEXT_PUBLIC_BASE_RPC_URL ?? "https://sepolia.base.org",
+    ),
   },
 })
+
+export const ACTIVE_CHAIN = baseSepolia

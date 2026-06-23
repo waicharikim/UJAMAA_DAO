@@ -70,6 +70,12 @@ services:
       - FRONTEND_URL=${FRONTEND_URL}
       - BASE_URL=${BASE_URL}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+      # Web verifies wallet signatures (ERC-1271/6492) via viem — needs the RPC
+      # to the chain where smart accounts live.
+      - BASE_RPC_URL=${BASE_RPC_URL:-https://sepolia.base.org}
+      - PR_TOKEN_ADDRESS=${PR_TOKEN_ADDRESS:-}
+      - UT_TOKEN_ADDRESS=${UT_TOKEN_ADDRESS:-}
+      - GOVERNANCE_VOTING_ADDRESS=${GOVERNANCE_VOTING_ADDRESS:-}
       - SMTP_HOST=${SMTP_HOST}
       - SMTP_PORT=${SMTP_PORT}
       - SMTP_USER=${SMTP_USER}

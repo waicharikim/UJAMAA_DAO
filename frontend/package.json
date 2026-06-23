@@ -11,6 +11,7 @@
     "test:bs": "browserstack-node-sdk playwright test"
   },
   "dependencies": {
+    "@coinbase/wallet-sdk": "^4.3.7",
     "@hookform/resolvers": "^3.10.0",
     "@privy-io/react-auth": "^3.14.1",
     "@radix-ui/colors": "^3.0.0",
@@ -45,6 +46,8 @@
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^1.1.2",
+    "viem": "^2.53.1",
+    "wagmi": "^3.6.18",
     "zod": "^3.25.28"
   },
   "devDependencies": {
