@@ -226,15 +226,18 @@ See [INFRASTRUCTURE.md](./INFRASTRUCTURE.md) for local development setup.
 
 ### Production
 
+Images are built by GitHub Actions and pushed to GHCR; the droplet **pulls**
+them rather than compiling (see [docs/server-runbook.md](../docs/server-runbook.md)).
+
 ```bash
-# Build production images
-make prod-build
+# Deploy (pull prebuilt images + restart) — the normal path
+make prod-deploy
 
-# Deploy
-make prod
-
-# Run migrations
+# Run migrations (web start script also runs these on boot)
 docker compose -f ../docker/docker-compose.prod.yml exec web npx prisma migrate deploy
+
+# Fallback only — build on the droplet (slow, RAM-heavy):
+make prod-build && make prod
 ```
 
 See [INFRASTRUCTURE.md](./INFRASTRUCTURE.md) for detailed production deployment guide.
@@ -338,8 +341,9 @@ make check-configs    # Check observability status
 make enable-monitoring # Enable Prometheus + Grafana
 
 # Production
-make prod             # Deploy production
-make prod-build       # Build images
+make prod-deploy      # Pull prebuilt images from GHCR + restart (normal deploy)
+make prod             # Start with existing images
+make prod-build       # Fallback: build images on the droplet
 ```
 
 See [Makefile](./Makefile) for all available commands.

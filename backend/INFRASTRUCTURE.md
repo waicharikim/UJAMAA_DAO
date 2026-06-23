@@ -191,10 +191,15 @@ Ensure `traefik/acme.json` has `chmod 600`.
 
 ### 3. Deploy
 
+Images are built in CI (GitHub Actions → GHCR) and pulled on the droplet — it
+no longer compiles locally. Authenticate once with `docker login ghcr.io -u waicharikim`.
+
 ```bash
-make prod-build
-make prod
+make prod-deploy   # pull prebuilt images from GHCR + restart (normal path)
 docker compose -f ../docker/docker-compose.prod.yml exec web npx prisma migrate deploy
+
+# Fallback only — build on the droplet (slow, 3 GB heap, may OOM on 2 GB box):
+make prod-build && make prod
 ```
 
 ### Production checklist

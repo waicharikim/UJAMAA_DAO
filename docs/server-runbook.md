@@ -14,8 +14,36 @@
 echo "source ~/UJAMAA_DAO/docker/server-aliases.sh" >> ~/.bashrc
 source ~/.bashrc
 
-# 2. Confirm aliases loaded
+# 2. Authenticate to GHCR so the droplet can pull prebuilt images
+#    (PAT needs read:packages; or make the packages public to skip this)
+docker login ghcr.io -u waicharikim
+
+# 3. Confirm aliases loaded
 uj-ps
+```
+
+---
+
+## How deploys work (CI build → droplet pull)
+
+Production images are **built by GitHub Actions, not on the droplet.** The 2 GB
+droplet OOMs/swap-thrashes when compiling (the backend build alone asks for 3 GB
+of heap), so it just pulls finished images instead.
+
+- On every push to `develop` touching `frontend/**` or `backend/**`, the
+  workflows in `.github/workflows/build-frontend.yml` and `build-backend.yml`
+  build and push to GHCR:
+  - `ghcr.io/waicharikim/ujamaa-frontend`
+  - `ghcr.io/waicharikim/ujamaa-web`
+  - `ghcr.io/waicharikim/ujamaa-worker`
+- Each build is tagged `latest` **and** `sha-<shortsha>` (pin/rollback).
+- The compose file references `${*_IMAGE:-ghcr...:latest}`, so `uj-deploy`
+  pulls these. The local `build:` blocks remain only as a fallback (`uj-build*`).
+
+**Roll back to a specific build** by exporting the pinned tag before deploying:
+
+```bash
+WEB_IMAGE=ghcr.io/waicharikim/ujamaa-web:sha-1a2b3c4 uj-up
 ```
 
 ---
@@ -26,8 +54,21 @@ uj-ps
 
 ```bash
 uj-deploy
-# Equivalent to: git pull origin develop → make prod-build → make prod
+# Equivalent to: git pull origin develop → make prod-deploy
+#   (= docker compose pull → up -d). Pulls images CI already built; the droplet
+#   compiles nothing. Wait for the GitHub Actions build to go green first.
+
+# Single service:
+uj-deploy-web        # pull + restart web only
+uj-deploy-worker     # pull + restart worker only
+uj-deploy-frontend   # pull + restart frontend only
+
+# Pull images without restarting:
+uj-pull
 ```
+
+> **Fallback — build on the droplet** (slow, RAM-heavy; only if CI is down):
+> `uj-build` / `uj-build-web` / `uj-build-worker` / `uj-build-frontend`.
 
 ### Check everything is running
 
@@ -236,14 +277,15 @@ uj-restart
 | `uj-up` | Start all prod containers |
 | `uj-down` | Stop all prod containers |
 | `uj-restart` | Stop then start (no rebuild) |
-| `uj-build` | Rebuild all images (no cache) |
-| `uj-build-web` | Rebuild web (API) image only + restart |
-| `uj-build-worker` | Rebuild worker image only + restart |
-| `uj-build-frontend` | Rebuild frontend image only + restart |
-| `uj-deploy` | git pull + rebuild all + start |
-| `uj-deploy-web` | git pull + rebuild web only |
-| `uj-deploy-worker` | git pull + rebuild worker only |
-| `uj-deploy-frontend` | git pull + rebuild frontend only |
+| `uj-deploy` | git pull + **pull images from GHCR** + start (normal deploy) |
+| `uj-deploy-web` | git pull + pull + restart web only |
+| `uj-deploy-worker` | git pull + pull + restart worker only |
+| `uj-deploy-frontend` | git pull + pull + restart frontend only |
+| `uj-pull` | Pull latest images from GHCR (no restart) |
+| `uj-build` | **Fallback:** build all images on the droplet (no cache, slow) |
+| `uj-build-web` | Fallback: build web image on the droplet + restart |
+| `uj-build-worker` | Fallback: build worker image on the droplet + restart |
+| `uj-build-frontend` | Fallback: build frontend image on the droplet + restart |
 | `uj-seed` | Force-seed database (first deploy) |
 | `uj-logs` | Tail all logs |
 | `uj-logs-web` | Tail API logs only |
