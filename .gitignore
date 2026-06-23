@@ -2,6 +2,11 @@ node_modules/
 dist/
 .env
 **/.env
+# All env variants (.env.prod, .env.local, etc.) — only *.example may be committed
+.env.*
+**/.env.*
+!*.example
+!**/*.example
 npm-debug.log*
 .vscode/
 *.tsbuildinfo
