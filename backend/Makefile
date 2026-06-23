@@ -1,4 +1,4 @@
-.PHONY: help dev prod prod-seed prod-rebuild-web prod-rebuild-worker prod-rebuild-frontend up down restart logs clean backup setup-configs enable-observability check-configs
+.PHONY: help dev prod prod-pull prod-deploy prod-deploy-web prod-deploy-worker prod-deploy-frontend prod-seed prod-rebuild-web prod-rebuild-worker prod-rebuild-frontend up down restart logs clean backup setup-configs enable-observability check-configs
 
 # Compose file location (relative to backend/)
 COMPOSE_FILE := ../docker/docker-compose.yml
@@ -49,6 +49,14 @@ help:
 	@echo "  make prod                  - Start production environment"
 	@echo "  make prod-seed             - Force-seed database (one-time use)"
 	@echo "  make prod-make-admin EMAIL=x - Grant super_admin role to a user"
+	@echo ""
+	@echo "  Deploy (pull prebuilt images from GHCR — preferred):"
+	@echo "  make prod-deploy           - Pull + restart all services"
+	@echo "  make prod-deploy-web       - Pull + restart web only"
+	@echo "  make prod-deploy-worker    - Pull + restart worker only"
+	@echo "  make prod-deploy-frontend  - Pull + restart frontend only"
+	@echo ""
+	@echo "  Local build (fallback — compiles on this box):"
 	@echo "  make prod-build            - Rebuild all production images"
 	@echo "  make prod-rebuild-web      - Rebuild + restart web (API) only"
 	@echo "  make prod-rebuild-worker   - Rebuild + restart worker only"
@@ -118,6 +126,35 @@ prod-rebuild-worker:
 prod-rebuild-frontend:
 	@echo "Rebuilding and restarting frontend service... (CACHE=1 for a cached build)"
 	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) build $(BUILD_FLAGS) frontend
+	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) up -d frontend
+
+# ── Pull-based deploys ────────────────────────────────────────────────────────
+# Images are built by GitHub Actions and pushed to GHCR, so the droplet pulls
+# instead of compiling (the backend build alone wants 3 GB heap and OOMs here).
+# Use these for normal deploys; the prod-rebuild-* targets above stay as a
+# local-build fallback.
+prod-pull:
+	@echo "Pulling prebuilt images from GHCR..."
+	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) pull
+
+prod-deploy:
+	@echo "Deploying (pull + restart all)..."
+	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) pull
+	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) up -d
+
+prod-deploy-web:
+	@echo "Deploying web (pull + restart)..."
+	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) pull web
+	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) up -d web
+
+prod-deploy-worker:
+	@echo "Deploying worker (pull + restart)..."
+	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) pull worker
+	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) up -d worker
+
+prod-deploy-frontend:
+	@echo "Deploying frontend (pull + restart)..."
+	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) pull frontend
 	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) up -d frontend
 
 # Common operations

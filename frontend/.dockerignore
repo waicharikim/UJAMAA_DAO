@@ -1,0 +1,27 @@
+# Keep the Docker build context tiny. Without this, the entire host
+# node_modules (~2.3 GB) + .next get packed and shipped to the daemon on every
+# build, and the builder's `COPY . .` overwrites the clean `npm ci` install,
+# busting the layer cache every time.
+node_modules
+.next
+out
+
+# VCS / tooling
+.git
+.gitignore
+
+# Local env + secrets (NEXT_PUBLIC_* are passed as build ARGs, not copied)
+.env
+.env.*
+
+# Test / CI artifacts
+playwright-report
+test-results
+coverage
+
+# Logs / OS cruft
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+*.log

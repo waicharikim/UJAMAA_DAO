@@ -9,14 +9,20 @@ UJAMAA_DIR="$HOME/UJAMAA_DAO/backend"
 alias uj-up="cd $UJAMAA_DIR && make prod"
 alias uj-down="cd $UJAMAA_DIR && make prod-down"
 alias uj-restart="cd $UJAMAA_DIR && make prod-down && make prod"
+
+# ── Deploy (pull prebuilt images from GHCR — preferred path) ──────────────────
+# Images are built by GitHub Actions; the droplet pulls instead of compiling.
+alias uj-pull="cd $UJAMAA_DIR && make prod-pull"
+alias uj-deploy="cd $HOME/UJAMAA_DAO && git pull origin develop && cd backend && make prod-deploy"
+alias uj-deploy-web="cd $HOME/UJAMAA_DAO && git pull origin develop && cd backend && make prod-deploy-web"
+alias uj-deploy-worker="cd $HOME/UJAMAA_DAO && git pull origin develop && cd backend && make prod-deploy-worker"
+alias uj-deploy-frontend="cd $HOME/UJAMAA_DAO && git pull origin develop && cd backend && make prod-deploy-frontend"
+
+# ── Local build (fallback — compiles on the droplet; slow, RAM-heavy) ─────────
 alias uj-build="cd $UJAMAA_DIR && make prod-build"
 alias uj-build-web="cd $UJAMAA_DIR && make prod-rebuild-web"
 alias uj-build-worker="cd $UJAMAA_DIR && make prod-rebuild-worker"
 alias uj-build-frontend="cd $UJAMAA_DIR && make prod-rebuild-frontend"
-alias uj-deploy="cd $HOME/UJAMAA_DAO && git pull origin develop && cd backend && make prod-build && make prod"
-alias uj-deploy-web="cd $HOME/UJAMAA_DAO && git pull origin develop && cd backend && make prod-rebuild-web"
-alias uj-deploy-worker="cd $HOME/UJAMAA_DAO && git pull origin develop && cd backend && make prod-rebuild-worker"
-alias uj-deploy-frontend="cd $HOME/UJAMAA_DAO && git pull origin develop && cd backend && make prod-rebuild-frontend"
 alias uj-seed="cd $UJAMAA_DIR && make prod-seed"
 # Direct exec shortcut (if make is unavailable)
 alias uj-seed-direct="docker exec -e FORCE_SEED=true ujamaa_web node dist/core/database/seed.js"

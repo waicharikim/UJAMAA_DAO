@@ -1,8 +1,13 @@
+# syntax=docker/dockerfile:1.7
 # ─────────────────────────────────────────────────────────────────────────────
 # UjamaaDAO Frontend — Dockerfile
 #
 # dev  stage: hot-reload via mounted volume (used in docker-compose)
 # prod stage: standalone Next.js output for deployment (future)
+#
+# The `--mount=type=cache,target=/root/.npm` on each `npm ci` persists npm's
+# download cache across builds, so packages aren't re-fetched from the registry
+# every time the lockfile changes — big win on the small prod droplet.
 # ─────────────────────────────────────────────────────────────────────────────
 
 FROM node:20-alpine AS base
@@ -14,7 +19,7 @@ COPY package.json package-lock.json .npmrc ./
 # DEV — dependencies installed, source mounted at runtime by docker-compose
 # ─────────────────────────────────────────────────────────────────────────────
 FROM base AS dev
-RUN npm ci --legacy-peer-deps
+RUN --mount=type=cache,target=/root/.npm npm ci --legacy-peer-deps
 # Source code is mounted by docker-compose volume — not copied here
 EXPOSE 3000
 ENV NODE_ENV=development
@@ -25,7 +30,7 @@ CMD ["npm", "run", "dev"]
 # PROD — full build, standalone output
 # ─────────────────────────────────────────────────────────────────────────────
 FROM base AS prod-deps
-RUN npm ci --omit=dev
+RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev
 
 FROM base AS builder
 # NEXT_PUBLIC_* vars are inlined at build time — must be ARG/ENV before npm run build
@@ -37,7 +42,7 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_PRIVY_APP_ID=$NEXT_PUBLIC_PRIVY_APP_ID
 ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN
 ENV SENTRY_AUTH_TOKEN=$SENTRY_AUTH_TOKEN
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm npm ci
 COPY . .
 RUN npm run build
 
