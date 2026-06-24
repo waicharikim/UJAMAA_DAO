@@ -47,6 +47,8 @@ alias uj-redis="docker exec -it ujamaa_redis redis-cli"
 alias uj-prune="docker system prune -af && docker volume prune -f"
 alias uj-disk="df -h / && docker system df"
 alias uj-migrate="docker exec ujamaa_web npx prisma migrate deploy"
+alias uj-backup="cd $UJAMAA_DIR && make prod-backup"
+alias uj-backup-cron="cd $UJAMAA_DIR && make prod-backup-cron"
 alias uj-make-admin='f() { cd ~/UJAMAA_DAO/backend && make prod-make-admin EMAIL="$1"; }; f'
 
 echo "✅  UjamaaDAO aliases loaded. Type 'uj-<tab>' to see all commands."

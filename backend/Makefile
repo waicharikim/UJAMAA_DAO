@@ -1,4 +1,4 @@
-.PHONY: help dev prod prod-pull prod-deploy prod-deploy-web prod-deploy-worker prod-deploy-frontend prod-seed prod-rebuild-web prod-rebuild-worker prod-rebuild-frontend up down restart logs clean backup setup-configs enable-observability check-configs
+.PHONY: help dev prod prod-pull prod-deploy prod-deploy-web prod-deploy-worker prod-deploy-frontend prod-seed prod-rebuild-web prod-rebuild-worker prod-rebuild-frontend prod-backup prod-backup-cron up down restart logs clean backup setup-configs enable-observability check-configs
 
 # Compose file location (relative to backend/)
 COMPOSE_FILE := ../docker/docker-compose.yml
@@ -55,6 +55,8 @@ help:
 	@echo "  make prod-deploy-web       - Pull + restart web only"
 	@echo "  make prod-deploy-worker    - Pull + restart worker only"
 	@echo "  make prod-deploy-frontend  - Pull + restart frontend only"
+	@echo "  make prod-backup           - Backup the prod DB (gzip + off-box if configured)"
+	@echo "  make prod-backup-cron      - Install the daily 02:00 backup cron"
 	@echo ""
 	@echo "  Local build (fallback — compiles on this box):"
 	@echo "  make prod-build            - Rebuild all production images"
@@ -156,6 +158,19 @@ prod-deploy-frontend:
 	@echo "Deploying frontend (pull + restart)..."
 	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) pull frontend
 	@docker compose -f $(COMPOSE_PROD) --env-file $(ENV_FILE) up -d frontend
+
+# Production database backup (timestamped, gzip, retention + optional off-box).
+prod-backup:
+	@ENV_FILE=$(ENV_FILE) bash ../docker/backup-db.sh
+
+# Install the daily 02:00 backup cron (idempotent — re-running just updates it).
+prod-backup-cron:
+	@SCRIPT="$$(cd ../docker && pwd)/backup-db.sh"; \
+	LOGDIR="$${BACKUP_DIR:-$$HOME/ujamaa-backups}"; \
+	mkdir -p "$$LOGDIR"; \
+	LINE="0 2 * * * $$SCRIPT >> $$LOGDIR/backup.log 2>&1"; \
+	( crontab -l 2>/dev/null | grep -v 'backup-db.sh'; echo "$$LINE" ) | crontab -; \
+	echo "Installed daily 02:00 backup cron:"; crontab -l | grep 'backup-db.sh'
 
 # Common operations
 up:
