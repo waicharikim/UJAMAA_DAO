@@ -117,8 +117,10 @@ class ProposalVotingService {
       { option: dto.option, weight }
     );
 
-    await this.anchorVoteOnChain(userId, dto.proposalId, dto.option, weight);
-
+    // Votes are now cast on-chain by the USER's own smart account (frontend →
+    // GovernanceVoting.castVote, gasless) — the platform no longer anchors votes
+    // (it cannot forge them). The off-chain DB record above is for tally/quorum
+    // UX; the trustless record is the user's on-chain VoteCast event.
     return { weight };
   }
 
@@ -273,39 +275,6 @@ class ProposalVotingService {
       );
   }
 
-  private async anchorVoteOnChain(
-    userId: string,
-    proposalId: string,
-    option: VoteOption,
-    weight: number
-  ): Promise<void> {
-    if (process.env.NODE_ENV === 'test') return;
-    const voter = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { walletAddress: true },
-    });
-    if (!voter?.walletAddress) return;
-    const govContract = getGovernanceContract();
-    if (!govContract) return;
-    try {
-      const proposalBytes32 = ethers.keccak256(ethers.toUtf8Bytes(proposalId));
-      const onChainOption =
-        option === VoteOption.YES ? 0 : option === VoteOption.NO ? 1 : 2;
-      await govContract.recordVote(
-        proposalBytes32,
-        voter.walletAddress,
-        onChainOption,
-        BigInt(weight)
-      );
-      logger.info({ userId, proposalId }, '[GOV] On-chain vote recorded');
-    } catch (err) {
-      logger.warn(
-        { userId, err },
-        '[GOV] On-chain vote failed — off-chain record intact'
-      );
-    }
-  }
-
   private async executeTallyPost(
     proposal: { creatorId: string | null; title: string },
     proposalId: string,
@@ -377,6 +346,22 @@ class ProposalVotingService {
     if (!govContract) return;
     try {
       const proposalBytes32 = ethers.keccak256(ethers.toUtf8Bytes(proposalId));
+
+      // The contract requires the voting window CLOSED before a result can be
+      // attested. status: 0 = never opened, 1 = open, 2 = closed.
+      const status: bigint = await govContract.proposalStatus(proposalBytes32);
+      if (status === 0n) {
+        logger.info(
+          { proposalId },
+          '[GOV] Proposal never opened on-chain — skipping result attestation'
+        );
+        return;
+      }
+      if (status === 1n) {
+        await govContract.closeProposal(proposalBytes32);
+        logger.info({ proposalId }, '[GOV] On-chain voting window closed');
+      }
+
       const onChainOutcome = newStatus === ProposalStatus.APPROVED ? 1 : 2;
       await govContract.recordResult(proposalBytes32, onChainOutcome);
       logger.info({ proposalId, newStatus }, '[GOV] On-chain result recorded');

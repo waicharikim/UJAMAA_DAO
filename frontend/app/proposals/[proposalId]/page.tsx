@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/auth-context"
+import { useWallet } from "@/contexts/wallet-context"
 import { governanceApi, communityApi, onboardingApi, type ProposalAnnotationDto } from "@/lib/api"
 import { AnnotatableText } from "@/components/governance/annotatable-text"
 import { AnnotationSidebar } from "@/components/governance/annotation-sidebar"
@@ -96,6 +97,7 @@ function pendingAdminLabel(group: { wardId?: string | null; constituencyId?: str
 export default function ProposalDetailPage({ params }: { params: Promise<{ proposalId: string }> }) {
   const { proposalId } = use(params)
   const { isAuthenticated, user } = useAuth()
+  const { castVoteOnChain, canVoteOnChain } = useWallet()
   useSectionTour(proposalDetailTour.key, proposalDetailTour.steps)
   const { toast } = useToast()
   const queryClient = useQueryClient()
@@ -184,11 +186,26 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
   }
 
   const { mutate: castVote, isPending: voting } = useMutation({
-    mutationFn: (option: "YES" | "NO" | "ABSTAIN") =>
-      governanceApi.castVote({ proposalId, option }),
-    onSuccess: () => {
+    mutationFn: async (option: "YES" | "NO" | "ABSTAIN") => {
+      // When the user has a wallet connected, cast the unforgeable on-chain vote
+      // FIRST (passkey-signed, gasless). Doing it first means a declined passkey
+      // aborts before we write the off-chain tally record — no phantom DB vote.
+      // Without a wallet we fall back to the off-chain record (the platform still
+      // cannot forge an on-chain vote; the user just doesn't mint their own yet).
+      if (canVoteOnChain) {
+        await castVoteOnChain(proposalId, option)
+      }
+      await governanceApi.castVote({ proposalId, option })
+      return { onChain: canVoteOnChain }
+    },
+    onSuccess: (res) => {
       invalidate()
-      toast({ title: "Vote recorded" })
+      toast({
+        title: res?.onChain ? "Vote recorded on-chain" : "Vote recorded",
+        description: res?.onChain
+          ? "Your vote was signed by your wallet and is publicly verifiable."
+          : undefined,
+      })
       // Auto-complete governance_basics tutorial on first vote — fire-and-forget
       onboardingApi.completeTutorial("governance_basics").catch(() => {})
       queryClient.invalidateQueries({ queryKey: ["onboarding-progress"] })
@@ -764,7 +781,12 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4 md:p-6 space-y-3">
             <h2 className="text-sm font-bold text-[#0A1F14]">Cast your vote</h2>
-            <p className="text-xs text-warm-gray">Your vote is weighted by your Participation Rights balance.</p>
+            <p className="text-xs text-warm-gray">
+              Your vote is weighted by your Participation Rights balance.
+              {canVoteOnChain
+                ? " It will be signed by your wallet and recorded on-chain — publicly verifiable and impossible for anyone to forge."
+                : " Connect your wallet to also record an unforgeable, publicly verifiable vote on-chain."}
+            </p>
             <div className="grid grid-cols-3 gap-3">
               <button
                 onClick={() => castVote("YES")}

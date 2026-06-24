@@ -59,7 +59,10 @@ export async function verifyErc1271Signature(
       signature: signature as Hex,
     });
   } catch (err) {
-    logger.warn({ err, address }, '[signature] smart-account verification failed');
+    logger.warn(
+      { err, address },
+      '[signature] smart-account verification failed'
+    );
     return false;
   }
 }

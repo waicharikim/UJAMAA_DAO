@@ -25,7 +25,10 @@ import { treasuryService } from '../../treasury/services/treasury.service.js';
 import { getGovernanceContract } from '../../../core/blockchain/client.js';
 import { ethers } from 'ethers';
 import { governanceQueue } from '../../../core/queue/index.js';
-import { GENERATE_DELIBERATION_SUMMARY_JOB } from '../jobs/proposal.jobs.js';
+import {
+  GENERATE_DELIBERATION_SUMMARY_JOB,
+  OPEN_PROPOSAL_ONCHAIN_JOB,
+} from '../jobs/proposal.jobs.js';
 
 /**
  * Anchor a proposal's ward-memory record hash on-chain.
@@ -661,6 +664,14 @@ class ProposalLifecycleService {
       GENERATE_DELIBERATION_SUMMARY_JOB,
       { proposalId },
       { jobId: `delib-${proposalId}` }
+    );
+
+    // Open the on-chain voting window so users can cast self-signed votes.
+    // Runs on the worker (which holds the blockchain env); no-op if unconfigured.
+    await governanceQueue.add(
+      OPEN_PROPOSAL_ONCHAIN_JOB,
+      { proposalId },
+      { jobId: `open-${proposalId}` }
     );
 
     await this.notifyGroupVotingStarted(proposalId, proposal, days);

@@ -27,10 +27,21 @@ import {
   useConnect,
   useDisconnect,
   useSignMessage,
+  useSendCalls,
 } from "wagmi"
+import { encodeFunctionData } from "viem"
 import { wagmiConfig } from "@/lib/wagmi"
 import { authApi, tokenStore } from "@/lib/api"
 import { useAuth } from "@/contexts/auth-context"
+import { paymasterCapabilities } from "@/lib/paymaster"
+import {
+  GOVERNANCE_VOTING_ABI,
+  GOVERNANCE_VOTING_ADDRESS,
+  proposalIdToBytes32,
+  voteOptionToUint8,
+  isGovernanceConfigured,
+  type VoteOptionLabel,
+} from "@/lib/governance-contract"
 
 // ── Shared interface (unchanged — consumers rely on this shape) ───────────────
 
@@ -47,6 +58,15 @@ export interface WalletContextType {
   linkAccount: () => Promise<void>
   /** Disconnect the smart account (UjamaaDAO session stays) */
   disconnectWallet: () => Promise<void>
+  /**
+   * Cast an unforgeable on-chain vote from the user's own smart account
+   * (GovernanceVoting.castVote, gasless via Pimlico). Triggers a passkey prompt,
+   * so MUST be called from a click. Throws if the wallet isn't connected or
+   * on-chain governance isn't configured.
+   */
+  castVoteOnChain: (proposalId: string, option: VoteOptionLabel) => Promise<void>
+  /** True when an on-chain vote can be cast (wallet connected + contract configured). */
+  canVoteOnChain: boolean
 }
 
 const WalletContext = createContext<WalletContextType>({
@@ -56,6 +76,8 @@ const WalletContext = createContext<WalletContextType>({
   connectWallet: async () => {},
   linkAccount: async () => {},
   disconnectWallet: async () => {},
+  castVoteOnChain: async () => {},
+  canVoteOnChain: false,
 })
 
 // ── Inner adapter (inside WagmiProvider) ──────────────────────────────────────
@@ -65,6 +87,7 @@ function WalletAdapter({ children }: { children: ReactNode }) {
   const { connectAsync, connectors } = useConnect()
   const { disconnectAsync } = useDisconnect()
   const { signMessageAsync } = useSignMessage()
+  const { sendCallsAsync } = useSendCalls()
   const { login } = useAuth()
 
   // Step 1 — connect only (popup 1). Two-click flow: this is its own gesture, so
@@ -105,6 +128,30 @@ function WalletAdapter({ children }: { children: ReactNode }) {
     await disconnectAsync()
   }, [disconnectAsync])
 
+  // Cast the vote on-chain from the user's own smart account, gasless. The
+  // passkey prompt is the deliberate friction — it authorizes YOUR governance
+  // act and proves the platform did not forge it.
+  const castVoteOnChain = useCallback(
+    async (proposalId: string, option: VoteOptionLabel) => {
+      if (!isConnected || !address) {
+        throw new Error("Connect your wallet to cast a verifiable on-chain vote")
+      }
+      if (!isGovernanceConfigured()) {
+        throw new Error("On-chain governance is not configured")
+      }
+      const data = encodeFunctionData({
+        abi: GOVERNANCE_VOTING_ABI,
+        functionName: "castVote",
+        args: [proposalIdToBytes32(proposalId), voteOptionToUint8(option)],
+      })
+      await sendCallsAsync({
+        calls: [{ to: GOVERNANCE_VOTING_ADDRESS, data }],
+        capabilities: paymasterCapabilities(),
+      })
+    },
+    [isConnected, address, sendCallsAsync]
+  )
+
   return (
     <WalletContext.Provider
       value={{
@@ -114,6 +161,8 @@ function WalletAdapter({ children }: { children: ReactNode }) {
         connectWallet,
         linkAccount,
         disconnectWallet,
+        castVoteOnChain,
+        canVoteOnChain: isConnected && !!address && isGovernanceConfigured(),
       }}
     >
       {children}

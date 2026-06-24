@@ -16,11 +16,57 @@ import { notificationService } from '../../notifications/services/notification.s
 import { NotificationType } from '../../notifications/types.js';
 import { auditService } from '../../audit/services/audit.service.js';
 import { AuditAction } from '../../audit/types.js';
+import { getGovernanceContract } from '../../../core/blockchain/client.js';
+import { ethers } from 'ethers';
 
 export const TALLY_PROPOSALS_JOB = 'tally-proposals';
 export const EXPIRE_PROPOSAL_REVIEW_JOB = 'expire-proposal-review';
 export const GENERATE_DELIBERATION_SUMMARY_JOB =
   'generate-deliberation-summary';
+export const OPEN_PROPOSAL_ONCHAIN_JOB = 'open-proposal-onchain';
+
+/**
+ * On-demand job enqueued when voting opens. Opens the on-chain voting window so
+ * users can cast unforgeable, self-signed votes (GovernanceVoting.castVote with
+ * msg.sender = voter). Best-effort: the off-chain DB record is the source of
+ * truth for tally/quorum UX; the chain is the trustless mirror. No-op on the web
+ * service / when blockchain env is unset (getGovernanceContract() === null).
+ *
+ * Idempotent: skips if the proposal is already open/closed on-chain, so retries
+ * and at-least-once delivery are safe.
+ */
+export async function processOpenProposalOnChain(
+  proposalId: string
+): Promise<void> {
+  const gov = getGovernanceContract();
+  if (!gov) return;
+
+  try {
+    const id = ethers.keccak256(ethers.toUtf8Bytes(proposalId));
+    const status: bigint = await gov.proposalStatus(id);
+    if (status !== 0n) {
+      logger.info(
+        {
+          job: OPEN_PROPOSAL_ONCHAIN_JOB,
+          proposalId,
+          status: status.toString(),
+        },
+        '[GOV] Proposal already opened/closed on-chain — skipping'
+      );
+      return;
+    }
+    await gov.openProposal(id);
+    logger.info(
+      { job: OPEN_PROPOSAL_ONCHAIN_JOB, proposalId },
+      '[GOV] On-chain voting window opened'
+    );
+  } catch (err) {
+    logger.warn(
+      { proposalId, err },
+      '[GOV] On-chain openProposal failed — DB voting record intact'
+    );
+  }
+}
 
 /**
  * On-demand job enqueued when voting opens. Distils community annotations into
