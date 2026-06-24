@@ -35,13 +35,21 @@ RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev
 FROM base AS builder
 # NEXT_PUBLIC_* vars are inlined at build time — must be ARG/ENV before npm run build
 ARG NEXT_PUBLIC_API_URL
-ARG NEXT_PUBLIC_PRIVY_APP_ID
 ARG NEXT_PUBLIC_SENTRY_DSN
 ARG SENTRY_AUTH_TOKEN
+# On-chain governance (Coinbase Smart Wallet + user-signed votes). NEXT_PUBLIC_CHAIN
+# selects the chain (base = mainnet, else Base Sepolia); the others point the client
+# at the GovernanceVoting contract + RPC. The gasless paymaster URL is derived from
+# NEXT_PUBLIC_API_URL at runtime (backend proxy), so no Pimlico key is inlined here.
+ARG NEXT_PUBLIC_CHAIN
+ARG NEXT_PUBLIC_GOVERNANCE_VOTING_ADDRESS
+ARG NEXT_PUBLIC_BASE_RPC_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-ENV NEXT_PUBLIC_PRIVY_APP_ID=$NEXT_PUBLIC_PRIVY_APP_ID
 ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN
 ENV SENTRY_AUTH_TOKEN=$SENTRY_AUTH_TOKEN
+ENV NEXT_PUBLIC_CHAIN=$NEXT_PUBLIC_CHAIN
+ENV NEXT_PUBLIC_GOVERNANCE_VOTING_ADDRESS=$NEXT_PUBLIC_GOVERNANCE_VOTING_ADDRESS
+ENV NEXT_PUBLIC_BASE_RPC_URL=$NEXT_PUBLIC_BASE_RPC_URL
 RUN --mount=type=cache,target=/root/.npm npm ci
 COPY . .
 RUN npm run build

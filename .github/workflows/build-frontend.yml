@@ -68,6 +68,8 @@ jobs:
           # values → repo Secrets. See the workflow README note below for setup.
           build-args: |
             NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
-            NEXT_PUBLIC_PRIVY_APP_ID=${{ vars.NEXT_PUBLIC_PRIVY_APP_ID }}
+            NEXT_PUBLIC_CHAIN=${{ vars.NEXT_PUBLIC_CHAIN }}
+            NEXT_PUBLIC_GOVERNANCE_VOTING_ADDRESS=${{ vars.NEXT_PUBLIC_GOVERNANCE_VOTING_ADDRESS }}
+            NEXT_PUBLIC_BASE_RPC_URL=${{ vars.NEXT_PUBLIC_BASE_RPC_URL }}
             NEXT_PUBLIC_SENTRY_DSN=${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}
             SENTRY_AUTH_TOKEN=${{ secrets.SENTRY_AUTH_TOKEN }}
