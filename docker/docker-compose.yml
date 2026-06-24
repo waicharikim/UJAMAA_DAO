@@ -85,6 +85,10 @@ services:
       - PR_TOKEN_ADDRESS=${PR_TOKEN_ADDRESS:-}
       - UT_TOKEN_ADDRESS=${UT_TOKEN_ADDRESS:-}
       - GOVERNANCE_VOTING_ADDRESS=${GOVERNANCE_VOTING_ADDRESS:-}
+      # Paymaster proxy (gasless votes) runs on WEB (HTTP endpoint) — exception to
+      # the worker-only secrets rule. Forwards to Pimlico with this server-held key.
+      - PIMLICO_API_KEY=${PIMLICO_API_KEY:-}
+      - PIMLICO_SPONSORSHIP_POLICY_ID=${PIMLICO_SPONSORSHIP_POLICY_ID:-}
       - SMTP_HOST=mailhog
       - SMTP_PORT=1025
       - SMTP_USER=
