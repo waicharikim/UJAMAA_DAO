@@ -94,7 +94,9 @@ interface InnerCall {
 
 /** True only when sponsorship can be served (key + governance contract set). */
 export function isPaymasterConfigured(): boolean {
-  return Boolean(PIMLICO_API_KEY) && Boolean(process.env.GOVERNANCE_VOTING_ADDRESS);
+  return (
+    Boolean(PIMLICO_API_KEY) && Boolean(process.env.GOVERNANCE_VOTING_ADDRESS)
+  );
 }
 
 /**
@@ -104,9 +106,14 @@ export function isPaymasterConfigured(): boolean {
 function decodeInnerCalls(callData: Hex): InnerCall[] {
   let decoded;
   try {
-    decoded = decodeFunctionData({ abi: SMART_ACCOUNT_EXEC_ABI, data: callData });
+    decoded = decodeFunctionData({
+      abi: SMART_ACCOUNT_EXEC_ABI,
+      data: callData,
+    });
   } catch {
-    throw new PaymasterPolicyError('Unrecognised account call (not execute/executeBatch)');
+    throw new PaymasterPolicyError(
+      'Unrecognised account call (not execute/executeBatch)'
+    );
   }
 
   if (decoded.functionName === 'execute') {
@@ -114,7 +121,9 @@ function decodeInnerCalls(callData: Hex): InnerCall[] {
     return [{ target, data }];
   }
   // executeBatch
-  const [calls] = decoded.args as [readonly { target: string; value: bigint; data: Hex }[]];
+  const [calls] = decoded.args as [
+    readonly { target: string; value: bigint; data: Hex }[],
+  ];
   return calls.map((c) => ({ target: c.target, data: c.data }));
 }
 
@@ -148,7 +157,9 @@ export function assertSponsorableUserOp(userOp: unknown): void {
       throw new PaymasterPolicyError('Invalid call target');
     }
     if (target !== allowedTarget) {
-      throw new PaymasterPolicyError('Only governance-contract calls are sponsored');
+      throw new PaymasterPolicyError(
+        'Only governance-contract calls are sponsored'
+      );
     }
     const selector = call.data.slice(0, 10).toLowerCase();
     if (selector !== CAST_VOTE_SELECTOR.toLowerCase()) {
@@ -161,13 +172,17 @@ export function assertSponsorableUserOp(userOp: unknown): void {
 function pimlicoUrlForChain(chainIdRaw: unknown): string {
   let chainId: number | undefined;
   if (typeof chainIdRaw === 'string') {
-    chainId = chainIdRaw.startsWith('0x') ? parseInt(chainIdRaw, 16) : Number(chainIdRaw);
+    chainId = chainIdRaw.startsWith('0x')
+      ? parseInt(chainIdRaw, 16)
+      : Number(chainIdRaw);
   } else if (typeof chainIdRaw === 'number') {
     chainId = chainIdRaw;
   }
   const slug = chainId ? CHAIN_SLUG[chainId] : undefined;
   if (!slug) {
-    throw new PaymasterPolicyError(`Unsupported chainId: ${String(chainIdRaw)}`);
+    throw new PaymasterPolicyError(
+      `Unsupported chainId: ${String(chainIdRaw)}`
+    );
   }
   return `https://api.pimlico.io/v2/${slug}/rpc?apikey=${PIMLICO_API_KEY}`;
 }
@@ -190,12 +205,16 @@ function rpcError(id: JsonRpcRequest['id'], code: number, message: string) {
  * a JSON-RPC envelope (the wallet SDK expects that, not an HTTP error).
  */
 export async function handlePaymasterRpc(
-  body: JsonRpcRequest,
+  body: JsonRpcRequest
 ): Promise<Record<string, unknown>> {
   const id = body?.id ?? null;
 
   if (!PIMLICO_API_KEY) {
-    return rpcError(id, -32000, 'Sponsorship unavailable: paymaster not configured');
+    return rpcError(
+      id,
+      -32000,
+      'Sponsorship unavailable: paymaster not configured'
+    );
   }
   if (!body || body.jsonrpc !== '2.0' || typeof body.method !== 'string') {
     return rpcError(id, -32600, 'Invalid JSON-RPC request');
@@ -211,8 +230,13 @@ export async function handlePaymasterRpc(
     assertSponsorableUserOp(userOp);
   } catch (err) {
     const message =
-      err instanceof PaymasterPolicyError ? err.message : 'Sponsorship policy rejected';
-    logger.warn({ method: body.method, message }, '[Paymaster] rejected sponsorship request');
+      err instanceof PaymasterPolicyError
+        ? err.message
+        : 'Sponsorship policy rejected';
+    logger.warn(
+      { method: body.method, message },
+      '[Paymaster] rejected sponsorship request'
+    );
     return rpcError(id, -32002, message);
   }
 
@@ -226,7 +250,8 @@ export async function handlePaymasterRpc(
   try {
     url = pimlicoUrlForChain(params[2]);
   } catch (err) {
-    const message = err instanceof PaymasterPolicyError ? err.message : 'Unsupported chain';
+    const message =
+      err instanceof PaymasterPolicyError ? err.message : 'Unsupported chain';
     return rpcError(id, -32602, message);
   }
 

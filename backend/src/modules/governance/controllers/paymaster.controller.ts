@@ -10,7 +10,10 @@
 import type { Request, Response } from 'express';
 import { handlePaymasterRpc } from '../services/paymaster.service.js';
 
-export async function paymasterProxy(req: Request, res: Response): Promise<void> {
+export async function paymasterProxy(
+  req: Request,
+  res: Response
+): Promise<void> {
   const result = await handlePaymasterRpc(req.body);
   res.status(200).json(result);
 }
