@@ -8,9 +8,15 @@
 // transactions. See backend `modules/governance/services/paymaster.service.ts`.
 const API_BASE = process.env.NEXT_PUBLIC_API_URL // e.g. http://localhost:4000/api/v1
 
-export const PAYMASTER_PROXY_URL: string | undefined = API_BASE
-  ? `${API_BASE.replace(/\/$/, "")}/governance/paymaster`
-  : undefined
+// Coinbase Smart Wallet REQUIRES the paymasterService URL to be HTTPS. In prod
+// the derived URL is already https (api.ujamaadao.org). On local dev the API is
+// http://localhost, which Coinbase rejects — set NEXT_PUBLIC_PAYMASTER_URL to an
+// https proxy (e.g. the deployed one) to test gasless votes from dev.
+const PAYMASTER_OVERRIDE = process.env.NEXT_PUBLIC_PAYMASTER_URL
+
+export const PAYMASTER_PROXY_URL: string | undefined =
+  PAYMASTER_OVERRIDE ||
+  (API_BASE ? `${API_BASE.replace(/\/$/, "")}/governance/paymaster` : undefined)
 
 /** EIP-5792 capabilities object that routes sponsorship through our proxy. */
 export function paymasterCapabilities():
