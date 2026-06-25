@@ -96,7 +96,7 @@
 - Vouching system (same ward, verified users only)
 - Group discovery / explore endpoint with `isMember` + `myRole` per user
 - Group admin tools: updateSettings, changeMemberRole, removeMember (LEADER-only)
-- Baraza messaging integration (Telegram/WhatsApp/Discord attendance tracking + PR rewards)
+- Baraza messaging integration (Telegram/WhatsApp/Discord attendance tracking + PR rewards; AI Q&A bot — see §6 AI Layer)
 - Community leaderboard (top contributors per ward) (planned)
 
 ---
@@ -139,6 +139,15 @@
 - Proposal categories / tags
 - Proposal creation fee / PR stake (planned)
 - Delegate voting (future)
+
+### AI Layer (Qwen — dormant until `DASHSCOPE_API_KEY` set)
+
+Powered by Alibaba DashScope (Qwen Cloud) via the shared `core/ai/qwen.ts` client. See `docs/baraza-deliberation.md` and `docs/architecture.md` § AI Layer.
+
+- **Public participation / annotations** — members annotate proposal text during the review/voting window; opinions get up/down reactions.
+- **Deliberation digest** — neutral-clerk AI summary of *human* annotations (support / concerns / open questions) at voting-open; never recommends how to vote.
+- **Baraza deliberation engine** — a 7-agent council (5 domain + Ukweli + Kivuli) that debates a proposal *before* the vote across 3 rounds + a Mkutano synthesis, producing a readiness score (0–100), conflict map, chokepoints, and revision suggestions; per-group agent memory; results posted to the ward's Telegram baraza. Agents fetch real local data (DB tools) and live web facts (Ukweli).
+- **Baraza Q&A bot** — conversational assistant in ward Telegram groups (see §4 Community).
 
 ---
 
@@ -275,4 +284,5 @@
 | Admin Tools | tested (50 tests) | functional | stats/users/config; PR adjust; suspend; role management; report generation (CSV) |
 | Audit / Feed | tested (31 tests) | functional | 6+ audit events active; feed cursor-paginated stream; geographic personalisation |
 | Integration (Baraza) | tested (30 tests) | functional | Telegram/Discord/WhatsApp; attendance + invite jobs; WARD_ADMIN bypasses group-leader check |
+| AI Layer (Qwen) | implemented, dormant | n/a (Telegram + API) | Qwen via DashScope; Baraza Q&A bot + deliberation digest + 7-agent deliberation engine; dormant until `DASHSCOPE_API_KEY`; see `docs/baraza-deliberation.md` |
 | Platform / Cross-cutting | complete | complete | EN/SW i18n live; PWA installable |
