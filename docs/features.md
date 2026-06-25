@@ -268,7 +268,7 @@ Powered by Alibaba DashScope (Qwen Cloud) via the shared `core/ai/qwen.ts` clien
 |---|---|---|---|
 | Identity & Verification | tested (104 auth + 36 verification = 140 tests) | functional | WebAuthn/passkeys live; SMS AT credentials → real; auth middleware checks user is ACTIVE in DB on every request |
 | Profile & Personal Data | tested (35 tests) | functional | Avatar upload pending |
-| Participation Rights (PR) + Economy (UT) | tested (66 tests) | functional | On-chain mint wired; UT cash-out idempotency tested; Base Sepolia deploy pending |
+| Participation Rights (PR) + Economy (UT) | tested (66 tests) | functional | On-chain mint wired; UT cash-out idempotency tested; PR/UT deployed on Base Sepolia (mainnet deferred) |
 | Community / Wards / Groups | tested (147 tests) | functional | Baraza integration live; conflict protocol live |
 | Governance / Voting | tested (121 tests) | functional | Proposal disbursement wired; 2-stage review + memory layer live; resubmit (max 3×) live |
 | Projects & Milestones | tested (127 tests) | functional | QR witness-chain work sessions; task board; contribution flows |
@@ -285,4 +285,5 @@ Powered by Alibaba DashScope (Qwen Cloud) via the shared `core/ai/qwen.ts` clien
 | Audit / Feed | tested (31 tests) | functional | 6+ audit events active; feed cursor-paginated stream; geographic personalisation |
 | Integration (Baraza) | tested (30 tests) | functional | Telegram/Discord/WhatsApp; attendance + invite jobs; WARD_ADMIN bypasses group-leader check |
 | AI Layer (Qwen) | implemented, dormant | n/a (Telegram + API) | Qwen via DashScope; Baraza Q&A bot + deliberation digest + 7-agent deliberation engine; dormant until `DASHSCOPE_API_KEY`; see `docs/baraza-deliberation.md` |
+| Blockchain / On-chain | deployed + device-tested (Base Sepolia) | functional | Soulbound PR + UT + **user-signed** GovernanceVoting (content-hash anchoring); passkey Coinbase Smart Wallet; gasless via Pimlico proxy; **Base mainnet deferred**; see `docs/blockchain-deploy.md` |
 | Platform / Cross-cutting | complete | complete | EN/SW i18n live; PWA installable |

@@ -13,9 +13,9 @@ UjamaaDAO is a neighborhood sovereignty platform for Kenyan wards — cooperativ
 | Backend API | ✅ Running — 22 routes mounted, **1398 tests green across 20 tested modules** |
 | Prisma schema | ✅ 80 models, migrations applied, E2E flow verified |
 | Docker/Infra | ✅ All services running (`make dev`) — API, worker, Postgres, Redis, frontend, MailHog, Anvil |
-| Frontend | ✅ 30+ routes, Chai palette design system, magic-link + passkey auth, Privy wallet, PWA installable |
+| Frontend | ✅ 30+ routes, Chai palette design system, magic-link + passkey auth, Coinbase Smart Wallet (passkey self-custody), PWA installable |
 | Payments | ✅ M-Pesa STK push via Buni by KCB — end-to-end verified (push sent, callback received, DB updated) |
-| Smart Contracts | 🔶 Written and tested — `PrToken.sol` (soulbound) + `UtToken.sol` + `GovernanceVoting.sol`, 13 Foundry tests green; Base Sepolia deploy pending (minter wallet not funded) |
+| Smart Contracts | ✅ Deployed + device-tested on **Base Sepolia** — `PrToken.sol` (soulbound) + `UtToken.sol` + **user-signed** `GovernanceVoting.sol` (content-hash anchoring), 39 Foundry tests green; user-signed gasless voting verified on-chain. **Base mainnet deferred** |
 | Observability | ✅ Sentry (backend + frontend), DataDog APM, BrowserStack wired |
 | **Production** | ✅ **LIVE** — `ujamaadao.org` + `api.ujamaadao.org` on DigitalOcean droplet `167.71.55.51` |
 
@@ -40,14 +40,14 @@ UJAMAA_DAO/
 ├── frontend/           # Next.js 16.1.6 frontend
 │   ├── app/            # App Router pages (26+ routes)
 │   ├── components/     # UI components (layout, auth, landing, dashboard, groups, …)
-│   ├── contexts/       # Auth + wallet (Privy) + notification + language contexts
+│   ├── contexts/       # Auth + wallet (Coinbase Smart Wallet/wagmi) + notification + language contexts
 │   ├── lib/            # Typed API client (22 API namespaces)
-│   └── stubs/          # Webpack stubs for unused Privy transitive deps
+│   └── stubs/          # Webpack stubs (lucide compat, noop components)
 │
 ├── contracts/          # Solidity (Foundry) — Base L2
 │   ├── foundry.toml
 │   ├── src/            # PrToken.sol (soulbound ERC-20) + UtToken.sol
-│   └── test/           # 13 Foundry tests green
+│   └── test/           # 39 Foundry tests green
 │
 ├── docker/             # Docker Compose configs + environment
 │   ├── docker-compose.yml          # Development stack (8 services)
@@ -104,8 +104,8 @@ Visit **`http://localhost:8025`** — MailHog catches all outgoing emails in dev
 | Auth | Email magic links (JWT + hex token), WebAuthn/passkeys, Africa's Talking SMS OTP |
 | Payments | Buni by KCB — M-Pesa STK push (end-to-end verified) |
 | Frontend | Next.js 16.1.6 (App Router + Turbopack), TanStack Query v5, Tailwind v3, shadcn/ui |
-| Wallet | Privy (`@privy-io/react-auth` v3.14.1) — embedded wallets on Base L2 |
-| Contracts | Foundry (forge/cast/anvil) — `PrToken` + `UtToken` + `GovernanceVoting`; Base Sepolia → Base Mainnet |
+| Wallet | Coinbase Smart Wallet — passkey self-custody (wagmi + viem + `@coinbase/wallet-sdk`) on Base L2; gasless via Pimlico |
+| Contracts | Foundry — `PrToken` (soulbound) + `UtToken` + user-signed `GovernanceVoting` (content-hash anchoring); deployed + device-tested on Base Sepolia, mainnet deferred |
 | AI | Qwen via DashScope (OpenAI-compatible, provider-switchable) — Baraza Q&A bot, deliberation digest, 7-agent deliberation engine; dormant until `DASHSCOPE_API_KEY` |
 | Observability | Sentry (backend + frontend), DataDog APM, BrowserStack |
 | Infra | Docker Compose (8 services), Traefik (disabled in dev) |
@@ -132,7 +132,7 @@ UjamaaDAO supports three login methods — no passwords.
 | **Email magic link (new user)** | 4-step registration form → email verification link → session token |
 | **Email magic link (returning user)** | Enter email → magic link email → click → session token |
 | **WebAuthn / passkey** | Register biometric from profile → subsequent logins via `PasskeyLoginButton` (Face ID, Touch ID, etc.) |
-| **Wallet signature** | Privy embedded wallet → nonce challenge → sign → session |
+| **Wallet signature** | Coinbase Smart Wallet (passkey) → nonce challenge → ERC-6492 sign → link/session |
 
 Token lifetime: 7 days. No short-lived/refresh rotation — single `sessionToken` field in all responses.
 

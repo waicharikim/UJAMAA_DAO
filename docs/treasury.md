@@ -22,7 +22,7 @@
 | Manual deposit / withdraw (SUPER_ADMIN only) | ✅ live |
 | My-groups treasury summary (`GET /treasury/my-groups`) | ✅ live |
 | Frontend treasury page (ward treasury + transaction history) | ✅ live |
-| `GroupTreasury.sol` on-chain mirroring | ❌ pending (minter wallet not funded) |
+| `GroupTreasury.sol` on-chain mirroring | ❌ not built — off-chain treasury is the source of truth (Rule 2: real KES off-chain via M-Pesa); on-chain treasury anchoring is post-launch Scope B (see `onchain-integrity-roadmap`) |
 
 ---
 

@@ -1,11 +1,13 @@
 # Blockchain Deploy Runbook — Base Mainnet
 
-> **Status:** ready (2026-06-05). Contracts compile and pass 33/33 Foundry tests.
-> This is **launch task A1**: deploying makes the trailer's "permanent /
-> incorruptible / on-chain" claims literally true and activates PR minting +
-> vote / annotation / ward-memory / deliberation anchoring.
->
-> Decision (logged): **deploy to Base mainnet.**
+> **Status (updated 2026-06-25):** contracts compile + pass **39/39 Foundry tests** and are
+> **deployed + device-tested on Base Sepolia** (user-signed gasless voting verified on-chain;
+> proposal content-hash anchoring auditor-reproducible). **Base mainnet deploy is DEFERRED**
+> (user decision) — gated on **(a) funds available** (~$10–20 ETH for deploy + ongoing minter
+> gas + Pimlico balance) **AND (b) before the first real proposals enter the system**, so the
+> permanent record captures all real governance from day one. The app can launch without mainnet
+> (on-chain layer is null-guarded → off-chain DB is the source of truth). This runbook is the
+> mainnet step when those conditions are met. See `project_wallet_rework` + `onchain-integrity-roadmap`.
 
 ---
 
@@ -18,7 +20,7 @@ recorder roles to `MINTER_WALLET_ADDRESS`:
 |---|---|
 | `PrToken` | Soulbound (non-transferable) Participation Rights — governance weight |
 | `UtToken` | Utility token (standard ERC-20) |
-| `GovernanceVoting` | On-chain anchoring: `recordVote` / `recordResult` / `recordOpinion` / `recordMemory` |
+| `GovernanceVoting` | **User-signed** voting: `castVote(id, option)` (`msg.sender`=voter — platform can't forge), `openProposal(id, contentHash)` (anchors proposal content hash), `closeProposal`, `recordResult` (tally attestation), `recordOpinion` / `recordMemory`. Worker drives open/close/recordResult; gasless `castVote` via the Pimlico paymaster proxy |
 
 RPCs are pre-configured in `contracts/foundry.toml` (`base_sepolia`, `base_mainnet`).
 
