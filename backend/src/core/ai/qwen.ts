@@ -167,42 +167,76 @@ export async function completeConversation(
 // ─── completeWithSearch() ─────────────────────────────────────────────────────
 
 /**
- * Completion with Qwen's built-in web_search tool enabled.
- * Used exclusively by Ukweli for real-time premise interrogation.
+ * Completion with Qwen's real, server-side web search enabled (Ukweli only).
  *
- * Qwen's web search is a built-in tool — pass it in the tools array and the
- * model decides when to invoke it. The tool loop runs up to MAX_SEARCH_ROUNDS
- * times before forcing a final text response.
+ * DashScope does NOT expose web search as an OpenAI function tool — it's a
+ * request flag (`enable_search`). When set, Qwen performs the retrieval itself
+ * and folds the results into its answer; there is no client-side tool loop.
+ * `forced_search: false` lets the model decide when a query actually needs the
+ * web (so Ukweli only searches when a premise warrants it).
  *
- * Returns the final text content, or null on failure.
+ * `enable_search`/`search_options` are DashScope extensions not in the OpenAI
+ * SDK types, so the params are passed through with a cast. Falls back to a plain
+ * completion (no search) on any error. Returns null only when the client is
+ * unavailable.
  */
-const MAX_SEARCH_ROUNDS = 3;
-
 export async function completeWithSearch(
   opts: CompleteOptions
 ): Promise<string | null> {
   const qwen = getQwenClient();
   if (!qwen) return null;
 
-  const webSearchTool: OpenAI.Chat.Completions.ChatCompletionTool = {
-    type: 'function',
-    function: {
-      name: 'web_search',
-      description:
-        'Search the web for current information to interrogate the factual premises of a governance proposal.',
-      parameters: {
-        type: 'object',
-        properties: {
-          query: {
-            type: 'string',
-            description: 'The search query',
-          },
-        },
-        required: ['query'],
-      },
-    },
-  };
+  try {
+    const response = await qwen.chat.completions.create({
+      model: opts.model ?? QWEN_ANALYST_MODEL,
+      max_tokens: opts.maxTokens ?? 2048,
+      messages: [
+        { role: 'system', content: opts.system },
+        { role: 'user', content: opts.userMessage },
+      ],
+      // DashScope server-side web search (forwarded in the request body).
+      enable_search: true,
+      search_options: { forced_search: false, enable_citation: true },
+    } as unknown as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming);
 
+    return response.choices[0]?.message?.content?.trim() ?? null;
+  } catch (err) {
+    logger.warn({ err }, '[AI] Qwen search completion failed');
+    // Fall back to a standard completion without search.
+    return complete(opts);
+  }
+}
+
+// ─── completeWithTools() ──────────────────────────────────────────────────────
+
+export interface CompleteWithToolsOptions {
+  system: string;
+  userMessage: string;
+  tools: OpenAI.Chat.Completions.ChatCompletionTool[];
+  /** Executes a tool call by name; returns a string result for the model. */
+  executeTool: (name: string, args: Record<string, unknown>) => Promise<string>;
+  /** Max tool-call rounds before forcing a final text answer (default 2). */
+  maxRounds?: number;
+  maxTokens?: number;
+  model?: string;
+}
+
+/**
+ * Completion with OpenAI-style function tool-calling. Lets an agent fetch real
+ * data on demand (e.g. ward stats, treasury, past decisions) before answering.
+ *
+ * Runs the tool loop up to `maxRounds`, executing each function call via
+ * `executeTool`. Never throws — on error it falls back to a plain completion so
+ * the agent still produces a position. Returns null only when the client is
+ * unavailable.
+ */
+export async function completeWithTools(
+  opts: CompleteWithToolsOptions
+): Promise<string | null> {
+  const qwen = getQwenClient();
+  if (!qwen) return null;
+
+  const maxRounds = opts.maxRounds ?? 2;
   const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
     { role: 'system', content: opts.system },
     { role: 'user', content: opts.userMessage },
@@ -210,9 +244,9 @@ export async function completeWithSearch(
 
   try {
     let response = await qwen.chat.completions.create({
-      model: opts.model ?? QWEN_ANALYST_MODEL,
+      model: opts.model ?? QWEN_MODEL,
       max_tokens: opts.maxTokens ?? 2048,
-      tools: [webSearchTool],
+      tools: opts.tools,
       tool_choice: 'auto',
       messages,
     });
@@ -220,41 +254,33 @@ export async function completeWithSearch(
     let round = 0;
     while (
       response.choices[0]?.finish_reason === 'tool_calls' &&
-      round < MAX_SEARCH_ROUNDS
+      round < maxRounds
     ) {
       round++;
       const assistantMessage = response.choices[0].message;
       messages.push(assistantMessage);
 
-      // Execute tool calls — for web_search, we return a stub since Qwen's
-      // built-in search is handled server-side. The tool_call mechanism here
-      // is for providers that expose search as a callable function.
-      // If using DashScope's native search plugin, switch to the DashScope
-      // native API instead (set BARAZA_USE_NATIVE_SEARCH=true).
-      const toolResults: OpenAI.Chat.Completions.ChatCompletionMessageParam[] =
-        [];
       for (const tc of assistantMessage.tool_calls ?? []) {
-        // OpenAI v6 tool_calls is a union (function | custom); only function
-        // calls carry `.function`.
+        // OpenAI v6 tool_calls is a union (function | custom).
         if (tc.type !== 'function') continue;
-        let query = '';
+        let args: Record<string, unknown> = {};
         try {
-          query = JSON.parse(tc.function.arguments || '{}').query ?? '';
+          args = JSON.parse(tc.function.arguments || '{}');
         } catch {
-          query = '';
+          args = {};
         }
-        toolResults.push({
+        const result = await opts.executeTool(tc.function.name, args);
+        messages.push({
           role: 'tool' as const,
           tool_call_id: tc.id,
-          content: `Search executed for: ${query}. Please proceed with your analysis based on your knowledge.`,
+          content: result,
         });
       }
 
-      messages.push(...toolResults);
       response = await qwen.chat.completions.create({
-        model: opts.model ?? QWEN_ANALYST_MODEL,
+        model: opts.model ?? QWEN_MODEL,
         max_tokens: opts.maxTokens ?? 2048,
-        tools: [webSearchTool],
+        tools: opts.tools,
         tool_choice: 'auto',
         messages,
       });
@@ -262,9 +288,13 @@ export async function completeWithSearch(
 
     return response.choices[0]?.message?.content?.trim() ?? null;
   } catch (err) {
-    logger.warn({ err }, '[AI] Qwen search completion failed');
-    // Fall back to standard completion without search
-    return complete(opts);
+    logger.warn({ err }, '[AI] Qwen tool completion failed');
+    return complete({
+      system: opts.system,
+      userMessage: opts.userMessage,
+      maxTokens: opts.maxTokens,
+      model: opts.model,
+    });
   }
 }
 

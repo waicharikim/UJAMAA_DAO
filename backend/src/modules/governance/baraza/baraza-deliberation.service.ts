@@ -22,11 +22,13 @@ import { logger } from '../../../core/logger/logger.js';
 import {
   complete,
   completeWithSearch,
+  completeWithTools,
   completeJSON,
   isQwenAvailable,
   QWEN_MODEL,
   QWEN_ANALYST_MODEL,
 } from '../../../core/ai/qwen.js';
+import { DELIBERATION_TOOLS, executeDeliberationTool } from './agents/tools.js';
 import {
   AGENT_SYSTEM_PROMPTS,
   DOMAIN_AGENT_KEYS,
@@ -330,7 +332,8 @@ async function runDomainAgentsRound(
   roundNumber: 1 | 2 | 3,
   proposalContextStr: string,
   agentMemories: Record<AgentKey, string>,
-  previousRounds: RoundOutput[]
+  previousRounds: RoundOutput[],
+  groupId: string
 ): Promise<Partial<Record<AgentKey, string>>> {
   const roundKey = `round${roundNumber}` as keyof typeof ROUND_INSTRUCTIONS;
   const roundInstruction = ROUND_INSTRUCTIONS[roundKey];
@@ -355,12 +358,27 @@ async function runDomainAgentsRound(
         PROPOSAL_CONTEXT: proposalContextStr,
       });
 
-      const response = await complete({
-        system: systemPrompt,
-        userMessage,
-        maxTokens: 2048, // 2–4 paragraphs per the prompts — avoid truncation
-        model: QWEN_MODEL,
-      });
+      // Round 1: agents may fetch real group data to ground their initial
+      // position. Rounds 2–3 react to the transcript (which already carries the
+      // grounded round-1 positions), so no extra fetches — keeps cost bounded.
+      const response =
+        roundNumber === 1
+          ? await completeWithTools({
+              system: systemPrompt,
+              userMessage,
+              tools: DELIBERATION_TOOLS,
+              executeTool: (name, args) =>
+                executeDeliberationTool(name, args, groupId),
+              maxRounds: 1,
+              maxTokens: 2048,
+              model: QWEN_MODEL,
+            })
+          : await complete({
+              system: systemPrompt,
+              userMessage,
+              maxTokens: 2048, // 2–4 paragraphs per the prompts — avoid truncation
+              model: QWEN_MODEL,
+            });
 
       return [agentKey, response ?? '[Agent did not respond]'] as const;
     })
@@ -409,7 +427,8 @@ async function runKivuli(
   agentMemory: string,
   currentRoundPositions: Partial<Record<AgentKey, string>>,
   ukweliAnnotations: string,
-  previousRounds: RoundOutput[]
+  previousRounds: RoundOutput[],
+  groupId: string
 ): Promise<string> {
   const roundTranscript = formatDomainPositions(currentRoundPositions);
 
@@ -427,9 +446,14 @@ async function runKivuli(
     UKWELI_ANNOTATIONS: `UKWELI'S ANNOTATIONS FOR THIS ROUND:\n${ukweliAnnotations}`,
   });
 
-  const response = await complete({
+  // Kivuli grounds its implementability/power analysis in the group's real
+  // treasury, precedent and leadership data every round.
+  const response = await completeWithTools({
     system: systemPrompt,
     userMessage: `Round ${roundNumber} — produce your implementability assessment.`,
+    tools: DELIBERATION_TOOLS,
+    executeTool: (name, args) => executeDeliberationTool(name, args, groupId),
+    maxRounds: 2,
     maxTokens: 1500,
     model: QWEN_ANALYST_MODEL,
   });
@@ -981,7 +1005,8 @@ class BarazaDeliberationService {
         roundNumber,
         proposalContextStr,
         agentMemories,
-        rounds
+        rounds,
+        groupId
       );
 
       const ukweliAnnotations = await runUkweli(
@@ -998,7 +1023,8 @@ class BarazaDeliberationService {
         agentMemories.KIVULI,
         domainPositions,
         ukweliAnnotations,
-        rounds
+        rounds,
+        groupId
       );
 
       rounds.push({
