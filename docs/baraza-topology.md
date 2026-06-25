@@ -58,7 +58,8 @@ A SACCO needs its own membership, treasury, and governance — so it's its own c
 **Built**
 - `BarazaGroup` model links a Telegram/Discord chat to a community `Group` (one `groupId`).
 - `/register` (leader/admin-gated), `/present` attendance + PR, auto-generated invite links.
-- AI bot replies (dormant until `CLAUDE_API_KEY` set — see `project_ai_provider.md`).
+- AI bot replies — Qwen via DashScope (dormant until `DASHSCOPE_API_KEY` set; `core/ai/qwen.ts`).
+- Baraza posts the **7-agent deliberation result** to the ward group when a proposal is approved for voting (see `docs/baraza-deliberation.md`).
 - In-app **ward Baraza card** (community page, ward level): Join CTA, or a leader create-guide when none exists.
 - **One-canonical-per-ward** dedup guard.
 

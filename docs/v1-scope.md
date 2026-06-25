@@ -12,8 +12,9 @@ This is a living checklist. Update it as items move.
 ## Decisions
 
 ### Cut / defer from v1 (don't let these block launch)
-- **AI deliberation layer + Baraza AI bot** — already dormant (needs `CLAUDE_API_KEY` +
-  paid credits). Adds nothing for a first group; ships dark. Revisit post-traction.
+- **AI deliberation layer + Baraza AI bot** — already dormant (needs `DASHSCOPE_API_KEY`).
+  Adds nothing for a first group; ships dark. Revisit post-traction. (The newer Baraza 7-agent
+  deliberation engine — `docs/baraza-deliberation.md` — is hackathon work on the same Qwen layer.)
 - **On-chain anchoring polish** (ward-memory / annotation anchoring) — dormant until the
   contract deploy; fine to ship dark.
 - **Deeper project-management rework** — the projects module is enough for a first group now
@@ -85,7 +86,7 @@ Driven through the actual app via Playwright across four users in distinct geogr
 
 ### Launch track (from SESSION_STATE)
 - [ ] **A1 — deploy contracts to Base mainnet** (ops; `docs/blockchain-deploy.md`).
-- [ ] **A4 — load Anthropic credits** (only if the AI layer is wanted at launch; otherwise cut).
+- [ ] **A4 — set `DASHSCOPE_API_KEY`** (Qwen) to activate the AI layer at launch; otherwise cut.
 
 ### Non-blocking / nice-to-have
 - [ ] **Notification coverage** — fires only for governance/emergencies/baraza; gaps in

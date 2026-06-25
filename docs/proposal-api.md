@@ -282,7 +282,9 @@ Community members can highlight any passage in a proposal's `description`, `rati
 
 Two surfaces connect these opinions to the vote:
 - **Most-reacted opinions (deterministic):** annotations ranked by net score (`upvotes − downvotes`), surfaced next to the rationale. Works with no AI configured.
-- **Deliberation digest (AI):** when voting opens (APPROVED_FOR_VOTING → VOTING), a BullMQ job (`generate-deliberation-summary`) calls Claude with a strict **neutral-clerk** prompt and stores `Proposal.deliberationSummary` = `{ support: string[], concerns: string[], openQuestions: string[] }` (or `{ note }` on parse fallback) + `deliberationSummaryAt`. It rides in the `GET /governance/:proposalId` response — no separate endpoint. The digest **never recommends how to vote** (the binding step is the human vote); it only summarises what annotators wrote. Dormant (`null`) until `CLAUDE_API_KEY` is set. The summary is folded into the on-chain ward-memory hash when an outcome is recorded (see ADR-052/ADR-053).
+- **Deliberation digest (AI):** when voting opens (APPROVED_FOR_VOTING → VOTING), a BullMQ job (`generate-deliberation-summary`) calls the AI model (**Qwen via DashScope** — `core/ai/qwen.ts`) with a strict **neutral-clerk** prompt and stores `Proposal.deliberationSummary` = `{ support: string[], concerns: string[], openQuestions: string[] }` (or `{ note }` on parse fallback) + `deliberationSummaryAt`. It rides in the `GET /governance/:proposalId` response — no separate endpoint. The digest **never recommends how to vote** (the binding step is the human vote); it only summarises what annotators wrote. Dormant (`null`) until `DASHSCOPE_API_KEY` is set. The summary is folded into the on-chain ward-memory hash when an outcome is recorded (see ADR-052/ADR-053).
+
+> **Not to be confused with the Baraza deliberation engine** — a separate 7-agent council that stress-tests the proposal *before* the vote (Qwen-powered; `docs/baraza-deliberation.md`). This digest summarises *human* annotations; Baraza is AI agents debating on their own.
 
 ### `POST /governance/:proposalId/annotations`
 Create an annotation on a highlighted passage. Returns **201**.

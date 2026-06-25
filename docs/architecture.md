@@ -174,6 +174,24 @@ All new events must be typed in the event bus types file and documented here.
 
 ---
 
+## AI Layer (Qwen)
+
+All AI runs through one shared, provider-agnostic client — `backend/src/core/ai/qwen.ts` — talking to **Alibaba DashScope** (Qwen Cloud, OpenAI-compatible) via the `openai` SDK. Everything is null-guarded and **dormant until `DASHSCOPE_API_KEY` is set** (no throws when absent).
+
+Three features ride on it:
+
+| Feature | Where it runs | What it does |
+|---|---|---|
+| **Baraza Q&A bot** | web (Telegram webhook) — `integration/services/baraza-ai.service.ts` | Free-text Q&A in ward Telegram groups; 6 DB tools. |
+| **Deliberation digest** | worker — `governance/services/deliberation.service.ts` | Neutral-clerk summary of *human* annotations (support/concerns/open-questions) at voting-open. |
+| **Baraza deliberation engine** | worker — `governance/baraza/` | 7-agent council that debates a proposal *before* the vote → readiness score + conflict map. See `docs/baraza-deliberation.md`. |
+
+- **Models:** `qwen-plus` (domain agents + Q&A bot) / `qwen-max` (analysts + JSON extraction/scoring). Env: `BARAZA_AI_MODEL`, `BARAZA_ANALYST_MODEL`, `DASHSCOPE_BASE_URL`.
+- **Info-fetching:** Ukweli uses DashScope server-side web search (`enable_search`); deliberation agents call read-only, group-scoped DB tools for real local data.
+- **Provider is env-switchable** (the OpenAI-compatible path is the point): hackathon → DashScope Qwen; post-hackathon → DO Qwen3-32B (swap base URL/key/model); Claude later would re-add an Anthropic client path. The shared client keeps `getClaudeClient`/`isClaudeAvailable` aliases from when this was Claude-based (migrated 2026-06-25).
+
+---
+
 ## Frontend
 
 Next.js 16.1.6, React 18, TypeScript, Tailwind CSS, shadcn/ui, TanStack Query, Privy.
