@@ -106,6 +106,7 @@ Visit **`http://localhost:8025`** — MailHog catches all outgoing emails in dev
 | Frontend | Next.js 16.1.6 (App Router + Turbopack), TanStack Query v5, Tailwind v3, shadcn/ui |
 | Wallet | Privy (`@privy-io/react-auth` v3.14.1) — embedded wallets on Base L2 |
 | Contracts | Foundry (forge/cast/anvil) — `PrToken` + `UtToken` + `GovernanceVoting`; Base Sepolia → Base Mainnet |
+| AI | Qwen via DashScope (OpenAI-compatible, provider-switchable) — Baraza Q&A bot, deliberation digest, 7-agent deliberation engine; dormant until `DASHSCOPE_API_KEY` |
 | Observability | Sentry (backend + frontend), DataDog APM, BrowserStack |
 | Infra | Docker Compose (8 services), Traefik (disabled in dev) |
 | CI | GitHub Actions — type-check · lint · prisma validate · build |
@@ -203,6 +204,7 @@ All payments go to platform-controlled M-Pesa accounts. No P2P transfers.
 | [`docs/onboarding-api.md`](docs/onboarding-api.md) | Onboarding progress, tutorial completion |
 | [`docs/elections-api.md`](docs/elections-api.md) | Group elections, nominations, voting, tally |
 | [`docs/integration-api.md`](docs/integration-api.md) | Baraza messaging (Telegram/WhatsApp/Discord) |
+| [`docs/baraza-deliberation.md`](docs/baraza-deliberation.md) | Baraza 7-agent pre-vote deliberation engine (Qwen) |
 | [`docs/audit-api.md`](docs/audit-api.md) | Audit log search and activity feed |
 | [`docs/admin-api.md`](docs/admin-api.md) | Admin panel — users, stats, config, Baraza management |
 | [`docs/treasury.md`](docs/treasury.md) | Treasury structure, M-Pesa flows, UT two-pool model |

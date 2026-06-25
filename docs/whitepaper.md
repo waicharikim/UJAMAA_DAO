@@ -165,6 +165,7 @@ Completion + quiz → Impact Points + small PR bonus.
 
 - **Layer-2 Ethereum** (Base or Polygon zkEVM) for on-chain components
 - **Hybrid execution**: on-chain governance, treasury, token balances; off-chain UX, discovery, education
+- **AI deliberation layer (advisory, never decides)**: a multi-agent council stress-tests proposals *before* a community vote (conflict map + readiness score + revision suggestions), plus a neutral-clerk digest of community input. Provider-agnostic (Qwen via DashScope today); the binding step is always the human vote.
 - **Embedded wallets** + mobile-first onboarding
 - **Backend**: Node.js, Express, Prisma, BullMQ, Redis
 - **Frontend**: responsive web (future native apps)
