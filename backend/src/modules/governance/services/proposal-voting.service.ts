@@ -11,8 +11,8 @@ import { notificationService } from '../../notifications/services/notification.s
 import { NotificationType } from '../../notifications/types.js';
 import { auditService } from '../../audit/services/audit.service.js';
 import { AuditAction } from '../../audit/types.js';
-import { getGovernanceContract } from '../../../core/blockchain/client.js';
-import { ethers } from 'ethers';
+import { governanceQueue } from '../../../core/queue/index.js';
+import { CLOSE_PROPOSAL_ONCHAIN_JOB } from '../jobs/proposal.jobs.js';
 import { assertStartVotingAuth } from './proposal-lifecycle.service.js';
 
 type VoteRecord = { vote: boolean | null; voteWeight: number };
@@ -305,7 +305,22 @@ class ProposalVotingService {
         proposalId,
         proposal.title
       );
-    await this.anchorResultOnChain(proposalId, newStatus);
+    // Anchor the result on-chain via the WORKER (where the minter key lives).
+    // A user/admin tally runs on the web process, which has no minter key and so
+    // cannot sign closeProposal/recordResult. Enqueueing keeps result attestation
+    // working regardless of where the tally ran. Mirrors OPEN_PROPOSAL_ONCHAIN_JOB.
+    await governanceQueue
+      .add(
+        CLOSE_PROPOSAL_ONCHAIN_JOB,
+        { proposalId, approved: newStatus === ProposalStatus.APPROVED },
+        { jobId: `close-${proposalId}` }
+      )
+      .catch((err) =>
+        logger.warn(
+          { proposalId, err },
+          '[GOV] Failed to enqueue on-chain close job'
+        )
+      );
     if (proposal.creatorId)
       await this.notifyTallyOutcome({
         creatorId: proposal.creatorId,
@@ -335,42 +350,6 @@ class ProposalVotingService {
         { proposalId, title }
       )
       .catch(() => {});
-  }
-
-  private async anchorResultOnChain(
-    proposalId: string,
-    newStatus: ProposalStatus
-  ): Promise<void> {
-    if (process.env.NODE_ENV === 'test') return;
-    const govContract = getGovernanceContract();
-    if (!govContract) return;
-    try {
-      const proposalBytes32 = ethers.keccak256(ethers.toUtf8Bytes(proposalId));
-
-      // The contract requires the voting window CLOSED before a result can be
-      // attested. status: 0 = never opened, 1 = open, 2 = closed.
-      const status: bigint = await govContract.proposalStatus(proposalBytes32);
-      if (status === 0n) {
-        logger.info(
-          { proposalId },
-          '[GOV] Proposal never opened on-chain — skipping result attestation'
-        );
-        return;
-      }
-      if (status === 1n) {
-        await govContract.closeProposal(proposalBytes32);
-        logger.info({ proposalId }, '[GOV] On-chain voting window closed');
-      }
-
-      const onChainOutcome = newStatus === ProposalStatus.APPROVED ? 1 : 2;
-      await govContract.recordResult(proposalBytes32, onChainOutcome);
-      logger.info({ proposalId, newStatus }, '[GOV] On-chain result recorded');
-    } catch (err) {
-      logger.warn(
-        { proposalId, err },
-        '[GOV] On-chain result failed — DB record intact'
-      );
-    }
   }
 
   private async notifyTallyOutcome(ctx: TallyOutcomeContext): Promise<void> {

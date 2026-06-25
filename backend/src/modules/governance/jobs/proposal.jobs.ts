@@ -24,6 +24,7 @@ export const EXPIRE_PROPOSAL_REVIEW_JOB = 'expire-proposal-review';
 export const GENERATE_DELIBERATION_SUMMARY_JOB =
   'generate-deliberation-summary';
 export const OPEN_PROPOSAL_ONCHAIN_JOB = 'open-proposal-onchain';
+export const CLOSE_PROPOSAL_ONCHAIN_JOB = 'close-proposal-onchain';
 
 /**
  * On-demand job enqueued when voting opens. Opens the on-chain voting window so
@@ -64,6 +65,56 @@ export async function processOpenProposalOnChain(
     logger.warn(
       { proposalId, err },
       '[GOV] On-chain openProposal failed — DB voting record intact'
+    );
+  }
+}
+
+/**
+ * On-demand job enqueued when a proposal is tallied. Closes the on-chain voting
+ * window (if open) and attests the result (1 = approved, 2 = rejected). Signs
+ * with the minter key (RECORDER_ROLE) which lives on the WORKER — so a user/admin
+ * tally on the web process still anchors the result via this job. Mirrors
+ * processOpenProposalOnChain. Best-effort + null-guarded (no-op on web / when the
+ * blockchain env is unset).
+ *
+ * Idempotent: skips if never opened (status 0); a re-run after success just
+ * re-attempts close/recordResult, which the contract rejects ("already
+ * closed/recorded") and the catch swallows — so at-least-once delivery is safe.
+ */
+export async function processCloseProposalOnChain(
+  proposalId: string,
+  approved: boolean
+): Promise<void> {
+  const gov = getGovernanceContract();
+  if (!gov) return;
+
+  try {
+    const id = ethers.keccak256(ethers.toUtf8Bytes(proposalId));
+    // status: 0 = never opened, 1 = open, 2 = closed.
+    const status: bigint = await gov.proposalStatus(id);
+    if (status === 0n) {
+      logger.info(
+        { job: CLOSE_PROPOSAL_ONCHAIN_JOB, proposalId },
+        '[GOV] Proposal never opened on-chain — skipping result attestation'
+      );
+      return;
+    }
+    if (status === 1n) {
+      await gov.closeProposal(id);
+      logger.info(
+        { job: CLOSE_PROPOSAL_ONCHAIN_JOB, proposalId },
+        '[GOV] On-chain voting window closed'
+      );
+    }
+    await gov.recordResult(id, approved ? 1 : 2);
+    logger.info(
+      { job: CLOSE_PROPOSAL_ONCHAIN_JOB, proposalId, approved },
+      '[GOV] On-chain result recorded'
+    );
+  } catch (err) {
+    logger.warn(
+      { proposalId, err },
+      '[GOV] On-chain result failed — DB record intact'
     );
   }
 }

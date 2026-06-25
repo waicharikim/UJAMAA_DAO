@@ -81,10 +81,12 @@ import {
   EXPIRE_PROPOSAL_REVIEW_JOB,
   GENERATE_DELIBERATION_SUMMARY_JOB,
   OPEN_PROPOSAL_ONCHAIN_JOB,
+  CLOSE_PROPOSAL_ONCHAIN_JOB,
   processTallyProposals,
   processExpireProposalReview,
   processGenerateDeliberationSummary,
   processOpenProposalOnChain,
+  processCloseProposalOnChain,
 } from './modules/governance/jobs/proposal.jobs.js';
 
 import {
@@ -348,6 +350,9 @@ const governanceWorker = createWorker('governance', async (job) => {
     } else if (job.name === OPEN_PROPOSAL_ONCHAIN_JOB) {
       // On-demand (enqueued when voting opens) — opens the on-chain voting window.
       await processOpenProposalOnChain(job.data.proposalId);
+    } else if (job.name === CLOSE_PROPOSAL_ONCHAIN_JOB) {
+      // On-demand (enqueued on tally) — closes the window + attests the result.
+      await processCloseProposalOnChain(job.data.proposalId, job.data.approved);
     } else {
       logger.warn(
         { jobName: job.name, queue: 'governance' },
