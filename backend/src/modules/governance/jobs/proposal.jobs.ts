@@ -27,6 +27,48 @@ export const OPEN_PROPOSAL_ONCHAIN_JOB = 'open-proposal-onchain';
 export const CLOSE_PROPOSAL_ONCHAIN_JOB = 'close-proposal-onchain';
 
 /**
+ * Canonical serialization of a proposal's content for the on-chain content hash.
+ * STABLE + DOCUMENTED: an auditor recomputes keccak256(utf8(this)) from the public
+ * proposal fields and compares it to
+ *   proposalContentHash[keccak256(utf8(proposalId))]
+ * on the GovernanceVoting contract. If a single field was altered off-chain after
+ * voting opened, the hashes won't match — proving tampering. Field order and the
+ * empty-string-for-null convention are part of the format: do NOT change them
+ * without a contract version bump (it would invalidate prior anchors).
+ */
+function canonicalProposalContent(p: {
+  id: string;
+  title: string | null;
+  description: string | null;
+  rationale: string | null;
+  alternatives: string | null;
+  proposalType: string | null;
+  kind: string | null;
+  proposalScope: string | null;
+  budget: unknown;
+  groupId: string | null;
+  targetWardId: string | null;
+  targetConstituencyId: string | null;
+  targetCountyId: string | null;
+}): string {
+  return JSON.stringify({
+    id: p.id,
+    title: p.title ?? '',
+    description: p.description ?? '',
+    rationale: p.rationale ?? '',
+    alternatives: p.alternatives ?? '',
+    proposalType: p.proposalType ?? '',
+    kind: p.kind ?? '',
+    proposalScope: p.proposalScope ?? '',
+    budget: p.budget != null ? String(p.budget) : '',
+    groupId: p.groupId ?? '',
+    targetWardId: p.targetWardId ?? '',
+    targetConstituencyId: p.targetConstituencyId ?? '',
+    targetCountyId: p.targetCountyId ?? '',
+  });
+}
+
+/**
  * On-demand job enqueued when voting opens. Opens the on-chain voting window so
  * users can cast unforgeable, self-signed votes (GovernanceVoting.castVote with
  * msg.sender = voter). Best-effort: the off-chain DB record is the source of
@@ -56,10 +98,40 @@ export async function processOpenProposalOnChain(
       );
       return;
     }
-    await gov.openProposal(id);
+    const proposal = await prisma.proposal.findUnique({
+      where: { id: proposalId },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        rationale: true,
+        alternatives: true,
+        proposalType: true,
+        kind: true,
+        proposalScope: true,
+        budget: true,
+        groupId: true,
+        targetWardId: true,
+        targetConstituencyId: true,
+        targetCountyId: true,
+      },
+    });
+    if (!proposal) {
+      logger.warn(
+        { proposalId },
+        '[GOV] Proposal not found — skipping on-chain open'
+      );
+      return;
+    }
+    // Anchor a hash of the canonical proposal content so the off-chain text is
+    // tamper-evident ("what was voted on, and why" is verifiable, not just the vote).
+    const contentHash = ethers.keccak256(
+      ethers.toUtf8Bytes(canonicalProposalContent(proposal))
+    );
+    await gov.openProposal(id, contentHash);
     logger.info(
-      { job: OPEN_PROPOSAL_ONCHAIN_JOB, proposalId },
-      '[GOV] On-chain voting window opened'
+      { job: OPEN_PROPOSAL_ONCHAIN_JOB, proposalId, contentHash },
+      '[GOV] On-chain voting window opened (content anchored)'
     );
   } catch (err) {
     logger.warn(

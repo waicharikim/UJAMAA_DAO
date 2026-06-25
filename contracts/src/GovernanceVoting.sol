@@ -68,7 +68,18 @@ contract GovernanceVoting is AccessControl {
     // proposalId => attested tally result
     mapping(bytes32 => ProposalResult) public results;
 
-    event ProposalOpened(bytes32 indexed proposalId, uint256 timestamp);
+    // proposalId => keccak256 of the canonical proposal content, captured when the
+    // voting window opens. Makes the off-chain proposal text tamper-evident: anyone
+    // can re-hash the canonical fields (title/description/rationale/budget/scope/
+    // target) and compare — so "what was voted on, and why" is verifiable, not just
+    // the vote itself.
+    mapping(bytes32 => bytes32) public proposalContentHash;
+
+    event ProposalOpened(
+        bytes32 indexed proposalId,
+        bytes32         contentHash,
+        uint256         timestamp
+    );
     event ProposalClosed(bytes32 indexed proposalId, uint256 timestamp);
 
     event VoteCast(
@@ -102,10 +113,14 @@ contract GovernanceVoting is AccessControl {
      * @notice Open a proposal's voting window. Process role only — the platform
      *         decides WHEN voting is open, never WHO voted or HOW.
      */
-    function openProposal(bytes32 proposalId) external onlyRole(RECORDER_ROLE) {
+    function openProposal(bytes32 proposalId, bytes32 contentHash)
+        external
+        onlyRole(RECORDER_ROLE)
+    {
         require(proposalStatus[proposalId] == STATUS_NONE, "Already initialised");
         proposalStatus[proposalId] = STATUS_OPEN;
-        emit ProposalOpened(proposalId, block.timestamp);
+        proposalContentHash[proposalId] = contentHash;
+        emit ProposalOpened(proposalId, contentHash, block.timestamp);
     }
 
     /**

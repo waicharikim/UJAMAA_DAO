@@ -36,9 +36,11 @@ contract GovernanceVotingTest is Test {
         vm.stopPrank();
     }
 
+    bytes32 internal constant CONTENT_HASH = keccak256("canonical-proposal-content");
+
     function _open(bytes32 proposalId) internal {
         vm.prank(recorder);
-        voting.openProposal(proposalId);
+        voting.openProposal(proposalId, CONTENT_HASH);
     }
 
     // ── Voting window ─────────────────────────────────────────────────────────
@@ -46,22 +48,24 @@ contract GovernanceVotingTest is Test {
     function test_OpenProposal() public {
         vm.prank(recorder);
         vm.expectEmit(true, false, false, true);
-        emit GovernanceVoting.ProposalOpened(PROPOSAL_A, block.timestamp);
-        voting.openProposal(PROPOSAL_A);
+        emit GovernanceVoting.ProposalOpened(PROPOSAL_A, CONTENT_HASH, block.timestamp);
+        voting.openProposal(PROPOSAL_A, CONTENT_HASH);
         assertEq(voting.proposalStatus(PROPOSAL_A), 1);
+        // The canonical content hash is anchored so the off-chain text is tamper-evident.
+        assertEq(voting.proposalContentHash(PROPOSAL_A), CONTENT_HASH);
     }
 
     function test_RevertOpenTwice() public {
         _open(PROPOSAL_A);
         vm.prank(recorder);
         vm.expectRevert("Already initialised");
-        voting.openProposal(PROPOSAL_A);
+        voting.openProposal(PROPOSAL_A, CONTENT_HASH);
     }
 
     function test_RevertOpenUnauthorized() public {
         vm.prank(voter1);
         vm.expectRevert();
-        voting.openProposal(PROPOSAL_A);
+        voting.openProposal(PROPOSAL_A, CONTENT_HASH);
     }
 
     function test_CloseProposal() public {
