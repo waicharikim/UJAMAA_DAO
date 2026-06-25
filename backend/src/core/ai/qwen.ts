@@ -47,8 +47,11 @@ export const QWEN_ANALYST_MODEL =
  * Override via DASHSCOPE_BASE_URL if routing through a proxy or using the
  * mainland China endpoint (https://dashscope.aliyuncs.com/compatible-mode/v1).
  */
+// NB: `||` (not `??`) — compose injects DASHSCOPE_BASE_URL as an empty string
+// when the host var is unset, and an empty baseURL makes the OpenAI SDK fall
+// back to api.openai.com (→ invalid_api_key). `||` treats "" as "use default".
 const DASHSCOPE_BASE_URL =
-  process.env.DASHSCOPE_BASE_URL ??
+  process.env.DASHSCOPE_BASE_URL ||
   'https://dashscope-intl.aliyuncs.com/compatible-mode/v1';
 
 // ─── Client singleton ─────────────────────────────────────────────────────────
