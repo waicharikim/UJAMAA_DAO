@@ -19,7 +19,7 @@ import {
   deliberationService,
   rankAnnotations,
 } from '../../src/modules/governance/services/deliberation.service.js';
-import { getClaudeClient } from '../../src/core/ai/claude.js';
+import { getClaudeClient } from '../../src/core/ai/qwen.js';
 import {
   createGovernanceUser,
   seedGovernanceGroup,

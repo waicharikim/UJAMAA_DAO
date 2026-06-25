@@ -125,6 +125,8 @@ model Group {
   elections             Election[]          @relation("GroupElections")
   nationalContributions NationalContribution[]
   barazaGroups          BarazaGroup[]
+  deliberations         BarazaDeliberation[] @relation("GroupDeliberations")
+  agentStates           BarazaAgentState[]   @relation("GroupAgentStates")
 
   @@index([isSystemGroup, systemType])
   @@index([isSystemGroup, voluntaryType])

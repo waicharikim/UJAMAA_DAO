@@ -15,7 +15,7 @@
 
 import { prisma } from '../../../core/database/client.js';
 import { logger } from '../../../core/logger/logger.js';
-import { getClaudeClient, complete } from '../../../core/ai/claude.js';
+import { getClaudeClient, complete } from '../../../core/ai/qwen.js';
 import { proposalAnnotationService } from './proposal-annotation.service.js';
 
 export interface DeliberationSummary {

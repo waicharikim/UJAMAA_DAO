@@ -25,6 +25,7 @@ import { treasuryService } from '../../treasury/services/treasury.service.js';
 import { getGovernanceContract } from '../../../core/blockchain/client.js';
 import { ethers } from 'ethers';
 import { governanceQueue } from '../../../core/queue/index.js';
+import { queueBarazaDeliberation } from '../baraza/baraza.job.js';
 import {
   GENERATE_DELIBERATION_SUMMARY_JOB,
   OPEN_PROPOSAL_ONCHAIN_JOB,
@@ -455,6 +456,12 @@ class ProposalLifecycleService {
         })
         .catch(() => {});
     }
+    // HOOK 1 — Baraza deliberation on fast-track approval (best-effort, dormant
+    // without DASHSCOPE_API_KEY).
+    if (proposal.groupId)
+      queueBarazaDeliberation(proposalId, proposal.groupId, 'AUTO').catch(
+        () => {}
+      );
     return updated;
   }
 
@@ -588,6 +595,12 @@ class ProposalLifecycleService {
         proposal.title,
         newStatus,
         dto.note
+      );
+    // HOOK 2 — Baraza deliberation on admin approval (best-effort, dormant
+    // without DASHSCOPE_API_KEY).
+    if (newStatus === ProposalStatus.APPROVED_FOR_VOTING && proposal.groupId)
+      queueBarazaDeliberation(proposalId, proposal.groupId, 'ADMIN').catch(
+        () => {}
       );
     return updated;
   }

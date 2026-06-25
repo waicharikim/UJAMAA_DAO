@@ -1321,6 +1321,8 @@ model Group {
   elections             Election[]          @relation("GroupElections")
   nationalContributions NationalContribution[]
   barazaGroups          BarazaGroup[]
+  deliberations         BarazaDeliberation[] @relation("GroupDeliberations")
+  agentStates           BarazaAgentState[]   @relation("GroupAgentStates")
 
   @@index([isSystemGroup, systemType])
   @@index([isSystemGroup, voluntaryType])
@@ -1766,6 +1768,7 @@ model Proposal {
   comments           Comment[]           @relation("ProposalComments") // NEW
   posts              Post[]              @relation("PostProposal")
   annotations        ProposalAnnotation[] @relation("ProposalAnnotations")
+  deliberations      BarazaDeliberation[] @relation("ProposalDeliberations")
 
   @@index([groupId, status])
   @@index([creatorId])
@@ -1873,6 +1876,105 @@ model ProposalAnnotationReaction {
   @@unique([annotationId, userId])
   @@index([annotationId])
   @@map("proposal_annotation_reactions")
+}
+
+
+// ============================================================================
+// BARAZA DELIBERATION ENGINE — 7-agent pre-vote deliberation (Qwen-powered)
+// ============================================================================
+
+enum BarazaDeliberationStatus {
+  PENDING
+  RUNNING
+  COMPLETE
+  FAILED
+}
+
+enum BarazaAgentKey {
+  MAISHA
+  ARDHI
+  UCHUMI
+  MIUNDOMBINU
+  JAMII
+  UKWELI
+  KIVULI
+}
+
+enum BarazaTrigger {
+  AUTHOR
+  ADMIN
+  AUTO
+}
+
+model BarazaDeliberation {
+  id          String                   @id @default(uuid()) @db.Uuid
+  proposalId  String                   @db.Uuid
+  groupId     String                   @db.Uuid
+
+  // Dedup key — hash of title + description + budget + problem + solution.
+  contentHash String                   @db.VarChar(64)
+
+  status      BarazaDeliberationStatus @default(PENDING)
+  triggeredBy BarazaTrigger            @default(AUTO)
+
+  readinessScore Int?
+  readinessBand  String?               @db.VarChar(30)
+
+  transcript          Json?
+  conflictMap         Json?
+  revisionSuggestions Json?
+  agentMemorySnapshot Json?
+  contextSnapshot     Json?
+
+  mkutanoConvergence    Json?
+  mkutanoContradictions Json?
+  mkutanoFixability     String?        @db.Text
+
+  errorLog    String?                  @db.Text
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+
+  proposal Proposal @relation("ProposalDeliberations", fields: [proposalId], references: [id], onDelete: Cascade)
+  group    Group    @relation("GroupDeliberations", fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([proposalId, status])
+  @@index([groupId, createdAt])
+  @@index([contentHash, status])
+  @@index([status, createdAt])
+  @@map("baraza_deliberations")
+}
+
+model BarazaAgentState {
+  id       String         @id @default(uuid()) @db.Uuid
+  groupId  String         @db.Uuid
+  agentKey BarazaAgentKey
+
+  deliberationCount Int @default(0)
+  concessionCount   Int @default(0)
+  allianceCount     Int @default(0)
+  holdCount         Int @default(0)
+
+  rigidityScore       Float @default(0.5)
+  responsivenessScore Float @default(0.5)
+
+  staticCore        Json?
+  episodicLog       Json?
+  relationalMap     Json?
+  premisePatterns   Json?
+  powerStructureMap Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  group Group @relation("GroupAgentStates", fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, agentKey])
+  @@index([groupId])
+  @@index([agentKey])
+  @@map("baraza_agent_states")
 }
 
 

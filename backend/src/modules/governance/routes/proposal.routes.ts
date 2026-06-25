@@ -8,6 +8,7 @@
 import { Router } from 'express';
 import { ProposalController } from '../controllers/proposal.controller.js';
 import { ProposalAnnotationController } from '../controllers/proposal-annotation.controller.js';
+import { BarazaController } from '../baraza/baraza.controller.js';
 import { authenticate } from '../../../core/middleware/auth.middleware.js';
 import { authorize } from '../../../core/middleware/authorize.js';
 import { validateRequest } from '../../../core/middleware/validateRequest.js';
@@ -23,6 +24,16 @@ router.get('/', asyncHandler(ProposalController.listProposals));
 router.get('/needs-action', asyncHandler(ProposalController.getNeedsAction));
 
 router.get('/:proposalId', asyncHandler(ProposalController.getProposal));
+
+// Baraza deliberation — read latest result; author-triggered pre-submission run
+router.get(
+  '/:proposalId/baraza',
+  asyncHandler(BarazaController.getDeliberation)
+);
+router.post(
+  '/:proposalId/baraza',
+  asyncHandler(BarazaController.requestDeliberation)
+);
 
 router.post(
   '/:proposalId/review',

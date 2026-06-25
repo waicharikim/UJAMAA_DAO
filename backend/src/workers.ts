@@ -88,6 +88,10 @@ import {
   processOpenProposalOnChain,
   processCloseProposalOnChain,
 } from './modules/governance/jobs/proposal.jobs.js';
+import {
+  BARAZA_DELIBERATION_JOB,
+  processBarazaDeliberationJob,
+} from './modules/governance/baraza/baraza.job.js';
 
 import {
   MPESA_PAYOUT_JOB,
@@ -353,6 +357,9 @@ const governanceWorker = createWorker('governance', async (job) => {
     } else if (job.name === CLOSE_PROPOSAL_ONCHAIN_JOB) {
       // On-demand (enqueued on tally) — closes the window + attests the result.
       await processCloseProposalOnChain(job.data.proposalId, job.data.approved);
+    } else if (job.name === BARAZA_DELIBERATION_JOB) {
+      // On-demand (enqueued on approval) — runs the 7-agent Baraza deliberation.
+      await processBarazaDeliberationJob(job);
     } else {
       logger.warn(
         { jobName: job.name, queue: 'governance' },

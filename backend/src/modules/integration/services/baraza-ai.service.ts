@@ -1,26 +1,36 @@
 /**
  * @file src/modules/integration/services/baraza-ai.service.ts
  * @description
- * Baraza AI — Claude-powered conversational layer for the Telegram bot.
+ * Baraza AI — Qwen Cloud-powered conversational layer for the Telegram bot.
+ *
+ * Uses Qwen Cloud via the OpenAI-compatible DashScope endpoint.
+ * No Anthropic dependency — requires only the `openai` npm package.
  *
  * Routing rule: slash commands (/present, /verify, etc.) stay deterministic.
  * Any free-text message in a registered baraza goes through this service.
  *
- * Graceful degradation: if CLAUDE_API_KEY is not set, returns a fallback message.
- * Tools: get_user_stats, get_group_proposals, get_group_treasury.
- * Model: configurable via BARAZA_AI_MODEL (default: claude-haiku-4-5-20251001).
+ * Graceful degradation: if DASHSCOPE_API_KEY is not set, returns a fallback message.
+ * Tools: get_user_stats, get_group_proposals, get_group_treasury,
+ *        get_election_results, get_ward_stats, search_past_decisions.
+ * Model: configurable via BARAZA_AI_MODEL (default: qwen-plus).
  */
 
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../../core/database/client.js';
 import { logger } from '../../../core/logger/logger.js';
 
-const MODEL = process.env.BARAZA_AI_MODEL ?? 'claude-haiku-4-5-20251001';
+// qwen-plus: best balance of speed + capability for conversational use
+// qwen-max: use for deeper reasoning if latency allows
+// qwen-turbo: cheapest, fastest — good for high-volume low-stakes queries
+const MODEL = process.env.BARAZA_AI_MODEL ?? 'qwen-plus';
 const MAX_TOOL_ROUNDS = 3;
 const MAX_TOKENS = 1024;
 
-// Static — never changes at runtime; eligible for prompt caching
+// Qwen Cloud international DashScope endpoint (OpenAI-compatible)
+const DASHSCOPE_BASE_URL =
+  'https://dashscope-intl.aliyuncs.com/compatible-mode/v1';
+
 const SYSTEM_PROMPT = `You are BarazaBot, the AI assistant for UjamaaDAO — a community self-governance platform built for East African communities. You live inside Telegram groups called barazas (community meetings).
 
 ## What UjamaaDAO is
@@ -80,13 +90,93 @@ export interface BarazaUserContext {
 const UNAVAILABLE_MSG =
   'BarazaBot AI si available saa hii. Commands kama /present, /verify, /schedule bado zinafanya kazi. 🌿';
 
+// Tool definitions in OpenAI format
+const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
+  {
+    type: 'function',
+    function: {
+      name: 'get_user_stats',
+      description:
+        "Get the current user's PR balance, total Impact Points, and verification level.",
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_group_proposals',
+      description:
+        'Get proposals for this baraza group. Use status=ACTIVE for proposals currently open for review or voting; status=ALL for recent history.',
+      parameters: {
+        type: 'object',
+        properties: {
+          status: {
+            type: 'string',
+            enum: ['ACTIVE', 'ALL'],
+            description: 'Filter scope',
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_group_treasury',
+      description: 'Get the KES and UT treasury balance for the group.',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_election_results',
+      description:
+        'Get elections for this group. Returns active elections (open for nominations or voting) and the most recent completed election with winner.',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_ward_stats',
+      description:
+        'Get ward-level community statistics: member count, total PR issued, active members (participated in last 30 days), and recent M-Pesa contributions.',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_past_decisions',
+      description:
+        'Search past proposals and decisions for this group by keyword. Use when a member asks about a previous vote, decision, or initiative.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description:
+              'Keyword or phrase to search in proposal titles and descriptions',
+          },
+        },
+        required: ['query'],
+      },
+    },
+  },
+];
+
 export class BarazaAiService {
-  private client: Anthropic | null = null;
+  private client: OpenAI | null = null;
 
   constructor() {
-    const apiKey = process.env.CLAUDE_API_KEY;
+    const apiKey = process.env.DASHSCOPE_API_KEY;
     if (apiKey) {
-      this.client = new Anthropic({ apiKey });
+      this.client = new OpenAI({
+        apiKey,
+        baseURL: DASHSCOPE_BASE_URL,
+      });
     }
   }
 
@@ -102,137 +192,71 @@ export class BarazaAiService {
     if (!this.client) return UNAVAILABLE_MSG;
 
     const contextHeader = buildContextHeader(userContext);
-    const tools = buildTools();
-    const messages: Anthropic.MessageParam[] = [
+    const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+      { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: `${contextHeader}\n\n${text}` },
     ];
 
-    // System prompt is static — eligible for prompt caching (5-min TTL, saves ~1200 input tokens per call)
-    const systemWithCache = [
-      {
-        type: 'text' as const,
-        text: SYSTEM_PROMPT,
-        cache_control: { type: 'ephemeral' as const },
-      },
-    ];
-
     try {
-      let response = await (this.client as any).messages.create({
+      let response = await this.client.chat.completions.create({
         model: MODEL,
         max_tokens: MAX_TOKENS,
-        system: systemWithCache,
-        tools,
+        tools: TOOLS,
+        tool_choice: 'auto',
         messages,
-        betas: ['prompt-caching-2024-07-31'],
       });
 
       let round = 0;
-      while (response.stop_reason === 'tool_use' && round < MAX_TOOL_ROUNDS) {
+      while (
+        response.choices[0]?.finish_reason === 'tool_calls' &&
+        round < MAX_TOOL_ROUNDS
+      ) {
         round++;
-        const toolBlocks = response.content.filter(
-          (b: Anthropic.ContentBlock): b is Anthropic.ToolUseBlock =>
-            b.type === 'tool_use'
-        );
-        messages.push({ role: 'assistant', content: response.content });
+        const assistantMessage = response.choices[0].message;
+        messages.push(assistantMessage);
 
-        const results: Anthropic.ToolResultBlockParam[] = await Promise.all(
-          toolBlocks.map(async (block: Anthropic.ToolUseBlock) => ({
-            type: 'tool_result' as const,
-            tool_use_id: block.id,
-            content: await executeToolCall(
-              block.name,
-              block.input as Record<string, unknown>,
+        const toolCalls = assistantMessage.tool_calls ?? [];
+        const toolResults = await Promise.all(
+          toolCalls.map(async (tc) => {
+            // OpenAI v6 tool_calls is a union (function | custom); only
+            // function tool calls carry a `.function` payload.
+            if (tc.type !== 'function') {
+              return {
+                role: 'tool' as const,
+                tool_call_id: tc.id,
+                content: 'Unsupported tool call type.',
+              };
+            }
+            const result = await executeToolCall(
+              tc.function.name,
+              JSON.parse(tc.function.arguments || '{}'),
               userContext,
               groupId
-            ),
-          }))
+            );
+            return {
+              role: 'tool' as const,
+              tool_call_id: tc.id,
+              content: result,
+            };
+          })
         );
 
-        messages.push({ role: 'user', content: results });
-        response = await (this.client! as any).messages.create({
+        messages.push(...toolResults);
+        response = await this.client!.chat.completions.create({
           model: MODEL,
           max_tokens: MAX_TOKENS,
-          system: systemWithCache,
-          tools,
+          tools: TOOLS,
+          tool_choice: 'auto',
           messages,
-          betas: ['prompt-caching-2024-07-31'],
         });
       }
 
-      const textBlock = response.content.find(
-        (b: Anthropic.ContentBlock): b is Anthropic.TextBlock =>
-          b.type === 'text'
-      );
-      return textBlock?.text ?? UNAVAILABLE_MSG;
+      return response.choices[0]?.message?.content ?? UNAVAILABLE_MSG;
     } catch (err) {
-      logger.warn({ err, groupId }, '[BarazaAI] Claude API call failed');
+      logger.warn({ err, groupId }, '[BarazaAI] Qwen API call failed');
       return UNAVAILABLE_MSG;
     }
   }
-}
-
-// ─────────────────────────────────────────────
-// Tool definitions
-// ─────────────────────────────────────────────
-
-function buildTools(): Anthropic.Tool[] {
-  return [
-    {
-      name: 'get_user_stats',
-      description:
-        "Get the current user's PR balance, total Impact Points, and verification level.",
-      input_schema: { type: 'object', properties: {}, required: [] },
-    },
-    {
-      name: 'get_group_proposals',
-      description:
-        'Get proposals for this baraza group. Use status=ACTIVE for proposals currently open for review or voting; status=ALL for recent history.',
-      input_schema: {
-        type: 'object',
-        properties: {
-          status: {
-            type: 'string',
-            enum: ['ACTIVE', 'ALL'],
-            description: 'Filter scope',
-          },
-        },
-        required: [],
-      },
-    },
-    {
-      name: 'get_group_treasury',
-      description: 'Get the KES and UT treasury balance for the group.',
-      input_schema: { type: 'object', properties: {}, required: [] },
-    },
-    {
-      name: 'get_election_results',
-      description:
-        'Get elections for this group. Returns active elections (open for nominations or voting) and the most recent completed election with winner.',
-      input_schema: { type: 'object', properties: {}, required: [] },
-    },
-    {
-      name: 'get_ward_stats',
-      description:
-        'Get ward-level community statistics: member count, total PR issued, active members (participated in last 30 days), and recent M-Pesa contributions.',
-      input_schema: { type: 'object', properties: {}, required: [] },
-    },
-    {
-      name: 'search_past_decisions',
-      description:
-        'Search past proposals and decisions for this group by keyword. Use when a member asks about a previous vote, decision, or initiative.',
-      input_schema: {
-        type: 'object',
-        properties: {
-          query: {
-            type: 'string',
-            description:
-              'Keyword or phrase to search in proposal titles and descriptions',
-          },
-        },
-        required: ['query'],
-      },
-    },
-  ];
 }
 
 // ─────────────────────────────────────────────
@@ -273,6 +297,10 @@ async function executeToolCall(
     return `Could not retrieve data for ${name}.`;
   }
 }
+
+// ─────────────────────────────────────────────
+// Tool implementations (unchanged from original)
+// ─────────────────────────────────────────────
 
 async function toolGetUserStats(userId: string | null): Promise<string> {
   if (!userId) return 'User is not linked to a UjamaaDAO account.';
@@ -423,11 +451,9 @@ async function toolGetWardStats(groupId: string): Promise<string> {
     select: { wardId: true, constituencyId: true, countyId: true },
   });
 
-  const wardId = group?.wardId;
-
   const [memberCount, recentActive, totalPR] = await Promise.all([
     prisma.groupMember.count({ where: { groupId, active: true } }),
-    wardId
+    group?.wardId
       ? prisma.barazaAttendance.count({
           where: {
             barazaGroup: { groupId },
