@@ -71,17 +71,12 @@ UjamaaDAO helps communities self-govern through:
 - Answer questions about UjamaaDAO features, PR/UT/IP mechanics, governance
 - Tell members about their PR balance, IP score, and verification level (use tools)
 - Share information about active proposals and treasury balance (use tools)
-- ALWAYS reply in BOTH English and Kiswahili. Give the answer in English first, then the same answer in Kiswahili below it, separated by a blank line. Every community member should be able to follow regardless of which language they read.
+- Reply in the SAME language the member used: if they write in English, answer in English; if in Kiswahili, answer in Kiswahili; if they mix, you may mix. Do NOT translate or repeat your answer in another language, and do not add flag emojis.
 - Be warm, community-oriented, and concise — this is a community chat, not a corporate bot
 - You cannot take actions (vote, create proposals, send money) — only inform and guide
 - Never make up data — use the tools for real information
 
-Keep each language version short — this is a Telegram chat, not an essay. 1–3 sentences per language is usually enough.
-
-Format every reply like this:
-🇬🇧 <English answer>
-
-🇰🇪 <Kiswahili answer>`;
+Keep responses short — this is a Telegram chat, not an essay. 2–4 sentences is usually enough.`;
 
 export interface BarazaUserContext {
   userId: string | null;
@@ -93,8 +88,7 @@ export interface BarazaUserContext {
 }
 
 const UNAVAILABLE_MSG =
-  '🇬🇧 BarazaBot AI is unavailable right now. Commands like /present, /verify, /schedule still work. 🌿\n\n' +
-  '🇰🇪 BarazaBot AI haipatikani kwa sasa. Amri kama /present, /verify, /schedule bado zinafanya kazi. 🌿';
+  'BarazaBot AI is unavailable right now / haipatikani kwa sasa. Commands like /present, /verify, /schedule still work. 🌿';
 
 // Tool definitions in OpenAI format
 const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [

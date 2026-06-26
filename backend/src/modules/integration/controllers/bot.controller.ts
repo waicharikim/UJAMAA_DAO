@@ -27,6 +27,7 @@ import {
   RegisterBarazaGroupDto,
   MarkAttendanceDto,
   TelegramUpdate,
+  TelegramMessage,
 } from '../types.js';
 
 type BarazaGroupRow = {
@@ -220,11 +221,69 @@ async function resolveUserContext(
   };
 }
 
+// ─────────────────────────────────────────────
+// Bot identity + AI invocation gate
+// ─────────────────────────────────────────────
+
+let cachedBot: { id: number; username: string } | null = null;
+let botFetchAttempted = false;
+
+/** Bot's id + @username (from getMe), cached. Used to gate AI replies. */
+async function getBotIdentity(): Promise<{
+  id: number;
+  username: string;
+} | null> {
+  if (cachedBot || botFetchAttempted) return cachedBot;
+  botFetchAttempted = true;
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return null;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/getMe`);
+    const data = (await res.json()) as {
+      ok: boolean;
+      result?: { id: number; username: string };
+    };
+    if (data.ok && data.result) {
+      cachedBot = { id: data.result.id, username: data.result.username };
+    }
+  } catch (err) {
+    logger.warn(
+      { operationType: 'TELEGRAM_GETME', error: String(err) },
+      'Could not fetch bot identity'
+    );
+  }
+  return cachedBot;
+}
+
+/**
+ * The AI bot only answers free-text when explicitly addressed:
+ *  - a private chat (every message is for the bot), OR
+ *  - a reply to one of the bot's own messages, OR
+ *  - a message that @mentions the bot's username.
+ * Otherwise it stays silent — no replying to every message in the group.
+ */
+function isBotAddressed(
+  message: TelegramMessage,
+  bot: { id: number; username: string } | null
+): boolean {
+  if (message.chat?.type === 'private') return true;
+  if (!bot) return false;
+  if (message.reply_to_message?.from?.id === bot.id) return true;
+  return new RegExp(`@${bot.username}(\\b|$)`, 'i').test(message.text ?? '');
+}
+
+/** Strip an @botname mention so the AI sees a clean question. */
+function stripBotMention(text: string, username?: string): string {
+  if (!username) return text.trim();
+  return text.replace(new RegExp(`@${username}`, 'ig'), '').trim();
+}
+
 async function dispatchCommand(
   text: string,
   from: TelegramFrom | undefined,
   chatId: number,
-  barazaGroup: BarazaGroupRow | null
+  barazaGroup: BarazaGroupRow | null,
+  message: TelegramMessage
 ): Promise<void> {
   if (text.startsWith('/verify'))
     return handleVerifyCommand(text, from, chatId);
@@ -247,13 +306,18 @@ async function dispatchCommand(
   if (text.startsWith('/present'))
     return handlePresentCommand(from, chatId, barazaGroup);
 
-  // Free-text → AI layer (skip empty messages and other slash commands)
+  // Free-text → AI layer — ONLY when the bot is explicitly addressed
+  // (mentioned, replied-to, or a private chat). Otherwise stay silent.
   if (!text || text.startsWith('/')) return;
   if (!barazaAiService.isAvailable) return;
 
+  const bot = await getBotIdentity();
+  if (!isBotAddressed(message, bot)) return;
+
+  const question = stripBotMention(text, bot?.username) || text;
   const userContext = await resolveUserContext(from, barazaGroup.groupId);
   const reply = await barazaAiService.reply(
-    text,
+    question,
     userContext,
     barazaGroup.groupId
   );
@@ -285,7 +349,7 @@ export async function handleTelegramWebhook(
   const text = message.text?.trim() ?? '';
 
   const barazaGroup = await fetchBarazaGroup(chatId);
-  await dispatchCommand(text, from, chatId, barazaGroup);
+  await dispatchCommand(text, from, chatId, barazaGroup, message);
 }
 
 // ─────────────────────────────────────────────

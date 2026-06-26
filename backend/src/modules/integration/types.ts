@@ -96,5 +96,12 @@ export interface TelegramUpdate {
     from?: { id: number; username?: string; first_name?: string };
     chat: { id: number; type: string };
     text?: string;
+    reply_to_message?: {
+      from?: { id: number; is_bot?: boolean; username?: string };
+    };
+    entities?: { type: string; offset: number; length: number }[];
   };
 }
+
+/** Bot identity (from getMe), cached to gate AI replies on @mention / reply-to-bot. */
+export type TelegramMessage = NonNullable<TelegramUpdate['message']>;
