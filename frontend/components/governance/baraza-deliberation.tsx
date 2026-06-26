@@ -1,17 +1,18 @@
 "use client"
 
-import { Users, Info, Check, Link2, Swords, HelpCircle, Construction, Microscope, Wrench, PencilLine } from "lucide-react"
+import { Users, Info, Check, ThumbsUp, Swords, HelpCircle, Construction, Star, Wrench, PencilLine } from "lucide-react"
 import type { BarazaDeliberationDto } from "@/lib/api"
 
 interface BarazaDeliberationCardProps {
   deliberation: BarazaDeliberationDto | null | undefined
 }
 
+// Plain-language readiness labels (the engine's bands, said simply).
 const BAND: Record<string, { label: string; color: string; bg: string }> = {
-  READY:                { label: "Ready",                color: "#1A6B3C", bg: "rgba(26,107,60,0.10)" },
-  CONDITIONAL:          { label: "Conditional",          color: "#7A4F1E", bg: "rgba(201,146,42,0.12)" },
-  SIGNIFICANT_CONCERNS: { label: "Significant concerns", color: "#B05A1E", bg: "rgba(176,90,30,0.12)" },
-  NOT_READY:            { label: "Not ready",            color: "#B03A1E", bg: "rgba(176,58,30,0.12)" },
+  READY:                { label: "Looks solid",        color: "#1A6B3C", bg: "rgba(26,107,60,0.10)" },
+  CONDITIONAL:          { label: "Needs some changes", color: "#7A4F1E", bg: "rgba(201,146,42,0.12)" },
+  SIGNIFICANT_CONCERNS: { label: "Needs work",         color: "#B05A1E", bg: "rgba(176,90,30,0.12)" },
+  NOT_READY:            { label: "Not ready yet",      color: "#B03A1E", bg: "rgba(176,58,30,0.12)" },
 }
 
 function asList(v: unknown): string[] {
@@ -19,8 +20,8 @@ function asList(v: unknown): string[] {
 }
 
 /**
- * Read-only record of the 7-agent Baraza deliberation (conflict map + readiness).
- * Renders nothing until a completed deliberation exists for the proposal.
+ * Read-only, plain-language summary of the 7-agent Baraza review for a proposal.
+ * Renders nothing until a completed deliberation exists.
  */
 export function BarazaDeliberationCard({ deliberation }: BarazaDeliberationCardProps) {
   if (!deliberation) return null
@@ -31,13 +32,13 @@ export function BarazaDeliberationCard({ deliberation }: BarazaDeliberationCardP
     : null
   const score = deliberation.readinessScore
 
-  const consensus = asList(map.consensus)
-  const unresolved = asList(map.unresolved)
-  const coalitions = map.coalitions ?? []
-  const conflicts = map.conflicts ?? []
-  const chokepoints = map.chokepoints ?? []
-  const convergence = asList(deliberation.mkutanoConvergence)
-  const revisions = asList(deliberation.revisionSuggestions)
+  const agreed = asList(map.consensus)
+  const open = asList(map.unresolved)
+  const sharedConcerns = (map.coalitions ?? []).map((c) => c.sharedConcern || (c.agents ?? []).join(", ")).filter(Boolean)
+  const tensions = (map.conflicts ?? []).map((c) => c.issue || (c.between ?? []).join(" vs ")).filter(Boolean)
+  const blockers = map.chokepoints ?? []
+  const topConcerns = asList(deliberation.mkutanoConvergence)
+  const changes = asList(deliberation.revisionSuggestions)
 
   const Section = ({ icon: Icon, label, color, children }: {
     icon: typeof Check; label: string; color: string; children: React.ReactNode
@@ -45,7 +46,7 @@ export function BarazaDeliberationCard({ deliberation }: BarazaDeliberationCardP
     <div className="rounded-xl p-3" style={{ background: "rgba(14,11,8,0.03)" }}>
       <div className="flex items-center gap-1.5 mb-1.5">
         <Icon className="h-3.5 w-3.5" style={{ color }} />
-        <p className="text-[11px] font-bold uppercase tracking-wide" style={{ color }}>{label}</p>
+        <p className="text-[12px] font-bold" style={{ color }}>{label}</p>
       </div>
       {children}
     </div>
@@ -62,6 +63,9 @@ export function BarazaDeliberationCard({ deliberation }: BarazaDeliberationCardP
     </ul>
   )
 
+  const sevWord = (s?: string) =>
+    s ? ({ HIGH: "big issue", MEDIUM: "worth sorting", LOW: "minor" }[s.toUpperCase()] ?? s.toLowerCase()) : null
+
   return (
     <div
       className="rounded-2xl overflow-hidden"
@@ -71,7 +75,7 @@ export function BarazaDeliberationCard({ deliberation }: BarazaDeliberationCardP
       <div className="flex items-center justify-between gap-2 px-4 md:px-5 pt-4">
         <div className="flex items-center gap-2">
           <Users className="h-4 w-4" style={{ color: "#C9922A" }} />
-          <h2 className="text-sm font-bold text-[#0A1F14]">Baraza council — AI stress-test</h2>
+          <h2 className="text-sm font-bold text-[#0A1F14]">Baraza review</h2>
         </div>
         {band && (
           <span
@@ -83,89 +87,80 @@ export function BarazaDeliberationCard({ deliberation }: BarazaDeliberationCardP
         )}
       </div>
 
-      {/* Disclaimer — the "AI never decides" contract */}
+      {/* Plain-language explainer + the "AI never decides" contract */}
       <div
         className="mx-4 md:mx-5 mt-2 flex items-start gap-2 rounded-lg px-3 py-2"
         style={{ background: "rgba(42,107,124,0.06)", border: "1px solid rgba(42,107,124,0.15)" }}
       >
         <Info className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" style={{ color: "#2A6B7C" }} />
         <p className="text-[11px] leading-snug" style={{ color: "rgba(14,11,8,0.6)" }}>
-          A council of AI agents stress-tested this proposal before voting — <strong>guidance, not a verdict</strong>. The binding decision is your vote.
+          A panel of AI helpers read this proposal before the vote and noted what looks strong and what needs work. It's here to help you decide — <strong>it does not decide</strong>. Your vote is what counts.
         </p>
       </div>
 
       <div className="px-4 md:px-5 py-4 space-y-3">
-        {consensus.length > 0 && (
-          <Section icon={Check} label="Consensus" color="#1A6B3C">
-            <Bullets items={consensus} color="#1A6B3C" />
+        {agreed.length > 0 && (
+          <Section icon={Check} label="What's widely agreed" color="#1A6B3C">
+            <Bullets items={agreed} color="#1A6B3C" />
           </Section>
         )}
 
-        {coalitions.length > 0 && (
-          <Section icon={Link2} label="Coalitions" color="#2A6B7C">
-            <ul className="space-y-1">
-              {coalitions.map((c, i) => (
-                <li key={i} className="flex gap-1.5 text-[13px] leading-snug" style={{ color: "rgba(14,11,8,0.78)" }}>
-                  <span style={{ color: "#2A6B7C" }}>•</span>
-                  <span>{(c.agents ?? []).join(" + ")}{c.sharedConcern ? ` — ${c.sharedConcern}` : ""}</span>
-                </li>
-              ))}
-            </ul>
+        {sharedConcerns.length > 0 && (
+          <Section icon={ThumbsUp} label="Concerns that come up a lot" color="#2A6B7C">
+            <Bullets items={sharedConcerns} color="#2A6B7C" />
           </Section>
         )}
 
-        {conflicts.length > 0 && (
-          <Section icon={Swords} label="Conflicts" color="#B03A1E">
-            <ul className="space-y-1">
-              {conflicts.map((c, i) => (
-                <li key={i} className="flex gap-1.5 text-[13px] leading-snug" style={{ color: "rgba(14,11,8,0.78)" }}>
-                  <span style={{ color: "#B03A1E" }}>•</span>
-                  <span>{(c.between ?? []).join(" ↔ ")}{c.issue ? `: ${c.issue}` : ""}</span>
-                </li>
-              ))}
-            </ul>
+        {tensions.length > 0 && (
+          <Section icon={Swords} label="Trade-offs to weigh" color="#B03A1E">
+            <Bullets items={tensions} color="#B03A1E" />
           </Section>
         )}
 
-        {unresolved.length > 0 && (
-          <Section icon={HelpCircle} label="Unresolved" color="#7A4F1E">
-            <Bullets items={unresolved} color="#7A4F1E" />
+        {open.length > 0 && (
+          <Section icon={HelpCircle} label="Still unanswered" color="#7A4F1E">
+            <Bullets items={open} color="#7A4F1E" />
           </Section>
         )}
 
-        {chokepoints.length > 0 && (
-          <Section icon={Construction} label="Chokepoints" color="#B05A1E">
-            <ul className="space-y-1">
-              {chokepoints.map((c, i) => (
-                <li key={i} className="flex gap-1.5 text-[13px] leading-snug" style={{ color: "rgba(14,11,8,0.78)" }}>
-                  <span style={{ color: "#B05A1E" }}>•</span>
-                  <span>
-                    {c.severity ? `[${c.severity}] ` : ""}{c.location ?? "unspecified"}
-                    {c.routeAround ? ` → route around: ${c.routeAround}` : ""}
-                  </span>
-                </li>
-              ))}
-            </ul>
+        {blockers.length > 0 && (
+          <Section icon={Construction} label="What could hold this back" color="#B05A1E">
+            <div className="space-y-2.5">
+              {blockers.map((c, i) => {
+                const sev = sevWord(c.severity)
+                return (
+                  <div key={i}>
+                    <p className="text-[13px] font-semibold leading-snug" style={{ color: "rgba(14,11,8,0.85)" }}>
+                      {c.location ?? "Unspecified"}
+                      {sev ? <span className="font-normal" style={{ color: "#B05A1E" }}> — {sev}</span> : null}
+                    </p>
+                    <p className="text-[12.5px] leading-snug mt-0.5" style={{ color: "rgba(14,11,8,0.65)" }}>
+                      {c.routeAround ? <><span className="font-semibold">How to get past it:</span> {c.routeAround}</> : "No clear way around it yet."}
+                    </p>
+                  </div>
+                )
+              })}
+            </div>
           </Section>
         )}
 
-        {convergence.length > 0 && (
-          <Section icon={Microscope} label="Mkutano — convergence" color="#1A6B3C">
-            <Bullets items={convergence} color="#1A6B3C" />
+        {topConcerns.length > 0 && (
+          <Section icon={Star} label="The most important things to fix" color="#1A6B3C">
+            <Bullets items={topConcerns} color="#1A6B3C" />
           </Section>
         )}
 
         {deliberation.mkutanoFixability && (
-          <div className="flex items-center gap-1.5 text-[12px]" style={{ color: "rgba(14,11,8,0.7)" }}>
-            <Wrench className="h-3.5 w-3.5" style={{ color: "#7A4F1E" }} />
-            <span><strong>Fixability:</strong> {deliberation.mkutanoFixability}</span>
+          <div className="flex items-start gap-1.5 text-[12.5px]" style={{ color: "rgba(14,11,8,0.7)" }}>
+            <Wrench className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" style={{ color: "#7A4F1E" }} />
+            <span><strong>Can these be fixed?</strong> {deliberation.mkutanoFixability}</span>
           </div>
         )}
 
-        {revisions.length > 0 && (
-          <Section icon={PencilLine} label="Revision suggestions" color="#7A4F1E">
+        {changes.length > 0 && (
+          <Section icon={PencilLine} label="Suggested changes before voting" color="#7A4F1E">
             <ol className="space-y-1 list-decimal list-inside">
-              {revisions.map((s, i) => (
+              {changes.map((s, i) => (
                 <li key={i} className="text-[13px] leading-snug" style={{ color: "rgba(14,11,8,0.78)" }}>{s}</li>
               ))}
             </ol>
