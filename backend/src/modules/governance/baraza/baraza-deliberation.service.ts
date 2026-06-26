@@ -326,6 +326,9 @@ ${episodicSummary}
 ${relationalSummary}${specialMemory}`;
 }
 
+/** Placeholder stored when a domain agent's AI call returns nothing. */
+const AGENT_NO_RESPONSE = '[Agent did not respond]';
+
 // ─── Round runner ─────────────────────────────────────────────────────────────
 
 async function runDomainAgentsRound(
@@ -380,7 +383,7 @@ async function runDomainAgentsRound(
               model: QWEN_MODEL,
             });
 
-      return [agentKey, response ?? '[Agent did not respond]'] as const;
+      return [agentKey, response ?? AGENT_NO_RESPONSE] as const;
     })
   );
 
@@ -519,7 +522,8 @@ KIVULI'S MKUTANO READING:
 ${kivuliReading ?? '(unavailable)'}
 
 Return JSON: { "convergencePoints": string[], "contradictionPoints": string[], "fixabilityVerdict": string }`,
-    maxTokens: 1000,
+    maxTokens: 2000,
+    model: QWEN_ANALYST_MODEL,
   });
 
   return {
@@ -581,7 +585,10 @@ Return JSON with this exact shape:
   "revisionSuggestions": string[],
   "baseConsensusRatio": 0-1
 }`,
-    maxTokens: 2000,
+    // qwen-max + a larger budget: the conflict map is a big structured object;
+    // qwen-plus / a tight token cap was under-extracting (empty coalitions/conflicts).
+    maxTokens: 4000,
+    model: QWEN_ANALYST_MODEL,
   });
 
   // ── Readiness score calculation ─────────────────────────────────────────────
@@ -1033,6 +1040,22 @@ class BarazaDeliberationService {
         ukweliAnnotations,
         kivuliAnnotations,
       });
+    }
+
+    // Total-failure guard: if EVERY domain-agent response is the no-response
+    // placeholder, the AI calls all failed (unavailable / misconfigured / out of
+    // quota). Throw so run() records FAILED + errorLog instead of a misleading
+    // COMPLETE with a default score.
+    const anyRealDomainResponse = rounds.some((r) =>
+      DOMAIN_AGENT_KEYS.some((k) => {
+        const v = r.domainPositions[k];
+        return !!v && v !== AGENT_NO_RESPONSE;
+      })
+    );
+    if (!anyRealDomainResponse) {
+      throw new Error(
+        'All domain-agent calls failed — no deliberation produced (Qwen unavailable, misconfigured, or out of quota)'
+      );
     }
 
     // ── 4. Mkutano ───────────────────────────────────────────────────────────
