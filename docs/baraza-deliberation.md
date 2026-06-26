@@ -97,6 +97,8 @@ Runs as a BullMQ job (`BARAZA_DELIBERATION`) on the governance queue/worker. Con
 
 **Telegram output** (`baraza-telegram.service.ts`): posts an in-progress notice, then the formatted result (bilingual SW/EN headers, emoji sections, split under Telegram's 4096-char limit), or a failure notice. No-op if Telegram isn't configured or the group has no active Telegram baraza.
 
+**Web output** (`components/governance/baraza-deliberation.tsx`): the proposal detail page reads `governanceApi.getBaraza(proposalId)` (→ `GET /governance/:proposalId/baraza`) and renders `BarazaDeliberationCard` — readiness band + score, consensus / coalitions / conflicts / unresolved / chokepoints / Mkutano convergence / fixability / revision suggestions, with the "AI stress-test, not a verdict — your vote is binding" disclaimer. Read-only and self-gating (renders nothing until a COMPLETE deliberation exists).
+
 ---
 
 ## AI provider & info-fetching
@@ -144,5 +146,5 @@ Code is identical; config is env-driven. **Two prod-specific steps** are require
 
 - **Proposal context richness:** the create form collects `problem`/`solution` but folds them into `description` (the structured `Proposal.problem`/`solution` columns stay null). Agents still get the content via `description`; sending discrete fields is a nice-to-have polish.
 - **Prod migration** is a manual `db push` (see above) until the migration drift is reconciled.
-- **No frontend UI** for the conflict map yet (D3 visualization is an explicit stretch goal); results surface via Telegram + the `GET` endpoint.
+- **Frontend:** a read-only text card (`BarazaDeliberationCard`) on the proposal page now surfaces the full record; a richer **D3 conflict-map visualization** remains a stretch goal.
 - **Outcome backfill:** episodic `proposalOutcome` is written as `PENDING` and not yet updated retroactively when the proposal is later approved/rejected.

@@ -13,6 +13,7 @@ import { AnnotatableText } from "@/components/governance/annotatable-text"
 import { AnnotationSidebar } from "@/components/governance/annotation-sidebar"
 import { DeliberationHighlights } from "@/components/governance/deliberation-highlights"
 import { DeliberationSummary } from "@/components/governance/deliberation-summary"
+import { BarazaDeliberationCard } from "@/components/governance/baraza-deliberation"
 import { ProjectSetupEditor } from "@/components/projects/project-setup-editor"
 import { useSectionTour } from "@/hooks/use-section-tour"
 import { proposalDetailTour } from "@/lib/tours"
@@ -118,6 +119,14 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
     queryFn: () => governanceApi.getProposal(proposalId),
     enabled: isAuthenticated,
     staleTime: 15_000,
+  })
+
+  // 7-agent Baraza deliberation record (null until the engine has run).
+  const { data: baraza } = useQuery({
+    queryKey: ["baraza", proposalId],
+    queryFn: () => governanceApi.getBaraza(proposalId),
+    enabled: isAuthenticated,
+    staleTime: 60_000,
   })
 
   useEffect(() => {
@@ -1016,6 +1025,9 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
             status={proposal.status}
           />
         )}
+
+        {/* ── 7-agent Baraza council record (read-only; hidden until it has run) ─ */}
+        <BarazaDeliberationCard deliberation={baraza} />
       </div>
 
       {/* ── Community Opinions ───────────────────────────── */}

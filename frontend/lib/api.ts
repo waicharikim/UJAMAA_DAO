@@ -1047,6 +1047,35 @@ export type ProposalStatus =
 
 export type ProposalScope = "GROUP" | "COMMUNITY"
 
+export type BarazaReadinessBand =
+  | "READY"
+  | "CONDITIONAL"
+  | "SIGNIFICANT_CONCERNS"
+  | "NOT_READY"
+
+export interface BarazaConflictMap {
+  coalitions?: { agents?: string[]; sharedConcern?: string }[]
+  conflicts?: { between?: string[]; issue?: string; intensity?: number }[]
+  consensus?: string[]
+  unresolved?: string[]
+  implementabilityRating?: string
+  chokepoints?: { location?: string; severity?: string; routeAround?: string | null }[]
+}
+
+/** The 7-agent Baraza deliberation record for a proposal (read-only). */
+export interface BarazaDeliberationDto {
+  id: string
+  readinessScore: number | null
+  readinessBand: BarazaReadinessBand | string | null
+  conflictMap: BarazaConflictMap | null
+  revisionSuggestions: string[] | null
+  mkutanoConvergence: string[] | null
+  mkutanoContradictions: string[] | null
+  mkutanoFixability: string | null
+  triggeredBy: string
+  completedAt: string | null
+}
+
 export interface ProposalAnnotationDto {
   id: string
   proposalId: string
@@ -1160,6 +1189,10 @@ export const governanceApi = {
 
   getProposal: (proposalId: string): Promise<ProposalDto> =>
     apiFetch<ProposalDto>(`/governance/${proposalId}`),
+
+  /** Latest completed 7-agent Baraza deliberation (null if none yet). */
+  getBaraza: (proposalId: string): Promise<BarazaDeliberationDto | null> =>
+    apiFetch<BarazaDeliberationDto | null>(`/governance/${proposalId}/baraza`),
 
   reviewProposal: (proposalId: string, decision: "APPROVE" | "REJECT", note?: string) =>
     apiFetch<unknown>(`/governance/${proposalId}/review`, {
