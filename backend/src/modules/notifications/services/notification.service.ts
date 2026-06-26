@@ -185,6 +185,7 @@ export class NotificationService {
         ];
       case NotificationType.PROPOSAL_PASSED:
       case NotificationType.PROJECT_MILESTONE_VERIFIED:
+      case NotificationType.BARAZA_NEEDED:
         return [NotificationChannel.EMAIL, NotificationChannel.IN_APP];
       default:
         return [NotificationChannel.IN_APP];

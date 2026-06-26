@@ -13,6 +13,10 @@ const BASE_URL = TELEGRAM_TOKEN
   ? `https://api.telegram.org/bot${TELEGRAM_TOKEN}`
   : null;
 
+// Cap every Telegram API call so a slow/hanging Telegram never blocks the
+// caller (an admin HTTP request or a worker job) indefinitely.
+const TELEGRAM_TIMEOUT_MS = 10_000;
+
 export function isTelegramConfigured(): boolean {
   return !!TELEGRAM_TOKEN;
 }
@@ -28,6 +32,7 @@ async function telegramApiCall(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(TELEGRAM_TIMEOUT_MS),
     });
     const data = await res.json();
     return data;

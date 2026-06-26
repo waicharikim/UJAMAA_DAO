@@ -18,6 +18,7 @@ import {
   registerBarazaGroup,
   getBarazaGroups,
   getAllBarazaGroups,
+  getBarazaDemand,
   recordAttendance,
   deactivateBarazaGroup,
   refreshInviteLink,
@@ -81,6 +82,16 @@ router.get(
     allowedRoles: [SystemRoles.WARD_ADMIN, SystemRoles.SUPER_ADMIN],
   }),
   getAllBarazaGroups
+);
+
+// Worklist: communities past the member threshold with no Telegram baraza.
+router.get(
+  '/baraza-groups/demand',
+  authenticate,
+  authorize({
+    allowedRoles: [SystemRoles.WARD_ADMIN, SystemRoles.SUPER_ADMIN],
+  }),
+  getBarazaDemand
 );
 
 router.post(

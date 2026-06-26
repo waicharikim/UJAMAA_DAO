@@ -84,6 +84,9 @@ UjamaaDAO helps communities self-govern through:
 - /open — (leader only) open the session for /present
 - /close — (leader only) close the session and tally attendance
 
+## A member's communities
+A member belongs to several communities at once: their location chain (ward → constituency → county → national, and a second ward chain if they have a secondary ward — up to 7 system groups) plus any voluntary groups (SACCOs, projects, interest groups) they have joined. "Your community" is never just the ward. When you report community-specific data (proposals, treasury, elections, decisions), the tool results are labelled by community — always say which community each item belongs to, and if something spans several, group it by community.
+
 ## Your role
 - Answer questions about UjamaaDAO features, PR/UT/IP mechanics, governance
 - Tell members about their PR balance, IP score, and verification level (use tools)
@@ -102,6 +105,17 @@ export interface BarazaUserContext {
   verificationLevel?: string;
   participationRights?: number;
   activeElectionCount?: number;
+}
+
+/**
+ * A community the user belongs to. In a baraza group chat this is the single
+ * registered group; in a DM it is every group the user is an active member of
+ * (their up-to-7 system groups + all voluntary groups). Group-scoped tools
+ * operate across this whole set and label results by community name.
+ */
+export interface BarazaCommunity {
+  groupId: string;
+  groupName: string;
 }
 
 const UNAVAILABLE_MSG =
@@ -123,7 +137,7 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     function: {
       name: 'get_group_proposals',
       description:
-        'Get proposals for this baraza group. Use status=ACTIVE for proposals currently open for review or voting; status=ALL for recent history.',
+        "Get proposals across the user's communities (their ward/constituency/county/national system groups and any voluntary groups). Results are labelled by community. Use status=ACTIVE for proposals currently open for review or voting; status=ALL for recent history.",
       parameters: {
         type: 'object',
         properties: {
@@ -141,7 +155,8 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'get_group_treasury',
-      description: 'Get the KES and UT treasury balance for the group.',
+      description:
+        "Get the KES and UT treasury balances for the user's communities, labelled by community.",
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
@@ -150,7 +165,7 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     function: {
       name: 'get_election_results',
       description:
-        'Get elections for this group. Returns active elections (open for nominations or voting) and the most recent completed election with winner.',
+        "Get elections across the user's communities. Returns active elections (open for nominations or voting) and the most recent completed election with winner, labelled by community.",
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
@@ -159,7 +174,7 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     function: {
       name: 'get_ward_stats',
       description:
-        'Get ward-level community statistics: member count, total PR issued, active members (participated in last 30 days), and recent M-Pesa contributions.',
+        "Get community statistics for the user's communities: member counts (and, when the user is in a single community, active members in the last 30 days and total PR held). Use when asked how big or how active a community is.",
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
@@ -168,7 +183,7 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     function: {
       name: 'search_past_decisions',
       description:
-        'Search past proposals and decisions for this group by keyword. Use when a member asks about a previous vote, decision, or initiative.',
+        "Search past proposals and decisions across the user's communities by keyword. Use when a member asks about a previous vote, decision, or initiative.",
       parameters: {
         type: 'object',
         properties: {
@@ -193,6 +208,10 @@ export class BarazaAiService {
       this.client = new OpenAI({
         apiKey,
         baseURL: DASHSCOPE_BASE_URL,
+        // Cap each call and limit retries so a slow Qwen can't hang the webhook
+        // async tail. reply() already catches and falls back on failure.
+        timeout: 30_000,
+        maxRetries: 1,
       });
     }
   }
@@ -204,11 +223,11 @@ export class BarazaAiService {
   async reply(
     text: string,
     userContext: BarazaUserContext,
-    groupId: string
+    communities: BarazaCommunity[]
   ): Promise<string> {
     if (!this.client) return UNAVAILABLE_MSG;
 
-    const contextHeader = buildContextHeader(userContext);
+    const contextHeader = buildContextHeader(userContext, communities);
     const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: `${contextHeader}\n\n${text}` },
@@ -248,7 +267,7 @@ export class BarazaAiService {
               tc.function.name,
               JSON.parse(tc.function.arguments || '{}'),
               userContext,
-              groupId
+              communities
             );
             return {
               role: 'tool' as const,
@@ -270,7 +289,10 @@ export class BarazaAiService {
 
       return response.choices[0]?.message?.content ?? UNAVAILABLE_MSG;
     } catch (err) {
-      logger.warn({ err, groupId }, '[BarazaAI] Qwen API call failed');
+      logger.warn(
+        { err, communities: communities.map((c) => c.groupId) },
+        '[BarazaAI] Qwen API call failed'
+      );
       return UNAVAILABLE_MSG;
     }
   }
@@ -280,30 +302,43 @@ export class BarazaAiService {
 // Tool execution
 // ─────────────────────────────────────────────
 
+const GROUP_SCOPED_TOOLS = new Set([
+  'get_group_proposals',
+  'get_group_treasury',
+  'get_election_results',
+  'get_ward_stats',
+  'search_past_decisions',
+]);
+
 async function executeToolCall(
   name: string,
   input: Record<string, unknown>,
   userContext: BarazaUserContext,
-  groupId: string
+  communities: BarazaCommunity[]
 ): Promise<string> {
+  // Group-scoped tools need at least one community. In a DM where the user
+  // isn't linked to any group, answer honestly rather than error.
+  if (GROUP_SCOPED_TOOLS.has(name) && communities.length === 0) {
+    return "I couldn't find any communities linked to your account. Join or get verified in a community in the UjamaaDAO app, then ask me again.";
+  }
   try {
     switch (name) {
       case 'get_user_stats':
         return await toolGetUserStats(userContext.userId);
       case 'get_group_proposals':
         return await toolGetGroupProposals(
-          groupId,
+          communities,
           (input.status as string) ?? 'ACTIVE'
         );
       case 'get_group_treasury':
-        return await toolGetGroupTreasury(groupId);
+        return await toolGetGroupTreasury(communities);
       case 'get_election_results':
-        return await toolGetElectionResults(groupId);
+        return await toolGetElectionResults(communities);
       case 'get_ward_stats':
-        return await toolGetWardStats(groupId);
+        return await toolGetWardStats(communities);
       case 'search_past_decisions':
         return await toolSearchPastDecisions(
-          groupId,
+          communities,
           (input.query as string) ?? ''
         );
       default:
@@ -348,33 +383,38 @@ async function toolGetUserStats(userId: string | null): Promise<string> {
 }
 
 async function toolGetGroupProposals(
-  groupId: string,
+  communities: BarazaCommunity[],
   status: string
 ): Promise<string> {
+  const groupIds = communities.map((c) => c.groupId);
+  const nameOf = communityNameMap(communities);
+
   const where: Prisma.ProposalWhereInput =
     status === 'ACTIVE'
       ? {
-          groupId,
+          groupId: { in: groupIds },
           status: { in: ['PENDING_REVIEW', 'APPROVED_FOR_VOTING'] as any },
         }
-      : { groupId };
+      : { groupId: { in: groupIds } };
 
   const proposals = await prisma.proposal.findMany({
     where,
     orderBy: { createdAt: 'desc' },
-    take: 5,
+    take: 10,
     select: {
       title: true,
       status: true,
       votingEndsAt: true,
+      groupId: true,
       _count: { select: { votes: true } },
     },
   });
 
-  if (!proposals.length) return 'No proposals found for this group.';
+  if (!proposals.length) return 'No proposals found in your communities.';
 
   return JSON.stringify(
     proposals.map((p) => ({
+      community: nameOf(p.groupId),
       title: p.title,
       status: p.status,
       votes: p._count.votes,
@@ -383,44 +423,63 @@ async function toolGetGroupProposals(
   );
 }
 
-async function toolGetGroupTreasury(groupId: string): Promise<string> {
-  const treasury = await prisma.groupTreasury.findUnique({
-    where: { groupId },
-    select: { balance: true, tokenBalance: true, updatedAt: true },
+async function toolGetGroupTreasury(
+  communities: BarazaCommunity[]
+): Promise<string> {
+  const groupIds = communities.map((c) => c.groupId);
+  const nameOf = communityNameMap(communities);
+
+  const treasuries = await prisma.groupTreasury.findMany({
+    where: { groupId: { in: groupIds } },
+    select: {
+      groupId: true,
+      balance: true,
+      tokenBalance: true,
+      updatedAt: true,
+    },
   });
 
-  if (!treasury) return 'No treasury found for this group.';
+  if (!treasuries.length) return 'No treasuries found in your communities.';
 
-  return JSON.stringify({
-    kesBalance: Number(treasury.balance),
-    utBalance: treasury.tokenBalance ?? 0,
-    lastUpdated: treasury.updatedAt?.toISOString().slice(0, 10) ?? null,
-  });
+  return JSON.stringify(
+    treasuries.map((t) => ({
+      community: nameOf(t.groupId),
+      kesBalance: Number(t.balance),
+      utBalance: t.tokenBalance ?? 0,
+      lastUpdated: t.updatedAt?.toISOString().slice(0, 10) ?? null,
+    }))
+  );
 }
 
-async function toolGetElectionResults(groupId: string): Promise<string> {
+async function toolGetElectionResults(
+  communities: BarazaCommunity[]
+): Promise<string> {
+  const groupIds = communities.map((c) => c.groupId);
+  const nameOf = communityNameMap(communities);
+
   const [active, recent] = await Promise.all([
     prisma.election.findMany({
       where: {
-        groupId,
+        groupId: { in: groupIds },
         status: { in: ['NOMINATIONS_OPEN', 'VOTING_OPEN'] },
       },
       select: {
-        id: true,
+        groupId: true,
         roleKey: true,
         status: true,
         nominationsCloseAt: true,
         votingCloseAt: true,
         _count: { select: { candidates: true } },
       },
-      take: 5,
+      take: 10,
     }),
-    prisma.election.findFirst({
-      where: { groupId, status: 'CLOSED' },
+    prisma.election.findMany({
+      where: { groupId: { in: groupIds }, status: 'CLOSED' },
       orderBy: { votingCloseAt: 'desc' },
+      take: 5,
       select: {
+        groupId: true,
         roleKey: true,
-        status: true,
         votingCloseAt: true,
         candidates: {
           orderBy: { voteCount: 'desc' },
@@ -434,78 +493,93 @@ async function toolGetElectionResults(groupId: string): Promise<string> {
     }),
   ]);
 
-  const result: Record<string, unknown> = {};
-
-  if (active.length) {
-    result.activeElections = active.map((e) => ({
+  const result: Record<string, unknown> = {
+    activeElections: active.map((e) => ({
+      community: nameOf(e.groupId),
       role: e.roleKey,
       status: e.status,
       candidates: e._count.candidates,
       nominationsCloseAt: e.nominationsCloseAt.toISOString().slice(0, 10),
       votingCloseAt: e.votingCloseAt.toISOString().slice(0, 10),
-    }));
-  } else {
-    result.activeElections = [];
-  }
-
-  if (recent) {
-    const winner = recent.candidates[0];
-    result.lastElection = {
-      role: recent.roleKey,
-      closedOn: recent.votingCloseAt.toISOString().slice(0, 10),
-      winner: winner
-        ? { name: winner.user?.name ?? 'Unknown', votes: winner.voteCount }
-        : null,
-    };
-  }
+    })),
+    recentElections: recent.map((e) => {
+      const winner = e.candidates[0];
+      return {
+        community: nameOf(e.groupId),
+        role: e.roleKey,
+        closedOn: e.votingCloseAt.toISOString().slice(0, 10),
+        winner: winner
+          ? { name: winner.user?.name ?? 'Unknown', votes: winner.voteCount }
+          : null,
+      };
+    }),
+  };
 
   return JSON.stringify(result);
 }
 
-async function toolGetWardStats(groupId: string): Promise<string> {
-  const group = await prisma.group.findUnique({
-    where: { id: groupId },
-    select: { wardId: true, constituencyId: true, countyId: true },
-  });
-
-  const [memberCount, recentActive, totalPR] = await Promise.all([
-    prisma.groupMember.count({ where: { groupId, active: true } }),
-    group?.wardId
-      ? prisma.barazaAttendance.count({
-          where: {
-            barazaGroup: { groupId },
-            sessionDate: {
-              gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-                .toISOString()
-                .slice(0, 10),
-            },
+async function toolGetWardStats(
+  communities: BarazaCommunity[]
+): Promise<string> {
+  // Single community (e.g. inside a baraza group chat): return the rich metrics.
+  if (communities.length === 1) {
+    const { groupId, groupName } = communities[0];
+    const [memberCount, recentActive, totalPR] = await Promise.all([
+      prisma.groupMember.count({ where: { groupId, active: true } }),
+      prisma.barazaAttendance.count({
+        where: {
+          barazaGroup: { groupId },
+          sessionDate: {
+            gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+              .toISOString()
+              .slice(0, 10),
           },
-        })
-      : Promise.resolve(0),
-    prisma.user.aggregate({
-      where: {
-        groupMemberships: { some: { groupId, active: true } },
-      },
-      _sum: { participationRights: true },
-    }),
-  ]);
+        },
+      }),
+      prisma.user.aggregate({
+        where: { groupMemberships: { some: { groupId, active: true } } },
+        _sum: { participationRights: true },
+      }),
+    ]);
 
-  return JSON.stringify({
-    members: memberCount,
-    activeParticipantsLast30Days: recentActive,
-    totalPRHeld: totalPR._sum.participationRights ?? 0,
+    return JSON.stringify({
+      community: groupName,
+      members: memberCount,
+      activeParticipantsLast30Days: recentActive,
+      totalPRHeld: totalPR._sum.participationRights ?? 0,
+    });
+  }
+
+  // Multiple communities (a DM): return member counts per community cheaply.
+  const groupIds = communities.map((c) => c.groupId);
+  const nameOf = communityNameMap(communities);
+  const counts = await prisma.groupMember.groupBy({
+    by: ['groupId'],
+    where: { groupId: { in: groupIds }, active: true },
+    _count: { _all: true },
   });
+  const byGroup = new Map(counts.map((c) => [c.groupId, c._count._all]));
+
+  return JSON.stringify(
+    communities.map((c) => ({
+      community: nameOf(c.groupId),
+      members: byGroup.get(c.groupId) ?? 0,
+    }))
+  );
 }
 
 async function toolSearchPastDecisions(
-  groupId: string,
+  communities: BarazaCommunity[],
   query: string
 ): Promise<string> {
   if (!query.trim()) return 'Please provide a search term.';
 
+  const groupIds = communities.map((c) => c.groupId);
+  const nameOf = communityNameMap(communities);
+
   const proposals = await prisma.proposal.findMany({
     where: {
-      groupId,
+      groupId: { in: groupIds },
       status: { in: ['APPROVED', 'REJECTED', 'COMPLETED', 'CANCELLED'] as any },
       OR: [
         { title: { contains: query, mode: 'insensitive' } },
@@ -513,47 +587,50 @@ async function toolSearchPastDecisions(
       ],
     },
     orderBy: { createdAt: 'desc' },
-    take: 5,
+    take: 8,
     select: {
       title: true,
       status: true,
       createdAt: true,
+      groupId: true,
       _count: { select: { votes: true } },
     },
   });
 
   const opinions = await prisma.proposalAnnotation.findMany({
     where: {
-      proposal: { groupId },
+      proposal: { groupId: { in: groupIds } },
       OR: [
         { quotedText: { contains: query, mode: 'insensitive' } },
         { comment: { contains: query, mode: 'insensitive' } },
       ],
     },
     orderBy: { createdAt: 'desc' },
-    take: 5,
+    take: 8,
     select: {
       comment: true,
       quotedText: true,
       fieldKey: true,
       createdAt: true,
-      proposal: { select: { title: true } },
+      proposal: { select: { title: true, groupId: true } },
       author: { select: { name: true } },
     },
   });
 
   if (!proposals.length && !opinions.length) {
-    return `No past decisions or community opinions found matching "${query}".`;
+    return `No past decisions or community opinions found matching "${query}" in your communities.`;
   }
 
   return JSON.stringify({
     decisions: proposals.map((p) => ({
+      community: nameOf(p.groupId),
       title: p.title,
       outcome: p.status,
       votes: p._count.votes,
       date: p.createdAt.toISOString().slice(0, 10),
     })),
     opinions: opinions.map((o) => ({
+      community: nameOf(o.proposal.groupId),
       proposal: o.proposal.title,
       author: o.author.name,
       on: o.fieldKey,
@@ -568,15 +645,32 @@ async function toolSearchPastDecisions(
 // Helpers
 // ─────────────────────────────────────────────
 
-function buildContextHeader(ctx: BarazaUserContext): string {
+function buildContextHeader(
+  ctx: BarazaUserContext,
+  communities: BarazaCommunity[]
+): string {
   const parts = [`Member: ${ctx.displayName}`];
-  if (ctx.ward) parts.push(`Ward: ${ctx.ward}`);
+  if (ctx.ward) parts.push(`Primary ward: ${ctx.ward}`);
   if (ctx.verificationLevel) parts.push(`Level: ${ctx.verificationLevel}`);
   if (ctx.participationRights !== undefined)
     parts.push(`PR: ${ctx.participationRights}`);
   if (ctx.activeElectionCount !== undefined && ctx.activeElectionCount > 0)
     parts.push(`Active elections: ${ctx.activeElectionCount}`);
+  if (communities.length)
+    parts.push(
+      `Communities (${communities.length}): ${communities
+        .map((c) => c.groupName)
+        .join(', ')}`
+    );
   return `[Context: ${parts.join(' | ')}]`;
+}
+
+/** Returns a lookup from groupId → community name for labelling tool results. */
+function communityNameMap(
+  communities: BarazaCommunity[]
+): (groupId: string | null) => string {
+  const map = new Map(communities.map((c) => [c.groupId, c.groupName]));
+  return (groupId) => (groupId && map.get(groupId)) || 'your community';
 }
 
 export const barazaAiService = new BarazaAiService();

@@ -1,6 +1,6 @@
 # Integration (Baraza) API Documentation
 
-> **Module status:** `tested` — 48 green tests across 4 files (service unit + baraza-ai + reward jobs + route integration).
+> **Module status:** `tested` — Q&A + bot suites green (baraza-ai 20 + baraza-bot 11), plus reward-jobs + route-integration tests.
 > Base URL: `http://localhost:4000/api/v1/integration`
 
 ---
@@ -42,9 +42,11 @@ Non-admin users who are group LEADERs may also manage barazas for their own grou
 ### Webhooks (no auth — called by platform servers)
 
 #### `POST /integration/telegram/webhook`
-Receive Telegram bot events. Validates `X-Telegram-Bot-Api-Secret-Token` header against `TELEGRAM_WEBHOOK_SECRET`.
+Receive Telegram bot events. Validates `X-Telegram-Bot-Api-Secret-Token` header against `TELEGRAM_WEBHOOK_SECRET`. Responds `200` immediately, then processes the update asynchronously inside a try/catch — a malformed update or downstream error can never destabilise the web process.
 
-Handles commands: `/present` (attendance), `/schedule YYYY-MM-DD HH:MM` (schedule next session), `/open` (open session for check-in), `/close` (close session), `/verify <code>` (link Telegram account to platform account).
+Handles commands: `/present` (attendance), `/schedule YYYY-MM-DD HH:MM` (schedule next session), `/open` (open session for check-in), `/close` (close session), `/verify <code>` (link Telegram account — **DM-only**, see below).
+
+**Free-text → AI (BarazaBot Q&A):** any non-command message routes to the Qwen-powered AI layer, but **only when the bot is explicitly addressed** — a private chat (DM), a reply to one of the bot's messages, or an `@mention`. Unregistered group chats stay silent. In a **DM** the AI reasons over **all** of the user's communities (their system groups + voluntary groups); in a registered baraza group chat it is scoped to that one community. Group-scoped tools (proposals, treasury, elections, ward stats, past decisions) query across the community set and label each result by community name. Replies mirror the asker's language. Outbound sends retry once as plain text if Telegram rejects unbalanced Markdown.
 
 #### `POST /integration/discord/webhook`
 Receive Discord interaction events. Validates Ed25519 signature using `DISCORD_PUBLIC_KEY`. Responds to ping (type 1). Slash command handling is a placeholder.
@@ -84,6 +86,18 @@ List all active Baraza groups for the authenticated user's community groups. Ret
 **Auth:** Bearer token (WARD_ADMIN or SUPER_ADMIN role)
 
 Admin endpoint. Returns all Baraza groups with attendance count. WARD_ADMIN sees groups for groups they manage (LEADER role); SUPER_ADMIN sees all.
+
+---
+
+#### `GET /integration/baraza-groups/demand`
+
+**Auth:** Bearer token (WARD_ADMIN or SUPER_ADMIN role)
+
+Worklist of communities that have crossed the member threshold but have **no active Telegram baraza** — ranked by eligible members. Powers the "which communities need a baraza next" view. Thresholds mirror the election bars (ward ≥10 community-verified, constituency ≥30, county/national ≥50, voluntary ≥5; system groups count community-verified members, voluntary count all active).
+
+**Response `200`:** array of `{ groupId, name, isSystem, systemType, members, eligible, threshold, alertedAt }`.
+
+This is the pull counterpart to the daily `BARAZA_DEMAND_SCAN` push alert (see BullMQ Jobs).
 
 ---
 
@@ -199,7 +213,16 @@ Close the currently open session. Returns final attendance count.
 | `/schedule YYYY-MM-DD HH:MM` | Group LEADER | Schedules next session (EAT timezone). |
 | `/open` | Group LEADER | Opens the scheduled session for `/present` check-ins. |
 | `/close` | Group LEADER | Closes the open session. Reports attendance count to the group chat. |
-| `/verify <code>` | Any Telegram user | Links Telegram account to platform account using a 6-digit code from the app. |
+| `/verify <code>` | Any Telegram user | **DM-only.** Links Telegram account to platform account using a 6-digit code from the app. |
+
+### `/verify` security model
+
+`/verify` binds a Telegram `from.id` to a UjamaaDAO account, so it is hardened:
+
+- **DM-only.** Run in a group, the bot refuses to bind, **immediately expires the pasted code** (so a bystander can't DM it to hijack the account), logs a `SUSPICIOUS_ACTIVITY` security event, and steers the user to a private chat.
+- **Brute-force throttle.** Failed attempts are counted per `from.id` (Redis-backed, in-memory fallback): **5 failures / 15 min → lockout**, logged as `BRUTE_FORCE`. The lockout is checked before any code lookup. A successful link clears the counter.
+- **Safe-binding guard.** If the code's account is already linked to a *different* Telegram id, `/verify` refuses (logged `ACCOUNT_TAKEOVER_ATTEMPT`) and tells the user to unlink in the app first. Re-verifying from the same Telegram is idempotent.
+- On success, the user is fanned out invite links for any of their communities that already have an active baraza (see `BARAZA_SEND_INVITE`).
 
 ### `/register` flow
 
@@ -221,8 +244,9 @@ Close the currently open session. Returns final attendance count.
 | Job | Trigger | Effect |
 |---|---|---|
 | `BARAZA_ATTENDANCE_REWARD` | `/present` command or manual attendance POST | Awards 15 PR to the user. Idempotent (`prAwarded` flag). |
-| `BARAZA_SEND_INVITE` | New Baraza group registered | Fans out invite jobs to all group members with matching platform profiles. |
+| `BARAZA_SEND_INVITE` | New Baraza group registered, **or** a user links Telegram via `/verify` | Sends the invite link to a member with a matching platform profile (only if their `externalUserId` is known). On registration it fans out to all members; on `/verify` it fans out to the one user across their existing barazas. |
 | `BARAZA_SESSION_REMINDER` | Session scheduled | Notifies group members 1 hour before scheduled session time. |
+| `BARAZA_DEMAND_SCAN` | Daily 06:00 (repeatable) | Alerts every SUPER_ADMIN (in-app + email, `BARAZA_NEEDED` notification type) about communities past the member threshold with no Telegram baraza. **Deduped** per community via `Group.barazaAlertSentAt` (cleared when a baraza is registered, so demand re-surfaces if it is later removed). Same data as `GET /baraza-groups/demand`. |
 
 ---
 
@@ -237,5 +261,13 @@ Close the currently open session. Returns final attendance count.
 ## Notes
 
 - `getBarazaGroupsForUser` returns ALL active baraza groups for the user's community groups — no platform filter. Users without a messaging profile can still see groups and follow invite links. This is intentional for discovery.
-- `/verify` links a Telegram user ID to a `UserMessagingProfile` using a one-time 6-digit code (stored in `PhoneVerification` table, reusing the phone verification flow).
+- `/verify` links a Telegram user ID to a `UserMessagingProfile` using a one-time 6-digit code (stored in `PhoneVerification` table, reusing the phone verification flow). See the `/verify` security model above.
 - Session management via HTTP API mirrors the bot command flow — same service methods, different auth path.
+
+## Resilience
+
+The bot is fully isolated from the core platform — if Telegram, the bot, or Qwen is down, the rest of the app is unaffected (no member-facing HTTP path awaits Telegram; phone verification falls back to SMS/WhatsApp; deliberation still runs and posting degrades gracefully). Hardening so a *slow* bot also can't cause harm:
+
+- **Timeouts on every outbound call.** All raw Telegram Bot API `fetch`es use `AbortSignal.timeout(10s)`; the Qwen client uses `timeout: 30s, maxRetries: 1`. A hanging Telegram/Qwen can no longer stall an admin request or the webhook tail.
+- **Contained webhook tail.** Post-response processing is wrapped in try/catch; the web process also has `unhandledRejection`/`uncaughtException` handlers (mirroring the worker).
+- Outbound sends are null-guarded (`isTelegramConfigured()`) and never throw.

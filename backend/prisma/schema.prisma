@@ -1301,6 +1301,11 @@ model Group {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Set when SUPER_ADMIN has been alerted that this community crossed the member
+  // threshold without a Telegram baraza. Cleared when a baraza is registered, so
+  // demand re-surfaces if the baraza is later removed.
+  barazaAlertSentAt DateTime?
+
   ward         Ward?         @relation("GroupWard", fields: [wardId], references: [id], onDelete: SetNull)
   constituency Constituency? @relation(fields: [constituencyId], references: [id], onDelete: SetNull)
   county       County?       @relation("CountyGroups", fields: [countyId], references: [id], onDelete: SetNull)

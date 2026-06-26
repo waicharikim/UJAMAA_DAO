@@ -23,6 +23,20 @@ import {
   BarazaAttendanceRewardJobData,
   BarazaSendInviteJobData,
 } from '../types.js';
+import { barazaBotService } from '../services/baraza-bot.service.js';
+
+/**
+ * Scheduled scan: alert SUPER_ADMINs about communities that have crossed the
+ * member threshold but have no Telegram baraza yet (deduped per community).
+ */
+export async function processBarazaDemandScan(): Promise<void> {
+  const { scanned, alerted } =
+    await barazaBotService.scanAndAlertBarazaDemand();
+  logger.info(
+    { operationType: 'BARAZA', scanned, alerted },
+    'Baraza demand scan complete'
+  );
+}
 
 export async function processBarazaAttendanceReward(
   job: Job<BarazaAttendanceRewardJobData>

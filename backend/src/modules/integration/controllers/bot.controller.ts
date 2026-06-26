@@ -18,7 +18,8 @@ import { prisma } from '../../../core/database/client.js';
 import { SystemRoles } from '../../../core/rbac/roles.js';
 
 const require = createRequire(import.meta.url);
-import { logger } from '../../../core/logger/logger.js';
+import { logger, logSecurityEvent } from '../../../core/logger/logger.js';
+import { getRedisClient } from '../../../core/database/redis.client.js';
 import { ApiError } from '../../../core/errors/ApiError.js';
 import { sendSuccess } from '../../../core/utils/response.js';
 import { barazaBotService } from '../services/baraza-bot.service.js';
@@ -40,6 +41,10 @@ type BarazaGroupRow = {
 
 type TelegramFrom = { id: number; username?: string; first_name?: string };
 
+// Cap raw Telegram Bot API calls so a slow Telegram never hangs the webhook
+// async tail or an admin request.
+const TELEGRAM_FETCH_TIMEOUT_MS = 10_000;
+
 // ─────────────────────────────────────────────
 // Telegram messaging helper
 // ─────────────────────────────────────────────
@@ -56,19 +61,33 @@ async function sendTelegramMessage(
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) return;
 
+  const post = (chatId: number, useMarkdown: boolean) =>
+    fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        ...(useMarkdown ? { parse_mode: 'Markdown' } : {}),
+      }),
+      signal: AbortSignal.timeout(TELEGRAM_FETCH_TIMEOUT_MS),
+    });
+
   const send = async (chatId: number) => {
-    const res = await fetch(
-      `https://api.telegram.org/bot${token}/sendMessage`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'Markdown' }),
-      }
-    );
-    if (!res.ok) {
-      const body = (await res.json()) as { ok: boolean; description?: string };
-      throw new Error(body.description ?? `HTTP ${res.status}`);
+    let res = await post(chatId, true);
+    if (res.ok) return;
+
+    const body = (await res.json()) as { ok: boolean; description?: string };
+    // Free-form AI replies often contain unbalanced Markdown (a stray * or _ or
+    // [), which Telegram rejects, dropping the whole message. Retry once as
+    // plain text so the member still gets the answer.
+    if (body.description?.includes('parse entities')) {
+      res = await post(chatId, false);
+      if (res.ok) return;
+      const retry = (await res.json()) as { ok: boolean; description?: string };
+      throw new Error(retry.description ?? `HTTP ${res.status}`);
     }
+    throw new Error(body.description ?? `HTTP ${res.status}`);
   };
 
   try {
@@ -174,7 +193,7 @@ async function fetchBarazaGroup(
 
 async function resolveUserContext(
   from: TelegramFrom | undefined,
-  groupId?: string
+  groupIds: string[] = []
 ): Promise<{
   userId: string | null;
   displayName: string;
@@ -201,10 +220,10 @@ async function resolveUserContext(
         primaryWard: { select: { name: true } },
       },
     }),
-    groupId
+    groupIds.length
       ? prisma.election.count({
           where: {
-            groupId,
+            groupId: { in: groupIds },
             status: { in: ['NOMINATIONS_OPEN', 'VOTING_OPEN'] },
           },
         })
@@ -238,7 +257,9 @@ async function getBotIdentity(): Promise<{
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) return null;
   try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/getMe`);
+    const res = await fetch(`https://api.telegram.org/bot${token}/getMe`, {
+      signal: AbortSignal.timeout(TELEGRAM_FETCH_TIMEOUT_MS),
+    });
     const data = (await res.json()) as {
       ok: boolean;
       result?: { id: number; username: string };
@@ -285,43 +306,99 @@ async function dispatchCommand(
   barazaGroup: BarazaGroupRow | null,
   message: TelegramMessage
 ): Promise<void> {
-  if (text.startsWith('/verify'))
+  if (text.startsWith('/verify')) {
+    // /verify carries a secret code. In a group everyone can see it, and for a
+    // first-time verifier (account not yet linked to any Telegram) a bystander
+    // could DM that code to bind the victim's account. So: only process it in a
+    // private chat, and treat a code pasted in a group as compromised — expire
+    // it immediately so it can't be reused.
+    if (message.chat?.type !== 'private') {
+      return handleVerifyInGroup(text, from, chatId);
+    }
     return handleVerifyCommand(text, from, chatId);
+  }
   if (text.startsWith('/register'))
     return handleRegisterCommand(text, from, chatId, barazaGroup);
-  if (!barazaGroup) {
+
+  // Group-scoped slash commands need a registered baraza group.
+  if (barazaGroup) {
+    if (text.startsWith('/schedule'))
+      return handleScheduleCommand(text, from, chatId, barazaGroup);
+    if (text.startsWith('/open'))
+      return handleOpenCommand(from, chatId, barazaGroup);
+    if (text.startsWith('/close'))
+      return handleCloseCommand(from, chatId, barazaGroup);
     if (text.startsWith('/present'))
-      logger.info(
-        { operationType: 'TELEGRAM_UNREGISTERED_GROUP', chatId },
-        'Unregistered group — use this chatId to register a baraza group'
-      );
+      return handlePresentCommand(from, chatId, barazaGroup);
+  } else if (text.startsWith('/present')) {
+    logger.info(
+      { operationType: 'TELEGRAM_UNREGISTERED_GROUP', chatId },
+      'Unregistered group — use this chatId to register a baraza group'
+    );
     return;
   }
-  if (text.startsWith('/schedule'))
-    return handleScheduleCommand(text, from, chatId, barazaGroup);
-  if (text.startsWith('/open'))
-    return handleOpenCommand(from, chatId, barazaGroup);
-  if (text.startsWith('/close'))
-    return handleCloseCommand(from, chatId, barazaGroup);
-  if (text.startsWith('/present'))
-    return handlePresentCommand(from, chatId, barazaGroup);
 
-  // Free-text → AI layer — ONLY when the bot is explicitly addressed
-  // (mentioned, replied-to, or a private chat). Otherwise stay silent.
+  // Free-text → AI layer. Allowed in registered baraza groups AND in private
+  // chats (DMs). Unregistered group chats stay silent. The bot only answers
+  // when explicitly addressed (mentioned, replied-to, or a private chat).
   if (!text || text.startsWith('/')) return;
+  const isPrivate = message.chat?.type === 'private';
+  if (!barazaGroup && !isPrivate) return;
   if (!barazaAiService.isAvailable) return;
 
   const bot = await getBotIdentity();
   if (!isBotAddressed(message, bot)) return;
 
   const question = stripBotMention(text, bot?.username) || text;
-  const userContext = await resolveUserContext(from, barazaGroup.groupId);
-  const reply = await barazaAiService.reply(
-    question,
-    userContext,
-    barazaGroup.groupId
-  );
+  // Resolve the community set the bot should reason over.
+  //  - In a registered baraza group chat: just that group (the bot is that
+  //    room's assistant and must not leak other communities into a shared chat).
+  //  - In a DM: ALL the user's communities (their up-to-7 system groups +
+  //    every voluntary group), so "my communities" questions resolve fully.
+  const communities = barazaGroup
+    ? await resolveSingleCommunity(barazaGroup.groupId)
+    : await resolveUserCommunities(from);
+  const groupIds = communities.map((c) => c.groupId);
+  const userContext = await resolveUserContext(from, groupIds);
+  const reply = await barazaAiService.reply(question, userContext, communities);
   if (from?.id) await sendTelegramMessage(from.id, reply, chatId);
+}
+
+/** Resolves a single group's id + name into a one-element community list. */
+async function resolveSingleCommunity(
+  groupId: string
+): Promise<{ groupId: string; groupName: string }[]> {
+  const group = await prisma.group.findUnique({
+    where: { id: groupId },
+    select: { name: true },
+  });
+  return [{ groupId, groupName: group?.name ?? 'this community' }];
+}
+
+/**
+ * Resolves every community the Telegram user actively belongs to — all their
+ * system groups (ward/constituency/county/national, primary + secondary) AND
+ * all voluntary groups. Used in DMs where there is no single group context.
+ * Returns [] if the user isn't linked to a UjamaaDAO account.
+ */
+async function resolveUserCommunities(
+  from: TelegramFrom | undefined
+): Promise<{ groupId: string; groupName: string }[]> {
+  if (!from?.id) return [];
+  const profile = await prisma.userMessagingProfile.findFirst({
+    where: { platform: 'TELEGRAM', externalUserId: String(from.id) },
+    select: { userId: true },
+  });
+  if (!profile) return [];
+  const memberships = await prisma.groupMember.findMany({
+    where: { userId: profile.userId, active: true },
+    select: { group: { select: { id: true, name: true } } },
+    orderBy: { joinedAt: 'desc' },
+  });
+  return memberships.map((m) => ({
+    groupId: m.group.id,
+    groupName: m.group.name,
+  }));
 }
 
 // ─────────────────────────────────────────────
@@ -340,16 +417,26 @@ export async function handleTelegramWebhook(
 
   res.status(200).json({ ok: true });
 
-  const update = req.body as TelegramUpdate;
-  const message = update?.message;
-  if (!message) return;
+  // Everything below runs AFTER the response is sent, so any throw here would
+  // be an unhandled rejection. Contain it — a bad update must never destabilise
+  // the web process.
+  try {
+    const update = req.body as TelegramUpdate;
+    const message = update?.message;
+    if (!message) return;
 
-  const chatId = message.chat.id;
-  const from = message.from;
-  const text = message.text?.trim() ?? '';
+    const chatId = message.chat.id;
+    const from = message.from;
+    const text = message.text?.trim() ?? '';
 
-  const barazaGroup = await fetchBarazaGroup(chatId);
-  await dispatchCommand(text, from, chatId, barazaGroup, message);
+    const barazaGroup = await fetchBarazaGroup(chatId);
+    await dispatchCommand(text, from, chatId, barazaGroup, message);
+  } catch (err) {
+    logger.warn(
+      { operationType: 'TELEGRAM_WEBHOOK', error: String(err) },
+      'Telegram webhook processing failed — non-fatal'
+    );
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -869,6 +956,96 @@ async function linkTelegramProfile(
   });
 }
 
+// ─────────────────────────────────────────────
+// /verify brute-force throttle (keyed on Telegram from.id)
+//
+// `/verify <code>` looks a code up GLOBALLY (the bot has no phone to scope by),
+// so without a per-sender cap an attacker could spam random 6-digit codes and
+// bind their Telegram to whichever account holds a matching pending code.
+// from.id is set by Telegram and the webhook is secret-gated, so it is a sound
+// throttle axis. Redis-backed, with a per-process in-memory fallback.
+// ─────────────────────────────────────────────
+
+const VERIFY_MAX_FAILURES = 5;
+const VERIFY_WINDOW_SECONDS = 15 * 60;
+
+const verifyFailMemory = new Map<string, { count: number; resetAt: number }>();
+
+function verifyFailKey(fromId: number): string {
+  return `tg:verify:fail:${fromId}`;
+}
+
+async function getVerifyFailures(fromId: number): Promise<number> {
+  const redis = getRedisClient();
+  if (redis) {
+    const v = await redis.get(verifyFailKey(fromId));
+    return v ? parseInt(v, 10) : 0;
+  }
+  const entry = verifyFailMemory.get(String(fromId));
+  if (!entry || entry.resetAt < Date.now()) return 0;
+  return entry.count;
+}
+
+async function recordVerifyFailure(fromId: number): Promise<void> {
+  const redis = getRedisClient();
+  if (redis) {
+    const key = verifyFailKey(fromId);
+    const count = await redis.incr(key);
+    if (count === 1) await redis.expire(key, VERIFY_WINDOW_SECONDS);
+    return;
+  }
+  const k = String(fromId);
+  const now = Date.now();
+  const entry = verifyFailMemory.get(k);
+  if (!entry || entry.resetAt < now) {
+    verifyFailMemory.set(k, {
+      count: 1,
+      resetAt: now + VERIFY_WINDOW_SECONDS * 1000,
+    });
+  } else {
+    entry.count += 1;
+  }
+}
+
+async function clearVerifyFailures(fromId: number): Promise<void> {
+  const redis = getRedisClient();
+  if (redis) await redis.del(verifyFailKey(fromId));
+  verifyFailMemory.delete(String(fromId));
+}
+
+/**
+ * /verify was sent in a group chat. The code is now visible to everyone, so we
+ * never bind from here. We expire the exposed code (so a bystander can't DM it
+ * to hijack the account) and steer the user to a private chat.
+ */
+async function handleVerifyInGroup(
+  text: string,
+  from: TelegramFrom | undefined,
+  chatId: number
+): Promise<void> {
+  const exposed = text.trim().split(/\s+/)[1]?.replace(/\D/g, '');
+  if (exposed && exposed.length === 6) {
+    // Expire any pending verification matching the leaked code. updateMany never
+    // throws on zero matches, and we never set verified=true here.
+    await prisma.phoneVerification.updateMany({
+      where: { code: exposed, verified: false, expiresAt: { gt: new Date() } },
+      data: { expiresAt: new Date(0) },
+    });
+    logSecurityEvent(
+      'Telegram /verify code exposed in a group — expired',
+      'SUSPICIOUS_ACTIVITY',
+      'MEDIUM',
+      `A /verify code was posted in group chat ${chatId} and has been invalidated`,
+      { metadata: { telegramId: from?.id, chatId } }
+    );
+  }
+  await sendTelegramMessage(
+    from?.id ?? chatId,
+    '⚠️ Usitume /verify kwenye group — code yako huwa wazi kwa kila mtu. Nimeibatilisha kwa usalama wako. Pata code mpya kwenye UjamaaDAO app, kisha nitumie hapa kwenye *DM* (private chat).',
+    chatId
+  );
+}
+
 async function handleVerifyCommand(
   text: string,
   from: TelegramFrom | undefined,
@@ -888,18 +1065,70 @@ async function handleVerifyCommand(
     return;
   }
 
+  // Brute-force gate: too many recent failures from this Telegram account → lock out.
+  if ((await getVerifyFailures(from.id)) >= VERIFY_MAX_FAILURES) {
+    logSecurityEvent(
+      'Telegram /verify locked out after repeated failures',
+      'BRUTE_FORCE',
+      'HIGH',
+      `Telegram user ${from.id} exceeded ${VERIFY_MAX_FAILURES} /verify attempts`,
+      { metadata: { telegramId: from.id } }
+    );
+    await sendTelegramMessage(
+      from.id,
+      '🚫 Umejaribu mara nyingi mno. Subiri dakika 15, kisha pata code mpya kwenye UjamaaDAO ujaribu tena.',
+      chatId
+    );
+    return;
+  }
+
   // Find the pending verification record by code
   const verification = await prisma.phoneVerification.findFirst({
     where: { code, verified: false, expiresAt: { gt: new Date() } },
   });
 
   if (!verification) {
+    await recordVerifyFailure(from.id);
     await sendTelegramMessage(
       from.id,
       '❌ Code haipo au imeisha muda wake. Rudi UjamaaDAO upate code mpya — itachukua sekunde moja tu. 💪',
       chatId
     );
     return;
+  }
+
+  // Safe-binding guard: if this account is already linked to a DIFFERENT Telegram
+  // account, refuse — a leaked code must not let someone re-point the binding.
+  // (Switching devices is done by unlinking in the app first.)
+  if (verification.userId) {
+    const existing = await prisma.userMessagingProfile.findUnique({
+      where: {
+        userId_platform: {
+          userId: verification.userId,
+          platform: 'TELEGRAM',
+        },
+      },
+      select: { externalUserId: true },
+    });
+    if (
+      existing?.externalUserId &&
+      existing.externalUserId !== String(from.id)
+    ) {
+      await recordVerifyFailure(from.id);
+      logSecurityEvent(
+        'Telegram /verify rejected — account already linked to another Telegram',
+        'ACCOUNT_TAKEOVER_ATTEMPT',
+        'HIGH',
+        `Telegram user ${from.id} used a valid code for an account already bound to a different Telegram id`,
+        { userId: verification.userId, metadata: { telegramId: from.id } }
+      );
+      await sendTelegramMessage(
+        from.id,
+        '❌ Akaunti hii tayari imeunganishwa na Telegram nyingine. Ukitaka kubadilisha, ondoa muunganisho kwenye app kwanza (Settings).',
+        chatId
+      );
+      return;
+    }
   }
 
   // Mark phone as verified
@@ -909,6 +1138,23 @@ async function handleVerifyCommand(
   });
 
   await linkTelegramProfile(verification, from);
+  await clearVerifyFailures(from.id);
+
+  // Now that the account is linked, pull them into any of their communities that
+  // already have a Telegram baraza (invite DMs via the queue). Non-fatal.
+  if (verification.userId) {
+    try {
+      await barazaBotService.fanOutInvitesToUser(
+        verification.userId,
+        'TELEGRAM'
+      );
+    } catch (err) {
+      logger.warn(
+        { operationType: 'BARAZA_INVITE', error: String(err) },
+        'fanOutInvitesToUser after /verify failed — non-fatal'
+      );
+    }
+  }
 
   const firstName = from.first_name ?? 'Wewe';
   await sendTelegramMessage(
@@ -1026,6 +1272,19 @@ export async function getAllBarazaGroups(
       include: { _count: { select: { attendances: true } } },
     });
     sendSuccess(res, groups);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getBarazaDemand(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const rows = await barazaBotService.getCommunitiesNeedingBaraza('TELEGRAM');
+    sendSuccess(res, rows);
   } catch (err) {
     next(err);
   }

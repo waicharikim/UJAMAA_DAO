@@ -24,6 +24,19 @@ import {
   NotificationChannel,
 } from '../../notifications/types.js';
 import { notificationService } from '../../notifications/services/notification.service.js';
+import { ElectionThresholds, SystemRoles } from '../../../core/rbac/roles.js';
+
+/** A community with members but no active Telegram baraza. */
+export interface BarazaDemandRow {
+  groupId: string;
+  name: string;
+  isSystem: boolean;
+  systemType: string | null;
+  members: number;
+  eligible: number;
+  threshold: number;
+  alertedAt: Date | null;
+}
 
 // Prisma-level type alias
 type BarazaGroupRecord = Awaited<ReturnType<typeof prisma.barazaGroup.create>>;
@@ -74,6 +87,13 @@ class BarazaBotService {
           ? JSON.parse(JSON.stringify(dto.metadata))
           : undefined,
       },
+    });
+
+    // Clear any pending demand alert — the community now has a baraza. If it is
+    // later removed, the next scan (null flag, no active baraza) re-alerts.
+    await prisma.group.update({
+      where: { id: dto.groupId },
+      data: { barazaAlertSentAt: null },
     });
 
     logger.info(
@@ -487,6 +507,171 @@ class BarazaBotService {
       });
     }
   }
+
+  /**
+   * Send invite links to ONE user for every community they belong to that
+   * already has an active baraza on the platform. Used right after a user links
+   * their account (e.g. via /verify) so they get pulled into existing barazas.
+   */
+  async fanOutInvitesToUser(
+    userId: string,
+    platform: 'TELEGRAM' | 'WHATSAPP' | 'DISCORD' = 'TELEGRAM'
+  ): Promise<void> {
+    const memberships = await prisma.groupMember.findMany({
+      where: { userId, active: true },
+      select: { groupId: true },
+    });
+    const groupIds = memberships.map((m) => m.groupId);
+    if (!groupIds.length) return;
+
+    const barazas = await prisma.barazaGroup.findMany({
+      where: {
+        groupId: { in: groupIds },
+        platform: platform as any,
+        isActive: true,
+      },
+      select: { id: true },
+    });
+    for (const b of barazas) {
+      await integrationQueue.add(BotJobName.BARAZA_SEND_INVITE, {
+        userId,
+        barazaGroupId: b.id,
+        platform: platform as any,
+      });
+    }
+  }
+
+  /**
+   * Communities that have crossed the member threshold but have no active baraza
+   * on the platform — ranked by eligible members. System communities count
+   * community-verified members; voluntary groups count all active members
+   * (mirrors the election eligibility rule). Used by the admin worklist and the
+   * demand-scan job.
+   */
+  async getCommunitiesNeedingBaraza(
+    platform: 'TELEGRAM' | 'WHATSAPP' | 'DISCORD' = 'TELEGRAM'
+  ): Promise<BarazaDemandRow[]> {
+    const existing = await prisma.barazaGroup.findMany({
+      where: { platform: platform as any, isActive: true },
+      select: { groupId: true },
+    });
+    const haveBaraza = new Set(existing.map((b) => b.groupId));
+
+    const [allCounts, verifiedCounts] = await Promise.all([
+      prisma.groupMember.groupBy({
+        by: ['groupId'],
+        where: { active: true },
+        _count: { _all: true },
+      }),
+      prisma.groupMember.groupBy({
+        by: ['groupId'],
+        where: { active: true, user: { communityVerified: true } },
+        _count: { _all: true },
+      }),
+    ]);
+    const allMap = new Map(allCounts.map((c) => [c.groupId, c._count._all]));
+    const verifiedMap = new Map(
+      verifiedCounts.map((c) => [c.groupId, c._count._all])
+    );
+
+    const candidateIds = [...allMap.keys()].filter((id) => !haveBaraza.has(id));
+    if (!candidateIds.length) return [];
+
+    const groups = await prisma.group.findMany({
+      where: { id: { in: candidateIds } },
+      select: {
+        id: true,
+        name: true,
+        isSystemGroup: true,
+        systemType: true,
+        barazaAlertSentAt: true,
+      },
+    });
+
+    const rows: BarazaDemandRow[] = [];
+    for (const g of groups) {
+      const eligible = g.isSystemGroup
+        ? (verifiedMap.get(g.id) ?? 0)
+        : (allMap.get(g.id) ?? 0);
+      const threshold = barazaThresholdFor(g.isSystemGroup, g.systemType);
+      if (eligible >= threshold) {
+        rows.push({
+          groupId: g.id,
+          name: g.name,
+          isSystem: g.isSystemGroup,
+          systemType: g.systemType,
+          members: allMap.get(g.id) ?? 0,
+          eligible,
+          threshold,
+          alertedAt: g.barazaAlertSentAt,
+        });
+      }
+    }
+    rows.sort((a, b) => b.eligible - a.eligible);
+    return rows;
+  }
+
+  /**
+   * Scans for communities needing a baraza and alerts every SUPER_ADMIN once
+   * per community (deduped via Group.barazaAlertSentAt). Run on a schedule.
+   */
+  async scanAndAlertBarazaDemand(): Promise<{
+    scanned: number;
+    alerted: number;
+  }> {
+    const demand = await this.getCommunitiesNeedingBaraza('TELEGRAM');
+    const fresh = demand.filter((d) => !d.alertedAt);
+    if (!fresh.length) return { scanned: demand.length, alerted: 0 };
+
+    const admins = await prisma.user.findMany({
+      where: {
+        userRoles: { some: { role: { name: SystemRoles.SUPER_ADMIN } } },
+      },
+      select: { id: true },
+    });
+    if (!admins.length) {
+      logger.warn(
+        { operationType: 'BARAZA' },
+        'Baraza demand: communities need a baraza but no SUPER_ADMIN to alert'
+      );
+      return { scanned: demand.length, alerted: 0 };
+    }
+
+    for (const d of fresh) {
+      const message = `${d.name} has ${d.eligible} verified member${
+        d.eligible === 1 ? '' : 's'
+      } (threshold ${d.threshold}) but no Telegram baraza yet. Create one in the admin panel — members will be invited automatically.`;
+      for (const a of admins) {
+        await notificationService.send({
+          userId: a.id,
+          type: NotificationType.BARAZA_NEEDED,
+          title: 'Community needs a Telegram baraza',
+          message,
+          data: {
+            groupId: d.groupId,
+            eligible: d.eligible,
+            threshold: d.threshold,
+          },
+        });
+      }
+    }
+
+    await prisma.group.updateMany({
+      where: { id: { in: fresh.map((d) => d.groupId) } },
+      data: { barazaAlertSentAt: new Date() },
+    });
+
+    logger.info(
+      {
+        operationType: 'BARAZA',
+        alerted: fresh.length,
+        admins: admins.length,
+      },
+      'Baraza demand alerts sent to SUPER_ADMINs'
+    );
+    return { scanned: demand.length, alerted: fresh.length };
+  }
+
   /**
    * Calls the Telegram Bot API to create a permanent invite link for a chat.
    * Returns the link string, or undefined if the bot token is not configured or the call fails.
@@ -504,6 +689,8 @@ class BarazaBotService {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ chat_id: Number(chatId) }),
+          // Cap so a slow Telegram never hangs an admin register/refresh request.
+          signal: AbortSignal.timeout(10_000),
         }
       );
       if (!res.ok) return undefined;
@@ -541,6 +728,23 @@ class BarazaBotService {
 
     return link;
   }
+}
+
+/**
+ * Member threshold a community must cross before we alert admins to create a
+ * baraza. Mirrors the election thresholds for consistency.
+ */
+function barazaThresholdFor(
+  isSystem: boolean,
+  systemType: string | null
+): number {
+  if (!isSystem) return ElectionThresholds.VOLUNTARY_GROUP_LEADER;
+  if (systemType === 'WARD') return ElectionThresholds.WARD_LEADER;
+  if (systemType === 'CONSTITUENCY')
+    return ElectionThresholds.CONSTITUENCY_LEADER;
+  if (systemType === 'COUNTY' || systemType === 'NATIONAL')
+    return ElectionThresholds.COUNTY_LEADER;
+  return ElectionThresholds.WARD_LEADER;
 }
 
 export const barazaBotService = new BarazaBotService();
