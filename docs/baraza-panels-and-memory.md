@@ -279,8 +279,11 @@ learn how their past positions actually turned out. 5 tests; tsc clean.
 2. ✅ **DONE** (`4106fb3`) — **Mjamaa convener/casting pass**: runs once before the rounds,
    casts each domain agent's life-stage × exposure voice + a structural note; cast block
    prepended to agent prompts at runtime; default-prior fallback; casting recorded in
-   `contextSnapshot` (resolved identity). +5 tests; baraza suite 22/22. *(Stateless pass —
-   Mjamaa as a per-round debating voice + its own memory deferred.)*
+   `contextSnapshot` (resolved identity). Mjamaa is now a **stateful structural analyst**
+   (`019d9b2`): emits a structural severity that feeds the readiness score (MAJOR −15 /
+   MINOR −6), and keeps its own per-group memory (`BarazaAgentState`, agentKey=MJAMAA) so
+   its structural reads compound. baraza suite 23/23. *(Still run-once — Mjamaa as a
+   per-round debating voice deferred by design, to bound Qwen cost.)*
 3. **Current-affairs: one collector (EPRA fuel)** → `CurrentAffairs` store → admin
    override → inject into `contextSnapshot`. Prove the pipeline.
 4. **@moneyacademyKE** (free/best-effort) + more collectors over time.
