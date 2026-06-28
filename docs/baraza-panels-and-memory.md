@@ -300,7 +300,10 @@ learn how their past positions actually turned out. 5 tests; tsc clean.
    run-once framing voice (arc + trajectory, confidence-aware) injected as a HISTORICAL
    CONTEXT block. +6 tests. *(now→history accretion loop + admin curation/verification UI
    deferred; seed is operator-run — generates unverified content for review.)*
-6. Proposal-nature panel refinement (v2).
+6. ✅ **DONE** (`aa8e27b`) — **Proposal-nature panel selection (v2)**: `selectDomainPanel`
+   now picks domain agents by what the proposal touches (deterministic keyword matcher over
+   the full 9-agent roster), group type as fallback, padded to 4 / capped at 6. A
+   system-group economic/mutual-aid proposal can now convene Mkurugenzi/Hustler. +4 tests.
 
 ---
 
