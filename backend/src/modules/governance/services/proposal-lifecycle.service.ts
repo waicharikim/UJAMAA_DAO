@@ -26,6 +26,7 @@ import { getGovernanceContract } from '../../../core/blockchain/client.js';
 import { ethers } from 'ethers';
 import { governanceQueue } from '../../../core/queue/index.js';
 import { queueBarazaDeliberation } from '../baraza/baraza.job.js';
+import { recordProposalOutcomeInMemory } from '../baraza/baraza-deliberation.service.js';
 import {
   GENERATE_DELIBERATION_SUMMARY_JOB,
   OPEN_PROPOSAL_ONCHAIN_JOB,
@@ -1019,6 +1020,10 @@ class ProposalLifecycleService {
         memoryAnchorTxHash: true,
       },
     });
+
+    // Close the deliberation memory loop: teach the 7 agents how this proposal
+    // actually turned out, against what each of them argued. Best-effort.
+    await recordProposalOutcomeInMemory(proposalId, outcome);
 
     // Anchor the complete ward-memory record on-chain. No-op until the chain is
     // configured; the off-chain record above is authoritative regardless.

@@ -266,6 +266,66 @@ ${pastSection}`;
 
 // ─── Agent memory loading ─────────────────────────────────────────────────────
 
+/**
+ * Close the deliberation memory loop. When a proposal's real-world outcome is
+ * recorded (ward memory), back-fill it into every agent's episodic memory for
+ * that group — so the agents learn how their past positions actually turned out,
+ * not just what they argued. Best-effort: never throws into the caller.
+ *
+ * Matches episodic entries by proposalId across all agents that deliberated in
+ * the proposal's group; resolves the group from the deliberation record so it
+ * always aligns with how the agent state was originally written.
+ */
+export async function recordProposalOutcomeInMemory(
+  proposalId: string,
+  proposalOutcome: string
+): Promise<void> {
+  try {
+    const summary = proposalOutcome.trim().slice(0, 300);
+    if (!summary) return;
+
+    const deliberation = await prisma.barazaDeliberation.findFirst({
+      where: { proposalId },
+      select: { groupId: true },
+    });
+    if (!deliberation) return; // proposal was never deliberated — nothing to learn
+
+    const states = await prisma.barazaAgentState.findMany({
+      where: { groupId: deliberation.groupId },
+      select: { id: true, episodicLog: true },
+    });
+
+    for (const state of states) {
+      const log = Array.isArray(state.episodicLog)
+        ? (state.episodicLog as any[])
+        : [];
+      let changed = false;
+      const updated = log.map((e: any) => {
+        if (
+          e &&
+          e.proposalId === proposalId &&
+          e.proposalOutcome !== summary
+        ) {
+          changed = true;
+          return { ...e, proposalOutcome: summary };
+        }
+        return e;
+      });
+      if (changed) {
+        await prisma.barazaAgentState.update({
+          where: { id: state.id },
+          data: { episodicLog: updated },
+        });
+      }
+    }
+  } catch (err) {
+    logger.warn(
+      { err, proposalId },
+      '[BarazaDeliberation] Failed to back-fill proposal outcome into agent memory'
+    );
+  }
+}
+
 async function loadAgentMemory(
   groupId: string,
   agentKey: AgentKey
@@ -284,10 +344,13 @@ async function loadAgentMemory(
           state.episodicLog as any[]
         )
           .slice(-10)
-          .map(
-            (e: any) =>
-              `- "${e.proposalTitle}" | ${e.date} | Your outcome: ${e.outcome} | Final position: ${e.finalPosition}`
-          )
+          .map((e: any) => {
+            const realOutcome =
+              e.proposalOutcome && e.proposalOutcome !== 'PENDING'
+                ? ` | Real outcome: ${e.proposalOutcome}`
+                : '';
+            return `- "${e.proposalTitle}" | ${e.date} | Your outcome: ${e.outcome}${realOutcome} | Final position: ${e.finalPosition}`;
+          })
           .join('\n')}`
       : 'EPISODIC MEMORY: No prior episodes.';
 
