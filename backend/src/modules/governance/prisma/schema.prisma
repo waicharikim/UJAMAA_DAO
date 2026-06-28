@@ -268,6 +268,28 @@ enum BarazaAgentKey {
   MJAMAA
 }
 
+/// Current real-world conditions (fuel, cost of living, …) injected into Baraza
+/// deliberations so the council reasons against the present state of the country.
+/// Populated by best-effort collectors; an admin value always wins over a scrape.
+model CurrentAffairs {
+  id            String   @id @default(uuid()) @db.Uuid
+  indicator     String   @unique // e.g. "fuel_petrol", "cpi_inflation"
+  label         String // human label, e.g. "Petrol pump price"
+  value         String // stored as text, e.g. "217.43"
+  unit          String? // "KES/L", "%"
+  source        String // "EPRA" | "admin" | "X:@moneyacademyKE"
+  sourceUrl     String?  @db.Text
+  asOf          DateTime // the date the figure actually refers to
+  fetchedAt     DateTime @default(now())
+  adminOverride Boolean  @default(false) // admin-set values are never overwritten by a scrape
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([active])
+  @@map("current_affairs")
+}
+
 enum BarazaTrigger {
   AUTHOR
   ADMIN

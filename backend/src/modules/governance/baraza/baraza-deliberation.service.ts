@@ -42,6 +42,7 @@ import {
   type StructuralSeverity,
   type StructuralReview,
 } from './agents/convener.js';
+import { currentAffairsService } from '../current-affairs/current-affairs.service.js';
 import {
   AGENT_SYSTEM_PROMPTS,
   ANALYST_AGENT_KEYS,
@@ -130,6 +131,7 @@ interface ProposalContext {
   treasuryBalance: number;
   memberCount: number;
   pastProposals: PastProposal[];
+  currentAffairs: string;
 }
 
 interface PastProposal {
@@ -202,6 +204,7 @@ async function assembleProposalContext(
   });
 
   const treasury = proposal.group.treasury[0];
+  const currentAffairs = await currentAffairsService.formatForDeliberation();
 
   return {
     id: proposal.id,
@@ -231,6 +234,7 @@ async function assembleProposalContext(
       outcome: p.outcome,
       createdAt: p.createdAt.toISOString().slice(0, 10),
     })),
+    currentAffairs,
   };
 }
 
@@ -249,11 +253,13 @@ function formatProposalContext(ctx: ProposalContext): string {
           .join('\n')}`
       : '\nPAST PROPOSALS: None on record.';
 
+  const currentSection = ctx.currentAffairs ? `\n${ctx.currentAffairs}\n` : '';
+
   return `PROPOSAL: ${ctx.title}
 TYPE: ${ctx.proposalType} | SCOPE: ${ctx.proposalScope}
 GROUP: ${ctx.groupName} | LOCATION: ${location || 'Not specified'}
 MEMBERS: ${ctx.memberCount} | TREASURY BALANCE: KES ${ctx.treasuryBalance.toLocaleString()}
-
+${currentSection}
 DESCRIPTION:
 ${ctx.description}
 

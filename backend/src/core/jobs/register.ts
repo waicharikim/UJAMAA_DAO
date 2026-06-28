@@ -46,6 +46,8 @@ import {
   EXPIRE_PROPOSAL_REVIEW_JOB,
 } from '../../modules/governance/jobs/proposal.jobs.js';
 
+import { COLLECT_CURRENT_AFFAIRS_JOB } from '../../modules/governance/current-affairs/current-affairs.job.js';
+
 export async function registerAllJobs(): Promise<void> {
   logger.info(
     { operationType: 'JOB_REGISTER' },
@@ -262,6 +264,23 @@ export async function registerAllJobs(): Promise<void> {
       }
     );
     logger.info({ job: EXPIRE_PROPOSAL_REVIEW_JOB }, 'Job registered');
+
+    // ─────────────────────────────────────────────
+    // CURRENT AFFAIRS COLLECTION
+    // Weekly (Mon 02:00) — refresh fuel/cost-of-living indicators for Baraza.
+    // Figures move slowly (EPRA/CPI monthly); best-effort, fails open.
+    // ─────────────────────────────────────────────
+    await governanceQueue.add(
+      COLLECT_CURRENT_AFFAIRS_JOB,
+      {},
+      {
+        repeat: { pattern: '0 2 * * 1' },
+        jobId: COLLECT_CURRENT_AFFAIRS_JOB,
+        removeOnComplete: { age: 3600 * 24 * 7 },
+        removeOnFail: { age: 3600 * 24 * 30 },
+      }
+    );
+    logger.info({ job: COLLECT_CURRENT_AFFAIRS_JOB }, 'Job registered');
 
     logger.info(
       { operationType: 'JOB_REGISTER' },

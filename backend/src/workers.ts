@@ -93,6 +93,10 @@ import {
   BARAZA_DELIBERATION_JOB,
   processBarazaDeliberationJob,
 } from './modules/governance/baraza/baraza.job.js';
+import {
+  COLLECT_CURRENT_AFFAIRS_JOB,
+  processCurrentAffairsCollection,
+} from './modules/governance/current-affairs/current-affairs.job.js';
 
 import {
   MPESA_PAYOUT_JOB,
@@ -363,6 +367,9 @@ const governanceWorker = createWorker('governance', async (job) => {
     } else if (job.name === BARAZA_DELIBERATION_JOB) {
       // On-demand (enqueued on approval) — runs the 7-agent Baraza deliberation.
       await processBarazaDeliberationJob(job);
+    } else if (job.name === COLLECT_CURRENT_AFFAIRS_JOB) {
+      // Weekly — refresh current-affairs indicators (best-effort, fails open).
+      await processCurrentAffairsCollection();
     } else {
       logger.warn(
         { jobName: job.name, queue: 'governance' },
