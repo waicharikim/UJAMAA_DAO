@@ -292,7 +292,9 @@ learn how their past positions actually turned out. 5 tests; tsc clean.
    admin-override + injection into `formatProposalContext`/`contextSnapshot`. +7 tests.
    *(Live EPRA parse unverified against the live page — needs `EPRA_SOURCE_URL`; store stays
    empty & section omitted until a verified scrape or admin value. Admin HTTP endpoint TODO.)*
-4. **@moneyacademyKE** (free/best-effort) + more collectors over time.
+4. ✅ **DONE** (`5aca39a`) — **@moneyacademyKE (X) collector** via configurable RSS bridge
+   (`MONEYACADEMY_FEED_URL`), best-effort/fail-open, labelled "one source, not verified",
+   added to the weekly run. +3 parser tests. *(Inactive until the bridge URL is set.)*
 5. **Mhenga**: `HistoricalEvent` KB with provenance → LLM seed pass → framing voice →
    trajectory; wire the now→history accretion last.
 6. Proposal-nature panel refinement (v2).
