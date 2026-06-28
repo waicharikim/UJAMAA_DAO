@@ -33,7 +33,7 @@ function episode(proposalId: string, title: string, outcome = 'PENDING') {
 
 async function seedAgentState(
   groupId: string,
-  agentKey: 'UCHUMI' | 'MAISHA',
+  agentKey: 'TAJIRI' | 'DAKTARI',
   episodicLog: unknown[]
 ) {
   return prisma.barazaAgentState.create({
@@ -62,8 +62,8 @@ describe('recordProposalOutcomeInMemory()', () => {
   });
 
   it('back-fills the real outcome into every agent that deliberated this proposal', async () => {
-    await seedAgentState(groupId, 'UCHUMI', [episode(proposalId, 'Borehole')]);
-    await seedAgentState(groupId, 'MAISHA', [episode(proposalId, 'Borehole')]);
+    await seedAgentState(groupId, 'TAJIRI', [episode(proposalId, 'Borehole')]);
+    await seedAgentState(groupId, 'DAKTARI', [episode(proposalId, 'Borehole')]);
 
     await recordProposalOutcomeInMemory(
       proposalId,
@@ -81,7 +81,7 @@ describe('recordProposalOutcomeInMemory()', () => {
   });
 
   it('only touches the matching proposal, leaving other episodes intact', async () => {
-    await seedAgentState(groupId, 'UCHUMI', [
+    await seedAgentState(groupId, 'TAJIRI', [
       episode(proposalId, 'This one'),
       episode('99999999-9999-4999-8999-999999999999', 'Another proposal'),
     ]);
@@ -89,7 +89,7 @@ describe('recordProposalOutcomeInMemory()', () => {
     await recordProposalOutcomeInMemory(proposalId, 'Done well.');
 
     const s = await prisma.barazaAgentState.findFirstOrThrow({
-      where: { groupId, agentKey: 'UCHUMI' },
+      where: { groupId, agentKey: 'TAJIRI' },
     });
     const log = s.episodicLog as Array<{ proposalOutcome: string }>;
     expect(log[0].proposalOutcome).toBe('Done well.');
@@ -97,11 +97,11 @@ describe('recordProposalOutcomeInMemory()', () => {
   });
 
   it('truncates a very long outcome to 300 chars', async () => {
-    await seedAgentState(groupId, 'UCHUMI', [episode(proposalId, 'Long')]);
+    await seedAgentState(groupId, 'TAJIRI', [episode(proposalId, 'Long')]);
     await recordProposalOutcomeInMemory(proposalId, 'x'.repeat(500));
 
     const s = await prisma.barazaAgentState.findFirstOrThrow({
-      where: { groupId, agentKey: 'UCHUMI' },
+      where: { groupId, agentKey: 'TAJIRI' },
     });
     const log = s.episodicLog as Array<{ proposalOutcome: string }>;
     expect(log[0].proposalOutcome).toHaveLength(300);
@@ -109,21 +109,21 @@ describe('recordProposalOutcomeInMemory()', () => {
 
   it('is a no-op (no throw) when the proposal was never deliberated', async () => {
     await prisma.barazaDeliberation.deleteMany({ where: { proposalId } });
-    await seedAgentState(groupId, 'UCHUMI', [episode(proposalId, 'X')]);
+    await seedAgentState(groupId, 'TAJIRI', [episode(proposalId, 'X')]);
 
     await expect(
       recordProposalOutcomeInMemory(proposalId, 'Done.')
     ).resolves.toBeUndefined();
 
     const s = await prisma.barazaAgentState.findFirstOrThrow({
-      where: { groupId, agentKey: 'UCHUMI' },
+      where: { groupId, agentKey: 'TAJIRI' },
     });
     const log = s.episodicLog as Array<{ proposalOutcome: string }>;
     expect(log[0].proposalOutcome).toBe('PENDING'); // unchanged
   });
 
   it('does not throw on an empty outcome string', async () => {
-    await seedAgentState(groupId, 'UCHUMI', [episode(proposalId, 'X')]);
+    await seedAgentState(groupId, 'TAJIRI', [episode(proposalId, 'X')]);
     await expect(
       recordProposalOutcomeInMemory(proposalId, '   ')
     ).resolves.toBeUndefined();

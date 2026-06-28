@@ -11,7 +11,7 @@
  * Two completion modes:
  *   complete()             — standard text completion (all agents)
  *   completeWithSearch()   — text completion with Qwen web_search tool enabled
- *                            (Ukweli only — for real-time premise interrogation)
+ *                            (Shahidi only — for real-time premise interrogation)
  *
  * Graceful degradation: getQwenClient() returns null when DASHSCOPE_API_KEY is
  * not set. Callers MUST null-check and skip the AI path.
@@ -25,7 +25,7 @@ import { logger } from '../logger/logger.js';
 /**
  * Model used for deliberation agents.
  * qwen-plus    — recommended default: best speed/capability balance
- * qwen-max     — use for Ukweli/Kivuli where deeper reasoning matters
+ * qwen-max     — use for Shahidi/Mpelelezi where deeper reasoning matters
  * qwen-turbo   — cheapest, for high-volume low-stakes completions
  *
  * Override per-agent by passing model explicitly to complete().
@@ -36,7 +36,7 @@ export const QWEN_MODEL =
   'qwen-plus';
 
 /**
- * Separate model for Ukweli and Kivuli — deeper reasoning justifies the cost.
+ * Separate model for Shahidi and Mpelelezi — deeper reasoning justifies the cost.
  * Defaults to qwen-max, overridable via BARAZA_ANALYST_MODEL.
  */
 export const QWEN_ANALYST_MODEL =
@@ -170,13 +170,13 @@ export async function completeConversation(
 // ─── completeWithSearch() ─────────────────────────────────────────────────────
 
 /**
- * Completion with Qwen's real, server-side web search enabled (Ukweli only).
+ * Completion with Qwen's real, server-side web search enabled (Shahidi only).
  *
  * DashScope does NOT expose web search as an OpenAI function tool — it's a
  * request flag (`enable_search`). When set, Qwen performs the retrieval itself
  * and folds the results into its answer; there is no client-side tool loop.
  * `forced_search: false` lets the model decide when a query actually needs the
- * web (so Ukweli only searches when a premise warrants it).
+ * web (so Shahidi only searches when a premise warrants it).
  *
  * `enable_search`/`search_options` are DashScope extensions not in the OpenAI
  * SDK types, so the params are passed through with a cast. Falls back to a plain

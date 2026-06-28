@@ -192,7 +192,7 @@ function formatResult(title: string, r: DeliberationResult): string {
   const convergence = asStrings(r.mkutanoConvergence);
   if (convergence.length) {
     lines.push('');
-    lines.push('🔬 Mkutano — convergence (Ukweli + Kivuli agree):');
+    lines.push('🔬 Mkutano — convergence (Shahidi + Mpelelezi agree):');
     convergence.slice(0, 5).forEach((c) => lines.push(`• ${c}`));
   }
 

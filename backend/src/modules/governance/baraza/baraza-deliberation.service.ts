@@ -5,10 +5,10 @@
  *
  * Processing order per deliberation:
  *   1. Context assembly (proposal + treasury + past proposals + agent memory)
- *   2. Round 1  — 5 domain agents in parallel → Ukweli → Kivuli
- *   3. Round 2  — 5 domain agents (cross-agent response) → Ukweli → Kivuli
- *   4. Round 3  — 5 domain agents (final position) → Ukweli → Kivuli
- *   5. Mkutano  — Ukweli reads Kivuli transcript, Kivuli reads Ukweli transcript
+ *   2. Round 1  — 5 domain agents in parallel → Shahidi → Mpelelezi
+ *   3. Round 2  — 5 domain agents (cross-agent response) → Shahidi → Mpelelezi
+ *   4. Round 3  — 5 domain agents (final position) → Shahidi → Mpelelezi
+ *   5. Mkutano  — Shahidi reads Mpelelezi transcript, Mpelelezi reads Shahidi transcript
  *   6. Scoring  — readiness score from transcript + Mkutano convergence
  *   7. Persist  — update BarazaDeliberation + all 7 BarazaAgentState records
  *
@@ -33,8 +33,8 @@ import {
   AGENT_SYSTEM_PROMPTS,
   DOMAIN_AGENT_KEYS,
   ROUND_INSTRUCTIONS,
-  MKUTANO_UKWELI_SYSTEM,
-  MKUTANO_KIVULI_SYSTEM,
+  MKUTANO_SHAHIDI_SYSTEM,
+  MKUTANO_MPELELEZI_SYSTEM,
   injectPrompt,
   type AgentKey,
 } from './agents/prompts.js';
@@ -370,14 +370,14 @@ async function loadAgentMemory(
       : 'RELATIONAL MAP: No prior interactions.';
 
   const specialMemory =
-    agentKey === 'UKWELI' && state.premisePatterns
+    agentKey === 'SHAHIDI' && state.premisePatterns
       ? `\nPREMISE PATTERN LIBRARY (${(state.premisePatterns as any[]).length} patterns identified across all deliberations):\n${(
           state.premisePatterns as any[]
         )
           .slice(-15)
           .map((p: any) => `- "${p.pattern}" (seen ${p.frequency}x)`)
           .join('\n')}`
-      : agentKey === 'KIVULI' && state.powerStructureMap
+      : agentKey === 'MPELELEZI' && state.powerStructureMap
         ? `\nPOWER STRUCTURE MAP:\n${JSON.stringify(state.powerStructureMap, null, 2)}`
         : '';
 
@@ -453,7 +453,7 @@ async function runDomainAgentsRound(
   return Object.fromEntries(results);
 }
 
-async function runUkweli(
+async function runShahidi(
   roundNumber: 1 | 2 | 3,
   proposalContextStr: string,
   agentMemory: string,
@@ -462,7 +462,7 @@ async function runUkweli(
 ): Promise<string> {
   const roundTranscript = formatDomainPositions(currentRoundPositions);
 
-  // Ukweli sees all previous round transcripts for context evolution tracking
+  // Shahidi sees all previous round transcripts for context evolution tracking
   const fullContext =
     previousRounds.length > 0
       ? previousRounds.map(formatRoundTranscript).join('\n\n---\n\n') +
@@ -470,13 +470,13 @@ async function runUkweli(
         roundTranscript
       : roundTranscript;
 
-  const systemPrompt = injectPrompt(AGENT_SYSTEM_PROMPTS.UKWELI, {
+  const systemPrompt = injectPrompt(AGENT_SYSTEM_PROMPTS.SHAHIDI, {
     AGENT_MEMORY: agentMemory,
     PROPOSAL_CONTEXT: proposalContextStr,
     ROUND_N_TRANSCRIPT: fullContext,
   });
 
-  // Ukweli uses web search for premise interrogation
+  // Shahidi uses web search for premise interrogation
   const response = await completeWithSearch({
     system: systemPrompt,
     userMessage: `Round ${roundNumber} — produce your credibility annotations for the positions above.`,
@@ -484,10 +484,10 @@ async function runUkweli(
     model: QWEN_ANALYST_MODEL,
   });
 
-  return response ?? '[Ukweli did not respond]';
+  return response ?? '[Shahidi did not respond]';
 }
 
-async function runKivuli(
+async function runMpelelezi(
   roundNumber: 1 | 2 | 3,
   proposalContextStr: string,
   agentMemory: string,
@@ -505,14 +505,14 @@ async function runKivuli(
         roundTranscript
       : roundTranscript;
 
-  const systemPrompt = injectPrompt(AGENT_SYSTEM_PROMPTS.KIVULI, {
+  const systemPrompt = injectPrompt(AGENT_SYSTEM_PROMPTS.MPELELEZI, {
     AGENT_MEMORY: agentMemory,
     PROPOSAL_CONTEXT: proposalContextStr,
     ROUND_N_TRANSCRIPT: fullContext,
-    UKWELI_ANNOTATIONS: `UKWELI'S ANNOTATIONS FOR THIS ROUND:\n${ukweliAnnotations}`,
+    SHAHIDI_ANNOTATIONS: `SHAHIDI'S ANNOTATIONS FOR THIS ROUND:\n${ukweliAnnotations}`,
   });
 
-  // Kivuli grounds its implementability/power analysis in the group's real
+  // Mpelelezi grounds its implementability/power analysis in the group's real
   // treasury, precedent and leadership data every round.
   const response = await completeWithTools({
     system: systemPrompt,
@@ -524,7 +524,7 @@ async function runKivuli(
     model: QWEN_ANALYST_MODEL,
   });
 
-  return response ?? '[Kivuli did not respond]';
+  return response ?? '[Mpelelezi did not respond]';
 }
 
 // ─── Mkutano ──────────────────────────────────────────────────────────────────
@@ -545,8 +545,8 @@ async function runMkutano(
   // Run in parallel — they read each other's complete transcripts simultaneously
   const [ukweliReading, kivuliReading] = await Promise.all([
     complete({
-      system: MKUTANO_UKWELI_SYSTEM.replace(
-        '{{KIVULI_TRANSCRIPT}}',
+      system: MKUTANO_SHAHIDI_SYSTEM.replace(
+        '{{MPELELEZI_TRANSCRIPT}}',
         kivuliFullTranscript
       ),
       userMessage:
@@ -555,8 +555,8 @@ async function runMkutano(
       model: QWEN_ANALYST_MODEL,
     }),
     complete({
-      system: MKUTANO_KIVULI_SYSTEM.replace(
-        '{{UKWELI_TRANSCRIPT}}',
+      system: MKUTANO_MPELELEZI_SYSTEM.replace(
+        '{{SHAHIDI_TRANSCRIPT}}',
         ukweliFullTranscript
       ),
       userMessage:
@@ -578,10 +578,10 @@ async function runMkutano(
 2. All contradiction points (where they diverge)
 3. A fixability verdict (are the core weaknesses fixable by changing the proposal, or do they require changing the conditions?)
 
-UKWELI'S MKUTANO READING:
+SHAHIDI'S MKUTANO READING:
 ${ukweliReading ?? '(unavailable)'}
 
-KIVULI'S MKUTANO READING:
+MPELELEZI'S MKUTANO READING:
 ${kivuliReading ?? '(unavailable)'}
 
 Return JSON: { "convergencePoints": string[], "contradictionPoints": string[], "fixabilityVerdict": string }`,
@@ -590,8 +590,8 @@ Return JSON: { "convergencePoints": string[], "contradictionPoints": string[], "
   });
 
   return {
-    ukweliReading: ukweliReading ?? '[Ukweli Mkutano unavailable]',
-    kivuliReading: kivuliReading ?? '[Kivuli Mkutano unavailable]',
+    ukweliReading: ukweliReading ?? '[Shahidi Mkutano unavailable]',
+    kivuliReading: kivuliReading ?? '[Mpelelezi Mkutano unavailable]',
     convergencePoints: mkutanoStructure?.convergencePoints ?? [],
     contradictionPoints: mkutanoStructure?.contradictionPoints ?? [],
     fixabilityVerdict:
@@ -670,7 +670,7 @@ Return JSON with this exact shape:
     ) ?? [];
   const isolationPenalty = Math.min(highConflicts.length * 10, 20);
 
-  // Mkutano convergence: if Ukweli and Kivuli agree on serious weaknesses,
+  // Mkutano convergence: if Shahidi and Mpelelezi agree on serious weaknesses,
   // penalise based on convergence count
   const convergencePenalty = Math.min(mkutano.convergencePoints.length * 8, 24);
 
@@ -907,10 +907,10 @@ function formatRoundTranscript(round: RoundOutput): string {
 DOMAIN AGENT POSITIONS:
 ${formatDomainPositions(round.domainPositions)}
 
-UKWELI'S ANNOTATIONS:
+SHAHIDI'S ANNOTATIONS:
 ${round.ukweliAnnotations}
 
-KIVULI'S ASSESSMENT:
+MPELELEZI'S ASSESSMENT:
 ${round.kivuliAnnotations}`;
 }
 
@@ -1048,13 +1048,13 @@ class BarazaDeliberationService {
 
     // ── 2. Load all agent memories ───────────────────────────────────────────
     const allAgentKeys: AgentKey[] = [
-      'MAISHA',
-      'ARDHI',
-      'UCHUMI',
-      'MIUNDOMBINU',
-      'JAMII',
-      'UKWELI',
-      'KIVULI',
+      'DAKTARI',
+      'LINDA',
+      'TAJIRI',
+      'FOREMAN',
+      'MWALIMU',
+      'SHAHIDI',
+      'MPELELEZI',
     ];
     const agentMemories = Object.fromEntries(
       await Promise.all(
@@ -1079,18 +1079,18 @@ class BarazaDeliberationService {
         groupId
       );
 
-      const ukweliAnnotations = await runUkweli(
+      const ukweliAnnotations = await runShahidi(
         roundNumber,
         proposalContextStr,
-        agentMemories.UKWELI,
+        agentMemories.SHAHIDI,
         domainPositions,
         rounds
       );
 
-      const kivuliAnnotations = await runKivuli(
+      const kivuliAnnotations = await runMpelelezi(
         roundNumber,
         proposalContextStr,
-        agentMemories.KIVULI,
+        agentMemories.MPELELEZI,
         domainPositions,
         ukweliAnnotations,
         rounds,
@@ -1125,8 +1125,8 @@ class BarazaDeliberationService {
     logger.info({ deliberationId }, '[BARAZA] Running Mkutano');
     const mkutano = await runMkutano(
       rounds,
-      agentMemories.UKWELI,
-      agentMemories.KIVULI
+      agentMemories.SHAHIDI,
+      agentMemories.MPELELEZI
     );
 
     // ── 5. Score ─────────────────────────────────────────────────────────────

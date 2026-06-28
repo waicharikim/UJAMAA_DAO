@@ -250,13 +250,13 @@ enum BarazaDeliberationStatus {
 }
 
 enum BarazaAgentKey {
-  MAISHA
-  ARDHI
-  UCHUMI
-  MIUNDOMBINU
-  JAMII
-  UKWELI
-  KIVULI
+  DAKTARI
+  LINDA
+  TAJIRI
+  FOREMAN
+  MWALIMU
+  SHAHIDI
+  MPELELEZI
 }
 
 enum BarazaTrigger {
