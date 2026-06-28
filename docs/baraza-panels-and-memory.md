@@ -295,8 +295,11 @@ learn how their past positions actually turned out. 5 tests; tsc clean.
 4. ✅ **DONE** (`5aca39a`) — **@moneyacademyKE (X) collector** via configurable RSS bridge
    (`MONEYACADEMY_FEED_URL`), best-effort/fail-open, labelled "one source, not verified",
    added to the weekly run. +3 parser tests. *(Inactive until the bridge URL is set.)*
-5. **Mhenga**: `HistoricalEvent` KB with provenance → LLM seed pass → framing voice →
-   trajectory; wire the now→history accretion last.
+5. ✅ **DONE** (`076cc92`) — **Mhenga, the historian**: `HistoricalEvent` KB with first-class
+   provenance + verification + supersede; theme/keyword retrieval; operator-run LLM seed;
+   run-once framing voice (arc + trajectory, confidence-aware) injected as a HISTORICAL
+   CONTEXT block. +6 tests. *(now→history accretion loop + admin curation/verification UI
+   deferred; seed is operator-run — generates unverified content for review.)*
 6. Proposal-nature panel refinement (v2).
 
 ---
