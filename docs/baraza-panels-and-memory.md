@@ -282,8 +282,11 @@ learn how their past positions actually turned out. 5 tests; tsc clean.
    `contextSnapshot` (resolved identity). Mjamaa is now a **stateful structural analyst**
    (`019d9b2`): emits a structural severity that feeds the readiness score (MAJOR −15 /
    MINOR −6), and keeps its own per-group memory (`BarazaAgentState`, agentKey=MJAMAA) so
-   its structural reads compound. baraza suite 23/23. *(Still run-once — Mjamaa as a
-   per-round debating voice deferred by design, to bound Qwen cost.)*
+   its structural reads compound. Also runs a **closing structural review** (`63d482c`):
+   after scoring, it vets each proposed *revision* for structural soundness (scope/dues/
+   review-path) + a closing verdict, stored in `contextSnapshot`. baraza suite green.
+   *(Run-once at start + close, not per-round — the proposal text is fixed across rounds,
+   so full per-round debating would just repeat; deferred by design.)*
 3. **Current-affairs: one collector (EPRA fuel)** → `CurrentAffairs` store → admin
    override → inject into `contextSnapshot`. Prove the pipeline.
 4. **@moneyacademyKE** (free/best-effort) + more collectors over time.
