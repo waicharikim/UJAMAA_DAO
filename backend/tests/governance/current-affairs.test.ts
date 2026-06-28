@@ -8,6 +8,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { prisma } from '../../src/core/database/client.js';
 import { currentAffairsService } from '../../src/modules/governance/current-affairs/current-affairs.service.js';
 import { parseEpraText } from '../../src/modules/governance/current-affairs/collectors/epra.js';
+import { parseXFeed } from '../../src/modules/governance/current-affairs/collectors/x-moneyacademy.js';
 
 describe('EPRA parser', () => {
   it('extracts petrol/diesel/kerosene from page text', () => {
@@ -24,6 +25,30 @@ describe('EPRA parser', () => {
 
   it('returns [] when nothing matches', () => {
     expect(parseEpraText('no fuel prices in this text', new Date())).toEqual([]);
+  });
+});
+
+describe('X (@moneyacademyKE) feed parser', () => {
+  it('extracts latest post titles (capped) and strips CDATA', () => {
+    const xml = `<rss><channel>
+      <item><title>Fuel prices up 5% this month</title></item>
+      <item><title><![CDATA[Shilling weakens to 130 per USD]]></title></item>
+      <item><title>Third item</title></item>
+      <item><title>Fourth item (should be dropped)</title></item>
+    </channel></rss>`;
+    const posts = parseXFeed(xml);
+    expect(posts).toHaveLength(3); // capped at MAX_POSTS
+    expect(posts[0]).toBe('Fuel prices up 5% this month');
+    expect(posts[1]).toBe('Shilling weakens to 130 per USD');
+  });
+
+  it('falls back to description and decodes entity-encoded HTML', () => {
+    const xml = `<feed><entry><description>&lt;p&gt;Tax &amp; levy update&lt;/p&gt;</description></entry></feed>`;
+    expect(parseXFeed(xml)[0]).toBe('Tax & levy update');
+  });
+
+  it('returns [] for non-feed text', () => {
+    expect(parseXFeed('not a feed at all')).toEqual([]);
   });
 });
 

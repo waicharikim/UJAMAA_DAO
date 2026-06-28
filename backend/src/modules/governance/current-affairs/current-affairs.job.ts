@@ -9,11 +9,12 @@
 import { logger } from '../../../core/logger/logger.js';
 import { currentAffairsService } from './current-affairs.service.js';
 import { collectEpraFuel } from './collectors/epra.js';
+import { collectMoneyAcademy } from './collectors/x-moneyacademy.js';
 
 export const COLLECT_CURRENT_AFFAIRS_JOB = 'collect-current-affairs';
 
 // Add new collectors here as sources are built up over time.
-const COLLECTORS = [collectEpraFuel];
+const COLLECTORS = [collectEpraFuel, collectMoneyAcademy];
 
 export async function processCurrentAffairsCollection(): Promise<void> {
   logger.info('[CURRENT_AFFAIRS] Running collectors');
