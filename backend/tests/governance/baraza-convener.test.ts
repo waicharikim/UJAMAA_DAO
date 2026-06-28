@@ -8,9 +8,12 @@ import {
   defaultCasting,
   mergeWithPriors,
   formatCastBlock,
+  normalizeReview,
+  EMPTY_REVIEW,
   LIFE_STAGES,
   EXPOSURES,
   type ProposalCasting,
+  type StructuralReview,
 } from '../../src/modules/governance/baraza/agents/convener.js';
 import {
   GOVERNANCE_DOMAIN_KEYS,
@@ -102,5 +105,37 @@ describe('convener casting', () => {
     expect(block).toContain('exposed');
     expect(block).toContain('They carry the cost.');
     expect(formatCastBlock(undefined)).toBe('');
+  });
+});
+
+describe('closing structural review', () => {
+  it('normalizeReview(null) returns the empty review', () => {
+    expect(normalizeReview(null)).toEqual(EMPTY_REVIEW);
+  });
+
+  it('coerces a valid review', () => {
+    const r = normalizeReview({
+      reviews: [
+        {
+          revision: 'Rescope to constituency',
+          sound: false,
+          note: 'Still exceeds the 15% constituency share.',
+        },
+      ],
+      verdict: 'Needs rescoping before it is fundable.',
+    });
+    expect(r.reviews).toHaveLength(1);
+    expect(r.reviews[0].sound).toBe(false);
+    expect(r.reviews[0].revision).toBe('Rescope to constituency');
+    expect(r.verdict).toBe('Needs rescoping before it is fundable.');
+  });
+
+  it('defaults sound=true and tolerates junk fields', () => {
+    const r = normalizeReview({
+      reviews: [{ revision: 'Phase the rollout' }],
+      verdict: 123,
+    } as unknown as StructuralReview);
+    expect(r.reviews[0].sound).toBe(true);
+    expect(r.verdict).toBe('');
   });
 });

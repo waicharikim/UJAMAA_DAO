@@ -34,8 +34,13 @@ import {
   buildConvenerUserMessage,
   mergeWithPriors,
   formatCastBlock,
+  CLOSING_REVIEW_SYSTEM,
+  buildClosingReviewMessage,
+  normalizeReview,
+  EMPTY_REVIEW,
   type ProposalCasting,
   type StructuralSeverity,
+  type StructuralReview,
 } from './agents/convener.js';
 import {
   AGENT_SYSTEM_PROMPTS,
@@ -496,6 +501,37 @@ async function persistMjamaaMemory(
       { err, groupId, proposalId },
       '[BARAZA] Failed to persist Mjamaa memory'
     );
+  }
+}
+
+/**
+ * Mjamaa's closing pass: vet the council's PROPOSED REVISIONS for structural
+ * soundness. Run-once at the end — the only new structural surface to react to is
+ * the fixes the council invents (the proposal text itself is fixed across rounds).
+ * No-op when there are no revisions or the AI is unavailable.
+ */
+async function runClosingReview(
+  proposalContextStr: string,
+  casting: ProposalCasting,
+  revisions: string[],
+  mjamaaMemory: string
+): Promise<StructuralReview> {
+  if (revisions.length === 0 || !isQwenAvailable()) return EMPTY_REVIEW;
+  try {
+    const result = await completeJSON<StructuralReview>({
+      system: CLOSING_REVIEW_SYSTEM,
+      userMessage: buildClosingReviewMessage(
+        proposalContextStr,
+        casting,
+        revisions,
+        mjamaaMemory
+      ),
+      maxTokens: 1024,
+      model: QWEN_ANALYST_MODEL,
+    });
+    return normalizeReview(result);
+  } catch {
+    return EMPTY_REVIEW;
   }
 }
 
@@ -1289,6 +1325,20 @@ class BarazaDeliberationService {
         casting.structuralSeverity
       );
 
+    // ── 5b. Mjamaa's closing structural review of the proposed revisions ──────
+    const structuralReview = await runClosingReview(
+      proposalContextStr,
+      casting,
+      revisionSuggestions,
+      mjamaaMemory
+    );
+    if (structuralReview.verdict) {
+      logger.info(
+        { deliberationId, verdict: structuralReview.verdict },
+        '[BARAZA] Mjamaa closing structural review'
+      );
+    }
+
     // ── 6. Update all agent memories ─────────────────────────────────────────
     await Promise.all(
       allAgentKeys.map((key) =>
@@ -1320,6 +1370,8 @@ class BarazaDeliberationService {
         ...ctx,
         casting: casting.casting,
         structuralNote: casting.structuralNote,
+        structuralSeverity: casting.structuralSeverity,
+        structuralReview,
       },
       agentMemorySnapshot: agentMemories,
     };

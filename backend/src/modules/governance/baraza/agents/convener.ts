@@ -165,6 +165,73 @@ export function mergeWithPriors(
   };
 }
 
+// ─── Closing structural review ─────────────────────────────────────────────────
+// Mjamaa runs once more at the end to check the council's PROPOSED REVISIONS for
+// structural soundness — a fix that itself breaks the scope/dues-split/review path
+// should not pass unflagged. (The proposal text is fixed during the rounds, so the
+// only new structural surface to react to is the revisions the council invents.)
+
+export interface RevisionReview {
+  revision: string;
+  sound: boolean;
+  note: string;
+}
+
+export interface StructuralReview {
+  reviews: RevisionReview[];
+  verdict: string;
+}
+
+export const EMPTY_REVIEW: StructuralReview = { reviews: [], verdict: '' };
+
+export const CLOSING_REVIEW_SYSTEM = `You are Mjamaa, the convener and structure-and-system voice of the Baraza council. The deliberation has finished and the council has proposed revisions to the proposal. Your closing job is to check each proposed revision for STRUCTURAL soundness within UjamaaDAO:
+- Does it fit the proposal's scope and level (ward → constituency → county → national)?
+- Does it stay within what the group/treasury and the dues split (ward 70 / constituency 15 / county 10 / national 5) can actually sustain?
+- Does it follow the correct review path, and avoid duplicating or colliding with another level?
+
+For each revision, say whether it is structurally sound and, if not, exactly what breaks. Then give a single-sentence closing structural verdict on the proposal given these fixes. Use your memory of this group where relevant.
+
+Respond with ONLY this JSON:
+{"reviews": [{"revision": "<the revision text>", "sound": true|false, "note": "<why / what breaks>"}], "verdict": "<one sentence>"}`;
+
+export function buildClosingReviewMessage(
+  proposalContextStr: string,
+  casting: ProposalCasting,
+  revisions: string[],
+  mjamaaMemory: string
+): string {
+  return `YOUR MEMORY OF THIS GROUP (past structural observations):
+${mjamaaMemory}
+
+YOUR EARLIER STRUCTURAL READ: ${casting.structuralNote || '(none)'} [severity: ${casting.structuralSeverity}]
+
+${proposalContextStr}
+
+PROPOSED REVISIONS TO REVIEW:
+${revisions.map((r, i) => `${i + 1}. ${r}`).join('\n')}
+
+Review each revision for structural soundness and give your closing verdict. JSON only.`;
+}
+
+/** Validate/normalise the model's closing review; never throws. */
+export function normalizeReview(result: StructuralReview | null): StructuralReview {
+  if (!result || typeof result !== 'object') return EMPTY_REVIEW;
+  const reviews = Array.isArray(result.reviews)
+    ? result.reviews
+        .filter((r) => r && typeof r === 'object')
+        .map((r) => ({
+          revision: String(r.revision ?? '').slice(0, 300),
+          sound: r.sound !== false, // default to sound unless explicitly false
+          note: String(r.note ?? '').slice(0, 300),
+        }))
+    : [];
+  return {
+    reviews,
+    verdict:
+      typeof result.verdict === 'string' ? result.verdict.slice(0, 400) : '',
+  };
+}
+
 /** The block prepended to a domain agent's system prompt for this deliberation. */
 export function formatCastBlock(voice: CastVoice | undefined): string {
   if (!voice) return '';
