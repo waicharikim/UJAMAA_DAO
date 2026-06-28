@@ -43,6 +43,13 @@ import {
   type StructuralReview,
 } from './agents/convener.js';
 import { currentAffairsService } from '../current-affairs/current-affairs.service.js';
+import { historianService } from '../historian/historian.service.js';
+import {
+  MHENGA_SYSTEM,
+  buildHistorianMessage,
+  formatFraming,
+  type HistorianFraming,
+} from './agents/historian.js';
 import {
   AGENT_SYSTEM_PROMPTS,
   ANALYST_AGENT_KEYS,
@@ -132,6 +139,7 @@ interface ProposalContext {
   memberCount: number;
   pastProposals: PastProposal[];
   currentAffairs: string;
+  historicalContext: string;
 }
 
 interface PastProposal {
@@ -162,6 +170,35 @@ export function buildContentHash(proposal: {
     solution: proposal.solution ?? null,
   });
   return crypto.createHash('sha256').update(content).digest('hex');
+}
+
+// ─── Mhenga (the historian) — run-once framing pass ─────────────────────────────
+
+/**
+ * Mhenga situates the proposal in the national arc. Retrieves a relevant timeline
+ * shortlist, then frames it via the LLM ("how we got here" + "where this is
+ * heading"); falls back to the raw shortlist when the AI is unavailable, and to
+ * '' when the knowledge base has nothing relevant.
+ */
+async function runMhenga(
+  proposalSummary: string,
+  themes: string[],
+  keywords: string[]
+): Promise<string> {
+  const events = await historianService.getRelevantHistory(themes, keywords);
+  if (events.length === 0) return '';
+  if (!isQwenAvailable()) return historianService.formatHistory(events);
+  try {
+    const framing = await completeJSON<HistorianFraming>({
+      system: MHENGA_SYSTEM,
+      userMessage: buildHistorianMessage(proposalSummary, events),
+      maxTokens: 1024,
+      model: QWEN_ANALYST_MODEL,
+    });
+    return formatFraming(framing) || historianService.formatHistory(events);
+  } catch {
+    return historianService.formatHistory(events);
+  }
 }
 
 // ─── Context assembly ─────────────────────────────────────────────────────────
@@ -205,6 +242,11 @@ async function assembleProposalContext(
 
   const treasury = proposal.group.treasury[0];
   const currentAffairs = await currentAffairsService.formatForDeliberation();
+  const historicalContext = await runMhenga(
+    `${proposal.title}\n${proposal.description}\n${proposal.problem ?? ''}\n${proposal.solution ?? ''}`,
+    [proposal.proposalType.toLowerCase()],
+    `${proposal.title} ${proposal.description}`.split(/\W+/).filter(Boolean)
+  );
 
   return {
     id: proposal.id,
@@ -235,6 +277,7 @@ async function assembleProposalContext(
       createdAt: p.createdAt.toISOString().slice(0, 10),
     })),
     currentAffairs,
+    historicalContext,
   };
 }
 
@@ -254,12 +297,15 @@ function formatProposalContext(ctx: ProposalContext): string {
       : '\nPAST PROPOSALS: None on record.';
 
   const currentSection = ctx.currentAffairs ? `\n${ctx.currentAffairs}\n` : '';
+  const historicalSection = ctx.historicalContext
+    ? `\n${ctx.historicalContext}\n`
+    : '';
 
   return `PROPOSAL: ${ctx.title}
 TYPE: ${ctx.proposalType} | SCOPE: ${ctx.proposalScope}
 GROUP: ${ctx.groupName} | LOCATION: ${location || 'Not specified'}
 MEMBERS: ${ctx.memberCount} | TREASURY BALANCE: KES ${ctx.treasuryBalance.toLocaleString()}
-${currentSection}
+${currentSection}${historicalSection}
 DESCRIPTION:
 ${ctx.description}
 
