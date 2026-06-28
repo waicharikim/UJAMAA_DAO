@@ -287,8 +287,11 @@ learn how their past positions actually turned out. 5 tests; tsc clean.
    review-path) + a closing verdict, stored in `contextSnapshot`. baraza suite green.
    *(Run-once at start + close, not per-round — the proposal text is fixed across rounds,
    so full per-round debating would just repeat; deferred by design.)*
-3. **Current-affairs: one collector (EPRA fuel)** → `CurrentAffairs` store → admin
-   override → inject into `contextSnapshot`. Prove the pipeline.
+3. ✅ **DONE** (`a2138ad`) — **Current-affairs pipeline**: `CurrentAffairs` store +
+   best-effort collector framework + EPRA fuel collector + weekly job + sanity/staleness/
+   admin-override + injection into `formatProposalContext`/`contextSnapshot`. +7 tests.
+   *(Live EPRA parse unverified against the live page — needs `EPRA_SOURCE_URL`; store stays
+   empty & section omitted until a verified scrape or admin value. Admin HTTP endpoint TODO.)*
 4. **@moneyacademyKE** (free/best-effort) + more collectors over time.
 5. **Mhenga**: `HistoricalEvent` KB with provenance → LLM seed pass → framing voice →
    trajectory; wire the now→history accretion last.
