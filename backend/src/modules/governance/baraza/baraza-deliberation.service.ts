@@ -30,6 +30,13 @@ import {
 } from '../../../core/ai/qwen.js';
 import { DELIBERATION_TOOLS, executeDeliberationTool } from './agents/tools.js';
 import {
+  CONVENER_SYSTEM,
+  buildConvenerUserMessage,
+  mergeWithPriors,
+  formatCastBlock,
+  type ProposalCasting,
+} from './agents/convener.js';
+import {
   AGENT_SYSTEM_PROMPTS,
   ANALYST_AGENT_KEYS,
   selectDomainPanel,
@@ -395,6 +402,32 @@ ${relationalSummary}${specialMemory}`;
 /** Placeholder stored when a domain agent's AI call returns nothing. */
 const AGENT_NO_RESPONSE = '[Agent did not respond]';
 
+// ─── Convener (Mjamaa) ──────────────────────────────────────────────────────────
+
+/**
+ * Mjamaa runs once before the rounds: reads the proposal and casts each domain
+ * agent's life-stage × exposure voice (whom this proposal most affects), plus a
+ * structural note. Falls back to default priors when the AI is unavailable or
+ * returns nothing/invalid — the council always ends up with a valid casting.
+ */
+async function runConvener(
+  proposalContextStr: string,
+  domainKeys: AgentKey[]
+): Promise<ProposalCasting> {
+  if (!isQwenAvailable()) return mergeWithPriors(null, domainKeys);
+  try {
+    const result = await completeJSON<ProposalCasting>({
+      system: CONVENER_SYSTEM,
+      userMessage: buildConvenerUserMessage(proposalContextStr, domainKeys),
+      maxTokens: 1024,
+      model: QWEN_ANALYST_MODEL,
+    });
+    return mergeWithPriors(result, domainKeys);
+  } catch {
+    return mergeWithPriors(null, domainKeys);
+  }
+}
+
 // ─── Round runner ─────────────────────────────────────────────────────────────
 
 async function runDomainAgentsRound(
@@ -403,7 +436,8 @@ async function runDomainAgentsRound(
   agentMemories: Record<AgentKey, string>,
   previousRounds: RoundOutput[],
   groupId: string,
-  domainKeys: AgentKey[]
+  domainKeys: AgentKey[],
+  casting: ProposalCasting
 ): Promise<Partial<Record<AgentKey, string>>> {
   const roundKey = `round${roundNumber}` as keyof typeof ROUND_INSTRUCTIONS;
   const roundInstruction = ROUND_INSTRUCTIONS[roundKey];
@@ -423,10 +457,12 @@ async function runDomainAgentsRound(
   // Run the selected panel's domain agents in parallel
   const results = await Promise.all(
     domainKeys.map(async (agentKey) => {
-      const systemPrompt = injectPrompt(AGENT_SYSTEM_PROMPTS[agentKey], {
-        AGENT_MEMORY: agentMemories[agentKey],
-        PROPOSAL_CONTEXT: proposalContextStr,
-      });
+      const systemPrompt =
+        formatCastBlock(casting.casting[agentKey]) +
+        injectPrompt(AGENT_SYSTEM_PROMPTS[agentKey], {
+          AGENT_MEMORY: agentMemories[agentKey],
+          PROPOSAL_CONTEXT: proposalContextStr,
+        });
 
       // Round 1: agents may fetch real group data to ground their initial
       // position. Rounds 2–3 react to the transcript (which already carries the
@@ -1066,6 +1102,22 @@ class BarazaDeliberationService {
       },
       '[BARAZA] Selected domain panel'
     );
+
+    // ── 2b. Convener (Mjamaa) casts each agent's voice for this proposal ──────
+    const casting = await runConvener(proposalContextStr, domainKeys);
+    logger.info(
+      {
+        deliberationId,
+        casting: Object.fromEntries(
+          Object.entries(casting.casting).map(([k, v]) => [
+            k,
+            v ? `${v.lifeStage} / ${v.exposure}` : null,
+          ])
+        ),
+        structuralNote: casting.structuralNote || undefined,
+      },
+      '[BARAZA] Convener cast voices'
+    );
     const agentMemories = Object.fromEntries(
       await Promise.all(
         allAgentKeys.map(async (key) => [
@@ -1087,7 +1139,8 @@ class BarazaDeliberationService {
         agentMemories,
         rounds,
         groupId,
-        domainKeys
+        domainKeys,
+        casting
       );
 
       const ukweliAnnotations = await runShahidi(
@@ -1168,7 +1221,11 @@ class BarazaDeliberationService {
         rounds,
         mkutano,
       },
-      contextSnapshot: ctx,
+      contextSnapshot: {
+        ...ctx,
+        casting: casting.casting,
+        structuralNote: casting.structuralNote,
+      },
       agentMemorySnapshot: agentMemories,
     };
   }
