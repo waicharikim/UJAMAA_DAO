@@ -269,10 +269,13 @@ learn how their past positions actually turned out. 5 tests; tsc clean.
 
 ## 10. Build order (phased, smallest-first)
 
-0. **Relabel the shipped 7** to the locked names (enum + persona token + memory key) —
-   do this first, while `BarazaAgentState` is ~empty and the migration is near-free.
-1. **Panels by community type** + cooperative archetypes (prompts + additive
-   `BarazaAgentKey` enum values; selector on `isSystemGroup`/`voluntaryType`).
+0. ✅ **DONE** (`e09d245`) — **Relabelled the shipped 7** to the locked names: enum +
+   `AgentKey` type + prompts + all code refs; dev & test DB enums renamed in place
+   (`ALTER TYPE RENAME VALUE`, preserving the 14 existing agent-state rows + remapped
+   embedded `relationalMap` keys). tsc 0; deliberation suite 12/12.
+1. ✅ **DONE** (`94a25f5`) — **Panels by community type**: `selectDomainPanel(group)` on
+   `isSystemGroup` (governance vs cooperative); 4 cooperative agent prompts + 4 additive
+   enum values (dev+test DBs); panel threaded through the round runner. baraza suite 17/17.
 2. **Mjamaa** (highest value, tool-grounded, low risk — internal data only), **including its
    convener/casting pass** — per-proposal impact map → voice casting onto domain agents →
    panel pick; the §4 default-prior table is the fallback.
