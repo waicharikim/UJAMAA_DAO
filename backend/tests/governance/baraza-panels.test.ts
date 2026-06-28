@@ -45,6 +45,42 @@ describe('selectDomainPanel()', () => {
     ]);
   });
 
+  it('v2: falls back to the group-type panel for neutral text', () => {
+    expect(selectDomainPanel({ isSystemGroup: true }, 'hello there')).toEqual(
+      GOVERNANCE_DOMAIN_KEYS
+    );
+    expect(selectDomainPanel({ isSystemGroup: false }, 'hello there')).toEqual(
+      COOPERATIVE_DOMAIN_KEYS
+    );
+  });
+
+  it('v2: pulls cooperative agents into a system group for an economic proposal', () => {
+    const panel = selectDomainPanel(
+      { isSystemGroup: true },
+      'a community savings and loan fund with bulk-buying for the market'
+    );
+    expect(panel).toContain('MKURUGENZI'); // finance
+    expect(panel).toContain('HUSTLER'); // market
+  });
+
+  it('v2: pulls governance lenses into a voluntary group for a health/water proposal', () => {
+    const panel = selectDomainPanel(
+      { isSystemGroup: false },
+      'build a health clinic and a water borehole for the community'
+    );
+    expect(panel).toContain('DAKTARI'); // health
+    expect(panel).toContain('LINDA'); // water / land
+  });
+
+  it('v2: bounds the panel size to 4..6', () => {
+    const big = selectDomainPanel(
+      { isSystemGroup: true },
+      'health clinic water borehole road construction school bursary savings loan market business rent'
+    );
+    expect(big.length).toBeGreaterThanOrEqual(4);
+    expect(big.length).toBeLessThanOrEqual(6);
+  });
+
   it('panels are disjoint and every agent has a non-empty system prompt', () => {
     const all: AgentKey[] = [
       ...GOVERNANCE_DOMAIN_KEYS,

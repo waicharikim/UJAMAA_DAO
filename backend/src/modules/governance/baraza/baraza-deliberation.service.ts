@@ -1262,7 +1262,10 @@ class BarazaDeliberationService {
     // ── 2. Select the panel + load its agent memories ────────────────────────
     // System groups deliberate with the governance panel; voluntary groups with
     // the cooperative panel. Analysts (Shahidi, Mpelelezi) run in both.
-    const domainKeys = selectDomainPanel({ isSystemGroup: ctx.isSystemGroup });
+    const domainKeys = selectDomainPanel(
+      { isSystemGroup: ctx.isSystemGroup },
+      `${ctx.title} ${ctx.description} ${ctx.problem ?? ''} ${ctx.solution ?? ''} ${ctx.proposalType}`
+    );
     const allAgentKeys: AgentKey[] = [...domainKeys, ...ANALYST_AGENT_KEYS];
     logger.info(
       {

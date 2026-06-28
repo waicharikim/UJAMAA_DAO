@@ -613,13 +613,65 @@ export const COOPERATIVE_DOMAIN_KEYS: AgentKey[] = [
 
 export const ANALYST_AGENT_KEYS: AgentKey[] = ['SHAHIDI', 'MPELELEZI'];
 
+/** The full domain roster (governance + cooperative) v2 selects from. */
+export const ALL_DOMAIN_KEYS: AgentKey[] = [
+  ...GOVERNANCE_DOMAIN_KEYS,
+  ...COOPERATIVE_DOMAIN_KEYS,
+];
+
+const MIN_PANEL = 4;
+const MAX_PANEL = 6;
+
+/** High-signal keywords per domain agent, for proposal-nature panel selection. */
+const AGENT_DOMAIN_KEYWORDS: Partial<Record<AgentKey, string[]>> = {
+  DAKTARI: ['health', 'clinic', 'hospital', 'medical', 'medicine', 'disease', 'nutrition', 'maternal', 'sanitation', 'elderly', 'disabled', 'welfare', 'sick', 'patient', 'mutual-aid', 'mutual aid'],
+  LINDA: ['land', 'water', 'borehole', 'environment', 'drought', 'flood', 'forest', 'farm', 'plot', 'conservation', 'climate', 'river', 'soil', 'irrigation', 'fertilizer', 'fertiliser'],
+  TAJIRI: ['economy', 'economic', 'income', 'jobs', 'employment', 'trade', 'revenue', 'price', 'cost of living', 'wealth', 'value'],
+  FOREMAN: ['road', 'bridge', 'construction', 'building', 'pipe', 'pipeline', 'electricity', 'lighting', 'transport', 'infrastructure', 'maintenance', 'tarmac', 'install'],
+  MWALIMU: ['school', 'education', 'bursary', 'fees', 'student', 'youth', 'training', 'skills', 'culture', 'library', 'sports', 'mentor'],
+  MKURUGENZI: ['savings', 'saving', 'loan', 'fund', 'reserves', 'contribution', 'dues', 'treasury', 'financial', 'sustainability', 'default', 'repayment', 'budget', 'invest'],
+  MWANANCHI: ['member', 'equity', 'fairness', 'vulnerable', 'inclusion', 'exclusion', 'benefit', 'marginal', 'poorest', 'who pays'],
+  FUNDI: ['deliver', 'maintain', 'logistics', 'labour', 'labor', 'contractor', 'technical', 'operate', 'repair', 'build', 'supplier'],
+  HUSTLER: ['sell', 'customer', 'demand', 'margin', 'competition', 'profit', 'business', 'vendor', 'rent', 'rental', 'bulk', 'market'],
+};
+
 /**
- * Choose the domain panel by community type. System groups (ward → national)
- * deliberate with the governance panel; voluntary groups use the cooperative
- * panel. Analysts (Shahidi, Mpelelezi) run in both, so they are added separately.
+ * Choose the domain panel for a deliberation. v2: driven by **proposal nature**
+ * (which domains it actually touches), drawn from the full roster, with **group
+ * type** as the fallback. When the proposal text matches nothing, it returns the
+ * group-type panel (system → governance, voluntary → cooperative) — back-compat.
+ * Matched panels are padded to a minimum (group-type base first, so the
+ * community's identity stays present) and capped to bound deliberation cost.
+ * Analysts (Shahidi, Mpelelezi) always run and are added separately.
  */
-export function selectDomainPanel(group: { isSystemGroup: boolean }): AgentKey[] {
-  return group.isSystemGroup ? GOVERNANCE_DOMAIN_KEYS : COOPERATIVE_DOMAIN_KEYS;
+export function selectDomainPanel(
+  group: { isSystemGroup: boolean },
+  proposalText = ''
+): AgentKey[] {
+  const base = group.isSystemGroup
+    ? GOVERNANCE_DOMAIN_KEYS
+    : COOPERATIVE_DOMAIN_KEYS;
+
+  const text = proposalText.toLowerCase();
+  const matched = ALL_DOMAIN_KEYS.map((k) => ({
+    k,
+    score: (AGENT_DOMAIN_KEYWORDS[k] ?? []).filter((w) => text.includes(w))
+      .length,
+  }))
+    .filter((s) => s.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .map((s) => s.k);
+
+  // Nothing matched → the group-type panel (back-compat).
+  if (matched.length === 0) return [...base];
+
+  const selected = [...matched];
+  // Pad to the minimum from the group-type base first, then the rest of the roster.
+  for (const k of [...base, ...ALL_DOMAIN_KEYS]) {
+    if (selected.length >= MIN_PANEL) break;
+    if (!selected.includes(k)) selected.push(k);
+  }
+  return selected.slice(0, MAX_PANEL);
 }
 
 export const AGENT_SYSTEM_PROMPTS: Record<AgentKey, string> = {
