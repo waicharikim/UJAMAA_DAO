@@ -31,7 +31,8 @@ import {
 import { DELIBERATION_TOOLS, executeDeliberationTool } from './agents/tools.js';
 import {
   AGENT_SYSTEM_PROMPTS,
-  DOMAIN_AGENT_KEYS,
+  ANALYST_AGENT_KEYS,
+  selectDomainPanel,
   ROUND_INSTRUCTIONS,
   MKUTANO_SHAHIDI_SYSTEM,
   MKUTANO_MPELELEZI_SYSTEM,
@@ -109,6 +110,7 @@ interface ProposalContext {
   proposalType: string;
   proposalScope: string;
   groupName: string;
+  isSystemGroup: boolean;
   wardName: string | null;
   constituencyName: string | null;
   countyName: string | null;
@@ -204,6 +206,7 @@ async function assembleProposalContext(
     proposalType: proposal.proposalType,
     proposalScope: proposal.proposalScope,
     groupName: proposal.group.name,
+    isSystemGroup: proposal.group.isSystemGroup,
     wardName: proposal.group.ward?.name ?? null,
     constituencyName: proposal.group.constituency?.name ?? null,
     countyName: proposal.group.county?.name ?? null,
@@ -399,7 +402,8 @@ async function runDomainAgentsRound(
   proposalContextStr: string,
   agentMemories: Record<AgentKey, string>,
   previousRounds: RoundOutput[],
-  groupId: string
+  groupId: string,
+  domainKeys: AgentKey[]
 ): Promise<Partial<Record<AgentKey, string>>> {
   const roundKey = `round${roundNumber}` as keyof typeof ROUND_INSTRUCTIONS;
   const roundInstruction = ROUND_INSTRUCTIONS[roundKey];
@@ -416,9 +420,9 @@ async function runDomainAgentsRound(
     .replace('{{ROUND_1_TRANSCRIPT}}', round1Transcript)
     .replace('{{ROUND_2_TRANSCRIPT}}', round2Transcript);
 
-  // Run all 5 domain agents in parallel
+  // Run the selected panel's domain agents in parallel
   const results = await Promise.all(
-    DOMAIN_AGENT_KEYS.map(async (agentKey) => {
+    domainKeys.map(async (agentKey) => {
       const systemPrompt = injectPrompt(AGENT_SYSTEM_PROMPTS[agentKey], {
         AGENT_MEMORY: agentMemories[agentKey],
         PROPOSAL_CONTEXT: proposalContextStr,
@@ -858,8 +862,10 @@ function updateRelationalMap(
 
   const map = new Map<string, any>(existing.map((e) => [e.withAgent, e]));
 
-  // Look for cross-agent challenges in Round 2 positions
-  for (const otherAgent of DOMAIN_AGENT_KEYS) {
+  // Look for cross-agent challenges in Round 2 positions, across whichever
+  // domain panel actually deliberated (governance or cooperative).
+  const otherAgents = Object.keys(round2.domainPositions) as AgentKey[];
+  for (const otherAgent of otherAgents) {
     if (otherAgent === thisAgent) continue;
 
     const thisPosition = round2.domainPositions[thisAgent] ?? '';
@@ -896,9 +902,10 @@ function updateRelationalMap(
 function formatDomainPositions(
   positions: Partial<Record<AgentKey, string>>
 ): string {
-  return DOMAIN_AGENT_KEYS.map(
-    (key) => `${key}:\n${positions[key] ?? '(no response)'}`
-  ).join('\n\n');
+  // Iterate the agents that actually ran (panel-agnostic), not a fixed list.
+  return Object.entries(positions)
+    .map(([key, v]) => `${key}:\n${v ?? '(no response)'}`)
+    .join('\n\n');
 }
 
 function formatRoundTranscript(round: RoundOutput): string {
@@ -1046,16 +1053,19 @@ class BarazaDeliberationService {
     if (!ctx) throw new Error('Could not assemble proposal context');
     const proposalContextStr = formatProposalContext(ctx);
 
-    // ── 2. Load all agent memories ───────────────────────────────────────────
-    const allAgentKeys: AgentKey[] = [
-      'DAKTARI',
-      'LINDA',
-      'TAJIRI',
-      'FOREMAN',
-      'MWALIMU',
-      'SHAHIDI',
-      'MPELELEZI',
-    ];
+    // ── 2. Select the panel + load its agent memories ────────────────────────
+    // System groups deliberate with the governance panel; voluntary groups with
+    // the cooperative panel. Analysts (Shahidi, Mpelelezi) run in both.
+    const domainKeys = selectDomainPanel({ isSystemGroup: ctx.isSystemGroup });
+    const allAgentKeys: AgentKey[] = [...domainKeys, ...ANALYST_AGENT_KEYS];
+    logger.info(
+      {
+        deliberationId,
+        panel: ctx.isSystemGroup ? 'governance' : 'cooperative',
+        domainKeys,
+      },
+      '[BARAZA] Selected domain panel'
+    );
     const agentMemories = Object.fromEntries(
       await Promise.all(
         allAgentKeys.map(async (key) => [
@@ -1076,7 +1086,8 @@ class BarazaDeliberationService {
         proposalContextStr,
         agentMemories,
         rounds,
-        groupId
+        groupId,
+        domainKeys
       );
 
       const ukweliAnnotations = await runShahidi(
@@ -1110,7 +1121,7 @@ class BarazaDeliberationService {
     // quota). Throw so run() records FAILED + errorLog instead of a misleading
     // COMPLETE with a default score.
     const anyRealDomainResponse = rounds.some((r) =>
-      DOMAIN_AGENT_KEYS.some((k) => {
+      domainKeys.some((k) => {
         const v = r.domainPositions[k];
         return !!v && v !== AGENT_NO_RESPONSE;
       })
