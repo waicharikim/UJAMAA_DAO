@@ -360,7 +360,15 @@ async function dispatchCommand(
     : await resolveUserCommunities(from);
   const groupIds = communities.map((c) => c.groupId);
   const userContext = await resolveUserContext(from, groupIds);
-  const reply = await barazaAiService.reply(question, userContext, communities);
+  // Per-user, per-chat thread so memory is isolated between members in a shared
+  // baraza group and scoped to the room (group chat vs DM are separate threads).
+  const conversationKey = `${chatId}:${from?.id ?? 'anon'}`;
+  const reply = await barazaAiService.reply(
+    question,
+    userContext,
+    communities,
+    conversationKey
+  );
   if (from?.id) await sendTelegramMessage(from.id, reply, chatId);
 }
 

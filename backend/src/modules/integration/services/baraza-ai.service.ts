@@ -18,6 +18,7 @@
 import OpenAI from 'openai';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../../core/database/client.js';
+import { getRedisClient } from '../../../core/database/redis.client.js';
 import { logger } from '../../../core/logger/logger.js';
 
 // qwen-plus: best balance of speed + capability for conversational use
@@ -26,6 +27,53 @@ import { logger } from '../../../core/logger/logger.js';
 const MODEL = process.env.BARAZA_AI_MODEL ?? 'qwen-plus';
 const MAX_TOOL_ROUNDS = 3;
 const MAX_TOKENS = 1024;
+
+// Rolling conversation memory (per user, per chat). Without this the bot is
+// stateless and loses the thread after the first reply — and re-guesses the
+// language on every isolated message. Kept in Redis with a short TTL; if Redis
+// is unavailable we silently fall back to stateless behaviour.
+const CONV_TTL_SECONDS = 1800; // 30-minute rolling window
+const CONV_MAX_MESSAGES = 8; // last 4 exchanges (user + assistant pairs)
+
+// High-recency nudge appended to the latest user turn. The system prompt also
+// covers this, but models weight the most recent instruction most heavily —
+// this is what stops the drift back to Swahili on short follow-ups.
+const LANGUAGE_REMINDER =
+  '[Reply in the SAME language as my message above. Do not switch to Kiswahili unless I wrote in Kiswahili.]';
+
+type ConvTurn = { role: 'user' | 'assistant'; content: string };
+
+function convKey(key: string): string {
+  return `baraza:conv:${key}`;
+}
+
+async function loadHistory(key: string): Promise<ConvTurn[]> {
+  const redis = getRedisClient();
+  if (!redis) return [];
+  try {
+    const raw = await redis.get(convKey(key));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed)
+      ? (parsed as ConvTurn[]).slice(-CONV_MAX_MESSAGES)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+async function saveHistory(key: string, turns: ConvTurn[]): Promise<void> {
+  const redis = getRedisClient();
+  if (!redis) return;
+  try {
+    const trimmed = turns.slice(-CONV_MAX_MESSAGES);
+    await redis.set(convKey(key), JSON.stringify(trimmed), {
+      EX: CONV_TTL_SECONDS,
+    });
+  } catch {
+    // Conversation memory is best-effort; never fail a reply over it.
+  }
+}
 
 // Qwen Cloud international DashScope endpoint (OpenAI-compatible)
 const DASHSCOPE_BASE_URL =
@@ -223,14 +271,28 @@ export class BarazaAiService {
   async reply(
     text: string,
     userContext: BarazaUserContext,
-    communities: BarazaCommunity[]
+    communities: BarazaCommunity[],
+    conversationKey?: string
   ): Promise<string> {
     if (!this.client) return UNAVAILABLE_MSG;
 
     const contextHeader = buildContextHeader(userContext, communities);
+    // Prior turns give the model continuity (and a stable language signal).
+    // Only the latest turn carries the context header + language reminder;
+    // history stores the raw user/assistant text so it never goes stale.
+    const history = conversationKey ? await loadHistory(conversationKey) : [];
     const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
       { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: `${contextHeader}\n\n${text}` },
+      ...history.map(
+        (t): OpenAI.Chat.Completions.ChatCompletionMessageParam => ({
+          role: t.role,
+          content: t.content,
+        })
+      ),
+      {
+        role: 'user',
+        content: `${contextHeader}\n\n${text}\n\n${LANGUAGE_REMINDER}`,
+      },
     ];
 
     try {
@@ -287,7 +349,21 @@ export class BarazaAiService {
         });
       }
 
-      return response.choices[0]?.message?.content ?? UNAVAILABLE_MSG;
+      const finalText =
+        response.choices[0]?.message?.content ?? UNAVAILABLE_MSG;
+
+      // Persist only the plain user text + final reply — never the intermediate
+      // tool_call / tool-result messages (trimming those across turns would
+      // break tool_call↔result pairing on the next request).
+      if (conversationKey && finalText && finalText !== UNAVAILABLE_MSG) {
+        await saveHistory(conversationKey, [
+          ...history,
+          { role: 'user', content: text },
+          { role: 'assistant', content: finalText },
+        ]);
+      }
+
+      return finalText;
     } catch (err) {
       logger.warn(
         { err, communities: communities.map((c) => c.groupId) },

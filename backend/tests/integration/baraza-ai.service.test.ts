@@ -15,12 +15,25 @@
 // vi.hoisted so the mock fn exists before the hoisted vi.mock factory runs
 // (the service constructs its OpenAI client at module load when DASHSCOPE_API_KEY
 // is present in the test env).
-const { mockCreate } = vi.hoisted(() => ({ mockCreate: vi.fn() }));
+const { mockCreate, redisStore } = vi.hoisted(() => ({
+  mockCreate: vi.fn(),
+  redisStore: new Map<string, string>(),
+}));
 
 vi.mock('openai', () => ({
   default: vi.fn().mockImplementation(() => ({
     chat: { completions: { create: mockCreate } },
   })),
+}));
+
+// In-memory stand-in for the Redis-backed conversation store.
+vi.mock('../../src/core/database/redis.client.js', () => ({
+  getRedisClient: () => ({
+    get: async (k: string) => redisStore.get(k) ?? null,
+    set: async (k: string, v: string) => {
+      redisStore.set(k, v);
+    },
+  }),
 }));
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -180,6 +193,60 @@ describe('BarazaAiService.reply — basic text response', () => {
     expect(userMsg).toContain('120');
     expect(userMsg).toContain('Active elections: 2');
     expect(userMsg).toContain('Mwangaza SACCO');
+  });
+});
+
+// ─────────────────────────────────────────────
+// Conversation memory + language adherence
+// ─────────────────────────────────────────────
+
+describe('BarazaAiService.reply — conversation memory', () => {
+  let svc: BarazaAiService;
+
+  beforeEach(() => {
+    process.env.DASHSCOPE_API_KEY = 'sk-test';
+    vi.clearAllMocks();
+    redisStore.clear();
+    svc = new BarazaAiService();
+  });
+
+  afterEach(() => {
+    delete process.env.DASHSCOPE_API_KEY;
+  });
+
+  it('appends a language reminder to the latest user turn', async () => {
+    mockCreate.mockResolvedValue(makeTextResponse('Sure!'));
+    await svc.reply('Hello', BASE_CTX, single('g1'), 'chat1:user1');
+    const call = mockCreate.mock.calls[0][0];
+    const userMsg = call.messages[call.messages.length - 1].content as string;
+    expect(userMsg).toContain('SAME language');
+  });
+
+  it('carries prior turns into the next reply for the same conversationKey', async () => {
+    mockCreate.mockResolvedValue(makeTextResponse('First answer.'));
+    await svc.reply('What is PR?', BASE_CTX, single('g1'), 'k1');
+
+    mockCreate.mockResolvedValue(makeTextResponse('Second answer.'));
+    await svc.reply('And UT?', BASE_CTX, single('g1'), 'k1');
+
+    const secondCall = mockCreate.mock.calls[1][0];
+    const roles = secondCall.messages.map((m: { role: string }) => m.role);
+    // [system, user(prev), assistant(prev), user(current)]
+    expect(roles).toEqual(['system', 'user', 'assistant', 'user']);
+    expect(secondCall.messages[1].content as string).toContain('What is PR?');
+    expect(secondCall.messages[2].content as string).toBe('First answer.');
+    // history stores RAW user text — no context header / language reminder
+    expect(secondCall.messages[1].content as string).not.toContain(
+      'SAME language'
+    );
+  });
+
+  it('stays stateless when no conversationKey is given', async () => {
+    mockCreate.mockResolvedValue(makeTextResponse('x'));
+    await svc.reply('one', BASE_CTX, single('g1'));
+    await svc.reply('two', BASE_CTX, single('g1'));
+    const call2 = mockCreate.mock.calls[1][0];
+    expect(call2.messages).toHaveLength(2); // system + current user only
   });
 });
 
