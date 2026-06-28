@@ -276,9 +276,11 @@ learn how their past positions actually turned out. 5 tests; tsc clean.
 1. ✅ **DONE** (`94a25f5`) — **Panels by community type**: `selectDomainPanel(group)` on
    `isSystemGroup` (governance vs cooperative); 4 cooperative agent prompts + 4 additive
    enum values (dev+test DBs); panel threaded through the round runner. baraza suite 17/17.
-2. **Mjamaa** (highest value, tool-grounded, low risk — internal data only), **including its
-   convener/casting pass** — per-proposal impact map → voice casting onto domain agents →
-   panel pick; the §4 default-prior table is the fallback.
+2. ✅ **DONE** (`4106fb3`) — **Mjamaa convener/casting pass**: runs once before the rounds,
+   casts each domain agent's life-stage × exposure voice + a structural note; cast block
+   prepended to agent prompts at runtime; default-prior fallback; casting recorded in
+   `contextSnapshot` (resolved identity). +5 tests; baraza suite 22/22. *(Stateless pass —
+   Mjamaa as a per-round debating voice + its own memory deferred.)*
 3. **Current-affairs: one collector (EPRA fuel)** → `CurrentAffairs` store → admin
    override → inject into `contextSnapshot`. Prove the pipeline.
 4. **@moneyacademyKE** (free/best-effort) + more collectors over time.
