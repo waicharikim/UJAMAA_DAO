@@ -45,7 +45,8 @@ describe('convener casting', () => {
           why: 'This proposal is about school fees.',
         },
       },
-      structuralNote: 'Scope looks correct.',
+      structuralNote: 'Ward proposal serves three wards.',
+      structuralSeverity: 'MAJOR',
     };
     const merged = mergeWithPriors(ai, GOVERNANCE_DOMAIN_KEYS);
     // AI value honoured for DAKTARI
@@ -56,7 +57,26 @@ describe('convener casting', () => {
     });
     // others fall back to priors (valid voices)
     expect(LIFE_STAGES).toContain(merged.casting.LINDA!.lifeStage);
-    expect(merged.structuralNote).toBe('Scope looks correct.');
+    expect(merged.structuralNote).toBe('Ward proposal serves three wards.');
+    expect(merged.structuralSeverity).toBe('MAJOR');
+  });
+
+  it('defaults structuralSeverity to NONE when missing or invalid', () => {
+    const noSeverity = {
+      casting: {},
+      structuralNote: 'x',
+    } as unknown as ProposalCasting;
+    expect(mergeWithPriors(noSeverity, GOVERNANCE_DOMAIN_KEYS).structuralSeverity).toBe(
+      'NONE'
+    );
+    const badSeverity = {
+      casting: {},
+      structuralNote: 'x',
+      structuralSeverity: 'CATASTROPHIC',
+    } as unknown as ProposalCasting;
+    expect(mergeWithPriors(badSeverity, GOVERNANCE_DOMAIN_KEYS).structuralSeverity).toBe(
+      'NONE'
+    );
   });
 
   it('rejects an invalid AI voice and uses the prior instead', () => {

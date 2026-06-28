@@ -35,6 +35,7 @@ import {
   mergeWithPriors,
   formatCastBlock,
   type ProposalCasting,
+  type StructuralSeverity,
 } from './agents/convener.js';
 import {
   AGENT_SYSTEM_PROMPTS,
@@ -412,19 +413,89 @@ const AGENT_NO_RESPONSE = '[Agent did not respond]';
  */
 async function runConvener(
   proposalContextStr: string,
-  domainKeys: AgentKey[]
+  domainKeys: AgentKey[],
+  mjamaaMemory: string
 ): Promise<ProposalCasting> {
   if (!isQwenAvailable()) return mergeWithPriors(null, domainKeys);
   try {
     const result = await completeJSON<ProposalCasting>({
       system: CONVENER_SYSTEM,
-      userMessage: buildConvenerUserMessage(proposalContextStr, domainKeys),
+      userMessage: buildConvenerUserMessage(
+        proposalContextStr,
+        domainKeys,
+        mjamaaMemory
+      ),
       maxTokens: 1024,
       model: QWEN_ANALYST_MODEL,
     });
     return mergeWithPriors(result, domainKeys);
   } catch {
     return mergeWithPriors(null, domainKeys);
+  }
+}
+
+// ─── Mjamaa's own per-group memory (structural observations) ────────────────────
+// Mjamaa is run-once (the convener), but it remembers each group's structural
+// patterns across deliberations so its reads compound over time.
+
+async function loadMjamaaMemory(groupId: string): Promise<string> {
+  const state = await prisma.barazaAgentState.findUnique({
+    where: { groupId_agentKey: { groupId, agentKey: 'MJAMAA' } },
+  });
+  const log = Array.isArray(state?.episodicLog)
+    ? (state!.episodicLog as any[])
+    : [];
+  if (log.length === 0) {
+    return '[No prior structural observations for this group — this is your first read here.]';
+  }
+  return log
+    .slice(-8)
+    .map(
+      (e: any) =>
+        `- "${e.proposalTitle}" (${e.date}) [${e.structuralSeverity ?? 'NONE'}]: ${e.structuralNote || 'no issues noted'}`
+    )
+    .join('\n');
+}
+
+async function persistMjamaaMemory(
+  groupId: string,
+  proposalId: string,
+  proposalTitle: string,
+  casting: ProposalCasting
+): Promise<void> {
+  try {
+    const existing = await prisma.barazaAgentState.findUnique({
+      where: { groupId_agentKey: { groupId, agentKey: 'MJAMAA' } },
+    });
+    const log = Array.isArray(existing?.episodicLog)
+      ? (existing!.episodicLog as any[])
+      : [];
+    const entry = {
+      proposalId,
+      proposalTitle,
+      date: new Date().toISOString().slice(0, 10),
+      structuralNote: casting.structuralNote.slice(0, 300),
+      structuralSeverity: casting.structuralSeverity,
+    };
+    const newLog = [...log, entry].slice(-50);
+    await prisma.barazaAgentState.upsert({
+      where: { groupId_agentKey: { groupId, agentKey: 'MJAMAA' } },
+      create: {
+        groupId,
+        agentKey: 'MJAMAA',
+        deliberationCount: 1,
+        episodicLog: newLog as any,
+      },
+      update: {
+        deliberationCount: { increment: 1 },
+        episodicLog: newLog as any,
+      },
+    });
+  } catch (err) {
+    logger.warn(
+      { err, groupId, proposalId },
+      '[BARAZA] Failed to persist Mjamaa memory'
+    );
   }
 }
 
@@ -644,7 +715,8 @@ Return JSON: { "convergencePoints": string[], "contradictionPoints": string[], "
 async function computeReadinessScore(
   rounds: RoundOutput[],
   mkutano: MkutanoOutput,
-  agentStates: Partial<Record<AgentKey, any>>
+  agentStates: Partial<Record<AgentKey, any>>,
+  structuralSeverity: StructuralSeverity = 'NONE'
 ): Promise<{
   score: number;
   band: string;
@@ -727,13 +799,23 @@ Return JSON with this exact shape:
   );
   const chokepointPenalty = Math.min(unchannelledChokepoints.length * 8, 16);
 
+  // Mjamaa's structural verdict: a MAJOR structural flaw (mis-scoping, unfundable,
+  // wrong review path) weighs heavily on readiness; MINOR is a nudge.
+  const structuralPenalty =
+    structuralSeverity === 'MAJOR'
+      ? 15
+      : structuralSeverity === 'MINOR'
+        ? 6
+        : 0;
+
   const rawScore =
     base +
     coalitionBonus -
     isolationPenalty -
     convergencePenalty +
     contradictionBonus -
-    chokepointPenalty;
+    chokepointPenalty -
+    structuralPenalty;
 
   const score = Math.max(0, Math.min(100, rawScore));
 
@@ -1104,7 +1186,12 @@ class BarazaDeliberationService {
     );
 
     // ── 2b. Convener (Mjamaa) casts each agent's voice for this proposal ──────
-    const casting = await runConvener(proposalContextStr, domainKeys);
+    const mjamaaMemory = await loadMjamaaMemory(groupId);
+    const casting = await runConvener(
+      proposalContextStr,
+      domainKeys,
+      mjamaaMemory
+    );
     logger.info(
       {
         deliberationId,
@@ -1195,7 +1282,12 @@ class BarazaDeliberationService {
 
     // ── 5. Score ─────────────────────────────────────────────────────────────
     const { score, band, conflictMap, revisionSuggestions } =
-      await computeReadinessScore(rounds, mkutano, {});
+      await computeReadinessScore(
+        rounds,
+        mkutano,
+        {},
+        casting.structuralSeverity
+      );
 
     // ── 6. Update all agent memories ─────────────────────────────────────────
     await Promise.all(
@@ -1210,6 +1302,9 @@ class BarazaDeliberationService {
         )
       )
     );
+    // Mjamaa (the run-once convener) records its structural observation so its
+    // reads of this group compound over time.
+    await persistMjamaaMemory(groupId, proposalId, ctx.title, casting);
 
     return {
       score,

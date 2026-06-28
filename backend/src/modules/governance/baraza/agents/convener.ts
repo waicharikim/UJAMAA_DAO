@@ -31,6 +31,10 @@ export type LifeStage = (typeof LIFE_STAGES)[number];
 export const EXPOSURES = ['Cushioned', 'Exposed', 'Dependent'] as const;
 export type Exposure = (typeof EXPOSURES)[number];
 
+/** How serious Mjamaa judges the proposal's structural problems to be. */
+export const STRUCTURAL_SEVERITIES = ['NONE', 'MINOR', 'MAJOR'] as const;
+export type StructuralSeverity = (typeof STRUCTURAL_SEVERITIES)[number];
+
 export interface CastVoice {
   lifeStage: LifeStage;
   exposure: Exposure;
@@ -40,6 +44,7 @@ export interface CastVoice {
 export interface ProposalCasting {
   casting: Partial<Record<AgentKey, CastVoice>>;
   structuralNote: string;
+  structuralSeverity: StructuralSeverity;
 }
 
 // ─── Default priors (the §4 table) ─────────────────────────────────────────────
@@ -76,7 +81,7 @@ export function defaultCasting(domainKeys: AgentKey[]): ProposalCasting {
       why: 'Default panel assignment (convener unavailable).',
     };
   }
-  return { casting, structuralNote: '' };
+  return { casting, structuralNote: '', structuralSeverity: 'NONE' };
 }
 
 // ─── Mjamaa, the convener ───────────────────────────────────────────────────────
@@ -91,20 +96,24 @@ Your job runs BEFORE the council debates. You do two things:
    - a one-sentence "why" tying that person to this proposal's repercussions.
    Spread the voices — the council should hear different stages and exposures, not the same person seven times. Centre whoever this proposal most affects.
 
-2. NOTE THE STRUCTURE. In one or two sentences, flag any structural issue you see: mis-scoping (e.g. a ward proposal that serves three wards), funding that exceeds what the group/treasury can sustain, the wrong review path, or duplication of something at another level. If nothing stands out, say so briefly.
+2. ASSESS THE STRUCTURE. In one or two sentences, flag any structural issue: mis-scoping (e.g. a ward proposal that serves three wards), funding that exceeds what the group/treasury can sustain, the wrong review path, or duplication of something at another level. Then rate severity: NONE (no real issue), MINOR (worth noting, not blocking), or MAJOR (a serious structural flaw the council should weigh heavily). Draw on your memory of this group's past structural patterns where relevant.
 
 Respond with ONLY this JSON shape (agent keys exactly as given):
-{"casting": {"<AGENT_KEY>": {"lifeStage": "...", "exposure": "...", "why": "..."}}, "structuralNote": "..."}`;
+{"casting": {"<AGENT_KEY>": {"lifeStage": "...", "exposure": "...", "why": "..."}}, "structuralNote": "...", "structuralSeverity": "NONE|MINOR|MAJOR"}`;
 
 export function buildConvenerUserMessage(
   proposalContextStr: string,
-  domainKeys: AgentKey[]
+  domainKeys: AgentKey[],
+  mjamaaMemory: string
 ): string {
   return `DOMAIN AGENTS TO CAST (use these exact keys): ${domainKeys.join(', ')}
 
+YOUR MEMORY OF THIS GROUP (past structural observations):
+${mjamaaMemory}
+
 ${proposalContextStr}
 
-Cast each agent's voice and note the structure now. JSON only.`;
+Cast each agent's voice and assess the structure now. JSON only.`;
 }
 
 // ─── Validation + merge ─────────────────────────────────────────────────────────
@@ -140,12 +149,19 @@ export function mergeWithPriors(
       };
     }
   }
+  const structuralSeverity = STRUCTURAL_SEVERITIES.includes(
+    result.structuralSeverity as StructuralSeverity
+  )
+    ? (result.structuralSeverity as StructuralSeverity)
+    : 'NONE';
+
   return {
     casting,
     structuralNote:
       typeof result.structuralNote === 'string'
         ? result.structuralNote.slice(0, 600)
         : '',
+    structuralSeverity,
   };
 }
 

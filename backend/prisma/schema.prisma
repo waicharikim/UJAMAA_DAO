@@ -1910,6 +1910,8 @@ enum BarazaAgentKey {
   // analysts (run in every panel)
   SHAHIDI
   MPELELEZI
+  // convener / framing (run once)
+  MJAMAA
 }
 
 enum BarazaTrigger {
