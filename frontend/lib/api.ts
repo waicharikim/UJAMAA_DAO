@@ -2285,6 +2285,7 @@ export interface WalletTransactionDto {
   proposalId:      string | null
   projectId:       string | null
   initiatedById:   string
+  anchorTxHash:    string | null   // on-chain mirror tx hash (null until anchored)
   metadata:        Record<string, unknown> | null
 }
 
