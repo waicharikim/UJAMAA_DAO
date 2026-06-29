@@ -1,10 +1,15 @@
 "use client"
 
-import { Users, Info, Check, ThumbsUp, Swords, HelpCircle, Construction, Star, Wrench, PencilLine } from "lucide-react"
+import { Users, Info, Check, ThumbsUp, Swords, HelpCircle, Construction, Star, Wrench, PencilLine, Lightbulb } from "lucide-react"
 import type { BarazaDeliberationDto } from "@/lib/api"
 
 interface BarazaDeliberationCardProps {
   deliberation: BarazaDeliberationDto | null | undefined
+  // When the viewer is the proposal's author and the proposal can still change
+  // (DRAFT / PENDING_REVIEW), the council's open questions are surfaced as a
+  // gentle "strengthen this" nudge rather than a read-only list.
+  isCreator?: boolean
+  editable?: boolean
 }
 
 // Plain-language readiness labels (the engine's bands, said simply).
@@ -23,7 +28,7 @@ function asList(v: unknown): string[] {
  * Read-only, plain-language summary of the 7-agent Baraza review for a proposal.
  * Renders nothing until a completed deliberation exists.
  */
-export function BarazaDeliberationCard({ deliberation }: BarazaDeliberationCardProps) {
+export function BarazaDeliberationCard({ deliberation, isCreator = false, editable = false }: BarazaDeliberationCardProps) {
   if (!deliberation) return null
 
   const map = deliberation.conflictMap ?? {}
@@ -39,6 +44,22 @@ export function BarazaDeliberationCard({ deliberation }: BarazaDeliberationCardP
   const blockers = map.chokepoints ?? []
   const topConcerns = asList(deliberation.mkutanoConvergence)
   const changes = asList(deliberation.revisionSuggestions)
+
+  // Author-facing nudge: the questions/changes worth addressing while the
+  // proposal can still be improved. Suggested changes first (most actionable),
+  // then anything still unanswered; deduped and capped so it stays inviting.
+  const nudgeItems = (() => {
+    const seen = new Set<string>()
+    return [...changes, ...open]
+      .filter((t) => {
+        const k = t.trim().toLowerCase()
+        if (!k || seen.has(k)) return false
+        seen.add(k)
+        return true
+      })
+      .slice(0, 5)
+  })()
+  const showNudge = isCreator && editable && nudgeItems.length > 0
 
   const Section = ({ icon: Icon, label, color, children }: {
     icon: typeof Check; label: string; color: string; children: React.ReactNode
@@ -97,6 +118,30 @@ export function BarazaDeliberationCard({ deliberation }: BarazaDeliberationCardP
           A panel of AI helpers read this proposal before the vote and noted what looks strong and what needs work. It's here to help you decide — <strong>it does not decide</strong>. Your vote is what counts.
         </p>
       </div>
+
+      {/* Author nudge — only while the proposal can still change */}
+      {showNudge && (
+        <div
+          className="mx-4 md:mx-5 mt-2 rounded-lg px-3 py-2.5"
+          style={{ background: "rgba(201,146,42,0.10)", border: "1px solid rgba(201,146,42,0.30)" }}
+        >
+          <div className="flex items-center gap-1.5 mb-1">
+            <Lightbulb className="h-3.5 w-3.5 flex-shrink-0" style={{ color: "#7A4F1E" }} />
+            <p className="text-[12px] font-bold" style={{ color: "#7A4F1E" }}>Strengthen your proposal before it goes further</p>
+          </div>
+          <p className="text-[11px] leading-snug mb-1.5" style={{ color: "rgba(14,11,8,0.6)" }}>
+            It's still a draft — addressing these now (in your reasoning below, or by resubmitting) will help it through review and the vote. Optional.
+          </p>
+          <ul className="space-y-1">
+            {nudgeItems.map((t, i) => (
+              <li key={i} className="flex gap-1.5 text-[12.5px] leading-snug" style={{ color: "rgba(14,11,8,0.82)" }}>
+                <span style={{ color: "#7A4F1E" }}>•</span>
+                <span>{t}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="px-4 md:px-5 py-4 space-y-3">
         {agreed.length > 0 && (

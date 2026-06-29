@@ -1027,7 +1027,11 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
         )}
 
         {/* ── 7-agent Baraza council record (read-only; hidden until it has run) ─ */}
-        <BarazaDeliberationCard deliberation={baraza} />
+        <BarazaDeliberationCard
+          deliberation={baraza}
+          isCreator={proposal?.creatorId === user?.id}
+          editable={["DRAFT", "PENDING_REVIEW"].includes(proposal?.status ?? "")}
+        />
       </div>
 
       {/* ── Community Opinions ───────────────────────────── */}
