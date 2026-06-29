@@ -2643,6 +2643,7 @@ model WalletTransaction {
   proposalId      String?       @db.Uuid
   projectId       String?       @db.Uuid
   initiatedById   String?       @db.Uuid
+  anchorTxHash    String?       @db.VarChar(66) // on-chain mirror tx hash (null until anchored; dormant until TREASURY_CONTRACT_ADDRESS is set)
   metadata        Json?
   createdAt       DateTime      @default(now())
 

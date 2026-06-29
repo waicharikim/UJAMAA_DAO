@@ -104,6 +104,11 @@ import {
   MpesaPayoutJobData,
 } from './modules/economy/jobs/ut-payout.jobs.js';
 import { utWithdrawalService } from './modules/economy/services/utWithdrawal.service.js';
+import {
+  ANCHOR_TREASURY_TX_JOB,
+  processAnchorTreasuryTx,
+  type AnchorTreasuryTxPayload,
+} from './modules/treasury/jobs/treasury.jobs.js';
 
 // ─────────────────────────────────────────────
 // Graceful shutdown & error handling
@@ -198,6 +203,10 @@ const economyWorker = createWorker('economy', async (job) => {
       );
     } else if (name === MPESA_PAYOUT_JOB) {
       await processMpesaPayout(job.data as MpesaPayoutJobData);
+    } else if (name === ANCHOR_TREASURY_TX_JOB) {
+      await processAnchorTreasuryTx(
+        (job.data as AnchorTreasuryTxPayload).transactionId
+      );
     } else {
       logger.warn(
         { jobName: name, queue: 'economy' },
