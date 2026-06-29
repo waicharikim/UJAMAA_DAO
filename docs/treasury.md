@@ -19,10 +19,10 @@
 | Proposal disbursement (EXECUTING transition debits group treasury) | ✅ live |
 | Project contribution → treasury credit | ✅ live |
 | M-Pesa `TREASURY_DEPOSIT` → treasury credit + on-chain UT mint | ✅ live |
-| Manual deposit / withdraw (SUPER_ADMIN only) | ✅ live |
+| Manual deposit / withdraw HTTP endpoints | ❌ **removed** — no single person can move community funds (Rule 2 / "nobody controls it alone"). Money moves only via governed paths: M-Pesa in, proposal disbursement out. The `deposit`/`withdraw` *service* methods remain, called only by those flows. |
 | My-groups treasury summary (`GET /treasury/my-groups`) | ✅ live |
-| Frontend treasury page (ward treasury + transaction history) | ✅ live |
-| `GroupTreasury.sol` on-chain mirroring | ❌ not built — off-chain treasury is the source of truth (Rule 2: real KES off-chain via M-Pesa); on-chain treasury anchoring is post-launch Scope B (see `onchain-integrity-roadmap`) |
+| Frontend treasury page (primary-ward treasury + transaction history) | ✅ live |
+| `GroupTreasury.sol` on-chain anchoring | ✅ **built, dormant** — contract + worker-driven anchor job ship; every anchor is a no-op until `TREASURY_CONTRACT_ADDRESS` + the minter wallet are set, then it activates with no code change. See §5. |
 
 ---
 
@@ -136,48 +136,16 @@ Paginated ledger of all wallet transactions for a group treasury.
 
 ---
 
-### `POST /api/v1/treasury/:groupId/deposit`
+### ~~`POST /api/v1/treasury/:groupId/deposit`~~ · ~~`POST /api/v1/treasury/:groupId/withdraw`~~ — REMOVED
 
-Manually credit a group treasury. Creates a `WalletTransaction` (type `CREDIT`) and increments balance atomically.
+These manual deposit/withdraw HTTP endpoints were **deliberately removed** so no
+single person can move community funds (Rule 2 / "nobody controls it alone"). They
+now return `404`. The `treasuryService.deposit()` / `withdraw()` *methods* remain,
+called only by governed flows:
+- **IN** — M-Pesa deposits (`payments` module) and dues fan-out (`allocateDues`).
+- **OUT** — governance-approved proposal disbursement (`governance` module, on the EXECUTING transition).
 
-**Auth:** `SUPER_ADMIN` only.
-
-**Body:**
-```json
-{
-  "amount": 10000,
-  "description": "Ward grant from county government",
-  "referenceType": "MANUAL",
-  "proposalId": null,
-  "projectId": null
-}
-```
-
-| Field | Required | Notes |
-|---|---|---|
-| `amount` | ✅ | Positive number, KES |
-| `description` | — | Max 500 chars |
-| `referenceType` | — | `PROPOSAL` \| `PROJECT` \| `DUES` \| `ESCROW` \| `MANUAL` (default `MANUAL`) |
-| `proposalId` | — | Links transaction to a proposal |
-| `projectId` | — | Links transaction to a project |
-
-**Response `200`:** The created `WalletTransaction` record.
-
-**Errors:** `400` invalid body · `403` not SUPER_ADMIN · `404` group not found.
-
----
-
-### `POST /api/v1/treasury/:groupId/withdraw`
-
-Manually debit a group treasury. Throws if balance is insufficient.
-
-**Auth:** `SUPER_ADMIN` only.
-
-**Body:** Same shape as deposit.
-
-**Response `200`:** The created `WalletTransaction` record.
-
-**Errors:** `400` insufficient balance or invalid body · `403` not SUPER_ADMIN · `404` treasury not found.
+There is no API surface that credits or debits a treasury directly.
 
 ---
 
@@ -230,9 +198,10 @@ Levels with percentage = 0 or no matching system group are silently skipped. Eac
 4. On success: proposal moves to `EXECUTING`, treasury debited with `referenceType=PROPOSAL` and `proposalId` set on the transaction.
 5. The proposal never enters `EXECUTING` state without the money leaving the treasury.
 
-### Manual withdrawal (admin-triggered)
+### ~~Manual withdrawal (admin-triggered)~~ — removed
 
-`POST /treasury/:groupId/withdraw` (SUPER_ADMIN). Used for paying contractors, off-platform transfers.
+There is no manual withdrawal path. Funds leave only via proposal disbursement
+(governance-approved, on the EXECUTING transition). See §1 / Rule 2.
 
 ---
 
@@ -272,13 +241,22 @@ The user's `fiatBackedUtBalance` and `earnedUtBalance` are always stored separat
 
 ---
 
-## 7. On-Chain Roadmap
+## 7. On-Chain Anchoring (built — dormant until configured)
 
-The treasury page says "All transactions are recorded on-chain for transparency." This is aspirational until `GroupTreasury.sol` is deployed.
+Treasury movements are anchored on-chain the **same way proposals are** — a
+tamper-evident mirror, not fund custody. Real KES stays off-chain via M-Pesa
+(Rule 2); the chain holds only a hash per ledger row so anyone can verify a
+transaction shown in-app was recorded and never altered.
 
-**Planned:**
-- `GroupTreasury.sol` on Base L2 — mirrors off-chain balance, gate-checked for disbursements
-- Ward treasury balances queryable on-chain
-- Disbursements require both off-chain governance approval (PR-weighted vote) and on-chain transaction
+**How it works**
+- **`GroupTreasury.sol`** (Base L2) — `recordTransaction(txId, groupId, dataHash, kind)` writes a `txId => hash` mapping + an immutable `TreasuryTxAnchored` event. RECORDER_ROLE-gated. It never holds KES. (8 Foundry tests.)
+- **`getTreasuryContract()`** — null-guarded on `TREASURY_CONTRACT_ADDRESS`; returns null (no-op) until set.
+- **`ANCHOR_TREASURY_TX_JOB`** (economy queue, worker-driven) — enqueued by `deposit` / `withdraw` / `allocateDues` after the DB write. The worker holds the minter key (RECORDER_ROLE), so a movement that ran on the web process still gets anchored. Fails-open: a chain error never touches the off-chain ledger.
+- **`WalletTransaction.anchorTxHash`** — stores the resulting tx hash (null until anchored). The treasury page renders a Basescan link + "mirrored on-chain" copy only when it's set; otherwise "recorded in a transparent ledger."
 
-**Blocked on:** Funded minter wallet → `forge script Deploy.s.sol --rpc-url base_sepolia --broadcast` → set `PR_TOKEN_ADDRESS`/`UT_TOKEN_ADDRESS` env vars.
+**Activation (seamless — no code change)**
+1. Deploy `GroupTreasury.sol` to Base with the minter wallet as admin (it auto-holds RECORDER_ROLE).
+2. Set `TREASURY_CONTRACT_ADDRESS` on the worker (the minter key already lives there as `MINTER_PRIVATE_KEY`).
+3. From then on, new dues / contributions / disbursements anchor automatically and the on-chain link appears. (Optional: a one-time backfill job for pre-existing rows.)
+
+Until step 2, every anchor is a no-op and the Postgres ledger is the source of truth. Roadmap context: memory `onchain-integrity-roadmap` (this closes the treasury half of Scope B).
