@@ -1,13 +1,13 @@
 # Baraza Deliberation Engine
 
-> **Module status:** `implemented, dormant` — code complete, tsc 0 / lint 0, governance suite 171/171 green. Inert until `DASHSCOPE_API_KEY` is set. Built for the Qwen Cloud Global AI Hackathon (Agent Society track).
+> **Module status:** `implemented + verified live` (session 102; branch `feat/baraza-deliberation`, not pushed). Active when `DASHSCOPE_API_KEY` is set (it is, in dev). **Extended by the council redesign** — career/archetype agent names, adaptive panels by proposal nature, per-proposal voice casting, and current-affairs + historical context — see [`baraza-panels-and-memory.md`](./baraza-panels-and-memory.md) (ADR-059). Built for the Qwen Cloud Global AI Hackathon (Agent Society track).
 > Code: `backend/src/modules/governance/baraza/` · AI client: `backend/src/core/ai/qwen.ts`
 
 ---
 
 ## Overview
 
-Baraza is a **multi-agent deliberation engine** that stress-tests a governance proposal **before** it reaches a real community vote. A council of **seven AI agents** debates the proposal in structured rounds and produces a conflict map, credibility annotations, an implementability assessment, a readiness score (0–100), and revision suggestions.
+Baraza is a **multi-agent deliberation engine** that stress-tests a community proposal **before** it reaches a real vote. A council of AI agents — a **domain panel chosen by the proposal's nature** plus cross-cutting analysts, convened by **Mjamaa** — debates the proposal in structured rounds and produces a conflict map, credibility annotations, an implementability assessment, a readiness score (0–100), and revision suggestions. (Note: UjamaaDAO is **not the government** — these are communities of any kind acting on what they collectively care about; the domain agents are *lenses*, not ministries.)
 
 This is distinct from two existing features — don't confuse them:
 - **Baraza Telegram bot** (`baraza-topology.md`, `integration-api.md`) — conversational Q&A in Telegram groups.
@@ -17,23 +17,30 @@ The binding decision is always the human vote. Baraza is guidance, never a verdi
 
 ---
 
-## The seven agents
+## The agents
 
-**Five domain agents** (debate each other), each mapped to Kenyan ministry clusters and carrying citizen-archetype "voices":
+**Relabelled and expanded** (session 102, ADR-059 — labels are career/archetype names, roles unchanged). Full design: [`baraza-panels-and-memory.md`](./baraza-panels-and-memory.md).
 
-| Agent | Domain | Voices |
-|---|---|---|
-| **Maisha** | Health, Labour, Social Protection, Gender | Mlezi (Caregiver) + Mzee (Elder) |
-| **Ardhi** | Lands, Housing, Environment, Water | Mkulima (Farmer) + Mzee |
-| **Uchumi** | Trade, Agriculture, Energy, Treasury | Mfanyabiashara (Trader) + Kijana (Youth) |
-| **Miundombinu** | Roads, Transport, Public Works | Mfanyabiashara + Mkulima |
-| **Jamii** | Education, Youth, Culture, Devolution | Kijana + Mlezi |
+**Domain agents** — a panel chosen **by proposal nature** (deterministic, drawn from the full roster, with community type as the fallback):
 
-**Two analyst agents** (annotate, never debate):
-- **Ukweli** (Truth) — premise interrogator. Flags claims `SOUND | QUESTIONABLE | CONTESTED | IDEOLOGICAL`. Uses **live web search**.
-- **Kivuli** (Shadow) — implementability/political-reality analyst. Maps chokepoints and route-arounds. Uses **DB tools**.
+| Panel | Agents |
+|---|---|
+| Governance (system groups) | **Daktari** (health/welfare) · **Linda** (land/environment) · **Tajiri** (economy) · **Foreman** (infrastructure) · **Mwalimu** (education/social) |
+| Cooperative (voluntary groups) | **Mkurugenzi** (finance) · **Mwananchi** (member-equity) · **Fundi** (execution) · **Hustler** (market) |
 
-**Asymmetry:** Ukweli never sees Kivuli before writing; Kivuli always sees Ukweli. They meet once, after the rounds, in **Mkutano** (a convergence check, not a debate).
+Each domain agent argues from a **cast lived perspective** — a *life-stage × economic-exposure* voice that **Mjamaa** assigns per proposal, recorded on the deliberation as the agent's resolved identity (not fixed ministry-citizen archetypes anymore).
+
+**Analyst agents** (annotate every panel, never debate):
+- **Shahidi** (Truth; was Ukweli) — premise interrogator. Flags `SOUND | QUESTIONABLE | CONTESTED | IDEOLOGICAL`. Uses **live web search**.
+- **Mpelelezi** (Shadow; was Kivuli) — implementability/political-reality. Maps chokepoints + route-arounds. Uses **DB tools**.
+
+**Framing voices** (run once, not per round, to bound cost):
+- **Mjamaa** (convener / structure) — picks the panel, casts the domain voices, emits a **structural severity** that feeds the readiness score, keeps per-group memory, and runs a **closing review** of the proposed revisions.
+- **Mhenga** (historian) — situates the proposal in the national arc + trajectory, from a provenance-tracked `HistoricalEvent` timeline.
+
+**Context injected into every deliberation:** present conditions (`CurrentAffairs` collectors — EPRA fuel, @moneyacademyKE, best-effort/fail-open) and Mhenga's historical framing.
+
+**Asymmetry:** Shahidi never sees Mpelelezi before writing; Mpelelezi always sees Shahidi. They meet once, after the rounds, in **Mkutano** (a convergence check, not a debate).
 
 ---
 
