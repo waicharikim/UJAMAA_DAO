@@ -135,7 +135,10 @@ Create a new proposal. Initial status is `DRAFT`.
 |---|---|---|---|
 | `groupId` | string (UUID) | Yes | Group this proposal belongs to |
 | `title` | string (min 10) | Yes | |
-| `description` | string (min 50) | Yes | |
+| `description` | string (min 50) | Yes | Client folds problem/solution/etc. into this blob for display + the Baraza content hash |
+| `problem` | string (max 1500) | No | Structured — the problem being addressed. Read directly by the Baraza council (no longer parsed out of `description`). |
+| `solution` | string (max 1500) | No | Structured — the proposed solution. Read directly by the Baraza council. |
+| `fundingSource` | `GROUP_TREASURY` \| `MEMBER_CONTRIBUTIONS` \| `EXTERNAL_GRANT` \| `LOCATION_REQUEST` | No | Primary funding source (one-tap pick-list on the create form). The council's most-requested field. |
 | `kind` | `POLICY` \| `PROJECT` | No | Default `PROJECT`. `POLICY` strips all funding fields and never creates a project. |
 | `isEmergency` | boolean | No | Sets `proposalType` to `EMERGENCY` |
 | `proposalScope` | `GROUP` \| `COMMUNITY` | No | Default `GROUP` (when `groupId` present) |

@@ -78,20 +78,34 @@ Get a project by ID, including milestones and participants.
 
 ### POST `/from-proposal`
 
-Create a new project from an approved proposal.
+Create a new project from an approved proposal. This is the project-setup gate: a
+`PROJECT` proposal cannot reach `EXECUTING` until its project exists. Besides the
+optional milestone editor, it captures the **project-setup details** — the Baraza
+council's most frequent HIGH-severity gaps, asked here (after the vote) rather than
+at idea stage to keep proposal creation low-friction.
 
 - **Auth required:** Yes
 - **Request Body:**
 
 ```json
 {
-  "proposalId": "UUID"
+  "proposalId": "UUID",
+  "milestones": [ /* optional full milestone editor payload */ ],
+  "maintenancePlan": "Who keeps it running in year two (string)",
+  "recurrentCostKes": 5000,
+  "recurrentCostPeriod": "MONTHLY | QUARTERLY | YEARLY",
+  "siteLocation": "Where exactly it sits (string)",
+  "landTenure": "Whose land / who has consented (string)",
+  "beneficiaries": "Who benefits, who contributes, who is exempt (string)"
 }
 ```
 
+All project-setup detail fields are optional (max 2000 chars each; `recurrentCostKes` ≥ 0).
+They are stored on the `Project` (columns added by migration `20260629000000_add_project_setup_details`).
+
 - **Responses:**
-  - `201 Created` — Created project object
-  - `400 Bad Request` — Proposal not in APPROVED status
+  - `200 OK` — Created project object (incl. the project-setup detail fields)
+  - `400 Bad Request` — Proposal not in APPROVED status, or invalid `recurrentCostPeriod`
   - `404 Not Found` — Proposal not found
 
 ---
