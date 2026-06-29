@@ -96,6 +96,13 @@ export class ProjectService {
         title: proposal!.title,
         description: proposal!.description,
         status: ProjectStatus.PLANNING,
+        // Project-setup details (Baraza council's recurring HIGH-severity gaps).
+        maintenancePlan: dto.maintenancePlan ?? null,
+        recurrentCostKes: dto.recurrentCostKes ?? null,
+        recurrentCostPeriod: dto.recurrentCostPeriod ?? null,
+        siteLocation: dto.siteLocation ?? null,
+        landTenure: dto.landTenure ?? null,
+        beneficiaries: dto.beneficiaries ?? null,
       },
     });
 

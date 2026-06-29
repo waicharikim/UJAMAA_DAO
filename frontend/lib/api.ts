@@ -1393,6 +1393,17 @@ export interface WorkLogResponseDto {
   createdAt: string
 }
 
+// Project-setup details supplied at the post-approval gate — the Baraza
+// council's most frequent HIGH-severity gaps (maintenance, site, beneficiaries).
+export interface ProjectSetupDetails {
+  maintenancePlan?: string
+  recurrentCostKes?: number
+  recurrentCostPeriod?: "MONTHLY" | "QUARTERLY" | "YEARLY"
+  siteLocation?: string
+  landTenure?: string
+  beneficiaries?: string
+}
+
 // Full project-setup milestone supplied at the post-approval setup gate (#4).
 export interface ProjectSetupMilestone {
   title: string
@@ -1423,10 +1434,18 @@ export const projectApi = {
   getProject: (id: string): Promise<ProjectDetailDto> =>
     apiFetch<ProjectDetailDto>(`/projects/${id}`),
 
-  createFromProposal: (proposalId: string, milestones?: ProjectSetupMilestone[]) =>
+  createFromProposal: (
+    proposalId: string,
+    milestones?: ProjectSetupMilestone[],
+    details?: ProjectSetupDetails,
+  ) =>
     apiFetch<unknown>("/projects/from-proposal", {
       method: "POST",
-      body: JSON.stringify(milestones?.length ? { proposalId, milestones } : { proposalId }),
+      body: JSON.stringify({
+        proposalId,
+        ...(milestones?.length ? { milestones } : {}),
+        ...(details ?? {}),
+      }),
     }),
 
   startMilestone: (milestoneId: string) =>

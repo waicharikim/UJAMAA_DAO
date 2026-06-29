@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { projectApi, type ProjectSetupMilestone } from "@/lib/api"
+import { projectApi, type ProjectSetupMilestone, type ProjectSetupDetails } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
 import { Plus, Trash2, Loader2, ChevronDown, ChevronUp, Briefcase } from "lucide-react"
 
@@ -72,6 +72,29 @@ export function ProjectSetupEditor({
   const queryClient = useQueryClient()
   const [milestones, setMilestones] = useState<DraftMilestone[]>([blankMilestone()])
 
+  // Project-setup details — the questions the Baraza council asks most often.
+  // Optional, but now there's a home for the answers (and the proposer is
+  // motivated: the community already backed this).
+  const [maintenancePlan, setMaintenancePlan] = useState("")
+  const [recurrentCostKes, setRecurrentCostKes] = useState("")
+  const [recurrentCostPeriod, setRecurrentCostPeriod] =
+    useState<NonNullable<ProjectSetupDetails["recurrentCostPeriod"]>>("MONTHLY")
+  const [siteLocation, setSiteLocation] = useState("")
+  const [landTenure, setLandTenure] = useState("")
+  const [beneficiaries, setBeneficiaries] = useState("")
+
+  function buildDetails(): ProjectSetupDetails {
+    return {
+      ...(maintenancePlan.trim() ? { maintenancePlan: maintenancePlan.trim() } : {}),
+      ...(recurrentCostKes && Number(recurrentCostKes) > 0
+        ? { recurrentCostKes: Number(recurrentCostKes), recurrentCostPeriod }
+        : {}),
+      ...(siteLocation.trim() ? { siteLocation: siteLocation.trim() } : {}),
+      ...(landTenure.trim() ? { landTenure: landTenure.trim() } : {}),
+      ...(beneficiaries.trim() ? { beneficiaries: beneficiaries.trim() } : {}),
+    }
+  }
+
   function update(i: number, patch: Partial<DraftMilestone>) {
     setMilestones((ms) => ms.map((m, idx) => (idx === i ? { ...m, ...patch } : m)))
   }
@@ -107,7 +130,7 @@ export function ProjectSetupEditor({
           ? { verificationCriteria: lines(m.criteria).map((criterion) => ({ criterion, required: true })) }
           : {}),
       }))
-      return projectApi.createFromProposal(proposalId, payload)
+      return projectApi.createFromProposal(proposalId, payload, buildDetails())
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["proposal", proposalId] })
@@ -121,6 +144,90 @@ export function ProjectSetupEditor({
 
   return (
     <div className="space-y-4">
+      {/* ── Project details — the council's recurring questions ───────────── */}
+      <div className="rounded-xl border border-cream bg-cream/30 p-3 space-y-2.5">
+        <div>
+          <p className="text-xs font-bold text-tea-green">Project details</p>
+          <p className="text-[11px] text-warm-gray mt-0.5">
+            The council asks these most often. All optional — answer what you can.
+          </p>
+        </div>
+
+        <label className="space-y-1 block">
+          <span className="text-[11px] text-warm-gray">Who keeps it running afterwards? (maintenance)</span>
+          <textarea
+            className={taCls}
+            rows={2}
+            placeholder="e.g. The water committee collects KES 50/household monthly; a trained caretaker services the pump quarterly."
+            value={maintenancePlan}
+            onChange={(e) => setMaintenancePlan(e.target.value)}
+          />
+        </label>
+
+        <div className="grid grid-cols-2 gap-2">
+          <label className="space-y-1">
+            <span className="text-[11px] text-warm-gray">Ongoing upkeep cost (KES)</span>
+            <input
+              type="number"
+              min={0}
+              className={inputCls}
+              placeholder="0"
+              value={recurrentCostKes}
+              onChange={(e) => setRecurrentCostKes(e.target.value)}
+            />
+          </label>
+          <label className="space-y-1">
+            <span className="text-[11px] text-warm-gray">Per</span>
+            <select
+              className={inputCls}
+              value={recurrentCostPeriod}
+              onChange={(e) =>
+                setRecurrentCostPeriod(
+                  e.target.value as NonNullable<ProjectSetupDetails["recurrentCostPeriod"]>,
+                )
+              }
+            >
+              <option value="MONTHLY">Month</option>
+              <option value="QUARTERLY">Quarter</option>
+              <option value="YEARLY">Year</option>
+            </select>
+          </label>
+        </div>
+
+        <label className="space-y-1 block">
+          <span className="text-[11px] text-warm-gray">Where exactly will it be? (site)</span>
+          <textarea
+            className={taCls}
+            rows={2}
+            placeholder="e.g. The primary school grounds, plot LR No. 209/1234, off Kirinyaga Road."
+            value={siteLocation}
+            onChange={(e) => setSiteLocation(e.target.value)}
+          />
+        </label>
+
+        <label className="space-y-1 block">
+          <span className="text-[11px] text-warm-gray">Whose land is it / who has agreed? (tenure)</span>
+          <textarea
+            className={taCls}
+            rows={2}
+            placeholder="e.g. Public school land; written consent from the school board and the area chief obtained."
+            value={landTenure}
+            onChange={(e) => setLandTenure(e.target.value)}
+          />
+        </label>
+
+        <label className="space-y-1 block">
+          <span className="text-[11px] text-warm-gray">Who benefits, who contributes, who is exempt?</span>
+          <textarea
+            className={taCls}
+            rows={2}
+            placeholder="e.g. ~400 households benefit; each contributes KES 200; elderly-headed and child-headed homes exempt."
+            value={beneficiaries}
+            onChange={(e) => setBeneficiaries(e.target.value)}
+          />
+        </label>
+      </div>
+
       <div className="space-y-3">
         {milestones.map((m, i) => (
           <div key={i} className="rounded-xl border border-cream bg-cream/30 p-3 space-y-2.5">

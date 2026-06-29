@@ -221,6 +221,50 @@ describe('POST /projects/from-proposal', () => {
     expect(res.body.data.proposalId).toBe(proposal.id);
     expect(res.body.data.ownerUserId).toBe(user.id);
   });
+
+  it('persists project-setup details from the gate', async () => {
+    const user = await createProjectUser('fp-details@test.com');
+    const token = makeProjectToken(user.id);
+    const group = await seedProjectGroup(user.id);
+    const proposal = await seedApprovedProposal(user.id, group.id);
+
+    const res = await request(app)
+      .post(`${BASE}/from-proposal`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        proposalId: proposal.id,
+        maintenancePlan: 'Water committee services the pump quarterly.',
+        recurrentCostKes: 5000,
+        recurrentCostPeriod: 'MONTHLY',
+        siteLocation: 'Primary school grounds, plot LR 209/1234.',
+        landTenure: 'Public school land; board consent obtained.',
+        beneficiaries: '400 households; elderly-headed homes exempt.',
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.maintenancePlan).toBe(
+      'Water committee services the pump quarterly.'
+    );
+    expect(Number(res.body.data.recurrentCostKes)).toBe(5000);
+    expect(res.body.data.recurrentCostPeriod).toBe('MONTHLY');
+    expect(res.body.data.siteLocation).toContain('Primary school');
+    expect(res.body.data.landTenure).toContain('Public school land');
+    expect(res.body.data.beneficiaries).toContain('400 households');
+  });
+
+  it('rejects an invalid recurrentCostPeriod', async () => {
+    const user = await createProjectUser('fp-bad-period@test.com');
+    const token = makeProjectToken(user.id);
+    const group = await seedProjectGroup(user.id);
+    const proposal = await seedApprovedProposal(user.id, group.id);
+
+    const res = await request(app)
+      .post(`${BASE}/from-proposal`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ proposalId: proposal.id, recurrentCostPeriod: 'WEEKLY' });
+
+    expect(res.status).toBe(400);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

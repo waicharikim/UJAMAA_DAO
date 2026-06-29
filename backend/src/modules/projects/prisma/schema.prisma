@@ -62,6 +62,16 @@ model Project {
 
   participationScope ProjectParticipation @default(MEMBERS_ONLY)
 
+  // PROJECT-SETUP DETAILS — captured at the from-proposal gate (after the vote
+  // passes), not at idea stage. These answer the Baraza council's most frequent
+  // HIGH-severity gaps: who keeps it running, where it sits, who it serves.
+  maintenancePlan     String?  @db.Text          // who keeps it working in year two
+  recurrentCostKes    Decimal? @db.Decimal(20, 2) // ongoing upkeep cost
+  recurrentCostPeriod String?                     // MONTHLY | QUARTERLY | YEARLY
+  siteLocation        String?  @db.Text          // where exactly (plot/landmark)
+  landTenure          String?  @db.Text          // tenure status + consent of rights-holders
+  beneficiaries       String?  @db.Text          // who benefits, who contributes, who is exempt
+
   // NEW: Link to original proposal
   proposalId   String?  @unique @db.Uuid
 
