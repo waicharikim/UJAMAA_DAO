@@ -69,6 +69,18 @@ router.post(
       groupId: z.string().uuid(),
       title: z.string().min(10),
       description: z.string().min(50),
+      // Structured narrative (also folded into description by the client for
+      // display + the deliberation content hash).
+      problem: z.string().max(1500).optional(),
+      solution: z.string().max(1500).optional(),
+      fundingSource: z
+        .enum([
+          'GROUP_TREASURY',
+          'MEMBER_CONTRIBUTIONS',
+          'EXTERNAL_GRANT',
+          'LOCATION_REQUEST',
+        ])
+        .optional(),
       kind: z.enum(['POLICY', 'PROJECT']).optional(),
       fundingAmountKes: z.number().optional(),
       isEmergency: z.boolean().optional(),

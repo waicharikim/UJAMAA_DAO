@@ -233,6 +233,11 @@ class ProposalLifecycleService {
         creatorId: userId,
         title: dto.title,
         description: dto.description,
+        // Structured narrative — read directly by the Baraza council and shown
+        // to voters as fields, rather than parsed back out of the description.
+        problem: dto.problem ?? null,
+        solution: dto.solution ?? null,
+        fundingSource: dto.fundingSource ?? null,
         kind,
         // Policy proposals never carry a budget — they are decisions, not spends.
         budget: isPolicy ? null : dto.fundingAmountKes,

@@ -1047,6 +1047,12 @@ export type ProposalStatus =
 
 export type ProposalScope = "GROUP" | "COMMUNITY"
 
+export type ProposalFundingSource =
+  | "GROUP_TREASURY"
+  | "MEMBER_CONTRIBUTIONS"
+  | "EXTERNAL_GRANT"
+  | "LOCATION_REQUEST"
+
 export type BarazaReadinessBand =
   | "READY"
   | "CONDITIONAL"
@@ -1147,6 +1153,9 @@ export const governanceApi = {
     groupId: string
     title: string
     description: string
+    problem?: string
+    solution?: string
+    fundingSource?: ProposalFundingSource
     kind?: "POLICY" | "PROJECT"
     fundingAmountKes?: number
     isEmergency?: boolean
