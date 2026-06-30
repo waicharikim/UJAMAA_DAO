@@ -452,3 +452,25 @@ Contribute UT funds to a project. Debits `fiatBackedUtBalance` from the caller a
 | 404 | Not Found | Requested resource does not exist |
 | 409 | Conflict | Duplicate record (already joined, already checked in, etc.) |
 | 500 | Internal Server Error | Unexpected server error |
+
+---
+
+## On-Chain Anchoring (built — dormant until configured)
+
+Projects are the thesis — *money + labor → outcomes, traceable* — so the lifecycle
+is mirrored on-chain the **same way proposals and the treasury are**: a
+tamper-evident hash per milestone-of-trust, never fund custody, never an
+execution gate.
+
+**Anchored events** (`ProjectRegistry.sol`, RECORDER_ROLE-gated):
+- **PROJECT_CREATED** — on `createFromProposal` → `Project.anchorTxHash`.
+- **MILESTONE_VERIFIED** — on a leader/verifier approval → `Milestone.anchorTxHash`.
+- **WORK_APPROVED** — when a work session passes the QR witness-chain (≥1 depth-0 witness = **labor verified by the community**) → `WorkSession.anchorTxHash`. This is the thesis-critical anchor.
+- PROJECT_COMPLETED — contract kind reserved; not wired yet (no auto-completion transition exists).
+
+**How it works**
+- `getProjectRegistryContract()` — null-guarded on `PROJECT_REGISTRY_ADDRESS`; returns null (no-op) until set.
+- `ANCHOR_PROJECT_EVENT` job (project queue, worker-driven) — enqueued after the DB write. The worker holds the minter key (RECORDER_ROLE), so an event that happened on the web process still gets anchored. Fails-open: a chain error never touches the off-chain record. Mirrors the treasury `ANCHOR_TREASURY_TX_JOB`.
+- `*.anchorTxHash` stores the resulting tx hash (null until anchored). The project detail header shows a "Verified on-chain" Basescan link when set.
+
+**Activation (seamless — no code change):** deploy `ProjectRegistry.sol` (minter=admin) → set `PROJECT_REGISTRY_ADDRESS` on the worker → new project/milestone/work events anchor automatically. Until then every anchor is a no-op and Postgres is the source of truth. Roadmap: memory `onchain-integrity-roadmap` (this completes Scope B).

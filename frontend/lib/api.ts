@@ -1328,6 +1328,7 @@ export interface ProjectListItemDto {
   participationScope: ParticipationScope
   milestonesCount: number
   completedMilestonesCount: number
+  anchorTxHash?: string | null   // on-chain anchor of PROJECT_CREATED (null until anchored)
   createdAt: string
   updatedAt: string
 }

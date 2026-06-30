@@ -13,7 +13,7 @@
 
 ## What gets deployed
 
-`contracts/script/Deploy.s.sol` deploys four contracts, granting admin / minter /
+`contracts/script/Deploy.s.sol` deploys five contracts, granting admin / minter /
 recorder roles to `MINTER_WALLET_ADDRESS`:
 
 | Contract | Purpose |
@@ -22,6 +22,7 @@ recorder roles to `MINTER_WALLET_ADDRESS`:
 | `UtToken` | Utility token (standard ERC-20) |
 | `GovernanceVoting` | **User-signed** voting: `castVote(id, option)` (`msg.sender`=voter — platform can't forge), `openProposal(id, contentHash)` (anchors proposal content hash), `closeProposal`, `recordResult` (tally attestation), `recordOpinion` / `recordMemory`. Worker drives open/close/recordResult; gasless `castVote` via the Pimlico paymaster proxy |
 | `GroupTreasury` | Treasury **anchor** (not custody): `recordTransaction(txId, groupId, dataHash, kind)` hashes each ledger movement for tamper-evidence. RECORDER_ROLE-gated, worker-driven. Real KES stays off-chain via M-Pesa (Rule 2). Dormant until `TREASURY_CONTRACT_ADDRESS` is wired. |
+| `ProjectRegistry` | Project lifecycle **anchor**: `recordEvent(projectId, eventId, kind, dataHash)` hashes project-created / milestone-verified / **work-approved (labor verified via QR witness-chain)** / project-completed. RECORDER_ROLE-gated, worker-driven. Dormant until `PROJECT_REGISTRY_ADDRESS` is wired. |
 
 RPCs are pre-configured in `contracts/foundry.toml` (`base_sepolia`, `base_mainnet`).
 
@@ -89,6 +90,7 @@ PR_TOKEN_ADDRESS=0x...
 UT_TOKEN_ADDRESS=0x...
 GOVERNANCE_VOTING_ADDRESS=0x...
 TREASURY_CONTRACT_ADDRESS=0x...           # activates treasury ledger anchoring (was dormant)
+PROJECT_REGISTRY_ADDRESS=0x...            # activates project lifecycle anchoring (was dormant)
 ```
 
 ```bash

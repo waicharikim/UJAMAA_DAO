@@ -634,6 +634,18 @@ function ProjectHeaderCard({
                   <ExternalLink className="h-2.5 w-2.5" />
                 </Link>
               )}
+              {project.anchorTxHash && (
+                <a
+                  href={`https://sepolia.basescan.org/tx/${project.anchorTxHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#1A6B3C] hover:underline"
+                  title="This project's creation is anchored on-chain"
+                >
+                  Verified on-chain
+                  <ExternalLink className="h-2.5 w-2.5" />
+                </a>
+              )}
             </div>
           </div>
         </div>
