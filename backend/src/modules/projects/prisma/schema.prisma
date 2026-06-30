@@ -90,6 +90,8 @@ model Project {
   comments           Comment[]           @relation("ProjectComments") // NEW
   projectUpdates     ProjectUpdate[]     @relation("ProjectUpdates")
 
+  anchorTxHash String? @db.VarChar(66) // on-chain anchor of PROJECT_CREATED (null until anchored; dormant until PROJECT_REGISTRY_ADDRESS is set)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -136,6 +138,8 @@ model Milestone {
   workLogs     PhysicalWorkLog[]
   workSessions WorkSession[]
   comments     Comment[]           @relation("MilestoneComments") // NEW
+
+  anchorTxHash String? @db.VarChar(66) // on-chain anchor of MILESTONE_VERIFIED
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -221,6 +225,8 @@ model WorkSession {
   project     Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdBy   User              @relation("WorkSessionCreator", fields: [createdById], references: [id])
   presences   WorkPresence[]
+
+  anchorTxHash String?          @db.VarChar(66) // on-chain anchor of WORK_APPROVED (labor verified)
 
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt

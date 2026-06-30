@@ -65,6 +65,8 @@ import {
   ProjectJobName,
   processWorkSessionClose,
 } from './modules/projects/jobs/work-session.jobs.js';
+import { processAnchorProjectEvent } from './modules/projects/jobs/project-anchor.jobs.js';
+import type { AnchorProjectEventJobData } from './modules/projects/types.js';
 
 import {
   SCHEDULE_ELECTIONS_JOB,
@@ -404,6 +406,9 @@ const projectWorker = createWorker('project', async (job) => {
   try {
     if (job.name === ProjectJobName.WORK_SESSION_CLOSE) {
       await processWorkSessionClose(job);
+    } else if (job.name === ProjectJobName.ANCHOR_PROJECT_EVENT) {
+      const { kind, entityId } = job.data as AnchorProjectEventJobData;
+      await processAnchorProjectEvent(kind, entityId);
     } else {
       logger.warn(
         { jobName: job.name, queue: 'project' },

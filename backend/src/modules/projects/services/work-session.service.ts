@@ -5,6 +5,7 @@ import { roleService } from '../../../core/services/role.service.js';
 import { ApiError } from '../../../core/errors/ApiError.js';
 import { logger } from '../../../core/logger/logger.js';
 import { projectQueue } from '../../../core/queue/index.js';
+import { enqueueProjectAnchor } from '../jobs/project-anchor.jobs.js';
 import { ImpactPointReason } from '../../reputation/types.js';
 import type {
   CreateWorkSessionDto,
@@ -171,6 +172,9 @@ export class WorkSessionService {
 
     if (newStatus === 'APPROVED') {
       await this.awardAllPresences(session.presences, sessionId);
+      // Anchor verified labor on-chain (the thesis event) — worker-driven, dormant
+      // until configured.
+      enqueueProjectAnchor('WORK_APPROVED', sessionId);
       logger.info(
         {
           operationType: 'WORK_SESSION',

@@ -335,8 +335,20 @@ export interface AttestResponseDto {
 
 export const ProjectJobName = {
   WORK_SESSION_CLOSE: 'WORK_SESSION_CLOSE',
+  ANCHOR_PROJECT_EVENT: 'ANCHOR_PROJECT_EVENT',
 } as const;
 
 export interface WorkSessionCloseJobData {
   sessionId: string;
+}
+
+export type ProjectEventKind =
+  | 'PROJECT_CREATED'
+  | 'MILESTONE_VERIFIED'
+  | 'WORK_APPROVED'
+  | 'PROJECT_COMPLETED';
+
+export interface AnchorProjectEventJobData {
+  kind: ProjectEventKind;
+  entityId: string; // projectId | milestoneId | workSessionId, per kind
 }

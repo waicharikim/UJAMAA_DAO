@@ -13,6 +13,7 @@ import { ApiError } from '../../../core/errors/ApiError.js';
 import { logger } from '../../../core/logger/logger.js';
 import { auditService } from '../../audit/services/audit.service.js';
 import { treasuryService } from '../../treasury/services/treasury.service.js';
+import { enqueueProjectAnchor } from '../jobs/project-anchor.jobs.js';
 import { AuditAction } from '../../audit/types.js';
 import { ParticipationRightsReason } from '../../economy/types.js';
 import { ImpactPointReason } from '../../reputation/types.js';
@@ -128,6 +129,7 @@ export class ProjectService {
     // NOTE: treasury is NOT debited here. Disbursement happens once, when the
     // proposal transitions APPROVED → EXECUTING (proposal-lifecycle service),
     // which now requires this project to exist first.
+    enqueueProjectAnchor('PROJECT_CREATED', project.id);
     return project;
   }
 
@@ -310,6 +312,9 @@ export class ProjectService {
         milestone.projectId,
         dto.milestoneId
       );
+
+    // Anchor the verified milestone on-chain (worker-driven, dormant until configured).
+    if (dto.approved) enqueueProjectAnchor('MILESTONE_VERIFIED', dto.milestoneId);
 
     return newStatus;
   }
