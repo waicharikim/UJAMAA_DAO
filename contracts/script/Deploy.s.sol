@@ -6,6 +6,7 @@ import "../src/PrToken.sol";
 import "../src/UtToken.sol";
 import "../src/GovernanceVoting.sol";
 import "../src/GroupTreasury.sol";
+import "../src/ProjectRegistry.sol";
 
 /**
  * @title Deploy — UjamaaDAO Token Deploy Script
@@ -37,6 +38,7 @@ contract Deploy is Script {
         UtToken utToken = new UtToken(minter);
         GovernanceVoting governance = new GovernanceVoting(minter, address(prToken));
         GroupTreasury treasury = new GroupTreasury(minter);
+        ProjectRegistry projectRegistry = new ProjectRegistry(minter);
 
         vm.stopBroadcast();
 
@@ -44,6 +46,7 @@ contract Deploy is Script {
         console.log("UtToken deployed at:         ", address(utToken));
         console.log("GovernanceVoting deployed at:", address(governance));
         console.log("GroupTreasury deployed at:   ", address(treasury));
+        console.log("ProjectRegistry deployed at: ", address(projectRegistry));
         console.log("Admin/minter/recorder:       ", minter);
     }
 }
