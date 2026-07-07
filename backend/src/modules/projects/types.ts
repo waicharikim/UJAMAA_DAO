@@ -52,7 +52,19 @@ export interface ProjectSetupMilestoneInput {
   orderIndex?: number;
 }
 
-export interface CreateProjectFromProposalDto {
+// Project-setup details captured at the post-approval gate — the Baraza
+// council's most frequent HIGH-severity gaps, asked once the proposal has the
+// community's backing (and the proposer the motivation to answer them).
+export interface ProjectSetupDetails {
+  maintenancePlan?: string;
+  recurrentCostKes?: number;
+  recurrentCostPeriod?: 'MONTHLY' | 'QUARTERLY' | 'YEARLY';
+  siteLocation?: string;
+  landTenure?: string;
+  beneficiaries?: string;
+}
+
+export interface CreateProjectFromProposalDto extends ProjectSetupDetails {
   proposalId: string;
   // Optional project-setup payload: when provided, these milestones are written
   // to the proposal and become the project's milestones. When omitted, the
@@ -323,8 +335,20 @@ export interface AttestResponseDto {
 
 export const ProjectJobName = {
   WORK_SESSION_CLOSE: 'WORK_SESSION_CLOSE',
+  ANCHOR_PROJECT_EVENT: 'ANCHOR_PROJECT_EVENT',
 } as const;
 
 export interface WorkSessionCloseJobData {
   sessionId: string;
+}
+
+export type ProjectEventKind =
+  | 'PROJECT_CREATED'
+  | 'MILESTONE_VERIFIED'
+  | 'WORK_APPROVED'
+  | 'PROJECT_COMPLETED';
+
+export interface AnchorProjectEventJobData {
+  kind: ProjectEventKind;
+  entityId: string; // projectId | milestoneId | workSessionId, per kind
 }

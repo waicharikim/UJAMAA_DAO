@@ -8,6 +8,7 @@
 import { Router } from 'express';
 import { ProposalController } from '../controllers/proposal.controller.js';
 import { ProposalAnnotationController } from '../controllers/proposal-annotation.controller.js';
+import { BarazaController } from '../baraza/baraza.controller.js';
 import { authenticate } from '../../../core/middleware/auth.middleware.js';
 import { authorize } from '../../../core/middleware/authorize.js';
 import { validateRequest } from '../../../core/middleware/validateRequest.js';
@@ -23,6 +24,16 @@ router.get('/', asyncHandler(ProposalController.listProposals));
 router.get('/needs-action', asyncHandler(ProposalController.getNeedsAction));
 
 router.get('/:proposalId', asyncHandler(ProposalController.getProposal));
+
+// Baraza deliberation — read latest result; author-triggered pre-submission run
+router.get(
+  '/:proposalId/baraza',
+  asyncHandler(BarazaController.getDeliberation)
+);
+router.post(
+  '/:proposalId/baraza',
+  asyncHandler(BarazaController.requestDeliberation)
+);
 
 router.post(
   '/:proposalId/review',
@@ -58,6 +69,18 @@ router.post(
       groupId: z.string().uuid(),
       title: z.string().min(10),
       description: z.string().min(50),
+      // Structured narrative (also folded into description by the client for
+      // display + the deliberation content hash).
+      problem: z.string().max(1500).optional(),
+      solution: z.string().max(1500).optional(),
+      fundingSource: z
+        .enum([
+          'GROUP_TREASURY',
+          'MEMBER_CONTRIBUTIONS',
+          'EXTERNAL_GRANT',
+          'LOCATION_REQUEST',
+        ])
+        .optional(),
       kind: z.enum(['POLICY', 'PROJECT']).optional(),
       fundingAmountKes: z.number().optional(),
       isEmergency: z.boolean().optional(),

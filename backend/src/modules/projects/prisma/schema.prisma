@@ -62,6 +62,16 @@ model Project {
 
   participationScope ProjectParticipation @default(MEMBERS_ONLY)
 
+  // PROJECT-SETUP DETAILS — captured at the from-proposal gate (after the vote
+  // passes), not at idea stage. These answer the Baraza council's most frequent
+  // HIGH-severity gaps: who keeps it running, where it sits, who it serves.
+  maintenancePlan     String?  @db.Text          // who keeps it working in year two
+  recurrentCostKes    Decimal? @db.Decimal(20, 2) // ongoing upkeep cost
+  recurrentCostPeriod String?                     // MONTHLY | QUARTERLY | YEARLY
+  siteLocation        String?  @db.Text          // where exactly (plot/landmark)
+  landTenure          String?  @db.Text          // tenure status + consent of rights-holders
+  beneficiaries       String?  @db.Text          // who benefits, who contributes, who is exempt
+
   // NEW: Link to original proposal
   proposalId   String?  @unique @db.Uuid
 
@@ -79,6 +89,8 @@ model Project {
   workSessions       WorkSession[]
   comments           Comment[]           @relation("ProjectComments") // NEW
   projectUpdates     ProjectUpdate[]     @relation("ProjectUpdates")
+
+  anchorTxHash String? @db.VarChar(66) // on-chain anchor of PROJECT_CREATED (null until anchored; dormant until PROJECT_REGISTRY_ADDRESS is set)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -126,6 +138,8 @@ model Milestone {
   workLogs     PhysicalWorkLog[]
   workSessions WorkSession[]
   comments     Comment[]           @relation("MilestoneComments") // NEW
+
+  anchorTxHash String? @db.VarChar(66) // on-chain anchor of MILESTONE_VERIFIED
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -211,6 +225,8 @@ model WorkSession {
   project     Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdBy   User              @relation("WorkSessionCreator", fields: [createdById], references: [id])
   presences   WorkPresence[]
+
+  anchorTxHash String?          @db.VarChar(66) // on-chain anchor of WORK_APPROVED (labor verified)
 
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt

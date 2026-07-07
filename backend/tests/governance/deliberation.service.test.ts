@@ -4,12 +4,24 @@
  *
  * Two surfaces:
  *  1. rankAnnotations() — pure ranking by net score (no DB, no AI).
- *  2. generateAndStore() — the dormant path: with no CLAUDE_API_KEY (the test
- *     env never sets it), it must store null and never throw.
+ *  2. generateAndStore() — Qwen availability is mocked (core/ai/qwen) so the
+ *     test is deterministic regardless of whether DASHSCOPE_API_KEY is set.
  */
+
+const { qwen } = vi.hoisted(() => ({
+  qwen: { available: false, completeResult: null as string | null },
+}));
 
 vi.mock('../../src/modules/audit/services/audit.service.js', () => ({
   auditService: { log: vi.fn().mockResolvedValue(undefined) },
+}));
+
+// Mock the Qwen client so AI availability is deterministic in tests, regardless
+// of whether DASHSCOPE_API_KEY is set in the environment.
+vi.mock('../../src/core/ai/qwen.js', () => ({
+  getQwenClient: () => (qwen.available ? {} : null),
+  getClaudeClient: () => (qwen.available ? {} : null),
+  complete: async () => qwen.completeResult,
 }));
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -19,7 +31,6 @@ import {
   deliberationService,
   rankAnnotations,
 } from '../../src/modules/governance/services/deliberation.service.js';
-import { getClaudeClient } from '../../src/core/ai/claude.js';
 import {
   createGovernanceUser,
   seedGovernanceGroup,
@@ -58,11 +69,15 @@ describe('rankAnnotations()', () => {
   });
 });
 
-describe('deliberationService.generateAndStore() — dormant path', () => {
+describe('deliberationService.generateAndStore()', () => {
+  let creatorId: string;
   let proposalId: string;
 
   beforeEach(async () => {
+    qwen.available = false;
+    qwen.completeResult = null;
     const creator = await createGovernanceUser(`delib-${Date.now()}@test.com`);
+    creatorId = creator.id;
     const group = await seedGovernanceGroup(creator.id);
     const proposal = await seedProposal(
       creator.id,
@@ -72,24 +87,71 @@ describe('deliberationService.generateAndStore() — dormant path', () => {
     proposalId = proposal.id;
   });
 
-  it('Claude is unavailable in the test env (no CLAUDE_API_KEY)', () => {
-    expect(getClaudeClient()).toBeNull();
-  });
+  async function seedAnnotation() {
+    await prisma.proposalAnnotation.create({
+      data: {
+        proposalId,
+        authorId: creatorId,
+        fieldKey: 'rationale',
+        startOffset: 0,
+        endOffset: 10,
+        quotedText: 'the budget line',
+        comment: 'This budget looks too high for the scope.',
+        color: '#3b82f6',
+      },
+    });
+  }
 
-  it('stores no summary and does not throw when the AI is unavailable', async () => {
-    await expect(
-      deliberationService.generateAndStore(proposalId)
-    ).resolves.toBeUndefined();
-
-    const row = await prisma.proposal.findUnique({
+  function readSummary() {
+    return prisma.proposal.findUnique({
       where: { id: proposalId },
       select: { deliberationSummary: true, deliberationSummaryAt: true },
     });
+  }
+
+  it('stores nothing when the AI is unavailable', async () => {
+    qwen.available = false;
+    await seedAnnotation();
+    await expect(
+      deliberationService.generateAndStore(proposalId)
+    ).resolves.toBeUndefined();
+    const row = await readSummary();
     expect(row?.deliberationSummary).toBeNull();
     expect(row?.deliberationSummaryAt).toBeNull();
   });
 
+  it('stores nothing when AI is available but there are no annotations', async () => {
+    qwen.available = true;
+    await deliberationService.generateAndStore(proposalId);
+    const row = await readSummary();
+    expect(row?.deliberationSummary).toBeNull();
+  });
+
+  it('stores the neutral digest when AI is available and annotations exist', async () => {
+    qwen.available = true;
+    qwen.completeResult = JSON.stringify({
+      support: ['Members back the borehole'],
+      concerns: ['Budget may be too high'],
+      openQuestions: ['Who maintains it after handover?'],
+    });
+    await seedAnnotation();
+
+    await deliberationService.generateAndStore(proposalId);
+
+    const row = await readSummary();
+    expect(row?.deliberationSummaryAt).toBeInstanceOf(Date);
+    const summary = row?.deliberationSummary as {
+      support: string[];
+      concerns: string[];
+      openQuestions: string[];
+    };
+    expect(summary.support).toContain('Members back the borehole');
+    expect(summary.concerns).toContain('Budget may be too high');
+    expect(summary.openQuestions).toContain('Who maintains it after handover?');
+  });
+
   it('does not throw for a non-existent proposal', async () => {
+    qwen.available = true;
     await expect(
       deliberationService.generateAndStore(
         '00000000-0000-0000-0000-000000000000'

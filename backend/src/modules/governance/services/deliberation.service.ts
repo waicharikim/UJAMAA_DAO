@@ -9,13 +9,14 @@
  * wrote. It never recommends how to vote, never adds opinions, never predicts
  * outcomes. The binding step remains a human vote ("AI never decides").
  *
- * Dormant until CLAUDE_API_KEY is set: generateAndStore() stores null and
- * returns when the client is unavailable or there are no annotations.
+ * Active when DASHSCOPE_API_KEY is set (the Qwen client); otherwise dormant —
+ * generateAndStore() stores null and returns when the client is unavailable or
+ * there are no annotations.
  */
 
 import { prisma } from '../../../core/database/client.js';
 import { logger } from '../../../core/logger/logger.js';
-import { getClaudeClient, complete } from '../../../core/ai/claude.js';
+import { getQwenClient, complete } from '../../../core/ai/qwen.js';
 import { proposalAnnotationService } from './proposal-annotation.service.js';
 
 export interface DeliberationSummary {
@@ -110,10 +111,10 @@ class DeliberationService {
    * annotations. Never throws — failures leave deliberationSummary null.
    */
   async generateAndStore(proposalId: string): Promise<void> {
-    if (!getClaudeClient()) {
+    if (!getQwenClient()) {
       logger.info(
         { proposalId },
-        '[DELIB] Claude unavailable — skipping deliberation summary'
+        '[DELIB] Qwen unavailable — skipping deliberation summary'
       );
       return;
     }
@@ -151,7 +152,7 @@ class DeliberationService {
     if (!raw) {
       logger.warn(
         { proposalId },
-        '[DELIB] Claude returned no content — summary not stored'
+        '[DELIB] Qwen returned no content — summary not stored'
       );
       return;
     }

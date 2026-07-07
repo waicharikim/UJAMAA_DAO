@@ -297,114 +297,38 @@ describe('GET /treasury/:groupId/transactions', () => {
   });
 });
 
-describe('POST /treasury/:groupId/deposit', () => {
+// Manual deposit/withdraw HTTP endpoints were deliberately REMOVED so no single
+// person can move community funds (Rule 2 / "nobody controls it alone"). Money
+// only moves via governed paths: M-Pesa deposits IN, proposal disbursement OUT.
+// These assert the endpoints stay gone; the deposit/withdraw *service* methods
+// (still used by those governed flows) are covered in treasury.service.test.ts.
+describe('Manual deposit/withdraw HTTP endpoints are removed (Rule 2)', () => {
   beforeAll(async () => {
     await servicesReady;
   });
 
-  it('returns 401 with no token', async () => {
-    await seedLocation();
-    const group = await seedGroup('Deposit No Token Group');
-    const res = await request(app)
-      .post(`/api/v1/treasury/${group.id}/deposit`)
-      .send({ amount: 100 });
-    expect(res.status).toBe(401);
-  });
-
-  it('returns 403 for non-admin user', async () => {
-    await seedLocation();
-    const group = await seedGroup('Deposit Forbidden Group');
-    const user = await seedRegularUser();
-    const token = makeAccessToken(user.id, 'COMMUNITY_VERIFIED', { roles: [] });
-
-    const res = await request(app)
-      .post(`/api/v1/treasury/${group.id}/deposit`)
-      .set('Authorization', `Bearer ${token}`)
-      .send({ amount: 100 });
-
-    expect(res.status).toBe(403);
-  });
-
-  it('returns 400 for invalid body (missing amount)', async () => {
+  it('POST /treasury/:groupId/deposit no longer exists (404)', async () => {
     const { token } = await seedAdmin();
-    const group = await seedGroup('Deposit Bad Body Group');
-
-    const res = await request(app)
-      .post(`/api/v1/treasury/${group.id}/deposit`)
-      .set('Authorization', `Bearer ${token}`)
-      .send({ description: 'no amount here' });
-
-    expect(res.status).toBe(400);
-  });
-
-  it('returns 200 and creates CREDIT transaction (200)', async () => {
-    const { token } = await seedAdmin();
-    const group = await seedGroup('Deposit Success Group');
+    const group = await seedGroup('Deposit Removed Group');
 
     const res = await request(app)
       .post(`/api/v1/treasury/${group.id}/deposit`)
       .set('Authorization', `Bearer ${token}`)
       .send({ amount: 2500, description: 'Ward grant', referenceType: 'MANUAL' });
 
-    expect(res.status).toBe(200);
-    expect(res.body.data.transactionType).toBe('CREDIT');
-    expect(Number(res.body.data.amount)).toBe(2500);
-  });
-});
-
-describe('POST /treasury/:groupId/withdraw', () => {
-  beforeAll(async () => {
-    await servicesReady;
+    expect(res.status).toBe(404);
   });
 
-  it('returns 403 for non-admin user', async () => {
-    const { user: admin } = await seedAdmin();
-    const group = await seedGroup('Withdraw Forbidden Group');
-    await treasuryService.deposit(group.id, { amount: 5000 }, admin.id);
-
-    const regular = await seedRegularUser();
-    const token = makeAccessToken(regular.id, 'COMMUNITY_VERIFIED', { roles: [] });
+  it('POST /treasury/:groupId/withdraw no longer exists (404)', async () => {
+    const { token } = await seedAdmin();
+    const group = await seedGroup('Withdraw Removed Group');
 
     const res = await request(app)
       .post(`/api/v1/treasury/${group.id}/withdraw`)
       .set('Authorization', `Bearer ${token}`)
       .send({ amount: 500 });
 
-    expect(res.status).toBe(403);
-  });
-
-  it('returns 400 when balance is insufficient', async () => {
-    const { user, token } = await seedAdmin();
-    const group = await seedGroup('Withdraw Insufficient Group');
-    await treasuryService.deposit(group.id, { amount: 100 }, user.id);
-
-    const res = await request(app)
-      .post(`/api/v1/treasury/${group.id}/withdraw`)
-      .set('Authorization', `Bearer ${token}`)
-      .send({ amount: 9999 });
-
-    expect(res.status).toBe(400);
-  });
-
-  it('returns 200 and creates DEBIT transaction', async () => {
-    const { user, token } = await seedAdmin();
-    const group = await seedGroup('Withdraw Success Group');
-    await treasuryService.deposit(group.id, { amount: 10000 }, user.id);
-
-    const res = await request(app)
-      .post(`/api/v1/treasury/${group.id}/withdraw`)
-      .set('Authorization', `Bearer ${token}`)
-      .send({ amount: 3000, description: 'Borehole supplies' });
-
-    expect(res.status).toBe(200);
-    expect(res.body.data.transactionType).toBe('DEBIT');
-    expect(Number(res.body.data.amount)).toBe(3000);
-
-    // Balance should be 7000
-    const treasury = await prisma.groupTreasury.findUnique({
-      where: { groupId: group.id },
-    });
-    expect(Number(treasury!.balance)).toBe(7000);
+    expect(res.status).toBe(404);
   });
 });
 

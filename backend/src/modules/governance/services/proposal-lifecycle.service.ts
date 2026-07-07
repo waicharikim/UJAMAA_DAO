@@ -25,6 +25,8 @@ import { treasuryService } from '../../treasury/services/treasury.service.js';
 import { getGovernanceContract } from '../../../core/blockchain/client.js';
 import { ethers } from 'ethers';
 import { governanceQueue } from '../../../core/queue/index.js';
+import { queueBarazaDeliberation } from '../baraza/baraza.job.js';
+import { recordProposalOutcomeInMemory } from '../baraza/baraza-deliberation.service.js';
 import {
   GENERATE_DELIBERATION_SUMMARY_JOB,
   OPEN_PROPOSAL_ONCHAIN_JOB,
@@ -231,6 +233,11 @@ class ProposalLifecycleService {
         creatorId: userId,
         title: dto.title,
         description: dto.description,
+        // Structured narrative — read directly by the Baraza council and shown
+        // to voters as fields, rather than parsed back out of the description.
+        problem: dto.problem ?? null,
+        solution: dto.solution ?? null,
+        fundingSource: dto.fundingSource ?? null,
         kind,
         // Policy proposals never carry a budget — they are decisions, not spends.
         budget: isPolicy ? null : dto.fundingAmountKes,
@@ -455,6 +462,12 @@ class ProposalLifecycleService {
         })
         .catch(() => {});
     }
+    // HOOK 1 — Baraza deliberation on fast-track approval (best-effort, dormant
+    // without DASHSCOPE_API_KEY).
+    if (proposal.groupId)
+      queueBarazaDeliberation(proposalId, proposal.groupId, 'AUTO').catch(
+        () => {}
+      );
     return updated;
   }
 
@@ -588,6 +601,12 @@ class ProposalLifecycleService {
         proposal.title,
         newStatus,
         dto.note
+      );
+    // HOOK 2 — Baraza deliberation on admin approval (best-effort, dormant
+    // without DASHSCOPE_API_KEY).
+    if (newStatus === ProposalStatus.APPROVED_FOR_VOTING && proposal.groupId)
+      queueBarazaDeliberation(proposalId, proposal.groupId, 'ADMIN').catch(
+        () => {}
       );
     return updated;
   }
@@ -1006,6 +1025,10 @@ class ProposalLifecycleService {
         memoryAnchorTxHash: true,
       },
     });
+
+    // Close the deliberation memory loop: teach the 7 agents how this proposal
+    // actually turned out, against what each of them argued. Best-effort.
+    await recordProposalOutcomeInMemory(proposalId, outcome);
 
     // Anchor the complete ward-memory record on-chain. No-op until the chain is
     // configured; the off-chain record above is authoritative regardless.

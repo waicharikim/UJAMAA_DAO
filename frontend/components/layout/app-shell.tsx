@@ -8,6 +8,7 @@ import { Topbar } from "./topbar"
 import { MobileBottomNav } from "./mobile-bottom-nav"
 import { OnboardingWizard } from "@/components/onboarding/onboarding-wizard"
 import { CompleteLocationPrompt } from "@/components/location/complete-location-prompt"
+import { BarazaChatWidget } from "@/components/baraza/baraza-chat-widget"
 import { BottomNavProvider } from "@/contexts/bottom-nav-context"
 
 interface AppShellProps {
@@ -49,6 +50,9 @@ export function AppShell({ children }: AppShellProps) {
 
         {/* First-time walkthrough wizard — shown once to new users; sets both wizard + audit-gate keys */}
         <OnboardingWizard />
+
+        {/* In-app Baraza assistant — self-gates to signed-in users */}
+        <BarazaChatWidget />
       </div>
     </BottomNavProvider>
   )

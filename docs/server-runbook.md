@@ -197,7 +197,8 @@ All secrets live in `~/UJAMAA_DAO/docker/.env.prod` (gitignored — never commit
 | `ENCRYPTION_KEY` | AES encryption for sensitive fields |
 | `TELEGRAM_BOT_TOKEN` | Baraza bot |
 | `TELEGRAM_WEBHOOK_SECRET` | Webhook validation |
-| `CLAUDE_API_KEY` | Baraza AI (leave empty to disable) |
+| `DASHSCOPE_API_KEY` | Qwen AI layer — Baraza bot, deliberation digest + Baraza deliberation engine (leave empty to disable) |
+| `BARAZA_AI_MODEL` / `BARAZA_ANALYST_MODEL` | Qwen model ids (default `qwen-plus` / `qwen-max`) |
 | `BUNI_*` | M-Pesa STK push via Buni by KCB |
 | `SMTP_*` | Transactional email |
 | `POSTGRES_USER/PASSWORD/DB` | Database credentials |

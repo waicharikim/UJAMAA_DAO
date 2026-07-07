@@ -18,6 +18,7 @@ import {
   registerBarazaGroup,
   getBarazaGroups,
   getAllBarazaGroups,
+  getBarazaDemand,
   recordAttendance,
   deactivateBarazaGroup,
   refreshInviteLink,
@@ -25,7 +26,9 @@ import {
   scheduleSessionHttp,
   openSessionHttp,
   closeSessionHttp,
+  askBaraza,
 } from '../controllers/bot.controller.js';
+import { aiChatRateLimit } from '../../../core/middleware/rateLimiter.js';
 
 const router = Router();
 
@@ -74,6 +77,22 @@ router.post(
 
 router.get('/baraza-groups', authenticate, getBarazaGroups);
 
+// ─────────────────────────────────────────────
+// In-app Baraza assistant (web chat) — signed-in users only
+// ─────────────────────────────────────────────
+
+const askBarazaSchema = z.object({
+  message: z.string().trim().min(1).max(2000),
+});
+
+router.post(
+  '/baraza/ask',
+  authenticate,
+  aiChatRateLimit(),
+  validateRequest({ schema: askBarazaSchema, target: 'body' }),
+  askBaraza
+);
+
 router.get(
   '/baraza-groups/all',
   authenticate,
@@ -81,6 +100,16 @@ router.get(
     allowedRoles: [SystemRoles.WARD_ADMIN, SystemRoles.SUPER_ADMIN],
   }),
   getAllBarazaGroups
+);
+
+// Worklist: communities past the member threshold with no Telegram baraza.
+router.get(
+  '/baraza-groups/demand',
+  authenticate,
+  authorize({
+    allowedRoles: [SystemRoles.WARD_ADMIN, SystemRoles.SUPER_ADMIN],
+  }),
+  getBarazaDemand
 );
 
 router.post(

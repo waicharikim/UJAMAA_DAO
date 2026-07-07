@@ -21,6 +21,39 @@ import {
   TransactionQueryDto,
   AllocationSplit,
 } from '../types.js';
+import { economyQueue } from '../../../core/queue/index.js';
+import {
+  ANCHOR_TREASURY_TX_JOB,
+  type AnchorTreasuryTxPayload,
+} from '../jobs/treasury.jobs.js';
+
+/**
+ * Enqueue a treasury movement to be mirrored on-chain by the worker (which holds
+ * the minter key). Best-effort: a failed enqueue never blocks the ledger write.
+ * The job itself is a no-op until the chain is configured. jobId dedupes retries.
+ */
+function enqueueTreasuryAnchor(transactionId: string): void {
+  if (process.env.NODE_ENV === 'test') return;
+  try {
+    economyQueue
+      .add(
+        ANCHOR_TREASURY_TX_JOB,
+        { transactionId } satisfies AnchorTreasuryTxPayload,
+        { jobId: `anchor-tx-${transactionId}` }
+      )
+      .catch((err) =>
+        logger.warn(
+          { transactionId, err },
+          '[TREASURY] Failed to enqueue on-chain anchor job'
+        )
+      );
+  } catch (err) {
+    logger.warn(
+      { transactionId, err },
+      '[TREASURY] Failed to enqueue on-chain anchor job'
+    );
+  }
+}
 
 const DEFAULT_SPLIT: AllocationSplit = {
   WARD: 70,
@@ -115,6 +148,7 @@ class TreasuryService {
       '[TREASURY] Deposit credited'
     );
 
+    enqueueTreasuryAnchor(tx.id);
     return tx;
   }
 
@@ -163,6 +197,7 @@ class TreasuryService {
       '[TREASURY] Withdrawal debited'
     );
 
+    enqueueTreasuryAnchor(tx.id);
     return tx;
   }
 
@@ -399,6 +434,7 @@ class TreasuryService {
       entries.map((e) => this.getOrCreateTreasury(e.group.id))
     );
 
+    const createdTxIds: string[] = [];
     await prisma.$transaction(async (t: Prisma.TransactionClient) => {
       for (let i = 0; i < entries.length; i++) {
         const { group, percentage, amount } = entries[i];
@@ -414,7 +450,7 @@ class TreasuryService {
           },
         });
 
-        await t.walletTransaction.create({
+        const walletTx = await t.walletTransaction.create({
           data: {
             treasuryId: treasury.id,
             amount,
@@ -432,6 +468,7 @@ class TreasuryService {
             },
           },
         });
+        createdTxIds.push(walletTx.id);
 
         await t.groupTreasury.update({
           where: { id: treasury.id },
@@ -439,6 +476,9 @@ class TreasuryService {
         });
       }
     });
+
+    // Anchor each fan-out movement on-chain (worker-driven, dormant until configured).
+    for (const id of createdTxIds) enqueueTreasuryAnchor(id);
 
     logger.info(
       {

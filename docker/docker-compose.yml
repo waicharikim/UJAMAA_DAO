@@ -110,10 +110,11 @@ services:
       # ── AI inference (Claude — Baraza bot + deliberation digest) ─────────
       # CLAUDE_BASE_URL empty = direct Anthropic; set to an Anthropic-compatible
       # gateway (e.g. https://inference.do-ai.run for DigitalOcean) to route there.
-      - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
-      - CLAUDE_BASE_URL=${CLAUDE_BASE_URL:-}
-      - BARAZA_AI_MODEL=${BARAZA_AI_MODEL:-claude-haiku-4-5-20251001}
-      - DELIBERATION_AI_MODEL=${DELIBERATION_AI_MODEL:-claude-haiku-4-5-20251001}
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
+      - DASHSCOPE_BASE_URL=${DASHSCOPE_BASE_URL:-}
+      - BARAZA_AI_MODEL=${BARAZA_AI_MODEL:-qwen-plus}
+      - BARAZA_ANALYST_MODEL=${BARAZA_ANALYST_MODEL:-qwen-max}
+      - DELIBERATION_AI_MODEL=${DELIBERATION_AI_MODEL:-qwen-plus}
       # ── Sentry (error monitoring) ────────────────────────────────────────
       - SENTRY_DSN=${SENTRY_DSN:-}
       # ── Web Push (VAPID) ────────────────────────────────────────────────
@@ -247,10 +248,11 @@ services:
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
       - DISCORD_PUBLIC_KEY=${DISCORD_PUBLIC_KEY:-}
       # ── AI inference (Claude — worker runs the deliberation-digest job) ──
-      - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
-      - CLAUDE_BASE_URL=${CLAUDE_BASE_URL:-}
-      - BARAZA_AI_MODEL=${BARAZA_AI_MODEL:-claude-haiku-4-5-20251001}
-      - DELIBERATION_AI_MODEL=${DELIBERATION_AI_MODEL:-claude-haiku-4-5-20251001}
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
+      - DASHSCOPE_BASE_URL=${DASHSCOPE_BASE_URL:-}
+      - BARAZA_AI_MODEL=${BARAZA_AI_MODEL:-qwen-plus}
+      - BARAZA_ANALYST_MODEL=${BARAZA_ANALYST_MODEL:-qwen-max}
+      - DELIBERATION_AI_MODEL=${DELIBERATION_AI_MODEL:-qwen-plus}
       # ── DataDog APM ──────────────────────────────────────────────────────
       - DD_AGENT_HOST=datadog
       - DD_TRACE_AGENT_PORT=8126

@@ -13,6 +13,17 @@ import Link from "next/link"
 type ProposalKind = "PROJECT" | "POLICY"
 type ProposalScope = "GROUP" | "COMMUNITY"
 type TargetLevel = "WARD" | "CONSTITUENCY" | "COUNTY"
+type FundingSource = "GROUP_TREASURY" | "MEMBER_CONTRIBUTIONS" | "EXTERNAL_GRANT" | "LOCATION_REQUEST"
+
+// The one structured field the Baraza council asks for most ("Funding Source"
+// was its single most frequent high-severity gap). Kept to a one-tap pick-list
+// to protect participation — no free typing required at the idea stage.
+const FUNDING_SOURCE_META: { value: FundingSource; label: string }[] = [
+  { value: "GROUP_TREASURY", label: "Our group's treasury" },
+  { value: "MEMBER_CONTRIBUTIONS", label: "Members contribute" },
+  { value: "EXTERNAL_GRANT", label: "An external grant / donor" },
+  { value: "LOCATION_REQUEST", label: "Asking the ward / county" },
+]
 
 const KIND_META: Record<ProposalKind, { label: string; description: string }> = {
   PROJECT: {
@@ -103,6 +114,7 @@ function CreateProposalForm() {
   const [team, setTeam] = useState("")
 
   // Step 3
+  const [fundingSource, setFundingSource] = useState<FundingSource | "">("")
   const [fundingAmountKes, setFundingAmountKes] = useState("")
   const [groupFundingAmount, setGroupFundingAmount] = useState("")
   const [locationFundingRequest, setLocationFundingRequest] = useState("")
@@ -143,11 +155,16 @@ function CreateProposalForm() {
         groupId,
         title: title.trim(),
         description: buildDescription(),
+        // Structured narrative — sent as fields too (not only inside the blob)
+        // so the Baraza council and voters can read them directly.
+        ...(problem.trim() ? { problem: problem.trim() } : {}),
+        ...(solution.trim() ? { solution: solution.trim() } : {}),
         kind,
         ...(isEmergency ? { isEmergency: true } : {}),
         proposalScope,
         ...(showTargetPicker ? { targetLevel } : {}),
         // Funding only applies to projects — policies carry no budget.
+        ...(isProject && fundingSource ? { fundingSource } : {}),
         ...(isProject && fundingAmountKes ? { fundingAmountKes: Number(fundingAmountKes) } : {}),
         ...(isProject && groupFundingAmount ? { groupFundingAmount: Number(groupFundingAmount) } : {}),
         ...(isProject && !isGroupScoped && locationFundingRequest
@@ -444,6 +461,28 @@ function CreateProposalForm() {
 
               {isProject && (
               <>
+              <Field
+                label="Where will the money come from?"
+                hint="The council always asks this first. One tap — you can add detail later."
+              >
+                <div className="grid grid-cols-2 gap-2">
+                  {FUNDING_SOURCE_META.map((f) => (
+                    <button
+                      key={f.value}
+                      type="button"
+                      onClick={() => setFundingSource((cur) => (cur === f.value ? "" : f.value))}
+                      className={`rounded-lg border px-3 py-2.5 text-left text-sm transition-all ${
+                        fundingSource === f.value
+                          ? "border-amber bg-amber/10 ring-1 ring-amber text-[#0A1F14] font-semibold"
+                          : "border-cream bg-white hover:border-amber/40 text-warm-gray"
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+
               <Field
                 label="Total budget needed (KES)"
                 hint="The full cost of this proposal. Leave blank if no funding is needed."

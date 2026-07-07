@@ -157,31 +157,50 @@ All new events must be typed in the event bus types file and documented here.
 
 ## Blockchain (Base L2)
 
-**Status:** Contracts written and tested. Base Sepolia deploy pending (minter wallet not yet funded).
+**Status:** Deployed + device-tested on **Base Sepolia**; user-signed gasless voting verified on-chain. **Base mainnet deferred** (gated on funds + before the first real proposals — see `project_prod_deployment` / `onchain-integrity-roadmap`). On-chain layer is null-guarded — the off-chain DB is the source of truth until mainnet.
 
 | Component | Status |
 |---|---|
-| `PrToken.sol` — soulbound ERC-20 | Written, 9 Foundry tests green |
-| `UtToken.sol` — standard ERC-20 | Written, 4 Foundry tests green |
-| `Deploy.s.sol` | Written, reads `MINTER_WALLET_ADDRESS` |
-| Backend `getPrContract()` / `getUtContract()` | Live with null-guard |
-| On-chain mint (PR award) | Wired in `participationRights.service.ts`, triple-guarded |
+| `PrToken.sol` — soulbound ERC-20 | Deployed Sepolia `0xb07a…DbA7` |
+| `UtToken.sol` — standard ERC-20 | Deployed Sepolia `0x6265…e040` |
+| `GovernanceVoting.sol` — **user-signed** | Deployed Sepolia `0x5f43…E43B` (supersedes `0x27dd…31e5`). `castVote(id,option)` with `msg.sender`=voter (platform can't forge); `openProposal(id, contentHash)` anchors the proposal content hash; worker drives open/close/recordResult. **39/39 Foundry tests** |
+| Gasless sponsorship | **Pimlico paymaster backend proxy** (ERC-7677) on `web` — allowlists only `castVote`; key server-held (`POST /api/v1/governance/paymaster`) |
+| Backend contract clients | `getPrContract()` / `getUtContract()` / `getGovernanceContract()`, null-guarded; on-chain reads/verify need blockchain env on **web** AND worker |
+| On-chain mint (PR award) | `participationRights.service.ts`, triple-guarded |
 | Local dev via Anvil | `ujamaa_anvil` container on :8545 |
 
-**Hybrid model (ADR-002):** On-chain = PR token, UT token, governance votes, treasury. Off-chain = profiles, discovery, education, emergency, chat, notifications.
+**Hybrid model (ADR-002):** On-chain = PR token, UT token, governance votes (user-signed) + proposal content-hash + result attestation. Off-chain = profiles, discovery, education, emergency, chat, notifications.
 
-**Embedded wallets:** Privy (`@privy-io/react-auth` v3.14.1) — ADR-009.
+**Wallets:** passkey-secured **Coinbase Smart Wallet** (default-trustless self-custody; secp256r1 signer in the device secure enclave) via wagmi + viem + `@coinbase/wallet-sdk`. Privy was removed in the wallet rework (session 96). See `project_wallet_rework`.
+
+---
+
+## AI Layer (Qwen)
+
+All AI runs through one shared, provider-agnostic client — `backend/src/core/ai/qwen.ts` — talking to **Alibaba DashScope** (Qwen Cloud, OpenAI-compatible) via the `openai` SDK. Everything is null-guarded and **dormant until `DASHSCOPE_API_KEY` is set** (no throws when absent).
+
+Three features ride on it:
+
+| Feature | Where it runs | What it does |
+|---|---|---|
+| **Baraza Q&A bot** | web (Telegram webhook) — `integration/services/baraza-ai.service.ts` | Free-text Q&A in ward Telegram groups; 6 DB tools. |
+| **Deliberation digest** | worker — `governance/services/deliberation.service.ts` | Neutral-clerk summary of *human* annotations (support/concerns/open-questions) at voting-open. |
+| **Baraza deliberation engine** | worker — `governance/baraza/` | 7-agent council that debates a proposal *before* the vote → readiness score + conflict map. See `docs/baraza-deliberation.md`. |
+
+- **Models:** `qwen-plus` (domain agents + Q&A bot) / `qwen-max` (analysts + JSON extraction/scoring). Env: `BARAZA_AI_MODEL`, `BARAZA_ANALYST_MODEL`, `DASHSCOPE_BASE_URL`.
+- **Info-fetching:** Ukweli uses DashScope server-side web search (`enable_search`); deliberation agents call read-only, group-scoped DB tools for real local data.
+- **Provider is env-switchable** (the OpenAI-compatible path is the point): hackathon → DashScope Qwen; post-hackathon → DO Qwen3-32B (swap base URL/key/model); Claude later would re-add an Anthropic client path. The shared client keeps `getClaudeClient`/`isClaudeAvailable` aliases from when this was Claude-based (migrated 2026-06-25).
 
 ---
 
 ## Frontend
 
-Next.js 16.1.6, React 18, TypeScript, Tailwind CSS, shadcn/ui, TanStack Query, Privy.
+Next.js 16.1.6, React 18, TypeScript, Tailwind CSS, shadcn/ui, TanStack Query, wagmi + viem (Coinbase Smart Wallet).
 
 **Dev:** `next dev --turbopack` (port 3000)
 **API client:** `frontend/lib/api.ts` — `authApi`, `userApi`, `economyApi`, `communityApi`, `governanceApi`, `projectApi`, `marketplaceApi`, `emergencyApi`, `onboardingApi`, `reputationApi`, `educationApi`, `integrationApi`, `notificationsApi`
 **Auth context:** `frontend/contexts/auth-context.tsx` — magic link flow, auto-hydrate from localStorage
-**Wallet context:** `frontend/contexts/wallet-context.tsx` — Privy integration
+**Wallet context:** `frontend/contexts/wallet-context.tsx` — Coinbase Smart Wallet via wagmi (passkey connect → ERC-6492 sign → `/auth/wallet/link`); `lib/wagmi.ts`, `lib/paymaster.ts` (gasless via the backend Pimlico proxy), `lib/governance-contract.ts` (user-signed `castVote`)
 
 ---
 

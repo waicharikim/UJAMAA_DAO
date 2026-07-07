@@ -831,6 +831,14 @@ export const integrationApi = {
       `/integration/baraza-groups/${barazaGroupId}/sessions/close`,
       { method: "POST", body: JSON.stringify({}) }
     ),
+
+  /** Ask the in-app Baraza assistant (signed-in users). Reasons over all the
+   *  user's communities; conversation is server-threaded per user. */
+  askBaraza: (message: string) =>
+    apiFetch<{ answer: string; available: boolean }>("/integration/baraza/ask", {
+      method: "POST",
+      body: JSON.stringify({ message }),
+    }),
 }
 
 // ─────────────────────────────────────────────────────────
@@ -1047,6 +1055,41 @@ export type ProposalStatus =
 
 export type ProposalScope = "GROUP" | "COMMUNITY"
 
+export type ProposalFundingSource =
+  | "GROUP_TREASURY"
+  | "MEMBER_CONTRIBUTIONS"
+  | "EXTERNAL_GRANT"
+  | "LOCATION_REQUEST"
+
+export type BarazaReadinessBand =
+  | "READY"
+  | "CONDITIONAL"
+  | "SIGNIFICANT_CONCERNS"
+  | "NOT_READY"
+
+export interface BarazaConflictMap {
+  coalitions?: { agents?: string[]; sharedConcern?: string }[]
+  conflicts?: { between?: string[]; issue?: string; intensity?: number }[]
+  consensus?: string[]
+  unresolved?: string[]
+  implementabilityRating?: string
+  chokepoints?: { location?: string; severity?: string; routeAround?: string | null }[]
+}
+
+/** The 7-agent Baraza deliberation record for a proposal (read-only). */
+export interface BarazaDeliberationDto {
+  id: string
+  readinessScore: number | null
+  readinessBand: BarazaReadinessBand | string | null
+  conflictMap: BarazaConflictMap | null
+  revisionSuggestions: string[] | null
+  mkutanoConvergence: string[] | null
+  mkutanoContradictions: string[] | null
+  mkutanoFixability: string | null
+  triggeredBy: string
+  completedAt: string | null
+}
+
 export interface ProposalAnnotationDto {
   id: string
   proposalId: string
@@ -1118,6 +1161,9 @@ export const governanceApi = {
     groupId: string
     title: string
     description: string
+    problem?: string
+    solution?: string
+    fundingSource?: ProposalFundingSource
     kind?: "POLICY" | "PROJECT"
     fundingAmountKes?: number
     isEmergency?: boolean
@@ -1160,6 +1206,10 @@ export const governanceApi = {
 
   getProposal: (proposalId: string): Promise<ProposalDto> =>
     apiFetch<ProposalDto>(`/governance/${proposalId}`),
+
+  /** Latest completed 7-agent Baraza deliberation (null if none yet). */
+  getBaraza: (proposalId: string): Promise<BarazaDeliberationDto | null> =>
+    apiFetch<BarazaDeliberationDto | null>(`/governance/${proposalId}/baraza`),
 
   reviewProposal: (proposalId: string, decision: "APPROVE" | "REJECT", note?: string) =>
     apiFetch<unknown>(`/governance/${proposalId}/review`, {
@@ -1286,6 +1336,7 @@ export interface ProjectListItemDto {
   participationScope: ParticipationScope
   milestonesCount: number
   completedMilestonesCount: number
+  anchorTxHash?: string | null   // on-chain anchor of PROJECT_CREATED (null until anchored)
   createdAt: string
   updatedAt: string
 }
@@ -1351,6 +1402,17 @@ export interface WorkLogResponseDto {
   createdAt: string
 }
 
+// Project-setup details supplied at the post-approval gate — the Baraza
+// council's most frequent HIGH-severity gaps (maintenance, site, beneficiaries).
+export interface ProjectSetupDetails {
+  maintenancePlan?: string
+  recurrentCostKes?: number
+  recurrentCostPeriod?: "MONTHLY" | "QUARTERLY" | "YEARLY"
+  siteLocation?: string
+  landTenure?: string
+  beneficiaries?: string
+}
+
 // Full project-setup milestone supplied at the post-approval setup gate (#4).
 export interface ProjectSetupMilestone {
   title: string
@@ -1381,10 +1443,18 @@ export const projectApi = {
   getProject: (id: string): Promise<ProjectDetailDto> =>
     apiFetch<ProjectDetailDto>(`/projects/${id}`),
 
-  createFromProposal: (proposalId: string, milestones?: ProjectSetupMilestone[]) =>
+  createFromProposal: (
+    proposalId: string,
+    milestones?: ProjectSetupMilestone[],
+    details?: ProjectSetupDetails,
+  ) =>
     apiFetch<unknown>("/projects/from-proposal", {
       method: "POST",
-      body: JSON.stringify(milestones?.length ? { proposalId, milestones } : { proposalId }),
+      body: JSON.stringify({
+        proposalId,
+        ...(milestones?.length ? { milestones } : {}),
+        ...(details ?? {}),
+      }),
     }),
 
   startMilestone: (milestoneId: string) =>
@@ -2224,6 +2294,7 @@ export interface WalletTransactionDto {
   proposalId:      string | null
   projectId:       string | null
   initiatedById:   string
+  anchorTxHash:    string | null   // on-chain mirror tx hash (null until anchored)
   metadata:        Record<string, unknown> | null
 }
 

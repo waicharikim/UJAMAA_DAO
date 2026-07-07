@@ -37,6 +37,7 @@ import {
   MapPin,
   RefreshCw,
   Plus,
+  Link as LinkIcon,
 } from "lucide-react"
 import { FundGroupModal } from "@/components/payments/fund-group-modal"
 
@@ -114,6 +115,18 @@ function TransactionRow({ tx }: { tx: WalletTransactionDto }) {
               day: "numeric", month: "short", year: "numeric",
             })}
           </span>
+          {tx.anchorTxHash && (
+            <a
+              href={`https://sepolia.basescan.org/tx/${tx.anchorTxHash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-0.5 text-[9px] font-semibold hover:underline"
+              style={{ color: "#1E3D2F" }}
+              title="View this transaction's on-chain anchor"
+            >
+              <LinkIcon className="h-2.5 w-2.5" /> on-chain
+            </a>
+          )}
         </div>
       </div>
 
@@ -250,7 +263,11 @@ export default function TreasuryPage() {
     enabled:  !!user,
   })
 
-  const wardGroup = memberships?.find((m) => m.isSystem && m.systemType === "WARD")
+  // Prefer the user's PRIMARY ward; fall back to any ward system group (a
+  // dual-ward member belongs to more than one).
+  const wardGroups = memberships?.filter((m) => m.isSystem && m.systemType === "WARD") ?? []
+  const wardGroup =
+    wardGroups.find((m) => m.ward?.id && m.ward.id === user?.primaryWardId) ?? wardGroups[0]
 
   const { data: treasury, isLoading: treasuryLoading, refetch } = useQuery({
     queryKey: ["treasury", wardGroup?.groupId],
@@ -348,7 +365,9 @@ export default function TreasuryPage() {
           <TxHistoryCard txData={txData} txLoading={txLoading} page={page} setPage={setPage} />
 
           <p className="text-xs text-center text-[#0E0B08]/30 pb-2">
-            Treasury funds are managed by ward leadership. All transactions are recorded on-chain for transparency.
+            {txData?.transactions?.some((t: WalletTransactionDto) => t.anchorTxHash)
+              ? "Treasury funds are managed by ward leadership. Anchored transactions are mirrored on-chain for tamper-evident transparency."
+              : "Treasury funds are managed by ward leadership. Every movement is recorded in a transparent ledger."}
           </p>
         </>
       )}

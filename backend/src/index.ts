@@ -212,5 +212,28 @@ async function startServer() {
   }
 }
 
+// Global safety nets — mirror the worker. An unhandled rejection (e.g. a throw
+// in a fire-and-forget path like the Telegram webhook tail) must not silently
+// destabilise the web process; an uncaught exception means undefined state, so
+// exit and let the container restart cleanly.
+process.on('unhandledRejection', (reason) => {
+  logger.error(
+    {
+      operationType: 'WEB',
+      reason: reason instanceof Error ? reason.message : String(reason),
+      stack: reason instanceof Error ? reason.stack : undefined,
+    },
+    'Unhandled promise rejection in web process'
+  );
+});
+
+process.on('uncaughtException', (err) => {
+  logger.error(
+    { operationType: 'WEB', error: err.message, stack: err.stack },
+    'Uncaught exception in web process — exiting'
+  );
+  process.exit(1);
+});
+
 // Start everything
 startServer();

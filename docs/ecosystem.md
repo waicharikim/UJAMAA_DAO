@@ -23,7 +23,7 @@ UjamaaDAO is a **decentralized autonomous organization (DAO) platform** inspired
 1. **Onboarding**: New user verifies phone → earns initial PR → sets profile & ward.
 2. **Community Building**: Gets vouched by ward members → unlocks community verification + more PR.
 3. **Economic Activity**: Posts marketplace offers → pays dues → contributes to projects.
-4. **Governance**: Votes on proposals with PR-weighted power → earns more PR for participation.
+4. **Governance**: Members deliberate on proposals (community annotations + an advisory **AI deliberation** that stress-tests the proposal before voting — see `baraza-deliberation.md`), then vote with PR-weighted power → earn more PR for participation. The binding decision is always the human vote.
 5. **Reputation Growth**: Accumulates Impact Points from vouches/contributions → visible trust signal.
 6. **Sustainability**: Monthly PR regen (activity-gated) keeps users engaged; cleanups remove expired data.
 

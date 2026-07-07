@@ -97,24 +97,48 @@ describe('BarazaBotService.registerBarazaGroup', () => {
     );
   });
 
-  it('throws on duplicate (unique: groupId+platform+externalId)', async () => {
+  it('is idempotent when re-registering the same group + external chat', async () => {
     const admin = await seedUser(`bgdup-${Date.now()}@test.com`);
     const group = await seedGroup(INT_WARD_ID);
     const externalId = `dup-ext-${Date.now()}`;
 
-    await barazaBotService.registerBarazaGroup(admin.id, {
+    const first = await barazaBotService.registerBarazaGroup(admin.id, {
       groupId: group.id,
       platform: 'TELEGRAM',
       externalId,
       name: 'Original Baraza',
     });
 
+    // Same group + same external chat → return the existing record, no throw.
+    const second = await barazaBotService.registerBarazaGroup(admin.id, {
+      groupId: group.id,
+      platform: 'TELEGRAM',
+      externalId,
+      name: 'Duplicate Baraza',
+    });
+
+    expect(second.id).toBe(first.id);
+  });
+
+  it('rejects a second active Baraza for the same group (different chat)', async () => {
+    const admin = await seedUser(`bgrival-${Date.now()}@test.com`);
+    const group = await seedGroup(INT_WARD_ID);
+
+    await barazaBotService.registerBarazaGroup(admin.id, {
+      groupId: group.id,
+      platform: 'TELEGRAM',
+      externalId: `chat-a-${Date.now()}`,
+      name: 'First Baraza',
+    });
+
+    // Same community, a different Telegram chat → reject so a ward can't end up
+    // with rival chats fragmenting the conversation.
     await expect(
       barazaBotService.registerBarazaGroup(admin.id, {
         groupId: group.id,
         platform: 'TELEGRAM',
-        externalId,
-        name: 'Duplicate Baraza',
+        externalId: `chat-b-${Date.now()}`,
+        name: 'Rival Baraza',
       })
     ).rejects.toThrow();
   });

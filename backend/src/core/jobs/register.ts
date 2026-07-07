@@ -15,7 +15,9 @@ import {
   userCleanupQueue,
   notificationsQueue,
   governanceQueue,
+  integrationQueue,
 } from '../queue/index.js';
+import { BotJobName } from '../../modules/integration/types.js';
 
 // ─────────────────────────────────────────────
 // Import all job names & processors
@@ -43,6 +45,8 @@ import {
   TALLY_PROPOSALS_JOB,
   EXPIRE_PROPOSAL_REVIEW_JOB,
 } from '../../modules/governance/jobs/proposal.jobs.js';
+
+import { COLLECT_CURRENT_AFFAIRS_JOB } from '../../modules/governance/current-affairs/current-affairs.job.js';
 
 export async function registerAllJobs(): Promise<void> {
   logger.info(
@@ -149,6 +153,23 @@ export async function registerAllJobs(): Promise<void> {
     logger.info({ job: DUES_REMINDER_JOB }, 'Job registered');
 
     // ─────────────────────────────────────────────
+    // BARAZA DEMAND SCAN
+    // Every day at 06:00 — alert SUPER_ADMINs about communities past the member
+    // threshold with no Telegram baraza (deduped per community).
+    // ─────────────────────────────────────────────
+    await integrationQueue.add(
+      BotJobName.BARAZA_DEMAND_SCAN,
+      {},
+      {
+        repeat: { pattern: '0 6 * * *' },
+        jobId: BotJobName.BARAZA_DEMAND_SCAN,
+        removeOnComplete: { age: 3600 * 24 * 7 },
+        removeOnFail: { age: 3600 * 24 * 30 },
+      }
+    );
+    logger.info({ job: BotJobName.BARAZA_DEMAND_SCAN }, 'Job registered');
+
+    // ─────────────────────────────────────────────
     // ELECTION SCHEDULING
     // 01:00 on 1st of every month — scan all groups/counties for eligible elections
     // ─────────────────────────────────────────────
@@ -243,6 +264,23 @@ export async function registerAllJobs(): Promise<void> {
       }
     );
     logger.info({ job: EXPIRE_PROPOSAL_REVIEW_JOB }, 'Job registered');
+
+    // ─────────────────────────────────────────────
+    // CURRENT AFFAIRS COLLECTION
+    // Weekly (Mon 02:00) — refresh fuel/cost-of-living indicators for Baraza.
+    // Figures move slowly (EPRA/CPI monthly); best-effort, fails open.
+    // ─────────────────────────────────────────────
+    await governanceQueue.add(
+      COLLECT_CURRENT_AFFAIRS_JOB,
+      {},
+      {
+        repeat: { pattern: '0 2 * * 1' },
+        jobId: COLLECT_CURRENT_AFFAIRS_JOB,
+        removeOnComplete: { age: 3600 * 24 * 7 },
+        removeOnFail: { age: 3600 * 24 * 30 },
+      }
+    );
+    logger.info({ job: COLLECT_CURRENT_AFFAIRS_JOB }, 'Job registered');
 
     logger.info(
       { operationType: 'JOB_REGISTER' },

@@ -78,20 +78,34 @@ Get a project by ID, including milestones and participants.
 
 ### POST `/from-proposal`
 
-Create a new project from an approved proposal.
+Create a new project from an approved proposal. This is the project-setup gate: a
+`PROJECT` proposal cannot reach `EXECUTING` until its project exists. Besides the
+optional milestone editor, it captures the **project-setup details** — the Baraza
+council's most frequent HIGH-severity gaps, asked here (after the vote) rather than
+at idea stage to keep proposal creation low-friction.
 
 - **Auth required:** Yes
 - **Request Body:**
 
 ```json
 {
-  "proposalId": "UUID"
+  "proposalId": "UUID",
+  "milestones": [ /* optional full milestone editor payload */ ],
+  "maintenancePlan": "Who keeps it running in year two (string)",
+  "recurrentCostKes": 5000,
+  "recurrentCostPeriod": "MONTHLY | QUARTERLY | YEARLY",
+  "siteLocation": "Where exactly it sits (string)",
+  "landTenure": "Whose land / who has consented (string)",
+  "beneficiaries": "Who benefits, who contributes, who is exempt (string)"
 }
 ```
 
+All project-setup detail fields are optional (max 2000 chars each; `recurrentCostKes` ≥ 0).
+They are stored on the `Project` (columns added by migration `20260629000000_add_project_setup_details`).
+
 - **Responses:**
-  - `201 Created` — Created project object
-  - `400 Bad Request` — Proposal not in APPROVED status
+  - `200 OK` — Created project object (incl. the project-setup detail fields)
+  - `400 Bad Request` — Proposal not in APPROVED status, or invalid `recurrentCostPeriod`
   - `404 Not Found` — Proposal not found
 
 ---
@@ -438,3 +452,25 @@ Contribute UT funds to a project. Debits `fiatBackedUtBalance` from the caller a
 | 404 | Not Found | Requested resource does not exist |
 | 409 | Conflict | Duplicate record (already joined, already checked in, etc.) |
 | 500 | Internal Server Error | Unexpected server error |
+
+---
+
+## On-Chain Anchoring (built — dormant until configured)
+
+Projects are the thesis — *money + labor → outcomes, traceable* — so the lifecycle
+is mirrored on-chain the **same way proposals and the treasury are**: a
+tamper-evident hash per milestone-of-trust, never fund custody, never an
+execution gate.
+
+**Anchored events** (`ProjectRegistry.sol`, RECORDER_ROLE-gated):
+- **PROJECT_CREATED** — on `createFromProposal` → `Project.anchorTxHash`.
+- **MILESTONE_VERIFIED** — on a leader/verifier approval → `Milestone.anchorTxHash`.
+- **WORK_APPROVED** — when a work session passes the QR witness-chain (≥1 depth-0 witness = **labor verified by the community**) → `WorkSession.anchorTxHash`. This is the thesis-critical anchor.
+- PROJECT_COMPLETED — contract kind reserved; not wired yet (no auto-completion transition exists).
+
+**How it works**
+- `getProjectRegistryContract()` — null-guarded on `PROJECT_REGISTRY_ADDRESS`; returns null (no-op) until set.
+- `ANCHOR_PROJECT_EVENT` job (project queue, worker-driven) — enqueued after the DB write. The worker holds the minter key (RECORDER_ROLE), so an event that happened on the web process still gets anchored. Fails-open: a chain error never touches the off-chain record. Mirrors the treasury `ANCHOR_TREASURY_TX_JOB`.
+- `*.anchorTxHash` stores the resulting tx hash (null until anchored). The project detail header shows a "Verified on-chain" Basescan link when set.
+
+**Activation (seamless — no code change):** deploy `ProjectRegistry.sol` (minter=admin) → set `PROJECT_REGISTRY_ADDRESS` on the worker → new project/milestone/work events anchor automatically. Until then every anchor is a no-op and Postgres is the source of truth. Roadmap: memory `onchain-integrity-roadmap` (this completes Scope B).

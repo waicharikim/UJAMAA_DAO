@@ -12,20 +12,23 @@ This is a living checklist. Update it as items move.
 ## Decisions
 
 ### Cut / defer from v1 (don't let these block launch)
-- **AI deliberation layer + Baraza AI bot** — already dormant (needs `CLAUDE_API_KEY` +
-  paid credits). Adds nothing for a first group; ships dark. Revisit post-traction.
+- **AI deliberation layer + Baraza AI bot** — already dormant (needs `DASHSCOPE_API_KEY`).
+  Adds nothing for a first group; ships dark. Revisit post-traction. (The newer Baraza 7-agent
+  deliberation engine — `docs/baraza-deliberation.md` — is hackathon work on the same Qwen layer.)
 - **On-chain anchoring polish** (ward-memory / annotation anchoring) — dormant until the
   contract deploy; fine to ship dark.
 - **Deeper project-management rework** — the projects module is enough for a first group now
   that the authorization hole is fixed.
 
 ### Hide for v1 (the highest-leverage UX call)
-- **Wallet / blockchain is invisible.** Privy auto-creates an embedded wallet on login, and
+- **Wallet / blockchain is invisible.** The passkey Coinbase Smart Wallet is a deliberate,
+  one-time prompt only at the last gate (no silent auto-create — passkeys need a user gesture), and
   **`COMMUNITY_VERIFIED` (3 vouches) already unlocks everything an everyday user does**
   (groups, proposals, voting, projects, dues). A wallet is only the last gate to
-  `FULL_VERIFIED`. So: remove the prominent "Connect Wallet" CTA from the main flow, let the
-  embedded wallet happen silently, and demote "link an external wallet" to an advanced option.
-  A 19-year-old should never see a crypto prompt to use the app.
+  `FULL_VERIFIED`. So: keep the wallet out of the main flow — the passkey Coinbase Smart Wallet
+  is a single, well-placed one-time prompt only at the `FULL_VERIFIED` gate (passkeys need a user
+  gesture, so it can't be fully silent), not a prominent CTA. A 19-year-old should never see a
+  crypto prompt just to use the everyday app.
 
 ### Ship as-is (the core — it's real)
 System groups (the 7 auto-enrolled geographic levels) + voluntary groups, both fully
@@ -85,7 +88,7 @@ Driven through the actual app via Playwright across four users in distinct geogr
 
 ### Launch track (from SESSION_STATE)
 - [ ] **A1 — deploy contracts to Base mainnet** (ops; `docs/blockchain-deploy.md`).
-- [ ] **A4 — load Anthropic credits** (only if the AI layer is wanted at launch; otherwise cut).
+- [ ] **A4 — set `DASHSCOPE_API_KEY`** (Qwen) to activate the AI layer at launch; otherwise cut.
 
 ### Non-blocking / nice-to-have
 - [ ] **Notification coverage** — fires only for governance/emergencies/baraza; gaps in

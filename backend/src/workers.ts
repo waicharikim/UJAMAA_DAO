@@ -51,6 +51,7 @@ import {
 import {
   processBarazaAttendanceReward,
   processBarazaSendInvite,
+  processBarazaDemandScan,
 } from './modules/integration/jobs/baraza-reward.jobs.js';
 import { processBarazaSessionReminder } from './modules/integration/jobs/baraza-reminder.jobs.js';
 import { BotJobName } from './modules/integration/types.js';
@@ -64,6 +65,8 @@ import {
   ProjectJobName,
   processWorkSessionClose,
 } from './modules/projects/jobs/work-session.jobs.js';
+import { processAnchorProjectEvent } from './modules/projects/jobs/project-anchor.jobs.js';
+import type { AnchorProjectEventJobData } from './modules/projects/types.js';
 
 import {
   SCHEDULE_ELECTIONS_JOB,
@@ -88,6 +91,14 @@ import {
   processOpenProposalOnChain,
   processCloseProposalOnChain,
 } from './modules/governance/jobs/proposal.jobs.js';
+import {
+  BARAZA_DELIBERATION_JOB,
+  processBarazaDeliberationJob,
+} from './modules/governance/baraza/baraza.job.js';
+import {
+  COLLECT_CURRENT_AFFAIRS_JOB,
+  processCurrentAffairsCollection,
+} from './modules/governance/current-affairs/current-affairs.job.js';
 
 import {
   MPESA_PAYOUT_JOB,
@@ -95,6 +106,11 @@ import {
   MpesaPayoutJobData,
 } from './modules/economy/jobs/ut-payout.jobs.js';
 import { utWithdrawalService } from './modules/economy/services/utWithdrawal.service.js';
+import {
+  ANCHOR_TREASURY_TX_JOB,
+  processAnchorTreasuryTx,
+  type AnchorTreasuryTxPayload,
+} from './modules/treasury/jobs/treasury.jobs.js';
 
 // ─────────────────────────────────────────────
 // Graceful shutdown & error handling
@@ -189,6 +205,10 @@ const economyWorker = createWorker('economy', async (job) => {
       );
     } else if (name === MPESA_PAYOUT_JOB) {
       await processMpesaPayout(job.data as MpesaPayoutJobData);
+    } else if (name === ANCHOR_TREASURY_TX_JOB) {
+      await processAnchorTreasuryTx(
+        (job.data as AnchorTreasuryTxPayload).transactionId
+      );
     } else {
       logger.warn(
         { jobName: name, queue: 'economy' },
@@ -263,6 +283,8 @@ const integrationWorker = createWorker('integration', async (job) => {
       await processBarazaSendInvite(job);
     } else if (job.name === BotJobName.BARAZA_SESSION_REMINDER) {
       await processBarazaSessionReminder(job);
+    } else if (job.name === BotJobName.BARAZA_DEMAND_SCAN) {
+      await processBarazaDemandScan();
     } else {
       logger.warn(
         { jobName: job.name, queue: 'integration' },
@@ -353,6 +375,12 @@ const governanceWorker = createWorker('governance', async (job) => {
     } else if (job.name === CLOSE_PROPOSAL_ONCHAIN_JOB) {
       // On-demand (enqueued on tally) — closes the window + attests the result.
       await processCloseProposalOnChain(job.data.proposalId, job.data.approved);
+    } else if (job.name === BARAZA_DELIBERATION_JOB) {
+      // On-demand (enqueued on approval) — runs the 7-agent Baraza deliberation.
+      await processBarazaDeliberationJob(job);
+    } else if (job.name === COLLECT_CURRENT_AFFAIRS_JOB) {
+      // Weekly — refresh current-affairs indicators (best-effort, fails open).
+      await processCurrentAffairsCollection();
     } else {
       logger.warn(
         { jobName: job.name, queue: 'governance' },
@@ -378,6 +406,9 @@ const projectWorker = createWorker('project', async (job) => {
   try {
     if (job.name === ProjectJobName.WORK_SESSION_CLOSE) {
       await processWorkSessionClose(job);
+    } else if (job.name === ProjectJobName.ANCHOR_PROJECT_EVENT) {
+      const { kind, entityId } = job.data as AnchorProjectEventJobData;
+      await processAnchorProjectEvent(kind, entityId);
     } else {
       logger.warn(
         { jobName: job.name, queue: 'project' },

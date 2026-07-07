@@ -1,4 +1,4 @@
-.PHONY: help dev prod prod-pull prod-deploy prod-deploy-web prod-deploy-worker prod-deploy-frontend prod-seed prod-rebuild-web prod-rebuild-worker prod-rebuild-frontend prod-backup prod-backup-cron up down restart logs clean backup setup-configs enable-observability check-configs
+.PHONY: help dev dev-up dev-down dev-status ngrok-sync ngrok-watch prod prod-pull prod-deploy prod-deploy-web prod-deploy-worker prod-deploy-frontend prod-seed prod-rebuild-web prod-rebuild-worker prod-rebuild-frontend prod-backup prod-backup-cron up down restart logs clean backup setup-configs enable-observability check-configs
 
 # Compose file location (relative to backend/)
 COMPOSE_FILE := ../docker/docker-compose.yml
@@ -75,6 +75,28 @@ dev:
 	@echo "   Traefik: http://localhost:8080"
 	@echo ""
 	@echo "💡 Want observability? Run: make check-configs"
+
+# Orchestrate the whole local dev system: compose up -> wait health -> ngrok ->
+# sync Telegram webhook -> background webhook watcher. (Local working tree only.)
+dev-up:
+	@./scripts/dev-stack.sh up
+
+# Tear it all down: stop watcher + ngrok + compose down.
+dev-down:
+	@./scripts/dev-stack.sh down
+
+# Show containers, API health, ngrok URL, and watcher state.
+dev-status:
+	@./scripts/dev-stack.sh status
+
+# Re-point the Telegram webhook at the current ngrok tunnel (auto-detects the URL).
+# Pass URL=https://xxx.ngrok-free.app to feed one in manually instead.
+ngrok-sync:
+	@./scripts/ngrok-sync.sh $(URL)
+
+# Keep running: auto re-syncs the webhook whenever ngrok's URL changes.
+ngrok-watch:
+	@./scripts/ngrok-sync.sh --watch
 
 # Production
 prod:

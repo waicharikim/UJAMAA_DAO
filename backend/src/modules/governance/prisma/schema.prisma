@@ -127,6 +127,7 @@ model Proposal {
   comments           Comment[]           @relation("ProposalComments") // NEW
   posts              Post[]              @relation("PostProposal")
   annotations        ProposalAnnotation[] @relation("ProposalAnnotations")
+  deliberations      BarazaDeliberation[] @relation("ProposalDeliberations")
 
   @@index([groupId, status])
   @@index([creatorId])
@@ -236,3 +237,174 @@ model ProposalAnnotationReaction {
   @@map("proposal_annotation_reactions")
 }
 
+
+// ============================================================================
+// BARAZA DELIBERATION ENGINE — 7-agent pre-vote deliberation (Qwen-powered)
+// ============================================================================
+
+enum BarazaDeliberationStatus {
+  PENDING
+  RUNNING
+  COMPLETE
+  FAILED
+}
+
+enum BarazaAgentKey {
+  // governance domain (system groups)
+  DAKTARI
+  LINDA
+  TAJIRI
+  FOREMAN
+  MWALIMU
+  // cooperative domain (voluntary groups)
+  MKURUGENZI
+  MWANANCHI
+  FUNDI
+  HUSTLER
+  // analysts (run in every panel)
+  SHAHIDI
+  MPELELEZI
+  // convener / framing (run once)
+  MJAMAA
+}
+
+/// Current real-world conditions (fuel, cost of living, …) injected into Baraza
+/// deliberations so the council reasons against the present state of the country.
+/// Populated by best-effort collectors; an admin value always wins over a scrape.
+model CurrentAffairs {
+  id            String   @id @default(uuid()) @db.Uuid
+  indicator     String   @unique // e.g. "fuel_petrol", "cpi_inflation"
+  label         String // human label, e.g. "Petrol pump price"
+  value         String // stored as text, e.g. "217.43"
+  unit          String? // "KES/L", "%"
+  source        String // "EPRA" | "admin" | "X:@moneyacademyKE"
+  sourceUrl     String?  @db.Text
+  asOf          DateTime // the date the figure actually refers to
+  fetchedAt     DateTime @default(now())
+  adminOverride Boolean  @default(false) // admin-set values are never overwritten by a scrape
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([active])
+  @@map("current_affairs")
+}
+
+/// Where a historical-timeline entry came from. Provenance is first-class so the
+/// historian (Mhenga) can cite with calibrated confidence and so LLM-seeded
+/// entries are distinguishable from source-fed and admin-confirmed ones.
+enum HistoryProvenance {
+  LLM_SEED // generated from the model's own knowledge (unverified backbone)
+  COLLECTOR // ingested from a current-affairs source
+  DELIBERATION // accreted from a past deliberation's recorded context
+  ADMIN // entered or corrected by an admin
+}
+
+enum HistoryVerification {
+  UNVERIFIED
+  ADMIN_CONFIRMED
+  DISPUTED
+}
+
+/// The national timeline Mhenga reasons from — "how we got here" and the arc a
+/// proposal sits in. Contested history is held to the truth discipline: entries
+/// carry provenance + verification, and corrections supersede rather than delete.
+model HistoricalEvent {
+  id             String              @id @default(uuid()) @db.Uuid
+  era            String // e.g. "Colonial", "Independence", "SAPs", "Devolution 2010"
+  title          String
+  startYear      Int? // for ordering along the arc
+  endYear        Int?
+  summary        String              @db.Text
+  causes         String?             @db.Text
+  consequences   String?             @db.Text
+  themes         String[]            @default([]) // for retrieval: ["land","debt","governance"]
+  provenance     HistoryProvenance
+  sourceRef      String?             @db.Text // URL / deliberationId / model+date
+  verification   HistoryVerification @default(UNVERIFIED)
+  supersededById String?             @db.Uuid // points to the entry that corrects this one
+  active         Boolean             @default(true)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@index([active])
+  @@index([provenance])
+  @@map("historical_events")
+}
+
+enum BarazaTrigger {
+  AUTHOR
+  ADMIN
+  AUTO
+}
+
+model BarazaDeliberation {
+  id          String                   @id @default(uuid()) @db.Uuid
+  proposalId  String                   @db.Uuid
+  groupId     String                   @db.Uuid
+
+  // Dedup key — hash of title + description + budget + problem + solution.
+  contentHash String                   @db.VarChar(64)
+
+  status      BarazaDeliberationStatus @default(PENDING)
+  triggeredBy BarazaTrigger            @default(AUTO)
+
+  readinessScore Int?
+  readinessBand  String?               @db.VarChar(30)
+
+  transcript          Json?
+  conflictMap         Json?
+  revisionSuggestions Json?
+  agentMemorySnapshot Json?
+  contextSnapshot     Json?
+
+  mkutanoConvergence    Json?
+  mkutanoContradictions Json?
+  mkutanoFixability     String?        @db.Text
+
+  errorLog    String?                  @db.Text
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+
+  proposal Proposal @relation("ProposalDeliberations", fields: [proposalId], references: [id], onDelete: Cascade)
+  group    Group    @relation("GroupDeliberations", fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([proposalId, status])
+  @@index([groupId, createdAt])
+  @@index([contentHash, status])
+  @@index([status, createdAt])
+  @@map("baraza_deliberations")
+}
+
+model BarazaAgentState {
+  id       String         @id @default(uuid()) @db.Uuid
+  groupId  String         @db.Uuid
+  agentKey BarazaAgentKey
+
+  deliberationCount Int @default(0)
+  concessionCount   Int @default(0)
+  allianceCount     Int @default(0)
+  holdCount         Int @default(0)
+
+  rigidityScore       Float @default(0.5)
+  responsivenessScore Float @default(0.5)
+
+  staticCore        Json?
+  episodicLog       Json?
+  relationalMap     Json?
+  premisePatterns   Json?
+  powerStructureMap Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  group Group @relation("GroupAgentStates", fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, agentKey])
+  @@index([groupId])
+  @@index([agentKey])
+  @@map("baraza_agent_states")
+}

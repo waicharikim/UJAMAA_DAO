@@ -1,27 +1,92 @@
 /**
  * @file src/modules/integration/services/baraza-ai.service.ts
  * @description
- * Baraza AI — Claude-powered conversational layer for the Telegram bot.
+ * Baraza AI — Qwen Cloud-powered conversational layer for the Telegram bot.
+ *
+ * Uses Qwen Cloud via the OpenAI-compatible DashScope endpoint.
+ * No Anthropic dependency — requires only the `openai` npm package.
  *
  * Routing rule: slash commands (/present, /verify, etc.) stay deterministic.
  * Any free-text message in a registered baraza goes through this service.
  *
- * Graceful degradation: if CLAUDE_API_KEY is not set, returns a fallback message.
- * Tools: get_user_stats, get_group_proposals, get_group_treasury.
- * Model: configurable via BARAZA_AI_MODEL (default: claude-haiku-4-5-20251001).
+ * Graceful degradation: if DASHSCOPE_API_KEY is not set, returns a fallback message.
+ * Tools: get_user_stats, get_group_proposals, get_group_treasury,
+ *        get_election_results, get_ward_stats, search_past_decisions.
+ * Model: configurable via BARAZA_AI_MODEL (default: qwen-plus).
  */
 
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../../core/database/client.js';
+import { getRedisClient } from '../../../core/database/redis.client.js';
 import { logger } from '../../../core/logger/logger.js';
 
-const MODEL = process.env.BARAZA_AI_MODEL ?? 'claude-haiku-4-5-20251001';
+// qwen-plus: best balance of speed + capability for conversational use
+// qwen-max: use for deeper reasoning if latency allows
+// qwen-turbo: cheapest, fastest — good for high-volume low-stakes queries
+const MODEL = process.env.BARAZA_AI_MODEL ?? 'qwen-plus';
 const MAX_TOOL_ROUNDS = 3;
 const MAX_TOKENS = 1024;
 
-// Static — never changes at runtime; eligible for prompt caching
+// Rolling conversation memory (per user, per chat). Without this the bot is
+// stateless and loses the thread after the first reply — and re-guesses the
+// language on every isolated message. Kept in Redis with a short TTL; if Redis
+// is unavailable we silently fall back to stateless behaviour.
+const CONV_TTL_SECONDS = 1800; // 30-minute rolling window
+const CONV_MAX_MESSAGES = 8; // last 4 exchanges (user + assistant pairs)
+
+// High-recency nudge appended to the latest user turn. The system prompt also
+// covers this, but models weight the most recent instruction most heavily —
+// this is what stops the drift back to Swahili on short follow-ups.
+const LANGUAGE_REMINDER =
+  '[Reply in the SAME language as my message above. Do not switch to Kiswahili unless I wrote in Kiswahili.]';
+
+type ConvTurn = { role: 'user' | 'assistant'; content: string };
+
+function convKey(key: string): string {
+  return `baraza:conv:${key}`;
+}
+
+async function loadHistory(key: string): Promise<ConvTurn[]> {
+  const redis = getRedisClient();
+  if (!redis) return [];
+  try {
+    const raw = await redis.get(convKey(key));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed)
+      ? (parsed as ConvTurn[]).slice(-CONV_MAX_MESSAGES)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+async function saveHistory(key: string, turns: ConvTurn[]): Promise<void> {
+  const redis = getRedisClient();
+  if (!redis) return;
+  try {
+    const trimmed = turns.slice(-CONV_MAX_MESSAGES);
+    await redis.set(convKey(key), JSON.stringify(trimmed), {
+      EX: CONV_TTL_SECONDS,
+    });
+  } catch {
+    // Conversation memory is best-effort; never fail a reply over it.
+  }
+}
+
+// Qwen Cloud international DashScope endpoint (OpenAI-compatible)
+const DASHSCOPE_BASE_URL =
+  'https://dashscope-intl.aliyuncs.com/compatible-mode/v1';
+
 const SYSTEM_PROMPT = `You are BarazaBot, the AI assistant for UjamaaDAO — a community self-governance platform built for East African communities. You live inside Telegram groups called barazas (community meetings).
+
+## LANGUAGE — MOST IMPORTANT RULE
+Detect the language of the member's latest message and reply ONLY in that exact language.
+- If the member writes in English, reply 100% in English. Do NOT use any Swahili.
+- If the member writes in Kiswahili, reply 100% in Kiswahili.
+- If they mix, you may mix to match them.
+Never default to Swahili. Never translate or repeat your answer in a second language. No flag emojis.
 
 ## What UjamaaDAO is
 UjamaaDAO helps communities self-govern through:
@@ -50,6 +115,16 @@ UjamaaDAO helps communities self-govern through:
 4. Members vote during the voting window
 5. System tallies automatically — APPROVED → EXECUTING, or REJECTED
 
+## Blockchain & wallet (answer accurately — NEVER guess or make up details)
+- UjamaaDAO is HYBRID: the governance record lives on a PUBLIC blockchain — **Base, an Ethereum Layer-2** — while profiles, chat, education and discovery stay off-chain for speed. It is NOT a private or "permissioned" chain.
+- On-chain: PR (soulbound / non-transferable), UT, and governance — each proposal's content hash AND the votes.
+- Votes are **user-signed**: your own wallet signs your vote, so it comes from you and **the platform cannot vote for you or fake your vote**. Results are recorded on-chain and anyone can verify them.
+- Voting is **gasless** — you never need ETH or to pay any gas; sponsorship is handled for you.
+- Wallet = a **passkey-secured Coinbase Smart Wallet**: no seed phrase, secured by your phone's passkey (fingerprint / Face ID). You do NOT need any crypto knowledge.
+- You do NOT need a wallet for everyday use: 3 community vouches (COMMUNITY_VERIFIED) already unlock proposals, voting, projects and dues. A linked wallet is the final step (FULL_VERIFIED) and is what makes your on-chain votes unforgeable.
+- Status: contracts are live and tested on **Base Sepolia** (a test network); the **Base mainnet** launch is planned. Until mainnet, the off-chain record is authoritative.
+- Money is NEVER crypto: real money (dues, contributions) moves via **M-Pesa** to platform accounts. PR can't be cashed out; earned UT can't be cashed out.
+
 ## Bot commands (you don't handle these — the bot does)
 - /present — mark attendance at an open baraza session (earns 15 PR)
 - /verify [code] — link your phone number via a 6-digit code from UjamaaDAO
@@ -57,11 +132,14 @@ UjamaaDAO helps communities self-govern through:
 - /open — (leader only) open the session for /present
 - /close — (leader only) close the session and tally attendance
 
+## A member's communities
+A member belongs to several communities at once: their location chain (ward → constituency → county → national, and a second ward chain if they have a secondary ward — up to 7 system groups) plus any voluntary groups (SACCOs, projects, interest groups) they have joined. "Your community" is never just the ward. When you report community-specific data (proposals, treasury, elections, decisions), the tool results are labelled by community — always say which community each item belongs to, and if something spans several, group it by community.
+
 ## Your role
 - Answer questions about UjamaaDAO features, PR/UT/IP mechanics, governance
 - Tell members about their PR balance, IP score, and verification level (use tools)
 - Share information about active proposals and treasury balance (use tools)
-- Respond in English or Swahili based on the user's language — mix is fine
+- Reply in the SAME language the member used: if they write in English, answer in English; if in Kiswahili, answer in Kiswahili; if they mix, you may mix. Do NOT translate or repeat your answer in another language, and do not add flag emojis.
 - Be warm, community-oriented, and concise — this is a community chat, not a corporate bot
 - You cannot take actions (vote, create proposals, send money) — only inform and guide
 - Never make up data — use the tools for real information
@@ -77,117 +155,38 @@ export interface BarazaUserContext {
   activeElectionCount?: number;
 }
 
-const UNAVAILABLE_MSG =
-  'BarazaBot AI si available saa hii. Commands kama /present, /verify, /schedule bado zinafanya kazi. 🌿';
-
-export class BarazaAiService {
-  private client: Anthropic | null = null;
-
-  constructor() {
-    const apiKey = process.env.CLAUDE_API_KEY;
-    if (apiKey) {
-      this.client = new Anthropic({ apiKey });
-    }
-  }
-
-  get isAvailable(): boolean {
-    return this.client !== null;
-  }
-
-  async reply(
-    text: string,
-    userContext: BarazaUserContext,
-    groupId: string
-  ): Promise<string> {
-    if (!this.client) return UNAVAILABLE_MSG;
-
-    const contextHeader = buildContextHeader(userContext);
-    const tools = buildTools();
-    const messages: Anthropic.MessageParam[] = [
-      { role: 'user', content: `${contextHeader}\n\n${text}` },
-    ];
-
-    // System prompt is static — eligible for prompt caching (5-min TTL, saves ~1200 input tokens per call)
-    const systemWithCache = [
-      {
-        type: 'text' as const,
-        text: SYSTEM_PROMPT,
-        cache_control: { type: 'ephemeral' as const },
-      },
-    ];
-
-    try {
-      let response = await (this.client as any).messages.create({
-        model: MODEL,
-        max_tokens: MAX_TOKENS,
-        system: systemWithCache,
-        tools,
-        messages,
-        betas: ['prompt-caching-2024-07-31'],
-      });
-
-      let round = 0;
-      while (response.stop_reason === 'tool_use' && round < MAX_TOOL_ROUNDS) {
-        round++;
-        const toolBlocks = response.content.filter(
-          (b: Anthropic.ContentBlock): b is Anthropic.ToolUseBlock =>
-            b.type === 'tool_use'
-        );
-        messages.push({ role: 'assistant', content: response.content });
-
-        const results: Anthropic.ToolResultBlockParam[] = await Promise.all(
-          toolBlocks.map(async (block: Anthropic.ToolUseBlock) => ({
-            type: 'tool_result' as const,
-            tool_use_id: block.id,
-            content: await executeToolCall(
-              block.name,
-              block.input as Record<string, unknown>,
-              userContext,
-              groupId
-            ),
-          }))
-        );
-
-        messages.push({ role: 'user', content: results });
-        response = await (this.client! as any).messages.create({
-          model: MODEL,
-          max_tokens: MAX_TOKENS,
-          system: systemWithCache,
-          tools,
-          messages,
-          betas: ['prompt-caching-2024-07-31'],
-        });
-      }
-
-      const textBlock = response.content.find(
-        (b: Anthropic.ContentBlock): b is Anthropic.TextBlock =>
-          b.type === 'text'
-      );
-      return textBlock?.text ?? UNAVAILABLE_MSG;
-    } catch (err) {
-      logger.warn({ err, groupId }, '[BarazaAI] Claude API call failed');
-      return UNAVAILABLE_MSG;
-    }
-  }
+/**
+ * A community the user belongs to. In a baraza group chat this is the single
+ * registered group; in a DM it is every group the user is an active member of
+ * (their up-to-7 system groups + all voluntary groups). Group-scoped tools
+ * operate across this whole set and label results by community name.
+ */
+export interface BarazaCommunity {
+  groupId: string;
+  groupName: string;
 }
 
-// ─────────────────────────────────────────────
-// Tool definitions
-// ─────────────────────────────────────────────
+const UNAVAILABLE_MSG =
+  'BarazaBot AI is unavailable right now / haipatikani kwa sasa. Commands like /present, /verify, /schedule still work. 🌿';
 
-function buildTools(): Anthropic.Tool[] {
-  return [
-    {
+// Tool definitions in OpenAI format
+const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
+  {
+    type: 'function',
+    function: {
       name: 'get_user_stats',
       description:
         "Get the current user's PR balance, total Impact Points, and verification level.",
-      input_schema: { type: 'object', properties: {}, required: [] },
+      parameters: { type: 'object', properties: {}, required: [] },
     },
-    {
+  },
+  {
+    type: 'function',
+    function: {
       name: 'get_group_proposals',
       description:
-        'Get proposals for this baraza group. Use status=ACTIVE for proposals currently open for review or voting; status=ALL for recent history.',
-      input_schema: {
+        "Get proposals across the user's communities (their ward/constituency/county/national system groups and any voluntary groups). Results are labelled by community. Use status=ACTIVE for proposals currently open for review or voting; status=ALL for recent history.",
+      parameters: {
         type: 'object',
         properties: {
           status: {
@@ -199,28 +198,41 @@ function buildTools(): Anthropic.Tool[] {
         required: [],
       },
     },
-    {
+  },
+  {
+    type: 'function',
+    function: {
       name: 'get_group_treasury',
-      description: 'Get the KES and UT treasury balance for the group.',
-      input_schema: { type: 'object', properties: {}, required: [] },
+      description:
+        "Get the KES and UT treasury balances for the user's communities, labelled by community.",
+      parameters: { type: 'object', properties: {}, required: [] },
     },
-    {
+  },
+  {
+    type: 'function',
+    function: {
       name: 'get_election_results',
       description:
-        'Get elections for this group. Returns active elections (open for nominations or voting) and the most recent completed election with winner.',
-      input_schema: { type: 'object', properties: {}, required: [] },
+        "Get elections across the user's communities. Returns active elections (open for nominations or voting) and the most recent completed election with winner, labelled by community.",
+      parameters: { type: 'object', properties: {}, required: [] },
     },
-    {
+  },
+  {
+    type: 'function',
+    function: {
       name: 'get_ward_stats',
       description:
-        'Get ward-level community statistics: member count, total PR issued, active members (participated in last 30 days), and recent M-Pesa contributions.',
-      input_schema: { type: 'object', properties: {}, required: [] },
+        "Get community statistics for the user's communities: member counts (and, when the user is in a single community, active members in the last 30 days and total PR held). Use when asked how big or how active a community is.",
+      parameters: { type: 'object', properties: {}, required: [] },
     },
-    {
+  },
+  {
+    type: 'function',
+    function: {
       name: 'search_past_decisions',
       description:
-        'Search past proposals and decisions for this group by keyword. Use when a member asks about a previous vote, decision, or initiative.',
-      input_schema: {
+        "Search past proposals and decisions across the user's communities by keyword. Use when a member asks about a previous vote, decision, or initiative.",
+      parameters: {
         type: 'object',
         properties: {
           query: {
@@ -232,37 +244,177 @@ function buildTools(): Anthropic.Tool[] {
         required: ['query'],
       },
     },
-  ];
+  },
+];
+
+export class BarazaAiService {
+  private client: OpenAI | null = null;
+
+  constructor() {
+    const apiKey = process.env.DASHSCOPE_API_KEY;
+    if (apiKey) {
+      this.client = new OpenAI({
+        apiKey,
+        baseURL: DASHSCOPE_BASE_URL,
+        // Cap each call and limit retries so a slow Qwen can't hang the webhook
+        // async tail. reply() already catches and falls back on failure.
+        timeout: 30_000,
+        maxRetries: 1,
+      });
+    }
+  }
+
+  get isAvailable(): boolean {
+    return this.client !== null;
+  }
+
+  async reply(
+    text: string,
+    userContext: BarazaUserContext,
+    communities: BarazaCommunity[],
+    conversationKey?: string
+  ): Promise<string> {
+    if (!this.client) return UNAVAILABLE_MSG;
+
+    const contextHeader = buildContextHeader(userContext, communities);
+    // Prior turns give the model continuity (and a stable language signal).
+    // Only the latest turn carries the context header + language reminder;
+    // history stores the raw user/assistant text so it never goes stale.
+    const history = conversationKey ? await loadHistory(conversationKey) : [];
+    const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+      { role: 'system', content: SYSTEM_PROMPT },
+      ...history.map(
+        (t): OpenAI.Chat.Completions.ChatCompletionMessageParam => ({
+          role: t.role,
+          content: t.content,
+        })
+      ),
+      {
+        role: 'user',
+        content: `${contextHeader}\n\n${text}\n\n${LANGUAGE_REMINDER}`,
+      },
+    ];
+
+    try {
+      let response = await this.client.chat.completions.create({
+        model: MODEL,
+        max_tokens: MAX_TOKENS,
+        tools: TOOLS,
+        tool_choice: 'auto',
+        messages,
+      });
+
+      let round = 0;
+      while (
+        response.choices[0]?.finish_reason === 'tool_calls' &&
+        round < MAX_TOOL_ROUNDS
+      ) {
+        round++;
+        const assistantMessage = response.choices[0].message;
+        messages.push(assistantMessage);
+
+        const toolCalls = assistantMessage.tool_calls ?? [];
+        const toolResults = await Promise.all(
+          toolCalls.map(async (tc) => {
+            // OpenAI v6 tool_calls is a union (function | custom); only
+            // function tool calls carry a `.function` payload.
+            if (tc.type !== 'function') {
+              return {
+                role: 'tool' as const,
+                tool_call_id: tc.id,
+                content: 'Unsupported tool call type.',
+              };
+            }
+            const result = await executeToolCall(
+              tc.function.name,
+              JSON.parse(tc.function.arguments || '{}'),
+              userContext,
+              communities
+            );
+            return {
+              role: 'tool' as const,
+              tool_call_id: tc.id,
+              content: result,
+            };
+          })
+        );
+
+        messages.push(...toolResults);
+        response = await this.client!.chat.completions.create({
+          model: MODEL,
+          max_tokens: MAX_TOKENS,
+          tools: TOOLS,
+          tool_choice: 'auto',
+          messages,
+        });
+      }
+
+      const finalText =
+        response.choices[0]?.message?.content ?? UNAVAILABLE_MSG;
+
+      // Persist only the plain user text + final reply — never the intermediate
+      // tool_call / tool-result messages (trimming those across turns would
+      // break tool_call↔result pairing on the next request).
+      if (conversationKey && finalText && finalText !== UNAVAILABLE_MSG) {
+        await saveHistory(conversationKey, [
+          ...history,
+          { role: 'user', content: text },
+          { role: 'assistant', content: finalText },
+        ]);
+      }
+
+      return finalText;
+    } catch (err) {
+      logger.warn(
+        { err, communities: communities.map((c) => c.groupId) },
+        '[BarazaAI] Qwen API call failed'
+      );
+      return UNAVAILABLE_MSG;
+    }
+  }
 }
 
 // ─────────────────────────────────────────────
 // Tool execution
 // ─────────────────────────────────────────────
 
+const GROUP_SCOPED_TOOLS = new Set([
+  'get_group_proposals',
+  'get_group_treasury',
+  'get_election_results',
+  'get_ward_stats',
+  'search_past_decisions',
+]);
+
 async function executeToolCall(
   name: string,
   input: Record<string, unknown>,
   userContext: BarazaUserContext,
-  groupId: string
+  communities: BarazaCommunity[]
 ): Promise<string> {
+  // Group-scoped tools need at least one community. In a DM where the user
+  // isn't linked to any group, answer honestly rather than error.
+  if (GROUP_SCOPED_TOOLS.has(name) && communities.length === 0) {
+    return "I couldn't find any communities linked to your account. Join or get verified in a community in the UjamaaDAO app, then ask me again.";
+  }
   try {
     switch (name) {
       case 'get_user_stats':
         return await toolGetUserStats(userContext.userId);
       case 'get_group_proposals':
         return await toolGetGroupProposals(
-          groupId,
+          communities,
           (input.status as string) ?? 'ACTIVE'
         );
       case 'get_group_treasury':
-        return await toolGetGroupTreasury(groupId);
+        return await toolGetGroupTreasury(communities);
       case 'get_election_results':
-        return await toolGetElectionResults(groupId);
+        return await toolGetElectionResults(communities);
       case 'get_ward_stats':
-        return await toolGetWardStats(groupId);
+        return await toolGetWardStats(communities);
       case 'search_past_decisions':
         return await toolSearchPastDecisions(
-          groupId,
+          communities,
           (input.query as string) ?? ''
         );
       default:
@@ -273,6 +425,10 @@ async function executeToolCall(
     return `Could not retrieve data for ${name}.`;
   }
 }
+
+// ─────────────────────────────────────────────
+// Tool implementations (unchanged from original)
+// ─────────────────────────────────────────────
 
 async function toolGetUserStats(userId: string | null): Promise<string> {
   if (!userId) return 'User is not linked to a UjamaaDAO account.';
@@ -303,33 +459,38 @@ async function toolGetUserStats(userId: string | null): Promise<string> {
 }
 
 async function toolGetGroupProposals(
-  groupId: string,
+  communities: BarazaCommunity[],
   status: string
 ): Promise<string> {
+  const groupIds = communities.map((c) => c.groupId);
+  const nameOf = communityNameMap(communities);
+
   const where: Prisma.ProposalWhereInput =
     status === 'ACTIVE'
       ? {
-          groupId,
+          groupId: { in: groupIds },
           status: { in: ['PENDING_REVIEW', 'APPROVED_FOR_VOTING'] as any },
         }
-      : { groupId };
+      : { groupId: { in: groupIds } };
 
   const proposals = await prisma.proposal.findMany({
     where,
     orderBy: { createdAt: 'desc' },
-    take: 5,
+    take: 10,
     select: {
       title: true,
       status: true,
       votingEndsAt: true,
+      groupId: true,
       _count: { select: { votes: true } },
     },
   });
 
-  if (!proposals.length) return 'No proposals found for this group.';
+  if (!proposals.length) return 'No proposals found in your communities.';
 
   return JSON.stringify(
     proposals.map((p) => ({
+      community: nameOf(p.groupId),
       title: p.title,
       status: p.status,
       votes: p._count.votes,
@@ -338,44 +499,63 @@ async function toolGetGroupProposals(
   );
 }
 
-async function toolGetGroupTreasury(groupId: string): Promise<string> {
-  const treasury = await prisma.groupTreasury.findUnique({
-    where: { groupId },
-    select: { balance: true, tokenBalance: true, updatedAt: true },
+async function toolGetGroupTreasury(
+  communities: BarazaCommunity[]
+): Promise<string> {
+  const groupIds = communities.map((c) => c.groupId);
+  const nameOf = communityNameMap(communities);
+
+  const treasuries = await prisma.groupTreasury.findMany({
+    where: { groupId: { in: groupIds } },
+    select: {
+      groupId: true,
+      balance: true,
+      tokenBalance: true,
+      updatedAt: true,
+    },
   });
 
-  if (!treasury) return 'No treasury found for this group.';
+  if (!treasuries.length) return 'No treasuries found in your communities.';
 
-  return JSON.stringify({
-    kesBalance: Number(treasury.balance),
-    utBalance: treasury.tokenBalance ?? 0,
-    lastUpdated: treasury.updatedAt?.toISOString().slice(0, 10) ?? null,
-  });
+  return JSON.stringify(
+    treasuries.map((t) => ({
+      community: nameOf(t.groupId),
+      kesBalance: Number(t.balance),
+      utBalance: t.tokenBalance ?? 0,
+      lastUpdated: t.updatedAt?.toISOString().slice(0, 10) ?? null,
+    }))
+  );
 }
 
-async function toolGetElectionResults(groupId: string): Promise<string> {
+async function toolGetElectionResults(
+  communities: BarazaCommunity[]
+): Promise<string> {
+  const groupIds = communities.map((c) => c.groupId);
+  const nameOf = communityNameMap(communities);
+
   const [active, recent] = await Promise.all([
     prisma.election.findMany({
       where: {
-        groupId,
+        groupId: { in: groupIds },
         status: { in: ['NOMINATIONS_OPEN', 'VOTING_OPEN'] },
       },
       select: {
-        id: true,
+        groupId: true,
         roleKey: true,
         status: true,
         nominationsCloseAt: true,
         votingCloseAt: true,
         _count: { select: { candidates: true } },
       },
-      take: 5,
+      take: 10,
     }),
-    prisma.election.findFirst({
-      where: { groupId, status: 'CLOSED' },
+    prisma.election.findMany({
+      where: { groupId: { in: groupIds }, status: 'CLOSED' },
       orderBy: { votingCloseAt: 'desc' },
+      take: 5,
       select: {
+        groupId: true,
         roleKey: true,
-        status: true,
         votingCloseAt: true,
         candidates: {
           orderBy: { voteCount: 'desc' },
@@ -389,80 +569,93 @@ async function toolGetElectionResults(groupId: string): Promise<string> {
     }),
   ]);
 
-  const result: Record<string, unknown> = {};
-
-  if (active.length) {
-    result.activeElections = active.map((e) => ({
+  const result: Record<string, unknown> = {
+    activeElections: active.map((e) => ({
+      community: nameOf(e.groupId),
       role: e.roleKey,
       status: e.status,
       candidates: e._count.candidates,
       nominationsCloseAt: e.nominationsCloseAt.toISOString().slice(0, 10),
       votingCloseAt: e.votingCloseAt.toISOString().slice(0, 10),
-    }));
-  } else {
-    result.activeElections = [];
-  }
-
-  if (recent) {
-    const winner = recent.candidates[0];
-    result.lastElection = {
-      role: recent.roleKey,
-      closedOn: recent.votingCloseAt.toISOString().slice(0, 10),
-      winner: winner
-        ? { name: winner.user?.name ?? 'Unknown', votes: winner.voteCount }
-        : null,
-    };
-  }
+    })),
+    recentElections: recent.map((e) => {
+      const winner = e.candidates[0];
+      return {
+        community: nameOf(e.groupId),
+        role: e.roleKey,
+        closedOn: e.votingCloseAt.toISOString().slice(0, 10),
+        winner: winner
+          ? { name: winner.user?.name ?? 'Unknown', votes: winner.voteCount }
+          : null,
+      };
+    }),
+  };
 
   return JSON.stringify(result);
 }
 
-async function toolGetWardStats(groupId: string): Promise<string> {
-  const group = await prisma.group.findUnique({
-    where: { id: groupId },
-    select: { wardId: true, constituencyId: true, countyId: true },
-  });
-
-  const wardId = group?.wardId;
-
-  const [memberCount, recentActive, totalPR] = await Promise.all([
-    prisma.groupMember.count({ where: { groupId, active: true } }),
-    wardId
-      ? prisma.barazaAttendance.count({
-          where: {
-            barazaGroup: { groupId },
-            sessionDate: {
-              gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-                .toISOString()
-                .slice(0, 10),
-            },
+async function toolGetWardStats(
+  communities: BarazaCommunity[]
+): Promise<string> {
+  // Single community (e.g. inside a baraza group chat): return the rich metrics.
+  if (communities.length === 1) {
+    const { groupId, groupName } = communities[0];
+    const [memberCount, recentActive, totalPR] = await Promise.all([
+      prisma.groupMember.count({ where: { groupId, active: true } }),
+      prisma.barazaAttendance.count({
+        where: {
+          barazaGroup: { groupId },
+          sessionDate: {
+            gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+              .toISOString()
+              .slice(0, 10),
           },
-        })
-      : Promise.resolve(0),
-    prisma.user.aggregate({
-      where: {
-        groupMemberships: { some: { groupId, active: true } },
-      },
-      _sum: { participationRights: true },
-    }),
-  ]);
+        },
+      }),
+      prisma.user.aggregate({
+        where: { groupMemberships: { some: { groupId, active: true } } },
+        _sum: { participationRights: true },
+      }),
+    ]);
 
-  return JSON.stringify({
-    members: memberCount,
-    activeParticipantsLast30Days: recentActive,
-    totalPRHeld: totalPR._sum.participationRights ?? 0,
+    return JSON.stringify({
+      community: groupName,
+      members: memberCount,
+      activeParticipantsLast30Days: recentActive,
+      totalPRHeld: totalPR._sum.participationRights ?? 0,
+    });
+  }
+
+  // Multiple communities (a DM): return member counts per community cheaply.
+  const groupIds = communities.map((c) => c.groupId);
+  const nameOf = communityNameMap(communities);
+  const counts = await prisma.groupMember.groupBy({
+    by: ['groupId'],
+    where: { groupId: { in: groupIds }, active: true },
+    _count: { _all: true },
   });
+  const byGroup = new Map(counts.map((c) => [c.groupId, c._count._all]));
+
+  return JSON.stringify(
+    communities.map((c) => ({
+      community: nameOf(c.groupId),
+      members: byGroup.get(c.groupId) ?? 0,
+    }))
+  );
 }
 
 async function toolSearchPastDecisions(
-  groupId: string,
+  communities: BarazaCommunity[],
   query: string
 ): Promise<string> {
   if (!query.trim()) return 'Please provide a search term.';
 
+  const groupIds = communities.map((c) => c.groupId);
+  const nameOf = communityNameMap(communities);
+
   const proposals = await prisma.proposal.findMany({
     where: {
-      groupId,
+      groupId: { in: groupIds },
       status: { in: ['APPROVED', 'REJECTED', 'COMPLETED', 'CANCELLED'] as any },
       OR: [
         { title: { contains: query, mode: 'insensitive' } },
@@ -470,47 +663,50 @@ async function toolSearchPastDecisions(
       ],
     },
     orderBy: { createdAt: 'desc' },
-    take: 5,
+    take: 8,
     select: {
       title: true,
       status: true,
       createdAt: true,
+      groupId: true,
       _count: { select: { votes: true } },
     },
   });
 
   const opinions = await prisma.proposalAnnotation.findMany({
     where: {
-      proposal: { groupId },
+      proposal: { groupId: { in: groupIds } },
       OR: [
         { quotedText: { contains: query, mode: 'insensitive' } },
         { comment: { contains: query, mode: 'insensitive' } },
       ],
     },
     orderBy: { createdAt: 'desc' },
-    take: 5,
+    take: 8,
     select: {
       comment: true,
       quotedText: true,
       fieldKey: true,
       createdAt: true,
-      proposal: { select: { title: true } },
+      proposal: { select: { title: true, groupId: true } },
       author: { select: { name: true } },
     },
   });
 
   if (!proposals.length && !opinions.length) {
-    return `No past decisions or community opinions found matching "${query}".`;
+    return `No past decisions or community opinions found matching "${query}" in your communities.`;
   }
 
   return JSON.stringify({
     decisions: proposals.map((p) => ({
+      community: nameOf(p.groupId),
       title: p.title,
       outcome: p.status,
       votes: p._count.votes,
       date: p.createdAt.toISOString().slice(0, 10),
     })),
     opinions: opinions.map((o) => ({
+      community: nameOf(o.proposal.groupId),
       proposal: o.proposal.title,
       author: o.author.name,
       on: o.fieldKey,
@@ -525,15 +721,32 @@ async function toolSearchPastDecisions(
 // Helpers
 // ─────────────────────────────────────────────
 
-function buildContextHeader(ctx: BarazaUserContext): string {
+function buildContextHeader(
+  ctx: BarazaUserContext,
+  communities: BarazaCommunity[]
+): string {
   const parts = [`Member: ${ctx.displayName}`];
-  if (ctx.ward) parts.push(`Ward: ${ctx.ward}`);
+  if (ctx.ward) parts.push(`Primary ward: ${ctx.ward}`);
   if (ctx.verificationLevel) parts.push(`Level: ${ctx.verificationLevel}`);
   if (ctx.participationRights !== undefined)
     parts.push(`PR: ${ctx.participationRights}`);
   if (ctx.activeElectionCount !== undefined && ctx.activeElectionCount > 0)
     parts.push(`Active elections: ${ctx.activeElectionCount}`);
+  if (communities.length)
+    parts.push(
+      `Communities (${communities.length}): ${communities
+        .map((c) => c.groupName)
+        .join(', ')}`
+    );
   return `[Context: ${parts.join(' | ')}]`;
+}
+
+/** Returns a lookup from groupId → community name for labelling tool results. */
+function communityNameMap(
+  communities: BarazaCommunity[]
+): (groupId: string | null) => string {
+  const map = new Map(communities.map((c) => [c.groupId, c.groupName]));
+  return (groupId) => (groupId && map.get(groupId)) || 'your community';
 }
 
 export const barazaAiService = new BarazaAiService();

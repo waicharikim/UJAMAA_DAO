@@ -165,7 +165,8 @@ Completion + quiz → Impact Points + small PR bonus.
 
 - **Layer-2 Ethereum** (Base or Polygon zkEVM) for on-chain components
 - **Hybrid execution**: on-chain governance, treasury, token balances; off-chain UX, discovery, education
-- **Embedded wallets** + mobile-first onboarding
+- **AI deliberation layer (advisory, never decides)**: a multi-agent council stress-tests proposals *before* a community vote (conflict map + readiness score + revision suggestions), plus a neutral-clerk digest of community input. Provider-agnostic (Qwen via DashScope today); the binding step is always the human vote.
+- **Passkey self-custody wallets** (Coinbase Smart Wallet — votes are user-signed, the platform cannot vote on a user's behalf) + gasless transactions + mobile-first onboarding
 - **Backend**: Node.js, Express, Prisma, BullMQ, Redis
 - **Frontend**: responsive web (future native apps)
 

@@ -24,13 +24,17 @@ const require = createRequire(import.meta.url);
 let prAbi: any[] | null = null;
 let utAbi: any[] | null = null;
 let govAbi: any[] | null = null;
+let treasuryAbi: any[] | null = null;
+let projectRegistryAbi: any[] | null = null;
 
 function loadAbis(): void {
-  if (prAbi && utAbi && govAbi) return;
+  if (prAbi && utAbi && govAbi && treasuryAbi && projectRegistryAbi) return;
   try {
     prAbi = require('./abis/PrToken.json').abi;
     utAbi = require('./abis/UtToken.json').abi;
     govAbi = require('./abis/GovernanceVoting.json').abi;
+    treasuryAbi = require('./abis/GroupTreasury.json').abi;
+    projectRegistryAbi = require('./abis/ProjectRegistry.json').abi;
   } catch (err) {
     logger.warn(
       { err },
@@ -157,6 +161,58 @@ export function getGovernanceContract(): ethers.Contract | null {
     logger.warn(
       { err },
       '[Blockchain] Failed to instantiate GovernanceVoting contract'
+    );
+    return null;
+  }
+}
+
+/**
+ * Returns a connected GroupTreasury (anchor) contract instance, or null if not
+ * configured. Dormant until TREASURY_CONTRACT_ADDRESS + a real MINTER_PRIVATE_KEY
+ * are set on the worker — exactly like getGovernanceContract.
+ */
+export function getTreasuryContract(): ethers.Contract | null {
+  loadAbis();
+  if (!treasuryAbi) return null;
+
+  const treasuryAddress = process.env.TREASURY_CONTRACT_ADDRESS;
+  if (!treasuryAddress) return null;
+
+  const connection = getSignerAndProvider();
+  if (!connection) return null;
+
+  try {
+    return new ethers.Contract(treasuryAddress, treasuryAbi, connection.signer);
+  } catch (err) {
+    logger.warn(
+      { err },
+      '[Blockchain] Failed to instantiate GroupTreasury contract'
+    );
+    return null;
+  }
+}
+
+/**
+ * Returns a connected ProjectRegistry (anchor) contract instance, or null if not
+ * configured. Dormant until PROJECT_REGISTRY_ADDRESS + a real MINTER_PRIVATE_KEY
+ * are set on the worker — exactly like getTreasuryContract / getGovernanceContract.
+ */
+export function getProjectRegistryContract(): ethers.Contract | null {
+  loadAbis();
+  if (!projectRegistryAbi) return null;
+
+  const address = process.env.PROJECT_REGISTRY_ADDRESS;
+  if (!address) return null;
+
+  const connection = getSignerAndProvider();
+  if (!connection) return null;
+
+  try {
+    return new ethers.Contract(address, projectRegistryAbi, connection.signer);
+  } catch (err) {
+    logger.warn(
+      { err },
+      '[Blockchain] Failed to instantiate ProjectRegistry contract'
     );
     return null;
   }
