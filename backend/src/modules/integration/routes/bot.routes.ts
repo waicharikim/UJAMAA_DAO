@@ -26,7 +26,9 @@ import {
   scheduleSessionHttp,
   openSessionHttp,
   closeSessionHttp,
+  askBaraza,
 } from '../controllers/bot.controller.js';
+import { aiChatRateLimit } from '../../../core/middleware/rateLimiter.js';
 
 const router = Router();
 
@@ -74,6 +76,22 @@ router.post(
 );
 
 router.get('/baraza-groups', authenticate, getBarazaGroups);
+
+// ─────────────────────────────────────────────
+// In-app Baraza assistant (web chat) — signed-in users only
+// ─────────────────────────────────────────────
+
+const askBarazaSchema = z.object({
+  message: z.string().trim().min(1).max(2000),
+});
+
+router.post(
+  '/baraza/ask',
+  authenticate,
+  aiChatRateLimit(),
+  validateRequest({ schema: askBarazaSchema, target: 'body' }),
+  askBaraza
+);
 
 router.get(
   '/baraza-groups/all',

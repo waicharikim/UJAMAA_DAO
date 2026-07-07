@@ -410,6 +410,116 @@ async function resolveUserCommunities(
 }
 
 // ─────────────────────────────────────────────
+// Web chat (in-app Baraza assistant)
+// ─────────────────────────────────────────────
+
+/**
+ * POST /integration/baraza/ask — the Baraza Q&A assistant embedded in the web
+ * app. Same brain as the Telegram bot (`barazaAiService.reply`), but the user
+ * is identified from the JWT rather than a Telegram messaging profile, so the
+ * assistant reasons over ALL of the signed-in member's communities (their
+ * system-group location chain + every voluntary group), exactly like a DM.
+ *
+ * The conversation thread is keyed `web:{userId}` so it's isolated from the
+ * member's Telegram threads and continuous across turns in the widget.
+ */
+export async function askBaraza(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const user = (req as any).user;
+    const userId: string = user.userId;
+    const message: string = req.body.message;
+
+    if (!barazaAiService.isAvailable) {
+      sendSuccess(res, {
+        answer:
+          'The Baraza assistant is not available right now. Please try again later.',
+        available: false,
+      });
+      return;
+    }
+
+    const communities = await resolveWebUserCommunities(userId);
+    const groupIds = communities.map((c) => c.groupId);
+    const userContext = await resolveWebUserContext(userId, groupIds);
+    const answer = await barazaAiService.reply(
+      message,
+      userContext,
+      communities,
+      `web:${userId}`
+    );
+    sendSuccess(res, { answer, available: true });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Every community the signed-in user actively belongs to — all their system
+ * groups (ward/constituency/county/national, primary + secondary) AND all
+ * voluntary groups. Web equivalent of `resolveUserCommunities` (which starts
+ * from a Telegram profile); here the userId comes straight from the JWT.
+ */
+async function resolveWebUserCommunities(
+  userId: string
+): Promise<{ groupId: string; groupName: string }[]> {
+  const memberships = await prisma.groupMember.findMany({
+    where: { userId, active: true },
+    select: { group: { select: { id: true, name: true } } },
+    orderBy: { joinedAt: 'desc' },
+  });
+  return memberships.map((m) => ({
+    groupId: m.group.id,
+    groupName: m.group.name,
+  }));
+}
+
+/** Web equivalent of `resolveUserContext`, keyed by the authenticated userId. */
+async function resolveWebUserContext(
+  userId: string,
+  groupIds: string[] = []
+): Promise<{
+  userId: string | null;
+  displayName: string;
+  ward?: string;
+  verificationLevel?: string;
+  participationRights?: number;
+  activeElectionCount?: number;
+}> {
+  const [user, activeElectionCount] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        name: true,
+        verificationLevel: true,
+        participationRights: true,
+        primaryWard: { select: { name: true } },
+      },
+    }),
+    groupIds.length
+      ? prisma.election.count({
+          where: {
+            groupId: { in: groupIds },
+            status: { in: ['NOMINATIONS_OPEN', 'VOTING_OPEN'] },
+          },
+        })
+      : Promise.resolve(0),
+  ]);
+
+  return {
+    userId,
+    displayName: user?.name ?? 'Member',
+    ward: user?.primaryWard?.name,
+    verificationLevel: user?.verificationLevel ?? undefined,
+    participationRights: user?.participationRights ?? undefined,
+    activeElectionCount,
+  };
+}
+
+// ─────────────────────────────────────────────
 // Telegram webhook
 // ─────────────────────────────────────────────
 

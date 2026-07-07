@@ -293,6 +293,27 @@ export function publicRateLimit() {
 }
 
 /**
+ * AI chat rate limit for the in-app Baraza assistant.
+ * 30 requests per 15 minutes, keyed by the authenticated userId (falls back to
+ * the request fingerprint if unauthenticated). Guards the managed LLM quota —
+ * each turn is a metered inference call. Must run AFTER `authenticate`.
+ */
+export function aiChatRateLimit() {
+  return buildRateLimiter({
+    windowMs: 15 * 60 * 1000,
+    max: 30,
+    message: 'Too many messages to the assistant — please slow down',
+    keyPrefix: 'ai-chat',
+    keyGenerator: (req: Request) => {
+      const userId = (req as any).user?.userId;
+      return userId
+        ? `ai-chat:${userId}`
+        : `ai-chat:${generateServerFingerprint(req)}`;
+    },
+  });
+}
+
+/**
  * Global rate limit (all requests combined)
  * 10,000 requests per minute across all users
  */

@@ -831,6 +831,14 @@ export const integrationApi = {
       `/integration/baraza-groups/${barazaGroupId}/sessions/close`,
       { method: "POST", body: JSON.stringify({}) }
     ),
+
+  /** Ask the in-app Baraza assistant (signed-in users). Reasons over all the
+   *  user's communities; conversation is server-threaded per user. */
+  askBaraza: (message: string) =>
+    apiFetch<{ answer: string; available: boolean }>("/integration/baraza/ask", {
+      method: "POST",
+      body: JSON.stringify({ message }),
+    }),
 }
 
 // ─────────────────────────────────────────────────────────
