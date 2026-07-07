@@ -1,39 +1,12 @@
 import Link from "next/link"
-import { ArrowLeft, ArrowRight, Coins, Users, Vote, ShieldCheck } from "lucide-react"
+import { ArrowLeft, ArrowRight } from "lucide-react"
 
-// ── Nguzo Saba ─────────────────────────────────────────────────────────────────
-
-const NGUZO_SABA = [
-  { swahili: "Umoja",        english: "Unity",                       meaning: "Strive for and maintain unity in the family, community, nation, and race." },
-  { swahili: "Kujitambua",   english: "Self-Determination",          meaning: "Define ourselves, name ourselves, create for ourselves, and speak for ourselves." },
-  { swahili: "Haki",         english: "Justice & Rights",                meaning: "Uphold justice and the rights of every member of our community, holding ourselves accountable to one another." },
-  { swahili: "Ujamaa",       english: "Cooperative Economics",       meaning: "Build and maintain our own stores, shops and businesses and profit from them together." },
-  { swahili: "Nia",          english: "Purpose",                     meaning: "Make our collective vocation the building and developing of our community." },
-  { swahili: "Ubunifu",      english: "Creativity",                  meaning: "Do always as much as we can, in the way we can, in order to leave our community more beautiful." },
-  { swahili: "Imani",        english: "Faith",                       meaning: "Believe with all our heart in our people, our parents, our teachers, our leaders, and the righteousness of our struggle." },
-]
-
-// ── Philosophy pillars ─────────────────────────────────────────────────────────
-
-const PILLARS = [
-  {
-    label: "Govern Together",
-    icon: Vote,
-    description: "Every member earns Participation Rights through contribution — not wealth. Governance is weighted by civic work, not token holdings.",
-  },
-  {
-    label: "Work Together",
-    icon: Users,
-    description: "Skills, labour, and goods flow through a community marketplace — discovery-first, trust-based, anchored in verified identity.",
-  },
-  {
-    label: "Prosper Together",
-    icon: Coins,
-    description: "Community treasury managed on-chain, funded by contributions, and unlocked by collective decision — every shilling traceable to outcomes.",
-  },
-]
-
-// ── Page ───────────────────────────────────────────────────────────────────────
+// ── About UjamaaDAO ─────────────────────────────────────────────────────────────
+// This page is about *us*, in *our* context: what UjamaaDAO is, for the Kenyan
+// communities that already run chamas, harambees and welfare groups. Ujamaa the
+// word and Nyerere the source are roots we credit — not the subject. The landing
+// page carries the product story (how it works, tokens, use-cases); this page
+// carries the why.
 
 export default function AboutPage() {
   return (
@@ -61,14 +34,15 @@ export default function AboutPage() {
           className="font-serif text-5xl md:text-7xl font-bold leading-tight mb-6"
           style={{ color: "#F7F2E8" }}
         >
-          The word that changed<br className="hidden md:block" /> how Africa thinks about{" "}
-          <span style={{ color: "#D4911E" }}>building together.</span>
+          <em>Ujamaa</em> means{" "}
+          <span style={{ color: "#D4911E" }}>familyhood.</span>
         </h1>
 
-        <p className="max-w-2xl text-lg leading-relaxed" style={{ color: "rgba(247,242,232,0.65)" }}>
-          <em>Ujamaa</em> — Swahili for familyhood, cooperative economics, shared prosperity.
-          Julius Nyerere named his governing philosophy after it in 1967. We named our protocol after
-          what that philosophy was always trying to become.
+        <p className="max-w-2xl text-lg leading-relaxed" style={{ color: "rgba(247,242,232,0.7)" }}>
+          It&apos;s the name we already give — in the chama, the harambee, the welfare group — to
+          people pooling what they have because they&apos;re answerable to each other. UjamaaDAO
+          gives that instinct the tools it never had: a way for a community to decide together, hold
+          money together, and build together, on a record no one can quietly rewrite.
         </p>
       </section>
 
@@ -77,28 +51,97 @@ export default function AboutPage() {
         <div className="h-px" style={{ background: "rgba(212,145,30,0.25)" }} />
       </div>
 
-      {/* ── What Ujamaa means ────────────────────────────────── */}
+      {/* ── You already live this ────────────────────────────── */}
       <section className="mx-auto max-w-5xl px-6 py-20">
         <div className="grid lg:grid-cols-2 gap-12 items-start">
           <div>
             <p className="mb-3 text-xs tracking-[0.25em] uppercase" style={{ color: "rgba(212,145,30,0.7)" }}>
-              The Philosophy
+              You already live this
             </p>
             <h2 className="font-serif text-4xl font-bold mb-6" style={{ color: "#F7F2E8" }}>
-              Africa has always known how to build together.
+              Cooperation isn&apos;t new here. The tools are.
             </h2>
             <div className="space-y-4 text-base leading-relaxed" style={{ color: "rgba(247,242,232,0.65)" }}>
               <p>
-                Before there were apps, there were <em>chama</em> — rotating savings groups in Kenya where
-                neighbours pooled money and took turns investing. Before there were DAOs, there was{" "}
-                <em>harambee</em> — the national tradition of coming together to build schools, clinics,
-                roads, and futures. Before there was DeFi, there were <em>tontines</em> and <em>stokvel</em>{" "}
-                networks stretching across West and Southern Africa.
+                Down every road in Kenya there is a group already doing this. The{" "}
+                <em>chama</em> that meets on Saturdays and takes turns lifting each member.
+                The <em>harambee</em> that raises a hospital bill or a school roof in an afternoon.
+                The welfare group that buries its own and celebrates its own. Money pooled, risk
+                shared, decisions made together — because the people are, in the fullest sense of
+                the word, <em>jamaa</em>: family.
               </p>
               <p>
-                These systems worked not because of smart contracts, but because of trust, obligation,
-                and shared stakes in each other's outcomes. UjamaaDAO is an attempt to encode that
-                same logic — to make it transparent, scalable, and unforgeable.
+                None of it needed a blockchain to exist. What it has always needed is something
+                harder to come by — a way to keep everyone honest without asking anyone to simply
+                trust that the treasurer wrote the number down right.
+              </p>
+            </div>
+          </div>
+
+          <div
+            className="rounded-2xl p-8"
+            style={{
+              background: "rgba(247,242,232,0.04)",
+              border: "1px solid rgba(212,145,30,0.22)",
+            }}
+          >
+            <p className="font-mono text-xs tracking-widest uppercase mb-4" style={{ color: "rgba(212,145,30,0.6)" }}>
+              The word
+            </p>
+            <div className="space-y-5">
+              <div>
+                <span className="font-serif text-3xl font-bold" style={{ color: "#D4911E" }}>jamaa</span>
+                <p className="mt-1 text-sm" style={{ color: "rgba(247,242,232,0.55)" }}>
+                  family · kin · the people you answer to
+                </p>
+              </div>
+              <div className="h-px" style={{ background: "rgba(247,242,232,0.1)" }} />
+              <div>
+                <span className="font-mono text-sm" style={{ color: "rgba(247,242,232,0.5)" }}>u-</span>
+                <span className="font-serif text-xl" style={{ color: "rgba(247,242,232,0.7)" }}> + jamaa</span>
+                <p className="mt-1 text-sm" style={{ color: "rgba(247,242,232,0.55)" }}>
+                  the prefix that turns a thing into a way of being — &ldquo;-hood&rdquo;
+                </p>
+              </div>
+              <div className="h-px" style={{ background: "rgba(247,242,232,0.1)" }} />
+              <div>
+                <span className="font-serif text-3xl font-bold" style={{ color: "#F7F2E8" }}>ujamaa</span>
+                <p className="mt-1 text-sm" style={{ color: "rgba(247,242,232,0.55)" }}>
+                  familyhood — being one another&apos;s people, and acting like it
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Amber rule ───────────────────────────────────────── */}
+      <div className="mx-auto max-w-5xl px-6">
+        <div className="h-px" style={{ background: "rgba(212,145,30,0.25)" }} />
+      </div>
+
+      {/* ── Where the word gets its weight (Nyerere, one beat) ── */}
+      <section className="mx-auto max-w-5xl px-6 py-20">
+        <div className="grid lg:grid-cols-2 gap-12 items-start">
+          <div>
+            <p className="mb-3 text-xs tracking-[0.25em] uppercase" style={{ color: "rgba(212,145,30,0.7)" }}>
+              Where the name comes from
+            </p>
+            <h2 className="font-serif text-4xl font-bold mb-6" style={{ color: "#F7F2E8" }}>
+              A whole country was once built on this word.
+            </h2>
+            <div className="space-y-4 text-base leading-relaxed" style={{ color: "rgba(247,242,232,0.65)" }}>
+              <p>
+                We take the name from Julius Nyerere, who did something bold with an everyday word:
+                he made <em>ujamaa</em> the founding idea of a nation. His argument was that Africa
+                did not need to import socialism or manufacture an enemy class — the model was
+                already here, in the extended family, where you share because the people are yours.
+              </p>
+              <p>
+                The state programme that followed was flawed, and often forced. But the idea outlived
+                the policy. We are not reviving a government plan. We are keeping the part that was
+                always true — and building it the way it should have been built: by choice, from the
+                ground up, one community at a time.
               </p>
             </div>
           </div>
@@ -110,14 +153,10 @@ export default function AboutPage() {
               border: "1px solid rgba(212,145,30,0.22)",
             }}
           >
-            <p
-              className="font-serif text-xl leading-relaxed mb-6"
-              style={{ color: "rgba(247,242,232,0.85)" }}
-            >
+            <p className="font-serif text-xl leading-relaxed mb-6" style={{ color: "rgba(247,242,232,0.85)" }}>
               &ldquo;The foundation and the objective of African socialism is the extended family.
-              The true African socialist does not look on one class of men as his brethren and
-              another as his natural enemies. He regards all men as his brethren — as members,
-              together, of an ever-extending family.&rdquo;
+              The true African socialist regards all men as his brethren — as members, together,
+              of an ever-extending family.&rdquo;
             </p>
             <footer>
               <span className="text-sm font-medium" style={{ color: "#D4911E" }}>
@@ -137,193 +176,74 @@ export default function AboutPage() {
         <div className="h-px" style={{ background: "rgba(212,145,30,0.25)" }} />
       </div>
 
-      {/* ── Three pillars ────────────────────────────────────── */}
+      {/* ── Why UjamaaDAO / why now ──────────────────────────── */}
       <section className="mx-auto max-w-5xl px-6 py-20">
-        <p className="mb-3 text-xs tracking-[0.25em] uppercase text-center" style={{ color: "rgba(212,145,30,0.7)" }}>
-          What We&apos;re Building
-        </p>
-        <h2 className="font-serif text-4xl font-bold text-center mb-12" style={{ color: "#F7F2E8" }}>
-          A platform for cooperative ownership.
-        </h2>
-
-        <div className="grid md:grid-cols-3 gap-6">
-          {PILLARS.map((pillar) => {
-            const Icon = pillar.icon
-            return (
-              <div
-                key={pillar.label}
-                className="rounded-2xl p-7"
-                style={{
-                  background: "rgba(247,242,232,0.04)",
-                  border: "1px solid rgba(212,145,30,0.18)",
-                }}
-              >
-                <div
-                  className="mb-5 flex h-10 w-10 items-center justify-center rounded-xl"
-                  style={{ background: "rgba(212,145,30,0.15)" }}
-                >
-                  <Icon size={20} style={{ color: "#D4911E" }} />
-                </div>
-                <h3 className="font-serif text-xl font-bold mb-3" style={{ color: "#F7F2E8" }}>
-                  {pillar.label}
-                </h3>
-                <p className="text-sm leading-relaxed" style={{ color: "rgba(247,242,232,0.55)" }}>
-                  {pillar.description}
-                </p>
-              </div>
-            )
-          })}
-        </div>
-      </section>
-
-      {/* ── Amber rule ───────────────────────────────────────── */}
-      <div className="mx-auto max-w-5xl px-6">
-        <div className="h-px" style={{ background: "rgba(212,145,30,0.25)" }} />
-      </div>
-
-      {/* ── Nguzo Saba ───────────────────────────────────────── */}
-      <section className="mx-auto max-w-5xl px-6 py-20">
-        <p className="mb-3 text-xs tracking-[0.25em] uppercase text-center" style={{ color: "rgba(212,145,30,0.7)" }}>
-          Our Foundation
-        </p>
-        <h2 className="font-serif text-4xl font-bold text-center mb-4" style={{ color: "#F7F2E8" }}>
-          Nguzo Saba — The Seven Principles
-        </h2>
-        <p className="text-center mb-12 max-w-xl mx-auto text-sm" style={{ color: "rgba(247,242,232,0.45)" }}>
-          Every design decision, governance rule, and economic mechanism in UjamaaDAO is tested
-          against these seven principles. They are the constitution behind the code.
-        </p>
-
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {NGUZO_SABA.map((principle, i) => (
-            <div
-              key={principle.swahili}
-              className="rounded-2xl p-6"
-              style={{
-                background: "rgba(247,242,232,0.03)",
-                border: "1px solid rgba(247,242,232,0.07)",
-              }}
-            >
-              <div className="flex items-baseline gap-3 mb-3">
-                <span
-                  className="text-xs font-mono"
-                  style={{ color: "rgba(212,145,30,0.5)" }}
-                >
-                  {String(i + 1).padStart(2, "0")}
-                </span>
-                <span className="font-serif text-lg font-bold" style={{ color: "#D4911E" }}>
-                  {principle.swahili}
-                </span>
-              </div>
-              <p className="text-xs font-medium uppercase tracking-widest mb-2" style={{ color: "rgba(247,242,232,0.35)" }}>
-                {principle.english}
-              </p>
-              <p className="text-sm leading-relaxed" style={{ color: "rgba(247,242,232,0.5)" }}>
-                {principle.meaning}
-              </p>
-            </div>
-          ))}
-
-          {/* The 7th principle gets extra width on 3-col grid */}
-          {/* (7 items on 3-col: 2 rows of 3 + 1 lone item — centre it) */}
-        </div>
-      </section>
-
-      {/* ── Amber rule ───────────────────────────────────────── */}
-      <div className="mx-auto max-w-5xl px-6">
-        <div className="h-px" style={{ background: "rgba(212,145,30,0.25)" }} />
-      </div>
-
-      {/* ── Protocol brief ───────────────────────────────────── */}
-      <section className="mx-auto max-w-5xl px-6 py-20">
-        <div className="grid lg:grid-cols-2 gap-12 items-center">
+        <div className="grid lg:grid-cols-2 gap-12 items-start">
           <div>
             <p className="mb-3 text-xs tracking-[0.25em] uppercase" style={{ color: "rgba(212,145,30,0.7)" }}>
-              The Protocol
+              Why UjamaaDAO
             </p>
             <h2 className="font-serif text-4xl font-bold mb-6" style={{ color: "#F7F2E8" }}>
-              Rights earned through contribution, not capital.
+              Every chama runs on trust — until it doesn&apos;t.
             </h2>
             <div className="space-y-4 text-base leading-relaxed" style={{ color: "rgba(247,242,232,0.65)" }}>
               <p>
-                UjamaaDAO uses a hybrid on-chain / off-chain architecture. Governance and
-                economic rights live on-chain (Base L2) where they are permanent and
-                unforgeable. Community coordination, communication, and discovery stay
-                off-chain where they are fast and free.
+                The oldest weak point in cooperation is not the idea — it&apos;s the custodian. The
+                treasurer holds the cashbox. The chairlady keeps the book. The harambee committee
+                counts the money out of sight. It works right up until it doesn&apos;t: a figure that
+                doesn&apos;t add up, a contribution nobody can prove, a group that quietly falls apart
+                over who was owed what.
               </p>
               <p>
-                Participation Rights (PR) are soulbound — you earn them by contributing and
-                you can&apos;t sell or transfer them. Impact Points are your reputation score.
-                The Community Treasury is governed by PR holders, not token speculators.
+                UjamaaDAO moves the trust off the person and onto the record. The community holds its
+                own funds together, every decision is a binding vote, and the ledger of who gave,
+                who decided, and where it went can&apos;t be edited after the fact — not by a
+                chairman, not by us. The obligations of family, kept by a record that never forgets.
               </p>
             </div>
           </div>
 
-          <div className="space-y-4">
-            {[
-              {
-                icon: ShieldCheck,
-                label: "Participation Rights",
-                tag: "Soulbound · Non-transferable",
-                desc: "Earned through verified activity. Governs your voting weight. Cannot be bought.",
-              },
-              {
-                icon: Vote,
-                label: "Impact Points",
-                tag: "Reputation · Non-transferable",
-                desc: "Your track record of collective contribution — visible to the community, never for sale.",
-              },
-              {
-                icon: Coins,
-                label: "Community Treasury",
-                tag: "On-chain · Multi-sig",
-                desc: "Funded by contributions and community income. Spent only through governance proposals with quorum.",
-              },
-            ].map((item) => {
-              const Icon = item.icon
-              return (
-                <div
-                  key={item.label}
-                  className="flex items-start gap-4 rounded-xl p-5"
-                  style={{
-                    background: "rgba(247,242,232,0.04)",
-                    border: "1px solid rgba(56,160,99,0.2)",
-                  }}
-                >
-                  <div
-                    className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
-                    style={{ background: "rgba(56,160,99,0.15)" }}
-                  >
-                    <Icon size={17} style={{ color: "#38A063" }} />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-medium text-sm" style={{ color: "#F7F2E8" }}>
-                        {item.label}
-                      </span>
-                      <span
-                        className="text-[10px] tracking-wider uppercase rounded-full px-2 py-0.5"
-                        style={{
-                          color: "rgba(56,160,99,0.8)",
-                          background: "rgba(56,160,99,0.12)",
-                        }}
-                      >
-                        {item.tag}
-                      </span>
-                    </div>
-                    <p className="text-sm" style={{ color: "rgba(247,242,232,0.5)" }}>
-                      {item.desc}
-                    </p>
-                  </div>
-                </div>
-              )
-            })}
+          <div
+            className="rounded-2xl p-8"
+            style={{
+              background: "rgba(56,160,99,0.08)",
+              border: "1px solid rgba(56,160,99,0.2)",
+            }}
+          >
+            <p className="font-mono text-xs tracking-widest uppercase mb-5" style={{ color: "rgba(56,160,99,0.75)" }}>
+              What changes
+            </p>
+            <div className="space-y-5 text-sm leading-relaxed">
+              <div>
+                <p className="font-medium mb-1" style={{ color: "#F7F2E8" }}>The old way — trust the person</p>
+                <p style={{ color: "rgba(247,242,232,0.5)" }}>
+                  The cashbox, the book, the committee. Everyone hopes the custodian does right, and
+                  the group breaks when that hope does.
+                </p>
+              </div>
+              <div className="h-px" style={{ background: "rgba(56,160,99,0.18)" }} />
+              <div>
+                <p className="font-medium mb-1" style={{ color: "#F7F2E8" }}>The new way — trust the record</p>
+                <p style={{ color: "rgba(247,242,232,0.5)" }}>
+                  Funds the community controls together, votes that bind, and a ledger no single
+                  person — including us — can rewrite.
+                </p>
+              </div>
+              <div className="h-px" style={{ background: "rgba(56,160,99,0.18)" }} />
+              <div>
+                <p className="font-medium mb-1" style={{ color: "#F7F2E8" }}>Always — real money, real rails</p>
+                <p style={{ color: "rgba(247,242,232,0.5)" }}>
+                  Contributions move on M-Pesa to accounts the community controls — never
+                  person-to-person, never out of sight.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
       {/* ── CTA ──────────────────────────────────────────────── */}
-      <section className="mx-auto max-w-5xl px-6 pb-24">
+      <section className="mx-auto max-w-5xl px-6 pb-24 pt-4">
         <div
           className="rounded-3xl p-12 text-center"
           style={{
@@ -332,11 +252,11 @@ export default function AboutPage() {
           }}
         >
           <h2 className="font-serif text-4xl font-bold mb-4" style={{ color: "#F7F2E8" }}>
-            Ready to build together?
+            Bring the people you already organise with.
           </h2>
           <p className="mb-8 max-w-md mx-auto text-base" style={{ color: "rgba(247,242,232,0.55)" }}>
-            UjamaaDAO is for people who believe that collective ownership, transparent governance,
-            and mutual obligation are still the most powerful technologies ever invented.
+            You don&apos;t need to be convinced that a community can build together — you already
+            know it. UjamaaDAO just gives your community a record worth trusting.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -369,11 +289,9 @@ export default function AboutPage() {
           <span className="font-serif text-xl font-bold" style={{ color: "rgba(247,242,232,0.25)" }}>
             UjamaaDAO
           </span>
-          <div className="flex flex-wrap gap-4 text-xs" style={{ color: "rgba(247,242,232,0.3)" }}>
-            {NGUZO_SABA.map((p) => (
-              <span key={p.swahili}>{p.swahili}</span>
-            ))}
-          </div>
+          <span className="text-xs tracking-widest uppercase" style={{ color: "rgba(247,242,232,0.3)" }}>
+            Umoja ni nguvu — unity is strength
+          </span>
         </div>
       </div>
 

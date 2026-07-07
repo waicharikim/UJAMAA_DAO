@@ -23,6 +23,8 @@ import {
   Ban,
   Users,
   Globe,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react"
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -709,28 +711,12 @@ function VisionSection() {
           </p>
         </div>
 
-        {/* Community photo break */}
-        <div className="mt-16 relative h-64 md:h-80 w-full overflow-hidden rounded-2xl">
-          <Image
-            src="https://images.unsplash.com/photo-1578662996442-48f60103fc96?auto=format&fit=crop&w=1200&q=75"
-            alt="African community members collaborating"
-            fill
-            sizes="(max-width: 768px) 100vw, 1200px"
-            className="object-cover"
-            priority={false}
-          />
-          <div
-            className="absolute inset-0"
-            style={{
-              background: "linear-gradient(to right, rgba(20,47,34,0.82) 0%, rgba(20,47,34,0.35) 60%, rgba(20,47,34,0.20) 100%)",
-            }}
-          />
-          <div className="absolute inset-0 flex items-center px-8 md:px-12">
-            <blockquote className="max-w-lg font-serif text-xl md:text-2xl font-medium italic leading-relaxed text-cream/90">
-              &ldquo;A people without the knowledge of their past history, origin and culture is like a tree without roots.&rdquo;
-              <footer className="mt-3 text-sm not-italic font-normal text-amber/70">— Marcus Garvey</footer>
-            </blockquote>
-          </div>
+        {/* Pull-quote — Marcus Garvey */}
+        <div className="mt-16 border-l-2 border-amber/40 pl-8 lg:pl-12">
+          <blockquote className="font-serif text-2xl font-medium italic leading-relaxed text-cream/80 lg:text-3xl">
+            &ldquo;A people without the knowledge of their past history, origin and culture is like a tree without roots.&rdquo;
+          </blockquote>
+          <p className="mt-5 text-sm font-medium text-amber/70">— Marcus Garvey</p>
         </div>
 
         {/* Three philosophy pillars */}
@@ -772,18 +758,6 @@ function VisionSection() {
               <p className="text-sm leading-relaxed text-cream/45">{pillar.body}</p>
             </div>
           ))}
-        </div>
-
-        {/* Manifesto quote */}
-        <div className="mt-20 border-l-2 border-amber/40 pl-8 lg:pl-12">
-          <blockquote className="font-serif text-2xl font-medium italic leading-relaxed text-cream/80 lg:text-3xl">
-            &ldquo;Ujamaa means the extended family. It means caring for each other.
-            It means building together. This is not ideology imposed from above.
-            This is what African communities have always done.&rdquo;
-          </blockquote>
-          <p className="mt-5 text-sm font-medium text-amber/70">
-            Inspired by Julius Nyerere&apos;s Arusha Declaration, 1967
-          </p>
         </div>
 
       </div>
@@ -894,6 +868,220 @@ function HowItWorksSection() {
                     {step.description}
                   </p>
                 </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ── See It In Action (proposal walkthrough) ───────────────────────────────────
+//
+// Scrollytelling ported from the draft-v9 landing mockup: as the reader scrolls
+// the beats on the left, the community register on the right fills itself in,
+// row by row, and seals at the end. Two variants — a project and a policy —
+// share one scroll mechanic (mirrors the PROJECT vs POLICY proposal kinds).
+
+type StoryBeat = { n: string; label: string; title: string; body: string; who?: string }
+type ProposalStory = { beats: StoryBeat[]; rows: string[] }
+
+const PROPOSAL_STORIES: Record<"project" | "policy", ProposalStory> = {
+  project: {
+    beats: [
+      { n: "01", label: "Propose", title: "One neighbour names who needs a hand.", body: "On her way to work, Wanjiru passes the children's home that's run low on food and books. She proposes the estate chips in — in two taps, in her own words.", who: "…anyone can start it." },
+      { n: "02", label: "Decide", title: "The community votes — and the vote is binding.", body: "Neighbours talk it over and decide together. 39 verified members vote yes. No chairman's veto, no committee discretion." },
+      { n: "03", label: "Fund", title: "Everyone chips in — by M-Pesa.", body: "KES 48,000 pooled into a treasury no single person controls. Real money on rails you already trust." },
+      { n: "04", label: "Deliver", title: "The gifts are bought and handed over.", body: "Food, mattresses and books — bought together, delivered, and checked by the neighbours who came along." },
+      { n: "05", label: "Sealed", title: "The whole record seals — and can't be rewritten.", body: "Every shilling and every item is on a record no one can quietly change — including us.", who: "…and no line can be erased." },
+    ],
+    rows: ["Children's home support proposed", "39 neighbours voted · binding", "KES 48,000 pooled · M-Pesa", "Food, mattresses, books delivered", "Record sealed — on-chain"],
+  },
+  policy: {
+    beats: [
+      { n: "01", label: "Propose", title: "A member proposes how Ujamaa itself should run.", body: "Wanjiru proposes a rule — every funded project must post its receipts within 30 days — in her own words. No fee, no gatekeeper.", who: "…anyone can shape the rules." },
+      { n: "02", label: "Confirm", title: "Members vote — and the rule is binding.", body: "72 verified members agree it should be the standard. A real decision about how Ujamaa works — not a suggestion that fades." },
+      { n: "03", label: "Record", title: "It goes on the books — a rule, not a project.", body: "Logged as official UjamaaDAO governance everyone can see. No money moves; this is simply how we agree to run things." },
+      { n: "04", label: "Apply", title: "The rule takes effect — for every project after.", body: "From now on the register won't seal a project until its receipts are posted. The change itself is recorded too." },
+      { n: "05", label: "Sealed", title: "The rule seals — and binds us too.", body: "It sits on a record no one can quietly change — including the UjamaaDAO team. We're governed by it as well.", who: "…the makers are bound too." },
+    ],
+    rows: ["Rule proposed — projects must post receipts", "72 members voted · binding", "Logged — UjamaaDAO governance", "In effect for every project after", "Rule sealed — on-chain"],
+  },
+}
+
+const PROPOSAL_STORY_CSS = `
+.ps-book{background:linear-gradient(160deg,#FBF6EC,#F1E7D6)}
+.ps-ok{transition:transform .4s cubic-bezier(.34,1.56,.64,1),background-color .4s,color .4s}
+.ps-ok-on{animation:psPop .5s cubic-bezier(.34,1.56,.64,1)}
+@keyframes psPop{0%{transform:scale(.4)}60%{transform:scale(1.15)}100%{transform:scale(1)}}
+.ps-stamp{display:inline-flex;flex-direction:column;align-items:center;gap:1px;padding:.45rem .8rem;border:2px solid rgba(196,61,40,.55);border-radius:.55rem;color:#C43D28;font-weight:800;font-size:.78rem;letter-spacing:2px;line-height:1;transform:rotate(-6deg) scale(.55);opacity:0;transition:opacity .5s ease,transform .5s cubic-bezier(.34,1.56,.64,1)}
+.ps-stamp small{font-size:.5rem;letter-spacing:.4px;font-weight:600;opacity:.7}
+.ps-stamp-on{opacity:1;transform:rotate(-6deg) scale(1)}
+@media (prefers-reduced-motion: reduce){.ps-ok,.ps-ok-on,.ps-stamp{animation:none!important;transition:none!important}}
+`
+
+function ProposalStorySection() {
+  const [storyKey, setStoryKey] = useState<"project" | "policy">("project")
+  const [active, setActive] = useState(0)
+  const beatRefs = useRef<(HTMLDivElement | null)[]>([])
+
+  const story = PROPOSAL_STORIES[storyKey]
+  const lastIndex = story.beats.length - 1
+
+  useEffect(() => {
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    if (reduce || !("IntersectionObserver" in window)) {
+      setActive(lastIndex)
+      return
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const i = Number((entry.target as HTMLElement).dataset.i)
+            if (!Number.isNaN(i)) setActive(i)
+          }
+        })
+      },
+      { rootMargin: "-45% 0px -45% 0px", threshold: 0 }
+    )
+    beatRefs.current.forEach((el) => el && io.observe(el))
+    return () => io.disconnect()
+  }, [storyKey, lastIndex])
+
+  const sealed = active >= lastIndex
+
+  return (
+    <section id="in-action" className="relative bg-cream py-24 lg:py-32">
+      <div
+        className="pointer-events-none absolute top-0 right-0 left-0 h-px"
+        aria-hidden="true"
+        style={{ background: "linear-gradient(to right, transparent, rgba(212,145,30,0.35), rgba(56,160,99,0.20), transparent)" }}
+      />
+      <style>{PROPOSAL_STORY_CSS}</style>
+
+      <div className="mx-auto max-w-6xl px-5 lg:px-8">
+        <div className="max-w-2xl">
+          <span className="text-[11px] font-semibold uppercase tracking-[3px] text-amber">
+            See It In Action
+          </span>
+          <h2 className="mt-4 font-serif text-4xl font-bold text-chai md:text-5xl">
+            Watch a community
+            <br />
+            act, together
+          </h2>
+          <p className="mt-4 text-base leading-relaxed text-chai/50">
+            Scroll to follow one decision — from a single neighbour&apos;s idea to a sealed,
+            unforgeable record that no one, not even us, can quietly rewrite.
+          </p>
+        </div>
+
+        {/* Story toggle — a project or a policy, same mechanic */}
+        <div
+          className="mt-8 inline-flex rounded-full border border-chai/15 bg-chai/[0.04] p-1"
+          role="tablist"
+          aria-label="Choose an example"
+        >
+          {([["project", "A project · a children's home"], ["policy", "A policy · how Ujamaa runs"]] as const).map(
+            ([key, label]) => (
+              <button
+                key={key}
+                role="tab"
+                aria-selected={storyKey === key}
+                onClick={() => { setStoryKey(key); setActive(0) }}
+                className={cn(
+                  "rounded-full px-4 py-2 text-[12px] font-semibold transition-all sm:text-[13px]",
+                  storyKey === key ? "bg-amber text-tea-dark shadow-sm" : "text-chai/50 hover:text-chai"
+                )}
+              >
+                {label}
+              </button>
+            )
+          )}
+        </div>
+
+        <div className="mt-12 grid gap-8 lg:grid-cols-[1fr_minmax(300px,400px)] lg:gap-16">
+          {/* Register — DOM-first so it sits on top on mobile, on the right on desktop */}
+          <div className="lg:col-start-2 lg:row-start-1">
+            <div className="sticky top-20 lg:top-24">
+              <div className="ps-book rounded-2xl border border-chai/10 p-6 shadow-xl">
+                <div className="flex items-center justify-between border-b border-black/10 pb-3">
+                  <h3 className="font-mono text-[11px] font-bold uppercase tracking-[1.5px] text-tea-dark/70">
+                    Community Register — Kayole
+                  </h3>
+                  <span className="font-mono text-[10px] text-tea-dark/40">no. 001</span>
+                </div>
+
+                <div className="mt-1 divide-y divide-black/[0.06]">
+                  {story.rows.map((row, k) => {
+                    const shown = k <= active
+                    return (
+                      <div
+                        key={k}
+                        className="flex items-center gap-3 py-3 transition-opacity duration-500"
+                        style={{ opacity: shown ? 1 : 0.3 }}
+                      >
+                        <span className="w-5 font-mono text-[11px] text-tea-dark/40">
+                          {String(k + 1).padStart(2, "0")}
+                        </span>
+                        <span className="flex-1 text-[13px] leading-snug text-tea-dark/80">{row}</span>
+                        <span
+                          className={cn(
+                            "ps-ok flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold",
+                            shown && "ps-ok-on"
+                          )}
+                          style={{
+                            backgroundColor: shown ? "#38A063" : "rgba(0,0,0,0.06)",
+                            color: shown ? "#ffffff" : "transparent",
+                          }}
+                        >
+                          ✓
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <div className="mt-4 flex items-center gap-4 border-t border-black/10 pt-4">
+                  <div className={cn("ps-stamp", sealed && "ps-stamp-on")}>
+                    SEALED
+                    <small>ON-CHAIN · CANNOT EDIT</small>
+                  </div>
+                  <p
+                    className="flex-1 text-[11px] leading-snug text-tea-dark/45"
+                    style={{ opacity: sealed ? 1 : 0, transition: "opacity .6s ease" }}
+                  >
+                    Anchored on-chain — the record can&apos;t be changed after the fact, including by us.
+                  </p>
+                </div>
+              </div>
+              <p className="mt-3 pl-1 text-[11px] text-chai/35">
+                * Designed to; activates at public-chain deploy.
+              </p>
+            </div>
+          </div>
+
+          {/* Beats — scroll drives the register */}
+          <div className="lg:col-start-1 lg:row-start-1">
+            {story.beats.map((beat, i) => (
+              <div
+                key={i}
+                data-i={i}
+                ref={(el) => { beatRefs.current[i] = el }}
+                className="flex min-h-[60vh] flex-col justify-center transition-opacity duration-300"
+                style={{ opacity: active === i ? 1 : 0.4 }}
+              >
+                <div className="font-mono text-xs font-bold uppercase tracking-[2px] text-amber">
+                  {beat.n} · {beat.label}
+                </div>
+                <h3 className="mt-3 max-w-md font-serif text-2xl font-bold leading-snug text-chai md:text-3xl">
+                  {beat.title}
+                </h3>
+                <p className="mt-4 max-w-md text-base leading-relaxed text-chai/55">{beat.body}</p>
+                {beat.who && (
+                  <p className="mt-4 font-serif text-sm italic text-amber/80">{beat.who} ✎</p>
+                )}
               </div>
             ))}
           </div>
@@ -1037,6 +1225,141 @@ function UseCasesSection() {
           {showcases.map((item) => (
             <UseCaseCard key={item.title} item={item} />
           ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ── History quote break (photo + Nyerere manifesto) ──────────────────────────
+//
+// A visual + quote break after "What communities are building", mirroring the
+// Garvey photo→pull-quote pattern in the Vision section. Photo is grayscaled for
+// the historical B&W feel; TODO swap src for a real independence/Ujamaa-era image
+// in /public/images once sourced.
+
+const HERITAGE_SLIDES = [
+  {
+    img: "/images/nyerere-ujamaa.jpg",
+    alt: "Julius Nyerere, who founded Tanzania on the philosophy of Ujamaa",
+    quote:
+      "Ujamaa means the extended family. It means caring for each other. It means building together. This is not ideology imposed from above. This is what African communities have always done.",
+    cite: "Inspired by Julius Nyerere’s Arusha Declaration, 1967",
+    credit: "Nationaal Archief · CC0",
+  },
+  {
+    img: "/images/maasai-gathering.jpg",
+    alt: "A community gathering under acacia trees in Kajiado County, Kenya",
+    quote:
+      "Umoja ni nguvu, utengano ni udhaifu — unity is strength; division is weakness.",
+    cite: "Swahili proverb",
+    credit: "Photo: Mark Myles Mugambi · CC BY-SA 4.0",
+  },
+  {
+    img: "/images/maasai-walking.jpg",
+    alt: "Community members walking together at a gathering in Kajiado County, Kenya",
+    quote: "If you want to go fast, go alone. If you want to go far, go together.",
+    cite: "African proverb",
+    credit: "Photo: Mark Myles Mugambi · CC BY-SA 4.0",
+  },
+]
+
+function HeritageQuoteSlider() {
+  const [index, setIndex] = useState(0)
+  const [paused, setPaused] = useState(false)
+  const count = HERITAGE_SLIDES.length
+
+  // auto-advance (respects reduced-motion + pauses on hover/focus)
+  useEffect(() => {
+    if (paused) return
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
+    const t = setInterval(() => setIndex((p) => (p + 1) % count), 6500)
+    return () => clearInterval(t)
+  }, [paused, count])
+
+  const go = (delta: number) => setIndex((p) => (p + delta + count) % count)
+  const slide = HERITAGE_SLIDES[index]
+
+  return (
+    <section className="relative bg-tea-dark py-24 lg:py-32">
+      <div
+        className="pointer-events-none absolute top-0 right-0 left-0 h-px"
+        aria-hidden="true"
+        style={{ background: "linear-gradient(to right, transparent, rgba(212,145,30,0.35), rgba(56,160,99,0.20), transparent)" }}
+      />
+      <div
+        className="mx-auto max-w-6xl px-5 lg:px-8"
+        onMouseEnter={() => setPaused(true)}
+        onMouseLeave={() => setPaused(false)}
+        onFocusCapture={() => setPaused(true)}
+        onBlurCapture={() => setPaused(false)}
+      >
+        {/* Photo — crossfading stack */}
+        <div className="relative h-72 w-full overflow-hidden rounded-2xl ring-1 ring-cream/10 md:h-96">
+          {HERITAGE_SLIDES.map((s, k) => (
+            <Image
+              key={s.img}
+              src={s.img}
+              alt={s.alt}
+              fill
+              sizes="(max-width: 768px) 100vw, 1200px"
+              priority={k === 0}
+              className={cn(
+                "object-cover object-center grayscale transition-opacity duration-700",
+                k === index ? "opacity-100" : "opacity-0"
+              )}
+            />
+          ))}
+          <div
+            className="absolute inset-0"
+            aria-hidden="true"
+            style={{ background: "linear-gradient(to top, rgba(10,31,20,0.55), transparent 55%)" }}
+          />
+          <p className="absolute bottom-2 right-3 z-10 text-[10px] text-cream/40">{slide.credit}</p>
+        </div>
+
+        {/* Quote + slider controls */}
+        <div className="mt-10 flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
+          <div className="border-l-2 border-amber/40 pl-8 lg:pl-12 md:max-w-3xl" aria-live="polite">
+            <blockquote className="font-serif text-2xl font-medium italic leading-relaxed text-cream/80 lg:text-3xl">
+              &ldquo;{slide.quote}&rdquo;
+            </blockquote>
+            <p className="mt-5 text-sm font-medium text-amber/70">{slide.cite}</p>
+          </div>
+
+          <div className="flex items-center gap-5 pl-8 md:pl-0">
+            <div className="flex items-center gap-2">
+              {HERITAGE_SLIDES.map((_, k) => (
+                <button
+                  key={k}
+                  onClick={() => setIndex(k)}
+                  aria-label={`Show quote ${k + 1} of ${count}`}
+                  aria-current={k === index}
+                  className="h-2 rounded-full transition-all duration-300"
+                  style={{
+                    width: k === index ? "26px" : "8px",
+                    background: k === index ? "#D4911E" : "rgba(247,242,232,0.25)",
+                  }}
+                />
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => go(-1)}
+                aria-label="Previous quote"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-cream/20 text-cream/70 transition-colors hover:border-cream/40 hover:text-cream"
+              >
+                <ChevronLeft size={18} />
+              </button>
+              <button
+                onClick={() => go(1)}
+                aria-label="Next quote"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-cream/20 text-cream/70 transition-colors hover:border-cream/40 hover:text-cream"
+              >
+                <ChevronRight size={18} />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -1249,7 +1572,9 @@ export function LandingPage() {
       <HeroSection isAuthenticated={isAuthenticated} onSignIn={() => setSignInOpen(true)} />
       <VisionSection />
       <HowItWorksSection />
+      <ProposalStorySection />
       <UseCasesSection />
+      <HeritageQuoteSlider />
       <ProtocolSection />
       <Footer />
     </div>
