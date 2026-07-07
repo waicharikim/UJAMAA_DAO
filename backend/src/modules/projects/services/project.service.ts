@@ -314,7 +314,8 @@ export class ProjectService {
       );
 
     // Anchor the verified milestone on-chain (worker-driven, dormant until configured).
-    if (dto.approved) enqueueProjectAnchor('MILESTONE_VERIFIED', dto.milestoneId);
+    if (dto.approved)
+      enqueueProjectAnchor('MILESTONE_VERIFIED', dto.milestoneId);
 
     return newStatus;
   }

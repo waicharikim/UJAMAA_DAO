@@ -151,7 +151,9 @@ async function resolveEvent(
       };
     }
     case 'WORK_APPROVED': {
-      const w = await prisma.workSession.findUnique({ where: { id: entityId } });
+      const w = await prisma.workSession.findUnique({
+        where: { id: entityId },
+      });
       if (!w) return null;
       return {
         projectId: w.projectId,

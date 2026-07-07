@@ -13,7 +13,11 @@
 import { HistoryProvenance, HistoryVerification } from '@prisma/client';
 import { prisma } from '../../../core/database/client.js';
 import { logger } from '../../../core/logger/logger.js';
-import { isQwenAvailable, completeJSON, QWEN_ANALYST_MODEL } from '../../../core/ai/qwen.js';
+import {
+  isQwenAvailable,
+  completeJSON,
+  QWEN_ANALYST_MODEL,
+} from '../../../core/ai/qwen.js';
 
 export interface HistoricalEventInput {
   era: string;
@@ -90,7 +94,9 @@ class HistorianService {
     if (all.length === 0) return [];
 
     const themeSet = new Set(themes.map((t) => t.toLowerCase()));
-    const kw = keywords.map((k) => k.toLowerCase()).filter((k) => k.length >= 4);
+    const kw = keywords
+      .map((k) => k.toLowerCase())
+      .filter((k) => k.length >= 4);
 
     const scored = all
       .map((e) => {
@@ -146,7 +152,10 @@ ${lines.join('\n')}`;
       where: { provenance: 'LLM_SEED' },
     });
     if (existingSeed > 0) {
-      logger.info({ existingSeed }, '[HISTORIAN] LLM seed already present — skipping');
+      logger.info(
+        { existingSeed },
+        '[HISTORIAN] LLM seed already present — skipping'
+      );
       return 0;
     }
 
@@ -165,7 +174,10 @@ Respond with ONLY JSON: {"events": [{"era": "...", "title": "...", "startYear": 
     for (const ev of events) {
       if (!ev?.title || !ev?.summary || !ev?.era) continue;
       await this.addEvent(
-        { ...ev, sourceRef: `LLM seed ${new Date().toISOString().slice(0, 10)}` },
+        {
+          ...ev,
+          sourceRef: `LLM seed ${new Date().toISOString().slice(0, 10)}`,
+        },
         'LLM_SEED',
         'UNVERIFIED'
       );

@@ -214,7 +214,9 @@ Review each revision for structural soundness and give your closing verdict. JSO
 }
 
 /** Validate/normalise the model's closing review; never throws. */
-export function normalizeReview(result: StructuralReview | null): StructuralReview {
+export function normalizeReview(
+  result: StructuralReview | null
+): StructuralReview {
   if (!result || typeof result !== 'object') return EMPTY_REVIEW;
   const reviews = Array.isArray(result.reviews)
     ? result.reviews

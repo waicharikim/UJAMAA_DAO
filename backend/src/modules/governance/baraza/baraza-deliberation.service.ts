@@ -369,11 +369,7 @@ export async function recordProposalOutcomeInMemory(
         : [];
       let changed = false;
       const updated = log.map((e: any) => {
-        if (
-          e &&
-          e.proposalId === proposalId &&
-          e.proposalOutcome !== summary
-        ) {
+        if (e && e.proposalId === proposalId && e.proposalOutcome !== summary) {
           changed = true;
           return { ...e, proposalOutcome: summary };
         }

@@ -43,7 +43,11 @@ export function parseEpraText(
     'fuel_petrol',
     'Petrol pump price'
   );
-  grab(/diesel[^0-9]{0,40}(\d{2,3}\.\d{2})/i, 'fuel_diesel', 'Diesel pump price');
+  grab(
+    /diesel[^0-9]{0,40}(\d{2,3}\.\d{2})/i,
+    'fuel_diesel',
+    'Diesel pump price'
+  );
   grab(
     /kerosene[^0-9]{0,40}(\d{2,3}\.\d{2})/i,
     'fuel_kerosene',

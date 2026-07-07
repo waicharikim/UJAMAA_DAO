@@ -41,11 +41,14 @@ export function parseXFeed(xml: string, max = MAX_POSTS): string[] {
   const out: string[] = [];
   const itemRe = /<(?:item|entry)\b[\s\S]*?<\/(?:item|entry)>/gi;
   const titleRe = /<title\b[^>]*>([\s\S]*?)<\/title>/i;
-  const descRe = /<(?:description|summary|content)\b[^>]*>([\s\S]*?)<\/(?:description|summary|content)>/i;
+  const descRe =
+    /<(?:description|summary|content)\b[^>]*>([\s\S]*?)<\/(?:description|summary|content)>/i;
   let m: RegExpExecArray | null;
   while ((m = itemRe.exec(xml)) && out.length < max) {
     const block = m[0];
-    const text = clean(block.match(titleRe)?.[1] ?? block.match(descRe)?.[1] ?? '');
+    const text = clean(
+      block.match(titleRe)?.[1] ?? block.match(descRe)?.[1] ?? ''
+    );
     if (text) out.push(text);
   }
   return out;

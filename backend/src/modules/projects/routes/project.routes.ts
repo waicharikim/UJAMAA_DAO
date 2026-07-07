@@ -75,7 +75,9 @@ router.post(
       // Project-setup details (optional, captured at this gate).
       maintenancePlan: z.string().max(2000).optional(),
       recurrentCostKes: z.number().min(0).optional(),
-      recurrentCostPeriod: z.enum(['MONTHLY', 'QUARTERLY', 'YEARLY']).optional(),
+      recurrentCostPeriod: z
+        .enum(['MONTHLY', 'QUARTERLY', 'YEARLY'])
+        .optional(),
       siteLocation: z.string().max(2000).optional(),
       landTenure: z.string().max(2000).optional(),
       beneficiaries: z.string().max(2000).optional(),
