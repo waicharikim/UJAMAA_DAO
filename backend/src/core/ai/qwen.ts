@@ -318,7 +318,10 @@ export async function completeJSON<T = unknown>(
   if (!raw) return null;
 
   try {
-    const cleaned = raw.replace(/```(?:json)?[\s\S]*?```/g, '').trim();
+    // Strip only the fence markers, keeping the JSON between them (an earlier
+    // version removed the whole fenced block *including* its contents, so a
+    // model that wrapped its JSON in ```json … ``` yielded an empty parse).
+    const cleaned = raw.replace(/```(?:json)?/gi, '').trim();
     const match = cleaned.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
     return JSON.parse(match ? match[0] : cleaned) as T;
   } catch (err) {

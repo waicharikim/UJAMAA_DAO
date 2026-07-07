@@ -169,7 +169,8 @@ Respond with ONLY JSON: {"events": [{"era": "...", "title": "...", "startYear": 
       model: QWEN_ANALYST_MODEL,
     });
 
-    const events = Array.isArray(result?.events) ? result!.events : [];
+    const rawEvents = result?.events;
+    const events = Array.isArray(rawEvents) ? rawEvents : [];
     let stored = 0;
     for (const ev of events) {
       if (!ev?.title || !ev?.summary || !ev?.era) continue;

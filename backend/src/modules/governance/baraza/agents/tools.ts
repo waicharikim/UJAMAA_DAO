@@ -11,6 +11,7 @@
  */
 
 import OpenAI from 'openai';
+import { ProposalStatus } from '@prisma/client';
 import { prisma } from '../../../../core/database/client.js';
 import { logger } from '../../../../core/logger/logger.js';
 
@@ -140,7 +141,12 @@ async function toolPastDecisions(
       where: {
         groupId,
         status: {
-          in: ['APPROVED', 'REJECTED', 'COMPLETED', 'CANCELLED'] as any,
+          in: [
+            ProposalStatus.APPROVED,
+            ProposalStatus.REJECTED,
+            ProposalStatus.COMPLETED,
+            ProposalStatus.CANCELLED,
+          ],
         },
         OR: [
           { title: { contains: query, mode: 'insensitive' } },
