@@ -290,6 +290,31 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   },
 ];
 
+/**
+ * Build the chat-completion params for the bot, with thinking disabled.
+ *
+ * DO's Qwen serverless models default to "thinking" (chain-of-thought): they
+ * emit `reasoning_content` before the answer, which is 3-5x slower and can burn
+ * the whole `max_tokens` budget before producing any `content` (→ a null reply).
+ * A Q&A bot doesn't need visible reasoning. DO's vLLM honours
+ * `reasoning_effort: "none"` — the `enable_thinking` / `chat_template_kwargs`
+ * switches are ignored on this endpoint. It's not in the OpenAI SDK's type
+ * union, so we build the object then cast. (The deliberation council keeps
+ * thinking on — it's worth the latency there.)
+ */
+function botCreateParams(
+  messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[]
+): OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming {
+  return {
+    model: MODEL,
+    max_tokens: MAX_TOKENS,
+    tools: TOOLS,
+    tool_choice: 'auto',
+    messages,
+    reasoning_effort: 'none',
+  } as unknown as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming;
+}
+
 export class BarazaAiService {
   private client: OpenAI | null = null;
 
@@ -345,13 +370,9 @@ export class BarazaAiService {
     ];
 
     try {
-      let response = await this.client.chat.completions.create({
-        model: MODEL,
-        max_tokens: MAX_TOKENS,
-        tools: TOOLS,
-        tool_choice: 'auto',
-        messages,
-      });
+      let response = await this.client.chat.completions.create(
+        botCreateParams(messages)
+      );
 
       let round = 0;
       while (
@@ -389,13 +410,9 @@ export class BarazaAiService {
         );
 
         messages.push(...toolResults);
-        response = await this.client!.chat.completions.create({
-          model: MODEL,
-          max_tokens: MAX_TOKENS,
-          tools: TOOLS,
-          tool_choice: 'auto',
-          messages,
-        });
+        response = await this.client!.chat.completions.create(
+          botCreateParams(messages)
+        );
       }
 
       const finalText = response.choices[0]?.message?.content ?? unavailable;
