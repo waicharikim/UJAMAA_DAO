@@ -75,8 +75,14 @@ async function saveHistory(key: string, turns: ConvTurn[]): Promise<void> {
   }
 }
 
-// Qwen Cloud international DashScope endpoint (OpenAI-compatible)
+// OpenAI-compatible inference endpoint. Honour DASHSCOPE_BASE_URL so the bot
+// can point at DigitalOcean serverless inference (or any provider) exactly like
+// the deliberation engine in core/ai/qwen.ts. NB: `||` (not `??`) — compose
+// injects DASHSCOPE_BASE_URL as an empty string when the host var is unset, and
+// an empty baseURL makes the OpenAI SDK fall back to api.openai.com. Default =
+// Alibaba's international DashScope endpoint (the hackathon provider).
 const DASHSCOPE_BASE_URL =
+  process.env.DASHSCOPE_BASE_URL ||
   'https://dashscope-intl.aliyuncs.com/compatible-mode/v1';
 
 const SYSTEM_PROMPT = `You are BarazaBot, the AI assistant for UjamaaDAO — a community self-governance platform built for East African communities. You live inside Telegram groups called barazas (community meetings).
