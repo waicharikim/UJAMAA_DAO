@@ -200,6 +200,12 @@ const UNAVAILABLE_MSG =
 const UNAVAILABLE_MSG_WEB =
   'Mjamaa is unavailable right now / haipatikani kwa sasa. Please try again in a moment.';
 
+// Per-request failure (e.g. a timeout or a transient API error) — the provider
+// is configured and usually works, so this is NOT the same as "unavailable".
+// Ask the member to retry rather than implying the whole assistant is down.
+const ERROR_MSG =
+  "Sorry, I couldn't answer that one just now / samahani, sikuweza kujibu hilo kwa sasa. Please try again in a moment.";
+
 // Tool definitions in OpenAI format
 const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
@@ -287,10 +293,13 @@ export class BarazaAiService {
       this.client = new OpenAI({
         apiKey,
         baseURL: DASHSCOPE_BASE_URL,
-        // Cap each call and limit retries so a slow Qwen can't hang the webhook
-        // async tail. reply() already catches and falls back on failure.
-        timeout: 30_000,
-        maxRetries: 1,
+        // Per-call cap. DO's Qwen3-32B is slower than DashScope's qwen-plus,
+        // and a tool round-trip needs a couple of generations — 30s timed out
+        // on any lookup question. 60s gives it room; the reply is sent async
+        // (Telegram already got its 200) so a longer wait blocks nothing.
+        // maxRetries 0: don't silently double the wait on a timeout.
+        timeout: 60_000,
+        maxRetries: 0,
       });
     }
   }
@@ -402,7 +411,10 @@ export class BarazaAiService {
         { err, communities: communities.map((c) => c.groupId) },
         '[BarazaAI] Qwen API call failed'
       );
-      return unavailable;
+      // The provider IS configured (client exists) — this is a per-request
+      // failure (usually a timeout), not an outage. Say "try again", not
+      // "unavailable".
+      return ERROR_MSG;
     }
   }
 }
