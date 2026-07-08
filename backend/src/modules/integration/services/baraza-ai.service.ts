@@ -21,10 +21,12 @@ import { prisma } from '../../../core/database/client.js';
 import { getRedisClient } from '../../../core/database/redis.client.js';
 import { logger } from '../../../core/logger/logger.js';
 
-// qwen-plus: best balance of speed + capability for conversational use
-// qwen-max: use for deeper reasoning if latency allows
-// qwen-turbo: cheapest, fastest — good for high-volume low-stakes queries
-const MODEL = process.env.BARAZA_AI_MODEL ?? 'qwen-plus';
+// The Q&A bot is latency-sensitive (a member waits for the reply), so it can run
+// a smaller/faster model than the deliberation council. BARAZA_BOT_MODEL wins if
+// set; otherwise it shares BARAZA_AI_MODEL (the council's domain-agent model).
+// Keep it a Qwen model for the hackathon.
+const MODEL =
+  process.env.BARAZA_BOT_MODEL || process.env.BARAZA_AI_MODEL || 'qwen-plus';
 const MAX_TOOL_ROUNDS = 3;
 const MAX_TOKENS = 1024;
 

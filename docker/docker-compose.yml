@@ -113,6 +113,7 @@ services:
       - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
       - DASHSCOPE_BASE_URL=${DASHSCOPE_BASE_URL:-}
       - BARAZA_AI_MODEL=${BARAZA_AI_MODEL:-qwen-plus}
+      - BARAZA_BOT_MODEL=${BARAZA_BOT_MODEL:-}
       - BARAZA_ANALYST_MODEL=${BARAZA_ANALYST_MODEL:-qwen-max}
       - DELIBERATION_AI_MODEL=${DELIBERATION_AI_MODEL:-qwen-plus}
       # ── Sentry (error monitoring) ────────────────────────────────────────
@@ -251,6 +252,7 @@ services:
       - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
       - DASHSCOPE_BASE_URL=${DASHSCOPE_BASE_URL:-}
       - BARAZA_AI_MODEL=${BARAZA_AI_MODEL:-qwen-plus}
+      - BARAZA_BOT_MODEL=${BARAZA_BOT_MODEL:-}
       - BARAZA_ANALYST_MODEL=${BARAZA_ANALYST_MODEL:-qwen-max}
       - DELIBERATION_AI_MODEL=${DELIBERATION_AI_MODEL:-qwen-plus}
       # ── DataDog APM ──────────────────────────────────────────────────────
