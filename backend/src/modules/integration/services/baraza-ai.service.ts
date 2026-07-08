@@ -20,6 +20,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../../../core/database/client.js';
 import { getRedisClient } from '../../../core/database/redis.client.js';
 import { logger } from '../../../core/logger/logger.js';
+import { locationImpactService } from '../../reputation/service/locationImpact.service.js';
 
 // The Q&A bot is latency-sensitive (a member waits for the reply), so it can run
 // a smaller/faster model than the deliberation council. BARAZA_BOT_MODEL wins if
@@ -103,7 +104,7 @@ Do NOT use decorative emojis (no 🌿 leaves, plants, sparkles, flags, hearts, e
 UjamaaDAO helps communities self-govern through:
 - **Participation Rights (PR)**: Non-transferable points earned through real participation. They represent your standing in the community and are required to vote, propose, and join projects.
 - **Utility Tokens (UT)**: Tokens earned through economic activity and M-Pesa contributions. Can be withdrawn to M-Pesa (no cash-out for PR — by design).
-- **Impact Points (IP)**: A reputation score reflecting your contributions at ward, constituency, county, and national level.
+- **Impact Points (IP)**: An earned, non-transferable reputation score (no cash value). IP are NOT global-only: you have one global lifetime total AND a separate score in each ward, constituency, and county where you've contributed — every level has its own reputation and leaderboard. Use get_user_stats to give the member their actual per-location numbers.
 
 ## How to earn PR
 - Attend a baraza (/present): 15 PR
@@ -219,7 +220,7 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     function: {
       name: 'get_user_stats',
       description:
-        "Get the current user's PR balance, total Impact Points, and verification level.",
+        "Get the current user's PR balance, verification level, and Impact Points. Impact Points are returned BOTH as a global lifetime total AND broken down per location (ward / constituency / county) — use the breakdown when the member asks where their reputation sits or whether IP are global or local.",
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
@@ -501,7 +502,7 @@ async function executeToolCall(
 async function toolGetUserStats(userId: string | null): Promise<string> {
   if (!userId) return 'User is not linked to a UjamaaDAO account.';
 
-  const [user, ipAgg] = await Promise.all([
+  const [user, ipAgg, hierarchy] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -514,13 +515,32 @@ async function toolGetUserStats(userId: string | null): Promise<string> {
       where: { userId },
       _sum: { amount: true },
     }),
+    // Per-location breakdown (ward → constituency → county). Null when the user
+    // has no ward-attributed IP yet.
+    locationImpactService.getPrimaryHierarchyImpact(userId),
   ]);
 
   if (!user) return 'User not found.';
 
   return JSON.stringify({
     participationRights: user.participationRights,
-    impactPoints: ipAgg._sum.amount ?? 0,
+    // Global lifetime total across every location and activity.
+    impactPointsTotal: ipAgg._sum.amount ?? 0,
+    // Where that reputation was earned. IP are NOT global-only: each level has
+    // its own score. Null means none earned in a specific ward yet.
+    impactPointsByLocation: hierarchy
+      ? {
+          ward: { name: hierarchy.ward.name, points: hierarchy.ward.points },
+          constituency: {
+            name: hierarchy.constituency.name,
+            points: hierarchy.constituency.points,
+          },
+          county: {
+            name: hierarchy.county.name,
+            points: hierarchy.county.points,
+          },
+        }
+      : null,
     verificationLevel: user.verificationLevel,
     ward: user.primaryWard?.name ?? 'Not set',
   });
