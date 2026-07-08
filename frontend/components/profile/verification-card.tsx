@@ -26,10 +26,16 @@ function levelIndex(level: string | undefined) {
 
 type Channel = "sms" | "whatsapp" | "telegram"
 
+// Dev and prod use different Telegram bots. Set NEXT_PUBLIC_TELEGRAM_BOT_USERNAME
+// per environment (baked at build time); falls back to the dev bot locally.
+const BOT_USERNAME = (
+  process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || "Ujamaadaobot"
+).replace(/^@/, "")
+
 const CHANNELS: { id: Channel; label: string; icon: React.ReactNode; hint: string }[] = [
   { id: "sms",      label: "SMS",      icon: <Phone className="h-3.5 w-3.5" />,          hint: "Text message to your phone" },
   { id: "whatsapp", label: "WhatsApp", icon: <MessageCircle className="h-3.5 w-3.5" />,  hint: "Message via WhatsApp" },
-  { id: "telegram", label: "Telegram", icon: <Send className="h-3.5 w-3.5" />,           hint: "Via @Ujamaadaobot" },
+  { id: "telegram", label: "Telegram", icon: <Send className="h-3.5 w-3.5" />,           hint: `Via @${BOT_USERNAME}` },
 ]
 
 // ─── Phone verification step ───────────────────────────────
@@ -89,7 +95,7 @@ function PhoneStep() {
       if (user?.verificationLevel !== "EMAIL_VERIFIED") {
         setVerified(true)
       } else {
-        toast({ title: "Not yet verified", description: "Send the command to @Ujamaadaobot first, then check again.", variant: "destructive" })
+        toast({ title: "Not yet verified", description: `Send the command to @${BOT_USERNAME} first, then check again.`, variant: "destructive" })
       }
     },
   })
@@ -170,7 +176,7 @@ function PhoneStep() {
             className="rounded-xl p-4 space-y-2"
             style={{ background: "rgba(34,158,217,0.08)", border: "1px solid rgba(34,158,217,0.2)" }}
           >
-            <p className="text-xs font-semibold" style={{ color: "#1A7DB5" }}>Open @Ujamaadaobot on Telegram and send:</p>
+            <p className="text-xs font-semibold" style={{ color: "#1A7DB5" }}>Open @{BOT_USERNAME} on Telegram and send:</p>
             <div
               className="rounded-lg px-3 py-2 font-mono text-sm font-bold tracking-wider text-center select-all"
               style={{ background: "rgba(34,158,217,0.12)", color: "#1A7DB5" }}
@@ -389,6 +395,81 @@ function CommunityStep() {
   )
 }
 
+// ─── Standalone Telegram linking (for users already past phone verification) ──
+// Linking Telegram is orthogonal to verification level: someone who verified by
+// SMS still needs a way to bind their Telegram account. /verify does that (it
+// upserts the messaging profile), so we expose it independently here.
+function ConnectTelegram() {
+  const { user } = useAuth()
+  const { toast } = useToast()
+  const [open, setOpen] = useState(false)
+  const [phone, setPhone] = useState(user?.phone ?? "")
+  const [telegramCode, setTelegramCode] = useState<string | undefined>()
+
+  const sendMutation = useMutation({
+    mutationFn: () => authApi.sendPhoneCode(phone, "telegram"),
+    onSuccess: (data) => {
+      if (data?.telegramCode) setTelegramCode(data.telegramCode)
+      else toast({ title: "Couldn't get a code", description: "Please try again.", variant: "destructive" })
+    },
+    onError: (err: any) => toast({ title: "Couldn't get a code", description: err?.message ?? "Try again.", variant: "destructive" }),
+  })
+
+  return (
+    <div className="pt-3 border-t border-black/6">
+      <button onClick={() => setOpen((o) => !o)} className="flex items-center gap-2 text-sm font-semibold text-[#0E0B08]">
+        <Send className="h-4 w-4" style={{ color: "#1A7DB5" }} />
+        Connect Telegram
+        <span className="text-[11px] font-normal text-[#0E0B08]/40">{open ? "Hide" : "Link your account"}</span>
+      </button>
+
+      {open && (
+        <div className="mt-3 space-y-3">
+          <p className="text-xs text-[#0E0B08]/60 leading-relaxed">
+            Link your Telegram to chat with the bot and use /present in baraza groups. Get a code below, then send it to @{BOT_USERNAME}.
+          </p>
+          {!telegramCode ? (
+            <div className="flex gap-2">
+              <input
+                type="tel"
+                placeholder="+254712345678"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="flex-1 h-10 rounded-lg border border-black/10 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#C9922A]/30"
+              />
+              <button
+                onClick={() => sendMutation.mutate()}
+                disabled={sendMutation.isPending || !phone.match(/^\+254[17]\d{8}$/)}
+                className="flex-shrink-0 h-10 rounded-lg px-4 text-sm font-semibold transition-all hover:opacity-90 disabled:opacity-40"
+                style={{ background: "#1E3D2F", color: "#fff" }}
+              >
+                {sendMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Get code"}
+              </button>
+            </div>
+          ) : (
+            <div className="rounded-xl p-4 space-y-2" style={{ background: "rgba(34,158,217,0.08)", border: "1px solid rgba(34,158,217,0.2)" }}>
+              <p className="text-xs font-semibold" style={{ color: "#1A7DB5" }}>Open @{BOT_USERNAME} on Telegram and send:</p>
+              <div
+                className="rounded-lg px-3 py-2 font-mono text-sm font-bold tracking-wider text-center select-all"
+                style={{ background: "rgba(34,158,217,0.12)", color: "#1A7DB5" }}
+              >
+                /verify {telegramCode}
+              </div>
+              <p className="text-[10px] text-[#0E0B08]/40">This links your Telegram account so the bot and /present work.</p>
+              <button
+                onClick={() => setTelegramCode(undefined)}
+                className="text-[11px] text-[#0E0B08]/40 hover:text-[#0E0B08]/70 transition-colors"
+              >
+                Get a new code
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Main card ─────────────────────────────────────────────
 export function VerificationCard() {
   const { user } = useAuth()
@@ -468,6 +549,10 @@ export function VerificationCard() {
             </p>
           </div>
         )}
+
+        {/* Telegram linking is available once phone verification is done — the
+            EMAIL_VERIFIED phone step already offers a Telegram option. */}
+        {currentLevel !== "EMAIL_VERIFIED" && <ConnectTelegram />}
       </CardContent>
     </Card>
   )
