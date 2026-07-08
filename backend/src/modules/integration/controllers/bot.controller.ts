@@ -391,7 +391,7 @@ async function resolveSingleCommunity(
  */
 async function resolveUserCommunities(
   from: TelegramFrom | undefined
-): Promise<{ groupId: string; groupName: string }[]> {
+): Promise<{ groupId: string; groupName: string; isSystemGroup: boolean }[]> {
   if (!from?.id) return [];
   const profile = await prisma.userMessagingProfile.findFirst({
     where: { platform: 'TELEGRAM', externalUserId: String(from.id) },
@@ -400,12 +400,15 @@ async function resolveUserCommunities(
   if (!profile) return [];
   const memberships = await prisma.groupMember.findMany({
     where: { userId: profile.userId, active: true },
-    select: { group: { select: { id: true, name: true } } },
+    select: {
+      group: { select: { id: true, name: true, isSystemGroup: true } },
+    },
     orderBy: { joinedAt: 'desc' },
   });
   return memberships.map((m) => ({
     groupId: m.group.id,
     groupName: m.group.name,
+    isSystemGroup: m.group.isSystemGroup,
   }));
 }
 
@@ -466,15 +469,18 @@ export async function askBaraza(
  */
 async function resolveWebUserCommunities(
   userId: string
-): Promise<{ groupId: string; groupName: string }[]> {
+): Promise<{ groupId: string; groupName: string; isSystemGroup: boolean }[]> {
   const memberships = await prisma.groupMember.findMany({
     where: { userId, active: true },
-    select: { group: { select: { id: true, name: true } } },
+    select: {
+      group: { select: { id: true, name: true, isSystemGroup: true } },
+    },
     orderBy: { joinedAt: 'desc' },
   });
   return memberships.map((m) => ({
     groupId: m.group.id,
     groupName: m.group.name,
+    isSystemGroup: m.group.isSystemGroup,
   }));
 }
 

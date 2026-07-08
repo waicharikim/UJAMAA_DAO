@@ -167,6 +167,7 @@ A member belongs to several communities at once: their location chain (ward → 
 ## When to use tools and data (IMPORTANT)
 - The \`[Context: …]\` line before each message is BACKGROUND for you only. NEVER recite it, and never list the member's balances, communities, or elections unless they specifically ask.
 - Only call a tool when the member's message actually asks for that live data (e.g. "what's my PR?", "any open proposals?", "how much is in the treasury?", "what did we decide about X?").
+- The member's group memberships are already in the \`[Context]\` line, split into "Location groups" and "Voluntary groups". Answer "which groups / SACCOs / voluntary groups am I in?" directly from there — there is NO tool for this and none is needed. If "Voluntary groups: none", tell them they haven't joined any voluntary groups yet.
 - For greetings or small talk ("hi", "habari", "sasa", "asante", "who are you?"), do NOT call any tool and do NOT dump data. Just reply warmly in one line and invite them to ask what they need — e.g. "Habari! I'm Mjamaa. Ask me about your proposals, elections, treasury, or how UjamaaDAO works."
 
 Keep responses short — this is a Telegram chat, not an essay. 2–4 sentences is usually enough.`;
@@ -189,6 +190,9 @@ export interface BarazaUserContext {
 export interface BarazaCommunity {
   groupId: string;
   groupName: string;
+  // false = a voluntary group (SACCO, project, interest group); true/undefined
+  // = a location/system group (ward, constituency, county, national).
+  isSystemGroup?: boolean;
 }
 
 // Telegram fallback — mentions the slash commands that keep working in a chat.
@@ -777,12 +781,24 @@ function buildContextHeader(
     parts.push(`PR: ${ctx.participationRights}`);
   if (ctx.activeElectionCount !== undefined && ctx.activeElectionCount > 0)
     parts.push(`Active elections: ${ctx.activeElectionCount}`);
-  if (communities.length)
+  if (communities.length) {
+    // Separate location groups (ward→national) from voluntary groups (SACCOs,
+    // projects, interest groups) so the model can answer "which voluntary
+    // groups am I in?" directly from context, without a tool.
+    const voluntary = communities.filter((c) => c.isSystemGroup === false);
+    const location = communities.filter((c) => c.isSystemGroup !== false);
+    if (location.length)
+      parts.push(
+        `Location groups: ${location.map((c) => c.groupName).join(', ')}`
+      );
     parts.push(
-      `Communities (${communities.length}): ${communities
-        .map((c) => c.groupName)
-        .join(', ')}`
+      voluntary.length
+        ? `Voluntary groups (SACCOs/projects/interest groups): ${voluntary
+            .map((c) => c.groupName)
+            .join(', ')}`
+        : 'Voluntary groups: none'
     );
+  }
   return `[Context: ${parts.join(' | ')}]`;
 }
 
