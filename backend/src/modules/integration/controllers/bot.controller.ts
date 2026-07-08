@@ -449,7 +449,8 @@ export async function askBaraza(
       message,
       userContext,
       communities,
-      `web:${userId}`
+      `web:${userId}`,
+      'web'
     );
     sendSuccess(res, { answer, available: true });
   } catch (err) {

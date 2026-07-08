@@ -172,8 +172,14 @@ export interface BarazaCommunity {
   groupName: string;
 }
 
+// Telegram fallback — mentions the slash commands that keep working in a chat.
 const UNAVAILABLE_MSG =
   'BarazaBot AI is unavailable right now / haipatikani kwa sasa. Commands like /present, /verify, /schedule still work. 🌿';
+
+// Web (in-app widget) fallback — no Telegram slash commands, which don't exist
+// in the browser.
+const UNAVAILABLE_MSG_WEB =
+  'BarazaBot is unavailable right now / haipatikani kwa sasa. Please try again in a moment. 🌿';
 
 // Tool definitions in OpenAI format
 const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
@@ -278,9 +284,12 @@ export class BarazaAiService {
     text: string,
     userContext: BarazaUserContext,
     communities: BarazaCommunity[],
-    conversationKey?: string
+    conversationKey?: string,
+    channel: 'telegram' | 'web' = 'telegram'
   ): Promise<string> {
-    if (!this.client) return UNAVAILABLE_MSG;
+    const unavailable =
+      channel === 'web' ? UNAVAILABLE_MSG_WEB : UNAVAILABLE_MSG;
+    if (!this.client) return unavailable;
 
     const contextHeader = buildContextHeader(userContext, communities);
     // Prior turns give the model continuity (and a stable language signal).
@@ -355,13 +364,12 @@ export class BarazaAiService {
         });
       }
 
-      const finalText =
-        response.choices[0]?.message?.content ?? UNAVAILABLE_MSG;
+      const finalText = response.choices[0]?.message?.content ?? unavailable;
 
       // Persist only the plain user text + final reply — never the intermediate
       // tool_call / tool-result messages (trimming those across turns would
       // break tool_call↔result pairing on the next request).
-      if (conversationKey && finalText && finalText !== UNAVAILABLE_MSG) {
+      if (conversationKey && finalText && finalText !== unavailable) {
         await saveHistory(conversationKey, [
           ...history,
           { role: 'user', content: text },
@@ -375,7 +383,7 @@ export class BarazaAiService {
         { err, communities: communities.map((c) => c.groupId) },
         '[BarazaAI] Qwen API call failed'
       );
-      return UNAVAILABLE_MSG;
+      return unavailable;
     }
   }
 }
