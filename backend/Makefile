@@ -1,4 +1,4 @@
-.PHONY: help dev dev-up dev-down dev-status ngrok-sync ngrok-watch prod prod-pull prod-deploy prod-deploy-web prod-deploy-worker prod-deploy-frontend prod-seed prod-rebuild-web prod-rebuild-worker prod-rebuild-frontend prod-backup prod-backup-cron up down restart logs clean backup setup-configs enable-observability check-configs
+.PHONY: help dev dev-up dev-down dev-status ngrok-sync ngrok-watch prod prod-pull prod-deploy prod-deploy-web prod-deploy-worker prod-deploy-frontend prod-seed prod-set-webhook prod-webhook-info prod-rebuild-web prod-rebuild-worker prod-rebuild-frontend prod-backup prod-backup-cron up down restart logs clean backup setup-configs enable-observability check-configs
 
 # Compose file location (relative to backend/)
 COMPOSE_FILE := ../docker/docker-compose.yml
@@ -57,6 +57,8 @@ help:
 	@echo "  make prod-deploy-frontend  - Pull + restart frontend only"
 	@echo "  make prod-backup           - Backup the prod DB (gzip + off-box if configured)"
 	@echo "  make prod-backup-cron      - Install the daily 02:00 backup cron"
+	@echo "  make prod-set-webhook      - Point the Telegram bot's webhook at this box"
+	@echo "  make prod-webhook-info     - Show the bot's current Telegram webhook"
 	@echo ""
 	@echo "  Local build (fallback — compiles on this box):"
 	@echo "  make prod-build            - Rebuild all production images"
@@ -132,6 +134,17 @@ prod-make-admin:
 		 JOIN user_roles ur ON ur.\"userId\" = u.id \
 		 JOIN roles r ON r.id = ur.\"roleId\" \
 		 WHERE u.email = '$(EMAIL)';"
+
+# ── Telegram webhook (prod) ───────────────────────────────────────────────────
+# Point the prod bot's webhook at this box. The URL is derived from BASE_URL in
+# .env.prod, so it follows the domain — a stable prod domain makes this a
+# set-once step; re-run only after moving boxes (DNS repoint) or rotating the
+# token/secret. Dev uses `make ngrok-sync` instead (ngrok's URL rotates).
+prod-set-webhook:
+	@./scripts/set-webhook.sh
+
+prod-webhook-info:
+	@./scripts/set-webhook.sh --info
 
 prod-build:
 	@echo "Building production images... (CACHE=1 for a cached build)"

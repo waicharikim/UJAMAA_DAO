@@ -51,4 +51,10 @@ alias uj-backup="cd $UJAMAA_DIR && make prod-backup"
 alias uj-backup-cron="cd $UJAMAA_DIR && make prod-backup-cron"
 alias uj-make-admin='f() { cd ~/UJAMAA_DAO/backend && make prod-make-admin EMAIL="$1"; }; f'
 
+# ── Telegram bot ──────────────────────────────────────────────────────────────
+# Point the bot's webhook at this box (reads BASE_URL + token from .env.prod).
+# Set-once on a stable domain; re-run after moving boxes or rotating the token.
+alias uj-set-webhook="cd $UJAMAA_DIR && make prod-set-webhook"
+alias uj-webhook-info="cd $UJAMAA_DIR && make prod-webhook-info"
+
 echo "✅  UjamaaDAO aliases loaded. Type 'uj-<tab>' to see all commands."
