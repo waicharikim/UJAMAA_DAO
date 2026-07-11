@@ -200,7 +200,20 @@ authorization. Internal machinery agents (Shahidi, Mpelelezi, the convener) are 
 
 ---
 
-## 7. The shared knowledge layer & education  *(DESIGN)*
+## 7. The shared knowledge layer & education  *(IMPLEMENTED — substrate + council tool; Buda wiring pending)*
+
+**As built:** `embed()` on the Qwen client (DashScope `text-embedding-v3`) +
+`KnowledgeChunk` (chunked, embedded corpus; migration `20260711020000`) +
+`knowledge/knowledge.service.ts` (`reindex()` over platform docs + **verified** education
+modules, cosine `search()`) + `knowledge/reindex-run.ts` (operator indexer). Wired into the
+council: `search_knowledge` is in `DELIBERATION_TOOLS` (on-demand, so cost is bounded).
+Verified live: 346 chunks indexed; a "how do PR work / can they transfer?" query returns the
+PR education module + `economy-design` doc. **Pending:** wire `search_knowledge` into Buda
+(the Q&A bot) + the cost-control refinements (scope to specific agents, top-k tuning).
+Re-index: `docker cp docs/. ujamaa_web:/usr/src/app/knowledge-docs` then
+`npx tsx src/modules/governance/knowledge/reindex-run.ts`.
+
+
 
 One **provenance-aware knowledge substrate**, many consumers. The corpus = platform
 `docs/` + the **education modules** (+ Mhenga's timeline for history, + the constitution
@@ -278,7 +291,7 @@ round with large retrievals.
 | Community timeline curation + national contribution | design |
 | AI-consolidated decision record (fail-open) | design |
 | Buda + talkable lenses | design |
-| Shared knowledge layer (`docs/` + education → `search_knowledge`) for Buda + council, w/ cost controls | design |
+| Shared knowledge layer (`docs/` + education → `search_knowledge`) — substrate + **council** tool | **implemented** (Buda wiring + cost-scoping pending) |
 | Build-upon education (AI drafts/gap-detection → existing approval pipeline) | design — later phase |
 
 **See also:** [`baraza-deliberation.md`](./baraza-deliberation.md),

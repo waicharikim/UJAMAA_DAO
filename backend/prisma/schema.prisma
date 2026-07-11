@@ -1983,6 +1983,22 @@ model HistoricalEvent {
   @@map("historical_events")
 }
 
+/// Shared knowledge layer (RAG): chunked, embedded corpus of platform docs +
+/// verified education modules. One provenance-aware substrate the Q&A bot and the
+/// council agents retrieve from via a search_knowledge tool. Rebuilt by an indexer.
+model KnowledgeChunk {
+  id        String   @id @default(uuid()) @db.Uuid
+  source    String // "docs" | "education"
+  sourceRef String // filename or module id
+  title     String
+  text      String   @db.Text
+  embedding Json // number[] — DashScope embedding vector
+  createdAt DateTime @default(now())
+
+  @@index([source])
+  @@map("knowledge_chunks")
+}
+
 enum BarazaTrigger {
   AUTHOR
   ADMIN

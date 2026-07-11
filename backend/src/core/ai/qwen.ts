@@ -42,6 +42,10 @@ export const QWEN_MODEL =
 export const QWEN_ANALYST_MODEL =
   process.env.BARAZA_ANALYST_MODEL ?? 'qwen-max';
 
+/** DashScope embedding model for the knowledge layer (RAG). */
+export const QWEN_EMBED_MODEL =
+  process.env.QWEN_EMBED_MODEL ?? 'text-embedding-v3';
+
 /**
  * DashScope international OpenAI-compatible endpoint.
  * Override via DASHSCOPE_BASE_URL if routing through a proxy or using the
@@ -326,6 +330,29 @@ export async function completeJSON<T = unknown>(
     return JSON.parse(match ? match[0] : cleaned) as T;
   } catch (err) {
     logger.warn({ err, raw }, '[AI] JSON parse failed after Qwen completion');
+    return null;
+  }
+}
+
+// ─── embed() ─────────────────────────────────────────────────────────────────
+
+/**
+ * Embed one or more texts via DashScope's OpenAI-compatible embeddings endpoint.
+ * Returns one vector per input (order-preserving), or null if the client is
+ * unavailable or the call fails. Never throws. Callers should batch large inputs
+ * (DashScope caps inputs per request).
+ */
+export async function embed(input: string[]): Promise<number[][] | null> {
+  const qwen = getQwenClient();
+  if (!qwen || input.length === 0) return null;
+  try {
+    const res = await qwen.embeddings.create({
+      model: QWEN_EMBED_MODEL,
+      input,
+    });
+    return res.data.map((d) => d.embedding as number[]);
+  } catch (err) {
+    logger.warn({ err }, '[AI] Qwen embedding failed');
     return null;
   }
 }

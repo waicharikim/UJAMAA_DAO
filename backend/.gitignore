@@ -70,3 +70,5 @@ coverage/
 *.tmp
 *.temp
 .cache/
+# Knowledge-layer index input (copied in at reindex time; do not commit)
+knowledge-docs/

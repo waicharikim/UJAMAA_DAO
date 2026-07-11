@@ -14,6 +14,7 @@ import OpenAI from 'openai';
 import { ProposalStatus } from '@prisma/client';
 import { prisma } from '../../../../core/database/client.js';
 import { logger } from '../../../../core/logger/logger.js';
+import { knowledgeService } from '../../knowledge/knowledge.service.js';
 
 /** OpenAI tool definitions offered to the deliberation agents. */
 export const DELIBERATION_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] =
@@ -57,6 +58,24 @@ export const DELIBERATION_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] =
     {
       type: 'function',
       function: {
+        name: 'search_knowledge',
+        description:
+          "Look up how the UjamaaDAO platform actually works — the rules and mechanics of PR/UT/Impact Points, governance, verification, treasury, education — from the platform docs and verified education modules. Use this to GROUND a claim about how the system works instead of guessing. (Not for values judgements — that is Kadere's role.)",
+        parameters: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description: 'What to look up (a question or keywords).',
+            },
+          },
+          required: ['query'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
         name: 'get_election_results',
         description:
           "This group's active elections and most recent completed election with winner. Use to understand the current leadership/power context.",
@@ -81,6 +100,8 @@ export async function executeDeliberationTool(
         return await toolPastDecisions(groupId, (args.query as string) ?? '');
       case 'get_election_results':
         return await toolElections(groupId);
+      case 'search_knowledge':
+        return await toolSearchKnowledge((args.query as string) ?? '');
       default:
         return `Unknown tool: ${name}`;
     }
@@ -228,4 +249,17 @@ async function toolElections(groupId: string): Promise<string> {
     };
   }
   return JSON.stringify(result);
+}
+
+async function toolSearchKnowledge(query: string): Promise<string> {
+  if (!query.trim()) return 'Please provide a search term.';
+  const hits = await knowledgeService.search(query, 3);
+  if (!hits.length) return `No platform knowledge found for "${query}".`;
+  return JSON.stringify(
+    hits.map((h) => ({
+      source: h.source,
+      title: h.title,
+      excerpt: h.text.slice(0, 600),
+    }))
+  );
 }
