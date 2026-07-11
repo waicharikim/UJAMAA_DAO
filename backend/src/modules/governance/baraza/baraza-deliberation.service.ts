@@ -216,7 +216,11 @@ async function runMhenga(
   try {
     const framing = await completeJSON<HistorianFraming>({
       system: MHENGA_SYSTEM,
-      userMessage: buildHistorianMessage(proposalSummary, events, pastDecisions),
+      userMessage: buildHistorianMessage(
+        proposalSummary,
+        events,
+        pastDecisions
+      ),
       maxTokens: 1024,
       model: QWEN_ANALYST_MODEL,
     });
@@ -850,7 +854,9 @@ async function runKadereClosing(
 ): Promise<string> {
   if (!isQwenAvailable()) return '';
   try {
-    const transcript = previousRounds.map(formatRoundTranscript).join('\n\n---\n\n');
+    const transcript = previousRounds
+      .map(formatRoundTranscript)
+      .join('\n\n---\n\n');
     const text = await complete({
       system: KADERE_CLOSING_SYSTEM,
       userMessage: buildKadereClosingMessage(proposalContextStr, transcript),

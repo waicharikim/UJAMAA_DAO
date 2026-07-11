@@ -45,14 +45,19 @@ function summarizeCouncil(d: {
   conflictMap: unknown;
   revisionSuggestions: unknown;
   mkutanoConvergence: unknown;
-}): { text: string; chokepoints: string[]; conflicts: string[]; revisions: string[] } {
+}): {
+  text: string;
+  chokepoints: string[];
+  conflicts: string[];
+  revisions: string[];
+} {
   const cm = (d.conflictMap ?? {}) as {
     conflicts?: { issue?: string; between?: string[] }[];
     unresolved?: string[];
     chokepoints?: { location?: string; issue?: string; severity?: string }[];
   };
-  const chokepoints = (cm.chokepoints ?? []).map(
-    (c) => `[${c.severity ?? '?'}] ${c.location ?? c.issue ?? ''}`.trim()
+  const chokepoints = (cm.chokepoints ?? []).map((c) =>
+    `[${c.severity ?? '?'}] ${c.location ?? c.issue ?? ''}`.trim()
   );
   const conflicts = (cm.conflicts ?? []).map(
     (c) => c.issue || (c.between ?? []).join(' vs ')
@@ -65,7 +70,9 @@ function summarizeCouncil(d: {
     chokepoints.length ? `Chokepoints: ${chokepoints.join('; ')}` : '',
     conflicts.length ? `Conflicts/trade-offs: ${conflicts.join('; ')}` : '',
     unresolved.length ? `Unresolved questions: ${unresolved.join('; ')}` : '',
-    convergence.length ? `Top concerns (Mkutano): ${convergence.join('; ')}` : '',
+    convergence.length
+      ? `Top concerns (Mkutano): ${convergence.join('; ')}`
+      : '',
     revisions.length ? `Revision suggestions: ${revisions.join('; ')}` : '',
   ]
     .filter(Boolean)
@@ -75,7 +82,9 @@ function summarizeCouncil(d: {
 
 async function main() {
   if (!isQwenAvailable()) {
-    console.error('Qwen unavailable (no DASHSCOPE_API_KEY) — cannot benchmark.');
+    console.error(
+      'Qwen unavailable (no DASHSCOPE_API_KEY) — cannot benchmark.'
+    );
     process.exit(1);
   }
 
@@ -116,7 +125,9 @@ async function main() {
 
     const council = summarizeCouncil(d);
     const councilPoints =
-      council.chokepoints.length + council.conflicts.length + council.revisions.length;
+      council.chokepoints.length +
+      council.conflicts.length +
+      council.revisions.length;
 
     const single = await completeJSON<SingleEval>({
       system: SINGLE_SYSTEM,
@@ -181,7 +192,11 @@ async function main() {
     `---\n\n` +
     detail.join('\n');
 
-  console.log('\n===BENCHMARK_REPORT_START===\n' + report + '\n===BENCHMARK_REPORT_END===\n');
+  console.log(
+    '\n===BENCHMARK_REPORT_START===\n' +
+      report +
+      '\n===BENCHMARK_REPORT_END===\n'
+  );
   await prisma.$disconnect();
 }
 

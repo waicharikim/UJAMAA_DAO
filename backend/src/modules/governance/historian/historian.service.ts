@@ -171,9 +171,7 @@ class HistorianService {
     const group = events.filter((e) => e.scope === 'group').map(line);
     const national = events.filter((e) => e.scope === 'national').map(line);
     const sections = [
-      group.length
-        ? `THIS COMMUNITY'S OWN HISTORY:\n${group.join('\n')}`
-        : '',
+      group.length ? `THIS COMMUNITY'S OWN HISTORY:\n${group.join('\n')}` : '',
       national.length
         ? `NATIONAL ARC (shared — weigh only where it bears on this decision):\n${national.join('\n')}`
         : '',

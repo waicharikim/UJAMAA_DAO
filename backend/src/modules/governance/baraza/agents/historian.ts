@@ -68,7 +68,9 @@ export function buildHistorianMessage(
     decisions.length
       ? `Past decisions and how they turned out:\n${decisions.join('\n')}`
       : '',
-    groupEvents.length ? `Local events on record:\n${groupEvents.join('\n')}` : '',
+    groupEvents.length
+      ? `Local events on record:\n${groupEvents.join('\n')}`
+      : '',
   ].filter(Boolean);
   const communitySection = communityParts.length
     ? `THIS COMMUNITY'S OWN HISTORY:\n${communityParts.join('\n')}`
