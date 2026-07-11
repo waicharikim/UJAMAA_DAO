@@ -189,7 +189,7 @@ Community Memory card under the recorded outcome. The user-facing **"Ward Memory
 
 ---
 
-## 6. Buda & talkable specialist lenses  *(DESIGN)*
+## 6. Buda & talkable specialist lenses  *(IMPLEMENTED — `baraza-lenses.ts`)*
 
 The public Telegram assistant is **Buda** (renamed from the working "Mjamaa" to resolve the
 collision — **Mjamaa stays the council's convener**). Buda is a **front desk** that can
@@ -197,6 +197,13 @@ collision — **Mjamaa stays the council's convener**). Buda is a **front desk**
 **Kadere** (what our principles say), **Tajiri** (can the treasury afford it). These are
 **advisory lenses, never rulings** — "Tajiri says you can afford it" must never read as
 authorization. Internal machinery agents (Shahidi, Mpelelezi, the convener) are not talkable.
+
+**As built** (`baraza-lenses.ts` + Buda `TOOLS`): three lens tools — `ask_the_historian`
+(Mhenga, grounded in `getRelevantHistory`), `ask_the_values_voice` (Kadere, reasons only
+from `UJAMAA_DECLARED_VALUES`), `ask_the_economist` (Tajiri, grounded in the group treasury
+figures). Each is a single `complete()` with a persona prompt that states it is advisory
+(informs, never rules). Not group-scoped, so they also work in DMs. Buda decides when to
+summon a lens from the tool descriptions.
 
 ---
 
@@ -293,7 +300,7 @@ round with large retrievals.
 | Kadere (values voice) | **implemented** — backend + frontend card; advisory, self-gating, in-transcript, NOT in the readiness score |
 | Community timeline curation + national contribution | design |
 | AI-consolidated decision record (fail-open) | design |
-| Buda + talkable lenses | design |
+| Buda + talkable lenses (ask_the_historian / values_voice / economist) | **implemented** |
 | Shared knowledge layer (`docs/` + education → `search_knowledge`) — substrate + **council** + **Buda** | **implemented** (cost-scoping refinements pending) |
 | Build-upon education (AI drafts/gap-detection → existing approval pipeline) | design — later phase |
 

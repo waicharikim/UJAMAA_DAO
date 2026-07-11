@@ -21,6 +21,13 @@ import { prisma } from '../../../core/database/client.js';
 import { getRedisClient } from '../../../core/database/redis.client.js';
 import { logger } from '../../../core/logger/logger.js';
 import { knowledgeService } from '../../governance/knowledge/knowledge.service.js';
+import { historianService } from '../../governance/historian/historian.service.js';
+import {
+  askLens,
+  HISTORIAN_LENS_SYSTEM,
+  VALUES_LENS_SYSTEM,
+  ECONOMIST_LENS_SYSTEM,
+} from './baraza-lenses.js';
 
 // The Q&A bot is latency-sensitive (a member waits for the reply), so it can run
 // a smaller/faster model than the deliberation council. BARAZA_BOT_MODEL wins if
@@ -307,6 +314,60 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'ask_the_historian',
+      description:
+        "Summon Mhenga, the council's historian, to answer a member's question about the community's or the nation's history / how things came to be. Use for 'why is it like this', 'what happened before', 'has this been tried' questions. Advisory.",
+      parameters: {
+        type: 'object',
+        properties: {
+          question: {
+            type: 'string',
+            description: "The member's question, in full.",
+          },
+        },
+        required: ['question'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'ask_the_values_voice',
+      description:
+        "Summon Kadere, the council's values voice, to reflect on whether something fits the community's declared Ujamaa values (cooperative economics, anti-capture, non-custodial, we rise or fall together). Use for 'is this fair to the community', 'does this fit what we stand for' questions. Advisory — never a ruling.",
+      parameters: {
+        type: 'object',
+        properties: {
+          question: {
+            type: 'string',
+            description: "The member's question, in full.",
+          },
+        },
+        required: ['question'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'ask_the_economist',
+      description:
+        "Summon Tajiri, the council's economist, for a treasury / money / affordability question (can we afford this, is this budget realistic, what are the money trade-offs). Advisory.",
+      parameters: {
+        type: 'object',
+        properties: {
+          question: {
+            type: 'string',
+            description: "The member's question, in full.",
+          },
+        },
+        required: ['question'],
+      },
+    },
+  },
 ];
 
 /**
@@ -506,6 +567,15 @@ async function executeToolCall(
         );
       case 'search_knowledge':
         return await toolSearchKnowledge((input.query as string) ?? '');
+      case 'ask_the_historian':
+        return await toolAskHistorian((input.question as string) ?? '');
+      case 'ask_the_values_voice':
+        return await toolAskValues((input.question as string) ?? '');
+      case 'ask_the_economist':
+        return await toolAskEconomist(
+          (input.question as string) ?? '',
+          communities
+        );
       default:
         return `Unknown tool: ${name}`;
     }
@@ -526,6 +596,43 @@ async function toolSearchKnowledge(query: string): Promise<string> {
   return JSON.stringify(
     hits.map((h) => ({ title: h.title, excerpt: h.text.slice(0, 700) }))
   );
+}
+
+// ─── Talkable specialist lenses (advisory — never rulings) ──────────────────────
+
+async function toolAskHistorian(question: string): Promise<string> {
+  if (!question.trim()) return 'What would you like to ask the historian?';
+  const events = await historianService.getRelevantHistory(
+    [],
+    question.split(/\W+/).filter(Boolean),
+    question,
+    undefined,
+    true
+  );
+  const grounding =
+    historianService.formatHistory(events) ||
+    'HISTORY ON RECORD: none relevant to this question.';
+  const answer = await askLens(HISTORIAN_LENS_SYSTEM, grounding, question);
+  return answer || 'Mhenga has nothing on record for that just now.';
+}
+
+async function toolAskValues(question: string): Promise<string> {
+  if (!question.trim()) return 'What would you like to ask about our values?';
+  const answer = await askLens(VALUES_LENS_SYSTEM, '', question);
+  return answer || 'Kadere could not reflect on that just now.';
+}
+
+async function toolAskEconomist(
+  question: string,
+  communities: BarazaCommunity[]
+): Promise<string> {
+  if (!question.trim()) return 'What would you like to ask the economist?';
+  const treasury = communities.length
+    ? await toolGetGroupTreasury(communities)
+    : '';
+  const grounding = treasury ? `TREASURY FIGURES:\n${treasury}` : '';
+  const answer = await askLens(ECONOMIST_LENS_SYSTEM, grounding, question);
+  return answer || 'Tajiri could not answer that just now.';
 }
 
 // ─────────────────────────────────────────────
