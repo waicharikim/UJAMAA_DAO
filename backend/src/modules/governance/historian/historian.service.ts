@@ -29,6 +29,8 @@ export interface HistoricalEventInput {
   consequences?: string;
   themes?: string[];
   sourceRef?: string;
+  /** null/omitted = shared national timeline; set = this group's own local history. */
+  groupId?: string;
 }
 
 const RETRIEVAL_CAP = 15;
@@ -64,19 +66,25 @@ class HistorianService {
         provenance,
         verification,
         sourceRef: input.sourceRef,
+        groupId: input.groupId,
       },
     });
   }
 
   /**
    * Shortlist timeline entries relevant to a proposal. Matches on theme overlap
-   * or keyword hits in title/summary; if nothing matches, returns a year-ordered
-   * sample so Mhenga still has a backbone to frame against. Superseded and
-   * inactive entries are excluded.
+   * (either explicitly-passed themes OR an event's own theme word appearing in
+   * the proposal text) or keyword hits in title/summary. If nothing genuinely
+   * matches, returns [] — we do NOT force an irrelevant year-ordered sample onto
+   * an unrelated proposal (that produced grandiose, off-topic framing). Superseded
+   * and inactive entries are excluded.
    */
   async getRelevantHistory(
     themes: string[],
-    keywords: string[]
+    keywords: string[],
+    proposalText = '',
+    groupId?: string,
+    includeNational = true
   ): Promise<
     {
       era: string;
@@ -85,15 +93,30 @@ class HistorianService {
       summary: string;
       consequences: string | null;
       tag: string;
+      scope: 'group' | 'national';
     }[]
   > {
+    // Register gate. A group's OWN history is always in scope (it's their story).
+    // The shared national arc is only pulled in when it is load-bearing for this
+    // proposal (includeNational) — so routine local decisions are not dressed up in
+    // colonial-to-devolution framing.
+    const scopeWhere = groupId
+      ? includeNational
+        ? { OR: [{ groupId: null }, { groupId }] } // national + this group
+        : { groupId } // this group's own history only
+      : includeNational
+        ? { groupId: null } // national only
+        : undefined; // no group and national suppressed → nothing to frame
+    if (!scopeWhere) return [];
+
     const all = await prisma.historicalEvent.findMany({
-      where: { active: true, supersededById: null },
+      where: { active: true, supersededById: null, ...scopeWhere },
       orderBy: [{ startYear: 'asc' }, { createdAt: 'asc' }],
     });
     if (all.length === 0) return [];
 
     const themeSet = new Set(themes.map((t) => t.toLowerCase()));
+    const text = proposalText.toLowerCase();
     const kw = keywords
       .map((k) => k.toLowerCase())
       .filter((k) => k.length >= 4);
@@ -101,17 +124,26 @@ class HistorianService {
     const scored = all
       .map((e) => {
         const hay = `${e.title} ${e.summary}`.toLowerCase();
-        const themeHits = e.themes.filter((t) =>
-          themeSet.has(t.toLowerCase())
+        // A theme counts if it was passed explicitly OR the event's own theme
+        // word appears in the proposal text — so themes actually contribute
+        // (previously only the proposalType was passed, which never matched).
+        const themeHits = e.themes.filter(
+          (t) =>
+            themeSet.has(t.toLowerCase()) ||
+            (text.length > 0 && text.includes(t.toLowerCase()))
         ).length;
         const kwHits = kw.filter((k) => hay.includes(k)).length;
         return { e, score: themeHits * 2 + kwHits };
       })
       .sort((a, b) => b.score - a.score);
 
-    const matched = scored.filter((s) => s.score > 0).map((s) => s.e);
-    // fall back to a year-ordered sample when nothing matches
-    const chosen = (matched.length > 0 ? matched : all).slice(0, RETRIEVAL_CAP);
+    // No fuzzy fallback: if nothing genuinely matches, return nothing rather than
+    // forcing an irrelevant year-ordered sample onto an unrelated proposal (that
+    // produced grandiose, off-topic historical framing).
+    const chosen = scored
+      .filter((s) => s.score > 0)
+      .map((s) => s.e)
+      .slice(0, RETRIEVAL_CAP);
     chosen.sort((a, b) => (a.startYear ?? 0) - (b.startYear ?? 0));
 
     return chosen.map((e) => ({
@@ -121,6 +153,7 @@ class HistorianService {
       summary: e.summary,
       consequences: e.consequences,
       tag: confidenceTag(e.provenance, e.verification),
+      scope: e.groupId ? ('group' as const) : ('national' as const),
     }));
   }
 
@@ -130,12 +163,23 @@ class HistorianService {
     events: Awaited<ReturnType<HistorianService['getRelevantHistory']>>
   ): string {
     if (events.length === 0) return '';
-    const lines = events.map((e) => {
+    const line = (e: (typeof events)[number]) => {
       const yr = e.startYear ? `${e.startYear} ` : '';
       return `- ${yr}[${e.era}] ${e.title} — ${e.summary} (${e.tag})`;
-    });
-    return `HISTORICAL CONTEXT (how we got here — confirmed vs unverified noted; weigh, don't take as settled):
-${lines.join('\n')}`;
+    };
+    // Lead with this community's own history; the national arc is secondary.
+    const group = events.filter((e) => e.scope === 'group').map(line);
+    const national = events.filter((e) => e.scope === 'national').map(line);
+    const sections = [
+      group.length
+        ? `THIS COMMUNITY'S OWN HISTORY:\n${group.join('\n')}`
+        : '',
+      national.length
+        ? `NATIONAL ARC (shared — weigh only where it bears on this decision):\n${national.join('\n')}`
+        : '',
+    ].filter(Boolean);
+    return `HISTORICAL CONTEXT (confirmed vs unverified noted; weigh, don't take as settled):
+${sections.join('\n\n')}`;
   }
 
   /**

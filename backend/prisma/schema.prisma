@@ -1969,12 +1969,14 @@ model HistoricalEvent {
   sourceRef      String?             @db.Text // URL / deliberationId / model+date
   verification   HistoryVerification @default(UNVERIFIED)
   supersededById String?             @db.Uuid // points to the entry that corrects this one
+  groupId        String?             @db.Uuid // null = shared/national timeline; set = this group's own local history
   active         Boolean             @default(true)
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
 
   @@index([active])
   @@index([provenance])
+  @@index([groupId])
   @@map("historical_events")
 }
 

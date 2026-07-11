@@ -49,6 +49,7 @@ import {
   buildHistorianMessage,
   formatFraming,
   type HistorianFraming,
+  type PastDecisionItem,
 } from './agents/historian.js';
 import {
   AGENT_SYSTEM_PROMPTS,
@@ -175,23 +176,34 @@ export function buildContentHash(proposal: {
 // ─── Mhenga (the historian) — run-once framing pass ─────────────────────────────
 
 /**
- * Mhenga situates the proposal in the national arc. Retrieves a relevant timeline
- * shortlist, then frames it via the LLM ("how we got here" + "where this is
- * heading"); falls back to the raw shortlist when the AI is unavailable, and to
- * '' when the knowledge base has nothing relevant.
+ * Mhenga situates the proposal in time — the community's own arc first, the
+ * national arc only when it is load-bearing. Retrieves a scope-aware shortlist,
+ * then frames it via the LLM ("how we got here" + "where this is heading") as a
+ * pattern; falls back to the raw shortlist when the AI is unavailable, and to ''
+ * when there is nothing on record to frame.
  */
 async function runMhenga(
   proposalSummary: string,
   themes: string[],
-  keywords: string[]
+  keywords: string[],
+  groupId: string | undefined,
+  includeNational: boolean,
+  pastDecisions: PastDecisionItem[]
 ): Promise<string> {
-  const events = await historianService.getRelevantHistory(themes, keywords);
-  if (events.length === 0) return '';
+  const events = await historianService.getRelevantHistory(
+    themes,
+    keywords,
+    proposalSummary,
+    groupId,
+    includeNational
+  );
+  // Nothing on the (gated) timeline and no past decisions → nothing to frame.
+  if (events.length === 0 && pastDecisions.length === 0) return '';
   if (!isQwenAvailable()) return historianService.formatHistory(events);
   try {
     const framing = await completeJSON<HistorianFraming>({
       system: MHENGA_SYSTEM,
-      userMessage: buildHistorianMessage(proposalSummary, events),
+      userMessage: buildHistorianMessage(proposalSummary, events, pastDecisions),
       maxTokens: 1024,
       model: QWEN_ANALYST_MODEL,
     });
@@ -199,6 +211,54 @@ async function runMhenga(
   } catch {
     return historianService.formatHistory(events);
   }
+}
+
+const NATIONAL_REGISTER_SIGNALS = [
+  'land',
+  'title deed',
+  'tenure',
+  'evict',
+  'displac',
+  'settlement',
+  'governance',
+  'policy',
+  'bylaw',
+  'constitution',
+  'devolution',
+  'rights',
+  'election',
+  'representation',
+  'tax',
+  'levy',
+  'debt',
+  'loan',
+  'subsidy',
+  'fuel',
+  'cost of living',
+  'county',
+  'constituency',
+];
+
+/**
+ * Register gate: should Mhenga pull in the shared NATIONAL arc for this proposal,
+ * or stay with the community's own history? National framing is reserved for
+ * load-bearing matters — policy/rule decisions, strategic or emergency proposals,
+ * and anything touching land, governance, rights, taxation or the wider economy —
+ * so routine local operational proposals are not inflated into national grandeur.
+ */
+function nationalArcIsLoadBearing(
+  proposal: { kind: string; proposalType: string },
+  proposalText: string
+): boolean {
+  if (proposal.kind === 'POLICY') return true;
+  if (
+    proposal.proposalType === 'STRATEGIC_DECISION' ||
+    proposal.proposalType === 'EMERGENCY'
+  ) {
+    return true;
+  }
+  const text = proposalText.toLowerCase();
+  return NATIONAL_REGISTER_SIGNALS.some((s) => text.includes(s));
 }
 
 // ─── Context assembly ─────────────────────────────────────────────────────────
@@ -242,10 +302,19 @@ async function assembleProposalContext(
 
   const treasury = proposal.group.treasury[0];
   const currentAffairs = await currentAffairsService.formatForDeliberation();
+  const proposalText = `${proposal.title} ${proposal.description} ${proposal.problem ?? ''} ${proposal.solution ?? ''}`;
+  const pastDecisions: PastDecisionItem[] = pastProposals.map((p) => ({
+    title: p.title,
+    outcome: p.outcome ?? p.status,
+    year: p.createdAt.getFullYear(),
+  }));
   const historicalContext = await runMhenga(
     `${proposal.title}\n${proposal.description}\n${proposal.problem ?? ''}\n${proposal.solution ?? ''}`,
     [proposal.proposalType.toLowerCase()],
-    `${proposal.title} ${proposal.description}`.split(/\W+/).filter(Boolean)
+    proposalText.split(/\W+/).filter(Boolean),
+    proposal.groupId ?? undefined,
+    nationalArcIsLoadBearing(proposal, proposalText),
+    pastDecisions
   );
 
   return {
