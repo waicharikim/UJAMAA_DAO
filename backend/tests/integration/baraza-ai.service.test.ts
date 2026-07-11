@@ -158,7 +158,7 @@ describe('BarazaAiService.reply — basic text response', () => {
   it('returns fallback when the API throws', async () => {
     mockCreate.mockRejectedValue(new Error('rate limit'));
     const result = await svc.reply('Hello', BASE_CTX, single('g1'));
-    expect(result).toMatch(/unavailable|haipatikani/i);
+    expect(result).toMatch(/couldn't answer|sikuweza/i);
   });
 
   it('returns fallback when response has no content', async () => {

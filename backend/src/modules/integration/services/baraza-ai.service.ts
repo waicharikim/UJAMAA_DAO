@@ -20,6 +20,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../../../core/database/client.js';
 import { getRedisClient } from '../../../core/database/redis.client.js';
 import { logger } from '../../../core/logger/logger.js';
+import { knowledgeService } from '../../governance/knowledge/knowledge.service.js';
 
 // The Q&A bot is latency-sensitive (a member waits for the reply), so it can run
 // a smaller/faster model than the deliberation council. BARAZA_BOT_MODEL wins if
@@ -288,6 +289,24 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'search_knowledge',
+      description:
+        "Look up how the UjamaaDAO platform works — PR/UT/Impact Points, governance, verification, treasury, education, tokens — from the official docs and verified learning modules. Use this to answer any 'how does X work / what is X / how do I…' question about the platform accurately instead of guessing.",
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'The question or keywords to look up.',
+          },
+        },
+        required: ['query'],
+      },
+    },
+  },
 ];
 
 /**
@@ -485,6 +504,8 @@ async function executeToolCall(
           communities,
           (input.query as string) ?? ''
         );
+      case 'search_knowledge':
+        return await toolSearchKnowledge((input.query as string) ?? '');
       default:
         return `Unknown tool: ${name}`;
     }
@@ -492,6 +513,19 @@ async function executeToolCall(
     logger.warn({ err, tool: name }, '[BarazaAI] Tool call failed');
     return `Could not retrieve data for ${name}.`;
   }
+}
+
+/** Platform-knowledge lookup (RAG) — docs + verified education modules. Not
+ *  group-scoped, so it stays out of GROUP_SCOPED_TOOLS. */
+async function toolSearchKnowledge(query: string): Promise<string> {
+  if (!query.trim()) return 'Please tell me what to look up.';
+  const hits = await knowledgeService.search(query, 3);
+  if (!hits.length) {
+    return `I couldn't find anything in the platform docs about "${query}".`;
+  }
+  return JSON.stringify(
+    hits.map((h) => ({ title: h.title, excerpt: h.text.slice(0, 700) }))
+  );
 }
 
 // ─────────────────────────────────────────────

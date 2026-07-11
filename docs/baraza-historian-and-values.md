@@ -200,7 +200,7 @@ authorization. Internal machinery agents (Shahidi, Mpelelezi, the convener) are 
 
 ---
 
-## 7. The shared knowledge layer & education  *(IMPLEMENTED — substrate + council tool; Buda wiring pending)*
+## 7. The shared knowledge layer & education  *(IMPLEMENTED — substrate + council tool + Buda)*
 
 **As built:** `embed()` on the Qwen client (DashScope `text-embedding-v3`) +
 `KnowledgeChunk` (chunked, embedded corpus; migration `20260711020000`) +
@@ -208,9 +208,12 @@ authorization. Internal machinery agents (Shahidi, Mpelelezi, the convener) are 
 modules, cosine `search()`) + `knowledge/reindex-run.ts` (operator indexer). Wired into the
 council: `search_knowledge` is in `DELIBERATION_TOOLS` (on-demand, so cost is bounded).
 Verified live: 346 chunks indexed; a "how do PR work / can they transfer?" query returns the
-PR education module + `economy-design` doc. **Pending:** wire `search_knowledge` into Buda
-(the Q&A bot) + the cost-control refinements (scope to specific agents, top-k tuning).
-Re-index: `docker cp docs/. ujamaa_web:/usr/src/app/knowledge-docs` then
+PR education module + `economy-design` doc. Also wired into **Buda** (the Q&A bot) —
+`search_knowledge` in its `TOOLS`, so it answers "how does X work" questions from the corpus
+rather than guessing (not group-scoped). **Pending:** cost-control refinements (scope to
+specific council agents, top-k tuning) + build-upon education (AI drafts / gap-detection via
+the existing approval pipeline). Re-index:
+`docker cp docs/. ujamaa_web:/usr/src/app/knowledge-docs` then
 `npx tsx src/modules/governance/knowledge/reindex-run.ts`.
 
 
@@ -291,7 +294,7 @@ round with large retrievals.
 | Community timeline curation + national contribution | design |
 | AI-consolidated decision record (fail-open) | design |
 | Buda + talkable lenses | design |
-| Shared knowledge layer (`docs/` + education → `search_knowledge`) — substrate + **council** tool | **implemented** (Buda wiring + cost-scoping pending) |
+| Shared knowledge layer (`docs/` + education → `search_knowledge`) — substrate + **council** + **Buda** | **implemented** (cost-scoping refinements pending) |
 | Build-upon education (AI drafts/gap-detection → existing approval pipeline) | design — later phase |
 
 **See also:** [`baraza-deliberation.md`](./baraza-deliberation.md),
