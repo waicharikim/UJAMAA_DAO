@@ -123,7 +123,7 @@ one-line note otherwise — mirroring its self-gating so it never becomes wallpa
 
 ---
 
-## 4. The community timeline & curation  *(DESIGN)*
+## 4. The community timeline & curation  *(backend API IMPLEMENTED; frontend + national + roles pending)*
 
 Local history has **two sources kept in one store** (two provenance values, not two
 systems): **model/feed-supplied** (`UNVERIFIED`, Mhenga hedges) and **community-curated**
@@ -165,6 +165,16 @@ to our story" (creates an `UNVERIFIED` suggestion) → one review queue (member 
 surfaced) the keeper ratifies. A Feed "mark as history" shortcut is a secondary on-ramp.
 National: a "suggest to the national story" affordance in the hierarchy browser → national
 review queue. (Avoid the tab name "Kumbukumbu" — it collides with an ADR-059 agent name.)
+
+**As built (backend, this session):** `MEMBER` provenance value (migration
+`20260712000000`, enum add dev+test) + `historianService.proposeLocalEvent` /
+`listGroupHistory` / `ratifyEvent` + `HistoryController` + routes under `/governance/history`:
+`POST /history` (member proposes → `MEMBER`/`UNVERIFIED`), `GET /history/:groupId` (timeline
+w/ status pending|confirmed|disputed), `PATCH /history/:eventId/ratify` (leader / location
+admin / super-admin → confirm=`ADMIN_CONFIRMED` / dispute=`DISPUTED` / reject=`active:false`).
+Confirmed entries feed Mhenga's group arc. **Pending:** the "Our Story" frontend tab + Feed
+shortcut; national contribution (coordinator-quorum / NATIONAL-scope vote); elected-historian
+role; reward-on-ratify (IP); Buda-surfaced candidates into the same queue.
 
 ---
 

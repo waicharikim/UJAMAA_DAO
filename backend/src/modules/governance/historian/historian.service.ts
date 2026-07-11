@@ -71,6 +71,64 @@ class HistorianService {
     });
   }
 
+  /** A community member proposes a local timeline entry — pending ratification. */
+  async proposeLocalEvent(
+    groupId: string,
+    input: Omit<HistoricalEventInput, 'groupId'>
+  ) {
+    return this.addEvent({ ...input, groupId }, 'MEMBER', 'UNVERIFIED');
+  }
+
+  /** This group's own timeline (confirmed + pending + disputed), arc order. */
+  async listGroupHistory(groupId: string) {
+    const events = await prisma.historicalEvent.findMany({
+      where: { groupId, active: true, supersededById: null },
+      orderBy: [{ startYear: 'asc' }, { createdAt: 'asc' }],
+      select: {
+        id: true,
+        era: true,
+        title: true,
+        startYear: true,
+        summary: true,
+        themes: true,
+        provenance: true,
+        verification: true,
+        createdAt: true,
+      },
+    });
+    return events.map((e) => ({
+      id: e.id,
+      era: e.era,
+      title: e.title,
+      startYear: e.startYear,
+      summary: e.summary,
+      themes: e.themes,
+      tag: confidenceTag(e.provenance, e.verification),
+      status:
+        e.verification === 'ADMIN_CONFIRMED'
+          ? 'confirmed'
+          : e.verification === 'DISPUTED'
+            ? 'disputed'
+            : 'pending',
+      createdAt: e.createdAt,
+    }));
+  }
+
+  /** A keeper reviews a proposed/contested entry: confirm, dispute, or reject. */
+  async ratifyEvent(id: string, action: 'confirm' | 'dispute' | 'reject') {
+    const data =
+      action === 'confirm'
+        ? { verification: 'ADMIN_CONFIRMED' as const }
+        : action === 'dispute'
+          ? { verification: 'DISPUTED' as const }
+          : { active: false };
+    return prisma.historicalEvent.update({
+      where: { id },
+      data,
+      select: { id: true, verification: true, active: true },
+    });
+  }
+
   /**
    * Shortlist timeline entries relevant to a proposal. Matches on theme overlap
    * (either explicitly-passed themes OR an event's own theme word appearing in

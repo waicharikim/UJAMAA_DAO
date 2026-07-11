@@ -9,6 +9,7 @@ import { Router } from 'express';
 import { ProposalController } from '../controllers/proposal.controller.js';
 import { ProposalAnnotationController } from '../controllers/proposal-annotation.controller.js';
 import { BarazaController } from '../baraza/baraza.controller.js';
+import { HistoryController } from '../controllers/history.controller.js';
 import { authenticate } from '../../../core/middleware/auth.middleware.js';
 import { authorize } from '../../../core/middleware/authorize.js';
 import { validateRequest } from '../../../core/middleware/validateRequest.js';
@@ -18,6 +19,33 @@ import { asyncHandler } from '../../../core/utils/response.js';
 const router = Router();
 
 router.use(authenticate);
+
+// ── Community timeline curation ("Our Story") ──────────────────────────────
+// Literal `/history` routes registered before the `/:proposalId` params.
+router.post(
+  '/history',
+  validateRequest({
+    schema: z.object({
+      groupId: z.string().uuid(),
+      title: z.string().min(3).max(160),
+      summary: z.string().min(3).max(2000),
+      era: z.string().max(60).optional(),
+      startYear: z.number().int().min(1800).max(2100).optional(),
+      themes: z.array(z.string().max(40)).max(8).optional(),
+    }),
+    target: 'body',
+  }),
+  asyncHandler(HistoryController.propose)
+);
+router.get('/history/:groupId', asyncHandler(HistoryController.list));
+router.patch(
+  '/history/:eventId/ratify',
+  validateRequest({
+    schema: z.object({ action: z.enum(['confirm', 'dispute', 'reject']) }),
+    target: 'body',
+  }),
+  asyncHandler(HistoryController.ratify)
+);
 
 router.get('/', asyncHandler(ProposalController.listProposals));
 
