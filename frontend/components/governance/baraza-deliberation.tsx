@@ -1,6 +1,6 @@
 "use client"
 
-import { Users, Info, Check, ThumbsUp, Swords, HelpCircle, Construction, Star, Wrench, PencilLine, Lightbulb } from "lucide-react"
+import { Users, Info, Check, ThumbsUp, Swords, HelpCircle, Construction, Star, Wrench, PencilLine, Lightbulb, HeartHandshake } from "lucide-react"
 import type { BarazaDeliberationDto } from "@/lib/api"
 
 interface BarazaDeliberationCardProps {
@@ -166,6 +166,28 @@ export function BarazaDeliberationCard({ deliberation, isCreator = false, editab
           <Section icon={HelpCircle} label="Still unanswered" color="#7A4F1E">
             <Bullets items={open} color="#7A4F1E" />
           </Section>
+        )}
+
+        {/* Values check (Kadere) — advisory read on fit with the community's declared
+            values. Prominent only when it flagged a tension; a quiet note otherwise. */}
+        {deliberation.kadere?.reading && (
+          deliberation.kadere.hasTension ? (
+            <Section icon={HeartHandshake} label="Values check" color="#7A4F1E">
+              <p className="text-[13px] leading-snug" style={{ color: "rgba(14,11,8,0.78)" }}>
+                {deliberation.kadere.reading}
+              </p>
+              {deliberation.kadere.closing && (
+                <p className="text-[12.5px] leading-snug mt-1.5" style={{ color: "rgba(14,11,8,0.6)" }}>
+                  <span className="font-semibold">After discussion:</span> {deliberation.kadere.closing}
+                </p>
+              )}
+            </Section>
+          ) : (
+            <div className="flex items-start gap-1.5 text-[12.5px]" style={{ color: "rgba(14,11,8,0.7)" }}>
+              <HeartHandshake className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" style={{ color: "#1A6B3C" }} />
+              <span><strong>Values check:</strong> {deliberation.kadere.reading}</span>
+            </div>
+          )
         )}
 
         {blockers.length > 0 && (

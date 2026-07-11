@@ -1088,6 +1088,13 @@ export interface BarazaDeliberationDto {
   mkutanoFixability: string | null
   triggeredBy: string
   completedAt: string | null
+  // Kadere (values voice) — advisory read on coherence with the community's declared
+  // values. `hasTension` drives UI salience; `closing` present only when it flagged one.
+  kadere?: {
+    reading: string | null
+    closing: string | null
+    hasTension: boolean
+  } | null
 }
 
 export interface ProposalAnnotationDto {

@@ -80,6 +80,8 @@ interface RoundOutput {
   /** Kadere (values voice) — round 1 reading + optional round-3 closing. Advisory
    *  only; lives in the transcript, never fed into the readiness score. */
   kadereValues?: string;
+  /** Whether Kadere flagged a real values tension (round 1). Drives UI salience. */
+  kadereHasTension?: boolean;
 }
 
 interface MkutanoOutput {
@@ -1484,9 +1486,11 @@ class BarazaDeliberationService {
       // enters the transcript (so the council can rebut it) but is never fed into
       // the readiness score.
       let kadereValues: string | undefined;
+      let kadereHasTension: boolean | undefined;
       if (roundNumber === 1) {
         const reading = await runKadere(proposalContextStr, domainPositions);
         kadereFlaggedTension = reading.hasValuesTension;
+        kadereHasTension = reading.hasValuesTension;
         kadereValues = reading.text || undefined;
       } else if (roundNumber === 3 && kadereFlaggedTension) {
         kadereValues =
@@ -1499,6 +1503,7 @@ class BarazaDeliberationService {
         ukweliAnnotations,
         kivuliAnnotations,
         kadereValues,
+        kadereHasTension,
       });
     }
 
@@ -1592,7 +1597,7 @@ class BarazaDeliberationService {
    * Used by the proposal controller to surface results to the author/voters.
    */
   async getLatest(proposalId: string) {
-    return prisma.barazaDeliberation.findFirst({
+    const delib = await prisma.barazaDeliberation.findFirst({
       where: { proposalId, status: 'COMPLETE' },
       orderBy: { createdAt: 'desc' },
       select: {
@@ -1606,8 +1611,30 @@ class BarazaDeliberationService {
         mkutanoFixability: true,
         triggeredBy: true,
         completedAt: true,
+        transcript: true,
       },
     });
+    if (!delib) return null;
+
+    // Surface Kadere (values voice) from the transcript without leaking the full
+    // internal transcript to the client.
+    const { transcript, ...rest } = delib;
+    const rounds = ((transcript as { rounds?: unknown[] } | null)?.rounds ??
+      []) as Array<{
+      roundNumber?: number;
+      kadereValues?: string;
+      kadereHasTension?: boolean;
+    }>;
+    const round1 = rounds.find((r) => r.roundNumber === 1);
+    const reading = round1?.kadereValues ?? null;
+    const closing =
+      rounds.find((r) => r.roundNumber === 3)?.kadereValues ?? null;
+    const kadere =
+      reading || closing
+        ? { reading, closing, hasTension: round1?.kadereHasTension ?? false }
+        : null;
+
+    return { ...rest, kadere };
   }
 
   /**

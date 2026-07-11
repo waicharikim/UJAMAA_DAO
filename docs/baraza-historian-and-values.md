@@ -1,7 +1,7 @@
 # Baraza — The Historian & The Values Voice
 
 > **Status:** mixed. **Mhenga (two-scale historian) `implemented + verified`** (`e3f37c0`)
-> and **Kadere (the values voice) `implemented` (backend; frontend surfacing pending)** —
+> and **Kadere (the values voice) `implemented`** (backend + frontend card) —
 > vision-check 2026-07-11 returned CONDITIONAL/proceed, and the build honours all four
 > conditions. **The community timeline & curation, the AI-consolidated decision record,
 > and the talkable lenses are `design`.**
@@ -115,9 +115,11 @@ view, weigh and rebut)` block, so rounds 2–3 can rebut it. **Honouring the vis
 conditions:** advisory-only — it is **deliberately not passed to `computeReadinessScore`**
 (lives only in the transcript); reasons solely from `UJAMAA_DECLARED_VALUES`; labelled +
 rebuttable in-transcript; scoped to values-coherence (prompt explicitly defers equity to
-Mwananchi). Fails open (no Qwen → no Kadere block). **Follow-up:** surface it to the
-frontend — it's persisted in `BarazaDeliberation.transcript`, but `getLatest` doesn't select
-`transcript`, so the deliberation card doesn't show it yet.
+Mwananchi). Fails open (no Qwen → no Kadere block). **Surfaced on the frontend:**
+`getLatest` extracts a `kadere` object (`reading` / `closing` / `hasTension`) from the
+transcript (without leaking the full transcript to the client); `BarazaDeliberationCard`
+renders a prominent "Values check" section when Kadere flagged a tension, and a quiet
+one-line note otherwise — mirroring its self-gating so it never becomes wallpaper.
 
 ---
 
@@ -267,7 +269,7 @@ round with large retrievals.
 | Mhenga two-scale historian (national + group, register gate, pattern narration) | **implemented + verified** (`e3f37c0`) |
 | `HistoricalEvent.groupId` + migration (dev+test) | **implemented** |
 | Community memory (human free-text rationale/alternatives/outcome) | **implemented** (pre-existing) |
-| Kadere (values voice) — backend | **implemented** — advisory, self-gating, in-transcript, NOT in the readiness score; frontend surfacing pending |
+| Kadere (values voice) | **implemented** — backend + frontend card; advisory, self-gating, in-transcript, NOT in the readiness score |
 | Community timeline curation + national contribution | design |
 | AI-consolidated decision record (fail-open) | design |
 | Buda + talkable lenses | design |
