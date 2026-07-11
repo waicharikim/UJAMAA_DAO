@@ -1,8 +1,10 @@
 # Baraza — The Historian & The Values Voice
 
-> **Status:** mixed. **Mhenga (the two-scale historian) is `implemented + verified`**
-> (commit `e3f37c0`). **Kadere (the values voice), the community timeline & curation,
-> the AI-consolidated decision record, and the talkable lenses are `design`.**
+> **Status:** mixed. **Mhenga (two-scale historian) `implemented + verified`** (`e3f37c0`)
+> and **Kadere (the values voice) `implemented` (backend; frontend surfacing pending)** —
+> vision-check 2026-07-11 returned CONDITIONAL/proceed, and the build honours all four
+> conditions. **The community timeline & curation, the AI-consolidated decision record,
+> and the talkable lenses are `design`.**
 > Companion to [`baraza-deliberation.md`](./baraza-deliberation.md) (the shipped engine)
 > and [`baraza-panels-and-memory.md`](./baraza-panels-and-memory.md) (ADR-059). Build
 > gate for the design parts: run `/vision-check` before Kadere or any agent-learning path
@@ -78,7 +80,7 @@ run on that instance (unseeded → no national arc).
 
 ---
 
-## 3. Kadere — the values voice  *(DESIGN — `/vision-check` before build)*
+## 3. Kadere — the values voice  *(IMPLEMENTED — backend; `agents/values.ts`)*
 
 A **labelled participant in the deliberation rounds** (in the transcript, rebuttable) —
 *not* injected as invisible shared context. That placement is what keeps it legitimate: a
@@ -103,6 +105,19 @@ voice people can talk back to, not the frame everyone inherits.
   declared values?" → a full labelled position when yes, a brief "no values tension" when
   no. Cadence: state its reading in round 1, optional closing word in round 3 — not a full
   three-round debater (protects salience + cost). `POLICY` → full voice by default.
+
+**As built** (`agents/values.ts` + orchestrator): Kadere is a **stateless, cross-cutting
+voice**, not an `AgentKey` domain agent (matches "not a 3-round debater" + avoids the enum
+blast radius). It runs once in round 1 (`runKadere` → `{ hasValuesTension, text }`, self-
+gating), and gives a brief `runKadereClosing` in round 3 **only if** it flagged a tension.
+Its reading is woven into `formatRoundTranscript` as a labelled `KADERE (values voice — one
+view, weigh and rebut)` block, so rounds 2–3 can rebut it. **Honouring the vision-check
+conditions:** advisory-only — it is **deliberately not passed to `computeReadinessScore`**
+(lives only in the transcript); reasons solely from `UJAMAA_DECLARED_VALUES`; labelled +
+rebuttable in-transcript; scoped to values-coherence (prompt explicitly defers equity to
+Mwananchi). Fails open (no Qwen → no Kadere block). **Follow-up:** surface it to the
+frontend — it's persisted in `BarazaDeliberation.transcript`, but `getLatest` doesn't select
+`transcript`, so the deliberation card doesn't show it yet.
 
 ---
 
@@ -252,7 +267,7 @@ round with large retrievals.
 | Mhenga two-scale historian (national + group, register gate, pattern narration) | **implemented + verified** (`e3f37c0`) |
 | `HistoricalEvent.groupId` + migration (dev+test) | **implemented** |
 | Community memory (human free-text rationale/alternatives/outcome) | **implemented** (pre-existing) |
-| Kadere (values voice) | design — `/vision-check` first |
+| Kadere (values voice) — backend | **implemented** — advisory, self-gating, in-transcript, NOT in the readiness score; frontend surfacing pending |
 | Community timeline curation + national contribution | design |
 | AI-consolidated decision record (fail-open) | design |
 | Buda + talkable lenses | design |

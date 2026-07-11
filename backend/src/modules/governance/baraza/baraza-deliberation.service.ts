@@ -61,6 +61,14 @@ import {
   injectPrompt,
   type AgentKey,
 } from './agents/prompts.js';
+import {
+  KADERE_SYSTEM,
+  KADERE_CLOSING_SYSTEM,
+  buildKadereMessage,
+  buildKadereClosingMessage,
+  formatKadereForTranscript,
+  type KadereReading,
+} from './agents/values.js';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -69,6 +77,9 @@ interface RoundOutput {
   domainPositions: Partial<Record<AgentKey, string>>;
   ukweliAnnotations: string;
   kivuliAnnotations: string;
+  /** Kadere (values voice) — round 1 reading + optional round-3 closing. Advisory
+   *  only; lives in the transcript, never fed into the readiness score. */
+  kadereValues?: string;
 }
 
 interface MkutanoOutput {
@@ -791,6 +802,65 @@ async function runMpelelezi(
   return response ?? '[Mpelelezi did not respond]';
 }
 
+// ─── Kadere (the values voice) ──────────────────────────────────────────────────
+
+/**
+ * Kadere reads whether the proposal coheres with the community's DECLARED values.
+ * A labelled, rebuttable voice — advisory only, deliberately NOT fed into the
+ * readiness score. Self-gates: brief "no values tension" when values aren't
+ * materially implicated, a short reading when they are. Fails open (no Qwen → no
+ * Kadere block). Runs once in round 1.
+ */
+async function runKadere(
+  proposalContextStr: string,
+  round1Positions: Partial<Record<AgentKey, string>>
+): Promise<KadereReading> {
+  if (!isQwenAvailable()) return { hasValuesTension: false, text: '' };
+  try {
+    const reading = await completeJSON<KadereReading>({
+      system: KADERE_SYSTEM,
+      userMessage: buildKadereMessage(
+        proposalContextStr,
+        formatDomainPositions(round1Positions)
+      ),
+      maxTokens: 700,
+      model: QWEN_ANALYST_MODEL,
+    });
+    if (!reading || typeof reading.text !== 'string') {
+      return { hasValuesTension: false, text: '' };
+    }
+    return {
+      hasValuesTension: reading.hasValuesTension === true,
+      text: reading.text,
+    };
+  } catch {
+    return { hasValuesTension: false, text: '' };
+  }
+}
+
+/**
+ * Kadere's brief closing word — only when it flagged a values tension in round 1.
+ * Reads the deliberation so far and says whether that tension was addressed.
+ */
+async function runKadereClosing(
+  proposalContextStr: string,
+  previousRounds: RoundOutput[]
+): Promise<string> {
+  if (!isQwenAvailable()) return '';
+  try {
+    const transcript = previousRounds.map(formatRoundTranscript).join('\n\n---\n\n');
+    const text = await complete({
+      system: KADERE_CLOSING_SYSTEM,
+      userMessage: buildKadereClosingMessage(proposalContextStr, transcript),
+      maxTokens: 400,
+      model: QWEN_ANALYST_MODEL,
+    });
+    return text ?? '';
+  } catch {
+    return '';
+  }
+}
+
 // ─── Mkutano ──────────────────────────────────────────────────────────────────
 
 async function runMkutano(
@@ -1189,7 +1259,11 @@ SHAHIDI'S ANNOTATIONS:
 ${round.ukweliAnnotations}
 
 MPELELEZI'S ASSESSMENT:
-${round.kivuliAnnotations}`;
+${round.kivuliAnnotations}${
+    round.kadereValues
+      ? `\n\n${formatKadereForTranscript(round.kadereValues)}`
+      : ''
+  }`;
 }
 
 // ─── Main orchestrator ────────────────────────────────────────────────────────
@@ -1372,6 +1446,7 @@ class BarazaDeliberationService {
 
     // ── 3. Three debate rounds ───────────────────────────────────────────────
     const rounds: RoundOutput[] = [];
+    let kadereFlaggedTension = false;
 
     for (const roundNumber of [1, 2, 3] as const) {
       logger.info({ deliberationId, roundNumber }, '[BARAZA] Running round');
@@ -1404,11 +1479,26 @@ class BarazaDeliberationService {
         groupId
       );
 
+      // Kadere (values voice): a labelled, rebuttable reading in round 1; a brief
+      // closing in round 3 only if it flagged a values tension. Advisory only — it
+      // enters the transcript (so the council can rebut it) but is never fed into
+      // the readiness score.
+      let kadereValues: string | undefined;
+      if (roundNumber === 1) {
+        const reading = await runKadere(proposalContextStr, domainPositions);
+        kadereFlaggedTension = reading.hasValuesTension;
+        kadereValues = reading.text || undefined;
+      } else if (roundNumber === 3 && kadereFlaggedTension) {
+        kadereValues =
+          (await runKadereClosing(proposalContextStr, rounds)) || undefined;
+      }
+
       rounds.push({
         roundNumber,
         domainPositions,
         ukweliAnnotations,
         kivuliAnnotations,
+        kadereValues,
       });
     }
 
