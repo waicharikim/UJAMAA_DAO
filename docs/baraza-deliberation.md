@@ -36,7 +36,7 @@ Each domain agent argues from a **cast lived perspective** — a *life-stage × 
 
 **Framing voices** (run once, not per round, to bound cost):
 - **Mjamaa** (convener / structure) — picks the panel, casts the domain voices, emits a **structural severity** that feeds the readiness score, keeps per-group memory, and runs a **closing review** of the proposed revisions.
-- **Mhenga** (historian) — situates the proposal in the national arc + trajectory, from a provenance-tracked `HistoricalEvent` timeline.
+- **Mhenga** (historian) — a **two-scale** voice: leads with the **community's own arc** (its past decisions + local timeline) as a *pattern*, and pulls in the **shared national arc** only when it's load-bearing (register gate). Provenance-tracked `HistoricalEvent` timeline (`groupId` null = national, set = group-local). Full design: [`baraza-historian-and-values.md`](./baraza-historian-and-values.md).
 
 **Context injected into every deliberation:** present conditions (`CurrentAffairs` collectors — EPRA fuel, @moneyacademyKE, best-effort/fail-open) and Mhenga's historical framing.
 

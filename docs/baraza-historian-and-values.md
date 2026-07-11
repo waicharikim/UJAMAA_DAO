@@ -1,0 +1,196 @@
+# Baraza — The Historian & The Values Voice
+
+> **Status:** mixed. **Mhenga (the two-scale historian) is `implemented + verified`**
+> (commit `e3f37c0`). **Kadere (the values voice), the community timeline & curation,
+> the AI-consolidated decision record, and the talkable lenses are `design`.**
+> Companion to [`baraza-deliberation.md`](./baraza-deliberation.md) (the shipped engine)
+> and [`baraza-panels-and-memory.md`](./baraza-panels-and-memory.md) (ADR-059). Build
+> gate for the design parts: run `/vision-check` before Kadere or any agent-learning path
+> (they touch the AI-agency rule + governance integrity).
+> Code: `backend/src/modules/governance/baraza/` + `backend/src/modules/governance/historian/`.
+
+This document covers how the Baraza council carries **values** and **history/context**,
+and how the public Telegram assistant relates to the council.
+
+---
+
+## 1. Why two separate voices (the principle)
+
+Values and history have **opposite epistemic disciplines**, so they are separate agents:
+
+- **The historian earns trust through restraint** — facts first, provenance-tagged,
+  contested-stays-contested, no agenda. The moment it editorialises, its facts get
+  discounted as motivated.
+- **The values voice earns trust through disclosure** — openly normative, reasoning from
+  the community's *declared* values, labelled so people can push back.
+
+Fusing them would launder advocacy onto the credibility of facts. So: **Mhenga** (history)
+stays context/framing; **Kadere** (values) is a labelled, rebuttable participant.
+
+Two framing rules that run through everything below:
+- **Shared values, distinct histories.** Values are a *commons* (one shared frame keeps
+  communities one movement). History is per-community *and* national — every group keeps
+  its own story.
+- **The AI never holds its own agenda.** It reasons from what the community *declared*
+  and can amend; it never originates a politics no one voted for (the "rogue actor"
+  capture risk). AI informs; humans decide.
+
+---
+
+## 2. Mhenga — the two-scale historian  *(SHIPPED — `e3f37c0`)*
+
+Mhenga situates a proposal in time. It is a **run-once framing pass** whose output is
+injected into the shared proposal context every agent reads (it is not a round debater).
+
+**Two scales, community-first.** Mhenga holds:
+- the **shared national arc** — the `HistoricalEvent` KB (colonial land → independence →
+  SAPs → devolution → debt/cost-of-living), and
+- **each group's own arc** — that community's local timeline entries **and** its past
+  decisions and how they turned out.
+
+`HistoricalEvent.groupId`: **null = shared national** (every group sees it), **set =
+that group's local history**. `getRelevantHistory(themes, keywords, proposalText,
+groupId?, includeNational?)` scopes retrieval to *national + this group* and tags every
+item `scope: 'group' | 'national'`.
+
+**Register gate.** A community's own history is *always* in scope; the national arc is
+pulled in **only when it is load-bearing** — `nationalArcIsLoadBearing()`: a `POLICY`
+proposal, a `STRATEGIC_DECISION`/`EMERGENCY` type, or text touching land, governance,
+rights, taxation or the wider economy. A routine "buy a water tank" proposal stays with
+the community's story; "resolve a land dispute" or "adopt a bylaw" earns the national arc.
+This replaced the old **year-ordered-sample fallback** (no match now = inject nothing),
+which used to inflate mundane local matters into colonial-to-devolution grandeur.
+
+**Narration as a pattern, not a list.** `MHENGA_SYSTEM` leads with the community and reads
+its arc as a *pattern* — "each time they did X, Y followed", the recurring gap — rather
+than recounting events. `buildHistorianMessage` renders **two registers**: the community
+first (past decisions + local events), then a gated national section. When there is little
+on record it says so plainly rather than inventing a backdrop.
+
+**Provenance is first-class.** Every entry carries `provenance` (`LLM_SEED` / `COLLECTOR` /
+`DELIBERATION` / `ADMIN`) + `verification` (`UNVERIFIED` / `ADMIN_CONFIRMED` / `DISPUTED`),
+with supersede-not-delete. `confidenceTag()` maps these to a phrase Mhenga must honour
+(lean on confirmed, hedge on unverified, present DISPUTED as contested). Fails open: no
+LLM → a scope-aware raw shortlist; nothing on record → empty.
+
+**Prod note:** Mhenga is silent unless `historianService.seedHistoricalBackbone()` has been
+run on that instance (unseeded → no national arc).
+
+---
+
+## 3. Kadere — the values voice  *(DESIGN — `/vision-check` before build)*
+
+A **labelled participant in the deliberation rounds** (in the transcript, rebuttable) —
+*not* injected as invisible shared context. That placement is what keeps it legitimate: a
+voice people can talk back to, not the frame everyone inherits.
+
+- **Reasons from declared values = the shared Ujamaa constitution** (source **A**, not
+  per-group charters — shared values keep communities one movement). Today's artifact is
+  the fixed manifesto from `group.service.ts` `generateDeclaration()` (Ujamaa / cooperative
+  economics / anti-capture / non-custodial treasury / "we rise or fall together"). Per-group
+  charters remain a possible later evolution; Kadere's interface ("cite declared values")
+  wouldn't change, only the source.
+- **Maps as a cross-cutting agent, not a domain agent.** Domain agents (DAKTARI/LINDA/
+  TAJIRI/FOREMAN/MWALIMU, MKURUGENZI/MWANANCHI/FUNDI/HUSTLER) have a *subject* and are
+  keyword-selected by `selectDomainPanel`. Kadere is orthogonal (values apply to
+  everything), so it is added **unconditionally like the analysts** — `'KADERE'` in
+  `AgentKey`, in `allAgentKeys` (never `selectDomainPanel`), surfaced in
+  `formatRoundTranscript`.
+- **Boundary vs MWANANCHI:** MWANANCHI does *stakeholder-equity* analysis (who pays, who's
+  left out); Kadere checks *coherence with the declared constitution*. Scope its prompt
+  tightly or the two duplicate.
+- **Always present, self-gating.** It always evaluates "does this materially implicate our
+  declared values?" → a full labelled position when yes, a brief "no values tension" when
+  no. Cadence: state its reading in round 1, optional closing word in round 3 — not a full
+  three-round debater (protects salience + cost). `POLICY` → full voice by default.
+
+---
+
+## 4. The community timeline & curation  *(DESIGN)*
+
+Local history has **two sources kept in one store** (two provenance values, not two
+systems): **model/feed-supplied** (`UNVERIFIED`, Mhenga hedges) and **community-curated**
+(`ADMIN_CONFIRMED`, Mhenga leans on). Conflicts → `DISPUTED`, presented as contested.
+Degrades gracefully: baseline context free, richer as a community records its own truth.
+
+**Life-context is in scope, gated.** Include ambient context that *conditions collective
+decisions* (climate/season, price shocks, infrastructure, shared events) — the difference
+between a historian and a filing clerk. Exclude private individual misfortune, unverified
+accusations about named people, and anything that doesn't bear on a shared decision
+(mirrors the existing feed-privacy discipline).
+
+**Contribution is tiered to trust, mapped to RBAC.** Admin adds directly
+(`ADMIN_CONFIRMED`) → member suggests → historian/admin ratifies (`UNVERIFIED` until
+confirmed) → contested goes `DISPUTED`, escalating to a lightweight community vote when it
+genuinely matters. An **elected/appointed community historian** (reuse the elections
+module) is the human keeper; **Mhenga narrates** what they've verified. **Reward the
+ratified entry, not the submission** (IP; Rule 5).
+
+**Anyone can contribute at ANY scope (local *and* national); the ratification bar scales
+with blast radius.** Admin-only national curation is rejected — it reproduces the "captured
+infrastructure" the founding declaration rails against, and is more dangerous at national
+scale (it frames every group). Local → the group's own keeper. National → proposed by
+anyone, ratified by a **distributed bar**: a county-coordinator quorum, or the actual
+**NATIONAL-scope proposal/vote** machinery for significant/contested entries. Here
+**`DISPUTED` is a feature** — much national history *should* stay contested. National facts
+also *accrete* when many groups' deliberations reference the same event
+(`DELIBERATION` provenance) — bottom-up national memory. *Sequencing:* ship local + an
+admin-seeded national backbone first; open national contribution once there are enough
+communities to distribute ratification.
+
+**Propose → ratify, never silent learning.** Chat interactions (via Buda, §6) only *surface
+candidates* into a review queue; a human ratifies before anything enters the store. Never
+fine-tune on chat; aggregate patterns, don't memorise individuals. This guards against
+poisoning, provenance collapse, privacy leakage, and drift.
+
+**UI:** an **"Our Story"** tab in the group hub `/groups/[id]` — view the timeline + "+ Add
+to our story" (creates an `UNVERIFIED` suggestion) → one review queue (member + Buda-
+surfaced) the keeper ratifies. A Feed "mark as history" shortcut is a secondary on-ramp.
+National: a "suggest to the national story" affordance in the hierarchy browser → national
+review queue. (Avoid the tab name "Kumbukumbu" — it collides with an ADR-059 agent name.)
+
+---
+
+## 5. Community memory & the decision record  *(partly SHIPPED, extension is DESIGN)*
+
+Today's **community memory** (was "ward memory") is **pure human free-text** —
+`rationale` / `alternatives` / `outcome` via `updateMemory`/`recordOutcome`, no AI, often
+blank. The only AI digest nearby is the separate *pre-vote* `deliberationSummary`. It is the
+*atomic ledger* of decisions; the timeline (§4) is the *arc*; Mhenga narrates across both.
+A notable outcome can **graduate into the timeline** via `DELIBERATION` provenance
+(ledger → story).
+
+**Planned:** an **AI-consolidated decision record at `recordOutcome`** — "what was decided,
+why, what alternatives were weighed, what happened" from the human fields +
+`deliberationSummary` + the vote result — **fail-open**: LLM when available, a deterministic
+template when not. Community memory never depends on AI. (Also rename user-facing "Ward
+Memory" → "Community Memory".)
+
+---
+
+## 6. Buda & talkable specialist lenses  *(DESIGN)*
+
+The public Telegram assistant is **Buda** (renamed from the working "Mjamaa" to resolve the
+collision — **Mjamaa stays the council's convener**). Buda is a **front desk** that can
+*summon* a specialist voice for a member's question — **Mhenga** (our story / precedent),
+**Kadere** (what our principles say), **Tajiri** (can the treasury afford it). These are
+**advisory lenses, never rulings** — "Tajiri says you can afford it" must never read as
+authorization. Internal machinery agents (Shahidi, Mpelelezi, the convener) are not talkable.
+
+---
+
+## Status at a glance
+
+| Piece | Status |
+|---|---|
+| Mhenga two-scale historian (national + group, register gate, pattern narration) | **implemented + verified** (`e3f37c0`) |
+| `HistoricalEvent.groupId` + migration (dev+test) | **implemented** |
+| Community memory (human free-text rationale/alternatives/outcome) | **implemented** (pre-existing) |
+| Kadere (values voice) | design — `/vision-check` first |
+| Community timeline curation + national contribution | design |
+| AI-consolidated decision record (fail-open) | design |
+| Buda + talkable lenses | design |
+
+**See also:** [`baraza-deliberation.md`](./baraza-deliberation.md),
+[`baraza-panels-and-memory.md`](./baraza-panels-and-memory.md),
+[`baraza-topology.md`](./baraza-topology.md).
