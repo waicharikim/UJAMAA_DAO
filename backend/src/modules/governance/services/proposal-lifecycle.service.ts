@@ -27,6 +27,7 @@ import { ethers } from 'ethers';
 import { governanceQueue } from '../../../core/queue/index.js';
 import { queueBarazaDeliberation } from '../baraza/baraza.job.js';
 import { recordProposalOutcomeInMemory } from '../baraza/baraza-deliberation.service.js';
+import { generateDecisionRecord } from './decision-record.js';
 import {
   GENERATE_DELIBERATION_SUMMARY_JOB,
   OPEN_PROPOSAL_ONCHAIN_JOB,
@@ -999,6 +1000,8 @@ class ProposalLifecycleService {
         creatorId: true,
         status: true,
         groupId: true,
+        title: true,
+        description: true,
         rationale: true,
         alternatives: true,
         deliberationSummary: true,
@@ -1015,14 +1018,30 @@ class ProposalLifecycleService {
     await this.assertCreatorOrLeaderAuth(userId, proposal, 'record outcomes');
 
     const outcomeRecordedAt = new Date();
+    // Consolidate the decision record (fail-open: LLM when available, deterministic
+    // template otherwise). Derived/convenience — descriptive only, never gates or awards.
+    const decisionRecord = await generateDecisionRecord({
+      title: proposal.title,
+      description: proposal.description,
+      rationale: proposal.rationale,
+      alternatives: proposal.alternatives,
+      outcome,
+      status: proposal.status as string,
+      deliberationSummary: proposal.deliberationSummary,
+    });
     const updated = await prisma.proposal.update({
       where: { id: proposalId },
-      data: { outcome, outcomeRecordedAt },
+      data: {
+        outcome,
+        outcomeRecordedAt,
+        decisionRecord: decisionRecord as unknown as Prisma.InputJsonObject,
+      },
       select: {
         id: true,
         outcome: true,
         outcomeRecordedAt: true,
         memoryAnchorTxHash: true,
+        decisionRecord: true,
       },
     });
 
@@ -1048,6 +1067,7 @@ class ProposalLifecycleService {
           outcome: true,
           outcomeRecordedAt: true,
           memoryAnchorTxHash: true,
+          decisionRecord: true,
         },
       });
       return patched;

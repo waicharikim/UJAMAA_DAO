@@ -1146,12 +1146,19 @@ export interface ProposalDto {
   votesSummary?: { total: number; yesWeight: number; noWeight: number }
   project?: { id: string } | null
   _count?: { votes: number }
-  // Ward Memory Layer
+  // Community Memory Layer
   rationale?: string | null
   alternatives?: string | null
   outcome?: string | null
   outcomeRecordedAt?: string | null
   memoryAnchorTxHash?: string | null
+  // AI-consolidated (fail-open) decision record, written when the outcome is recorded.
+  decisionRecord?: {
+    decided: string
+    why: string
+    alternatives: string
+    whatHappened: string
+  } | null
   deliberationSummary?: {
     support: string[]
     concerns: string[]

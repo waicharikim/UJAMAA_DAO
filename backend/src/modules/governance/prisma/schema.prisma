@@ -101,12 +101,15 @@ model Proposal {
   documents         String[]       // URLs to supporting docs
   images            String[]       // Proposal images
 
-  // WARD MEMORY LAYER — reasoning, alternatives, outcomes
+  // COMMUNITY MEMORY LAYER — reasoning, alternatives, outcomes
   rationale          String?       @db.Text  // Why this option, not others
   alternatives       String?       @db.Text  // What else was considered
   outcome            String?       @db.Text  // What actually happened after execution
   outcomeRecordedAt  DateTime?               // When outcome was written
   memoryAnchorTxHash String?       @db.VarChar(66) // on-chain tx hash when outcome anchored
+  // AI-consolidated decision record (fail-open: LLM when available, deterministic
+  // template otherwise). Derived/convenience — the fields above stay authoritative.
+  decisionRecord     Json?         // { decided, why, alternatives, whatHappened }
 
   // DELIBERATION LAYER — neutral AI digest of community annotations, generated at voting-open
   deliberationSummary   Json?      // { support: string[], concerns: string[], openQuestions: string[], note?: string }

@@ -826,13 +826,13 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
         </Card>
       )}
 
-      {/* ── Ward Memory Layer ─────────────────────────────────── */}
+      {/* ── Community Memory Layer ────────────────────────────── */}
       <Card className="border-0 shadow-card">
         <CardContent className="p-4 md:p-6 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <BookMarked className="h-4 w-4" style={{ color: "#C9922A" }} />
-              <h2 className="text-sm font-bold text-[#0A1F14]">Ward Memory</h2>
+              <h2 className="text-sm font-bold text-[#0A1F14]">Community Memory</h2>
             </div>
             {/* Creator edit button — only in draft/pending */}
             {proposal?.creatorId === user?.id &&
@@ -981,6 +981,17 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
                       </a>
                     )}
                   </div>
+                  {proposal.decisionRecord && (
+                    <div className="mt-3 rounded-xl p-3" style={{ background: "rgba(14,11,8,0.03)" }}>
+                      <p className="text-[12px] font-bold mb-1.5" style={{ color: "#7A4F1E" }}>Decision record</p>
+                      <dl className="space-y-1.5 text-[13px] leading-snug text-[#0A1F14]/75">
+                        <div><span className="font-semibold text-[#0A1F14]">Decided: </span>{proposal.decisionRecord.decided}</div>
+                        <div><span className="font-semibold text-[#0A1F14]">Why: </span>{proposal.decisionRecord.why}</div>
+                        <div><span className="font-semibold text-[#0A1F14]">Alternatives: </span>{proposal.decisionRecord.alternatives}</div>
+                        <div><span className="font-semibold text-[#0A1F14]">What happened: </span>{proposal.decisionRecord.whatHappened}</div>
+                      </dl>
+                    </div>
+                  )}
                 </div>
               ) : !showOutcomeForm ? (
                 <p className="text-xs text-[#7A6E60]">No outcome recorded yet.</p>
@@ -1089,7 +1100,7 @@ export default function ProposalDetailPage({ params }: { params: Promise<{ propo
               >
                 <Archive className="h-5 w-5 mt-0.5 flex-shrink-0" style={{ color: "#7A6E60" }} />
                 <div>
-                  <p className="text-sm font-semibold text-[#0A1F14]">Preserved in ward memory</p>
+                  <p className="text-sm font-semibold text-[#0A1F14]">Preserved in community memory</p>
                   <p className="text-xs text-[#7A6E60] mt-0.5">
                     Rejected proposals remain permanently in the governance record.
                     The deliberation, vote count, and any rationale you added are preserved.

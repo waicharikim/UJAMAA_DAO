@@ -168,7 +168,7 @@ review queue. (Avoid the tab name "Kumbukumbu" — it collides with an ADR-059 a
 
 ---
 
-## 5. Community memory & the decision record  *(partly SHIPPED, extension is DESIGN)*
+## 5. Community memory & the decision record  *(IMPLEMENTED)*
 
 Today's **community memory** (was "ward memory") is **pure human free-text** —
 `rationale` / `alternatives` / `outcome` via `updateMemory`/`recordOutcome`, no AI, often
@@ -177,11 +177,15 @@ blank. The only AI digest nearby is the separate *pre-vote* `deliberationSummary
 A notable outcome can **graduate into the timeline** via `DELIBERATION` provenance
 (ledger → story).
 
-**Planned:** an **AI-consolidated decision record at `recordOutcome`** — "what was decided,
-why, what alternatives were weighed, what happened" from the human fields +
-`deliberationSummary` + the vote result — **fail-open**: LLM when available, a deterministic
-template when not. Community memory never depends on AI. (Also rename user-facing "Ward
-Memory" → "Community Memory".)
+**Implemented** (`services/decision-record.ts` + `recordOutcome`): an **AI-consolidated
+decision record** — `{ decided, why, alternatives, whatHappened }` from the human fields +
+`deliberationSummary` — written when the outcome is recorded and stored on
+`Proposal.decisionRecord` (migration `20260711010000`). **Fail-open**: `generateDecisionRecord`
+uses the LLM when available and a **deterministic template** (`buildDeterministicDecisionRecord`)
+otherwise — community memory never depends on AI, and the fields above stay authoritative.
+Descriptive only: it never gates, scores, or awards. Surfaced on the proposal page's
+Community Memory card under the recorded outcome. The user-facing **"Ward Memory" →
+"Community Memory"** rename is done (schema comment, proposal card, `api.ts`).
 
 ---
 
@@ -269,6 +273,7 @@ round with large retrievals.
 | Mhenga two-scale historian (national + group, register gate, pattern narration) | **implemented + verified** (`e3f37c0`) |
 | `HistoricalEvent.groupId` + migration (dev+test) | **implemented** |
 | Community memory (human free-text rationale/alternatives/outcome) | **implemented** (pre-existing) |
+| AI-consolidated decision record (fail-open) + "Ward Memory"→"Community Memory" rename | **implemented** |
 | Kadere (values voice) | **implemented** — backend + frontend card; advisory, self-gating, in-transcript, NOT in the readiness score |
 | Community timeline curation + national contribution | design |
 | AI-consolidated decision record (fail-open) | design |
