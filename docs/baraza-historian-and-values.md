@@ -179,6 +179,72 @@ authorization. Internal machinery agents (Shahidi, Mpelelezi, the convener) are 
 
 ---
 
+## 7. The shared knowledge layer & education  *(DESIGN)*
+
+One **provenance-aware knowledge substrate**, many consumers. The corpus = platform
+`docs/` + the **education modules** (+ Mhenga's timeline for history, + the constitution
+for Kadere's values). It is reached through a single **`search_knowledge`** tool that
+slots into `DELIBERATION_TOOLS` (same shape as `get_ward_stats`/`get_group_treasury`), so
+the **Q&A bot (Buda)**, the **council agents**, and the **talkable lenses** all draw on the
+same source instead of each cramming knowledge into a prompt that can drift from the code.
+
+**Why the council benefits too (not just Buda).** Agents today reason about PR/UT/IP
+mechanics, governance flow and treasury rules from their system prompts / model priors,
+which can be stale or subtly wrong. Letting them *look it up* grounds those claims (Tajiri
+on UT/treasury, MKURUGENZI on dues/repayment, Shahidi checking whether a "how it works
+here" premise is actually true). This is the fault-tolerance principle — knowledge lives in
+the corpus, not the prompt.
+
+**Two hard rules on how the knowledge is used:**
+- **Facts → agents; values → Kadere.** Education contains both mechanics *and* Ujamaa
+  values material. Agents use the corpus for "how does X work," never for "what should we
+  value" — that stays Kadere's labelled job, or every agent blurs into a values-preacher
+  (re-creating the laundering problem).
+- **Authority is provenance.** For *agent* grounding, prefer authoritative content (`docs/`
+  + verified core modules) over arbitrary community-authored modules; an approved-yet-
+  opinionated module must not become gospel the council reasons from.
+
+**Building upon education (later phase).** The AI can *draft* modules and *surface gaps*
+(what members keep asking Buda, which quiz questions people keep failing, what
+deliberations keep stumbling on) — routed through the **existing** author →
+`submitModule` → admin `approveModule`/`rejectModule` pipeline. Guardrails: **never
+auto-publish** (AI-drafted modules award nothing until approved — protects Rule 5 against a
+reward farm, using the existing `verified`/`submittedAt` + once-per-module `rewardAwarded`
+gates), and **admin ratification is the legitimacy gate** (education is quasi-normative;
+unsupervised AI-authored curriculum is the same "AI holds an agenda" risk). Prefer
+**gap-detection over from-scratch generation**. Result: a knowledge flywheel — education
+grounds Buda + the agents → friction reveals gaps → ratified modules → better-informed
+proposers → better proposals/deliberations; can go community-specific (Mhenga's "you keep
+failing on maintenance" → a suggested maintenance module for that group).
+
+### Cost controls  *(requirements, not afterthoughts)*
+
+Retrieval infra (embeddings + vector search over a small corpus) is negligible and mostly
+one-time. The recurring cost is **retrieved-chunk tokens + extra tool round-trips**, which
+scales with *how many agents search × how much they pull back*. To keep it near the noise
+floor:
+
+- **Scoped** — give `search_knowledge` only to agents where facts matter (Tajiri,
+  MKURUGENZI, the analysts), not all ~11 agents × 3 rounds.
+- **On-demand** — `completeWithTools` calls the tool only when the agent needs it; never
+  forced every round.
+- **Small top-k** — return 1–3 chunks, not whole modules.
+- **Embed the corpus once** and cache; re-embed only on doc/module change.
+- **Council runs async on the worker** (BullMQ) — no user waits on the extra round-trip, so
+  only the (bounded) token cost matters.
+- **Thin-the-prompt offset** — move volatile mechanics *out* of system prompts into the
+  corpus (prompt carries persona/stance, RAG carries facts). This trades "always-pay for a
+  big prompt" for "sometimes-pay for a small retrieval"; net can approach neutral. (Static
+  prompts are already prompt-cached; retrieved chunks are not — so the offset is real but
+  partial.)
+
+Context: Qwen/DashScope is cheap per token and inference is already ~5× optimized
+(`reasoning_effort:none`, `BARAZA_BOT_MODEL` split). Measure real token cost once wired —
+the unbounded anti-pattern to avoid is an always-on knowledge search for every agent every
+round with large retrievals.
+
+---
+
 ## Status at a glance
 
 | Piece | Status |
@@ -190,6 +256,8 @@ authorization. Internal machinery agents (Shahidi, Mpelelezi, the convener) are 
 | Community timeline curation + national contribution | design |
 | AI-consolidated decision record (fail-open) | design |
 | Buda + talkable lenses | design |
+| Shared knowledge layer (`docs/` + education → `search_knowledge`) for Buda + council, w/ cost controls | design |
+| Build-upon education (AI drafts/gap-detection → existing approval pipeline) | design — later phase |
 
 **See also:** [`baraza-deliberation.md`](./baraza-deliberation.md),
 [`baraza-panels-and-memory.md`](./baraza-panels-and-memory.md),
