@@ -27,6 +27,7 @@ import {
 import { GroupTreasuryCard } from "@/components/groups/group-treasury-card"
 import { GroupMembers } from "@/components/groups/group-members"
 import { LeaderAdminPanel } from "@/components/groups/group-detail"
+import { OurStoryTab } from "@/components/community/our-story-tab"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { useAuth } from "@/contexts/auth-context"
 import { useContextualNav } from "@/hooks/use-contextual-nav"
@@ -40,6 +41,7 @@ import {
   Home,
   Users,
   CalendarDays,
+  BookMarked,
   ChevronRight,
   ChevronLeft,
   Rss,
@@ -86,7 +88,7 @@ function groupScope(group: GroupDetailDto): PostScope {
 
 // ── Hub tab types ────────────────────────────────────────────
 
-type HubTab = "feed" | "proposals" | "elections" | "projects" | "treasury" | "members" | "sessions" | "admin"
+type HubTab = "feed" | "proposals" | "elections" | "projects" | "treasury" | "members" | "sessions" | "story" | "admin"
 
 // ── Breadcrumb ───────────────────────────────────────────────
 
@@ -906,6 +908,7 @@ function GroupHub({ groupId }: { groupId: string }) {
     { id: "treasury",  label: "Treasury",  Icon: Landmark   },
     { id: "members",   label: "Members",   Icon: Users        },
     { id: "sessions",  label: "Sessions",  Icon: CalendarDays },
+    { id: "story",     label: "Our Story", Icon: BookMarked   },
     ...(isLeader && !group?.isSystem ? [{ id: "admin" as HubTab, label: "Admin", Icon: Settings }] : []),
   ]
 
@@ -1007,6 +1010,7 @@ function GroupHub({ groupId }: { groupId: string }) {
         )}
         {activeTab === "members"   && <GroupMembers groupId={groupId} />}
         {activeTab === "sessions"  && <SessionsTab groupId={groupId} />}
+        {activeTab === "story"     && <OurStoryTab groupId={groupId} canRatify={isLeader} canPropose={canCreate} />}
         {activeTab === "admin"     && isLeader && !group.isSystem && (
           <LeaderAdminPanel group={group} />
         )}

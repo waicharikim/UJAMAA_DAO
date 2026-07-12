@@ -123,7 +123,7 @@ one-line note otherwise — mirroring its self-gating so it never becomes wallpa
 
 ---
 
-## 4. The community timeline & curation  *(backend API IMPLEMENTED; frontend + national + roles pending)*
+## 4. The community timeline & curation  *(IMPLEMENTED — "Our Story" tab + API; national + roles pending)*
 
 Local history has **two sources kept in one store** (two provenance values, not two
 systems): **model/feed-supplied** (`UNVERIFIED`, Mhenga hedges) and **community-curated**
@@ -172,7 +172,12 @@ review queue. (Avoid the tab name "Kumbukumbu" — it collides with an ADR-059 a
 `POST /history` (member proposes → `MEMBER`/`UNVERIFIED`), `GET /history/:groupId` (timeline
 w/ status pending|confirmed|disputed), `PATCH /history/:eventId/ratify` (leader / location
 admin / super-admin → confirm=`ADMIN_CONFIRMED` / dispute=`DISPUTED` / reject=`active:false`).
-Confirmed entries feed Mhenga's group arc. **Pending:** the "Our Story" frontend tab + Feed
+Confirmed entries feed Mhenga's group arc — and pending (unratified) member text is
+**withheld from the LLM** until a keeper ratifies it (prompt-injection guard); location
+admins are **scoped to the group's own location** for ratification. **Frontend:** an
+**"Our Story" tab** in the group hub (`components/community/our-story-tab.tsx`) — timeline
+with status badges, an "Add to our story" form (COMMUNITY_VERIFIED members), and keeper
+Confirm/Dispute/Reject actions on pending entries. **Pending:** Feed "mark as history"
 shortcut; national contribution (coordinator-quorum / NATIONAL-scope vote); elected-historian
 role; reward-on-ratify (IP); Buda-surfaced candidates into the same queue.
 

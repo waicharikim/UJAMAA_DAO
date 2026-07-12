@@ -1170,6 +1170,18 @@ export interface ProposalDto {
   annotations?: ProposalAnnotationDto[]
 }
 
+export interface CommunityHistoryEntry {
+  id: string
+  era: string
+  title: string
+  startYear: number | null
+  summary: string
+  themes: string[]
+  tag: string
+  status: "pending" | "confirmed" | "disputed"
+  createdAt: string
+}
+
 export const governanceApi = {
   createProposal: (dto: {
     groupId: string
@@ -1245,6 +1257,27 @@ export const governanceApi = {
       `/governance/${proposalId}/outcome`,
       { method: "PATCH", body: JSON.stringify({ outcome }) }
     ),
+
+  // Community timeline curation ("Our Story")
+  listHistory: (groupId: string) =>
+    apiFetch<CommunityHistoryEntry[]>(`/governance/history/${groupId}`),
+  proposeHistory: (dto: {
+    groupId: string
+    title: string
+    summary: string
+    era?: string
+    startYear?: number
+    themes?: string[]
+  }) =>
+    apiFetch<{ id: string }>(`/governance/history`, {
+      method: "POST",
+      body: JSON.stringify(dto),
+    }),
+  ratifyHistory: (eventId: string, action: "confirm" | "dispute" | "reject") =>
+    apiFetch<unknown>(`/governance/history/${eventId}/ratify`, {
+      method: "PATCH",
+      body: JSON.stringify({ action }),
+    }),
 
   cancelProposal: (proposalId: string) =>
     apiFetch<unknown>(`/governance/${proposalId}/cancel`, { method: "POST" }),
