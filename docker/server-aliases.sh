@@ -51,4 +51,11 @@ alias uj-backup="cd $UJAMAA_DIR && make prod-backup"
 alias uj-backup-cron="cd $UJAMAA_DIR && make prod-backup-cron"
 alias uj-make-admin='f() { cd ~/UJAMAA_DAO/backend && make prod-make-admin EMAIL="$1"; }; f'
 
+# ── Integrations ──────────────────────────────────────────────────────────────
+# Point the Telegram bot webhook at the live API (reads token + secret from docker/.env.prod).
+# The webhook MUST carry secret_token or the app rejects Telegram's updates.
+alias uj-set-webhook='f() { local ENV="$HOME/UJAMAA_DAO/docker/.env.prod"; local TOKEN SECRET; TOKEN=$(grep -E "^TELEGRAM_BOT_TOKEN=" "$ENV" | head -1 | cut -d= -f2- | tr -d "\"\r"); SECRET=$(grep -E "^TELEGRAM_WEBHOOK_SECRET=" "$ENV" | head -1 | cut -d= -f2- | tr -d "\"\r"); [ -z "$TOKEN" ] && { echo "TELEGRAM_BOT_TOKEN missing in $ENV"; return 1; }; curl -s "https://api.telegram.org/bot${TOKEN}/setWebhook" --data-urlencode "url=https://api.ujamaadao.org/api/v1/integration/telegram/webhook" ${SECRET:+--data-urlencode "secret_token=${SECRET}"} --data-urlencode "drop_pending_updates=false"; echo; }; f'
+# Show the currently-registered Telegram webhook (URL, pending count, last error).
+alias uj-webhook-info='f() { local ENV="$HOME/UJAMAA_DAO/docker/.env.prod"; local TOKEN; TOKEN=$(grep -E "^TELEGRAM_BOT_TOKEN=" "$ENV" | head -1 | cut -d= -f2- | tr -d "\"\r"); curl -s "https://api.telegram.org/bot${TOKEN}/getWebhookInfo"; echo; }; f'
+
 echo "✅  UjamaaDAO aliases loaded. Type 'uj-<tab>' to see all commands."
