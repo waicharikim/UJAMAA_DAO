@@ -12,7 +12,7 @@ import { prisma } from '../../../core/database/client.js';
 import { ApiError } from '../../../core/errors/ApiError.js';
 import { sendSuccess } from '../../../core/utils/response.js';
 import { historianService } from '../historian/historian.service.js';
-import { SystemRoles } from '../../../core/rbac/roles.js';
+import { canLocationAdminApprove } from '../services/proposal-lifecycle.service.js';
 
 async function isActiveMember(
   userId: string,
@@ -27,15 +27,20 @@ async function isActiveMember(
 
 async function canRatify(
   userId: string,
-  groupId: string,
+  group: {
+    id: string;
+    wardId: string | null;
+    constituencyId: string | null;
+    countyId: string | null;
+    locationScope: string;
+  },
   roles: string[]
 ): Promise<boolean> {
-  if (roles.includes(SystemRoles.SUPER_ADMIN)) return true;
-  if (roles.some((r) => r.startsWith('location:') && r.endsWith('_admin'))) {
-    return true;
-  }
+  // Handles super-admin AND scopes a location admin to THIS group's own
+  // ward/constituency/county — a ward admin cannot ratify another ward's story.
+  if (canLocationAdminApprove(group, roles)) return true;
   const leader = await prisma.groupMember.findFirst({
-    where: { groupId, userId, active: true, role: 'LEADER' },
+    where: { groupId: group.id, userId, active: true, role: 'LEADER' },
     select: { id: true },
   });
   return !!leader;
@@ -58,6 +63,12 @@ export class HistoryController {
         'You must be a member of this community to add to its story'
       );
     }
+    const level = req.user!.verificationLevel;
+    if (level !== 'COMMUNITY_VERIFIED' && level !== 'FULL_VERIFIED') {
+      throw ApiError.forbidden(
+        'Get community-verified before adding to your community story'
+      );
+    }
     const event = await historianService.proposeLocalEvent(groupId, {
       title,
       summary,
@@ -72,9 +83,12 @@ export class HistoryController {
     );
   }
 
-  /** This community's timeline (confirmed + pending + disputed). */
+  /** This community's timeline. Members/keepers see pending entries too; others see
+   *  only confirmed + disputed. */
   static async list(req: AuthRequest, res: Response) {
-    const events = await historianService.listGroupHistory(req.params.groupId);
+    const { groupId } = req.params;
+    const member = await isActiveMember(req.user!.userId, groupId);
+    const events = await historianService.listGroupHistory(groupId, member);
     sendSuccess(res, events, "Community's story");
   }
 
@@ -89,9 +103,20 @@ export class HistoryController {
       select: { groupId: true },
     });
     if (!ev?.groupId) throw ApiError.notFound('Community history entry');
-    if (!(await canRatify(userId, ev.groupId, roles))) {
+    const group = await prisma.group.findUnique({
+      where: { id: ev.groupId },
+      select: {
+        id: true,
+        wardId: true,
+        constituencyId: true,
+        countyId: true,
+        locationScope: true,
+      },
+    });
+    if (!group) throw ApiError.notFound('Community');
+    if (!(await canRatify(userId, group, roles))) {
       throw ApiError.forbidden(
-        'Only a community leader or admin can review the story'
+        'Only this community leader or its location admin can review its story'
       );
     }
     const updated = await historianService.ratifyEvent(eventId, action);

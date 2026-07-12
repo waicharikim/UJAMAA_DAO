@@ -79,10 +79,16 @@ class HistorianService {
     return this.addEvent({ ...input, groupId }, 'MEMBER', 'UNVERIFIED');
   }
 
-  /** This group's own timeline (confirmed + pending + disputed), arc order. */
-  async listGroupHistory(groupId: string) {
+  /** This group's own timeline. `includePending` reveals unratified (member-proposed)
+   *  entries — only for members/keepers; others see confirmed + disputed only. */
+  async listGroupHistory(groupId: string, includePending = true) {
     const events = await prisma.historicalEvent.findMany({
-      where: { groupId, active: true, supersededById: null },
+      where: {
+        groupId,
+        active: true,
+        supersededById: null,
+        ...(includePending ? {} : { verification: { not: 'UNVERIFIED' } }),
+      },
       orderBy: [{ startYear: 'asc' }, { createdAt: 'asc' }],
       select: {
         id: true,
@@ -168,7 +174,15 @@ class HistorianService {
     if (!scopeWhere) return [];
 
     const all = await prisma.historicalEvent.findMany({
-      where: { active: true, supersededById: null, ...scopeWhere },
+      where: {
+        active: true,
+        supersededById: null,
+        // Prompt-injection guard + propose→ratify: an unratified member proposal
+        // must NOT reach the LLM. Member-contributed entries influence Mhenga only
+        // after a keeper confirms or disputes them.
+        NOT: { provenance: 'MEMBER', verification: 'UNVERIFIED' },
+        ...scopeWhere,
+      },
       orderBy: [{ startYear: 'asc' }, { createdAt: 'asc' }],
     });
     if (all.length === 0) return [];
