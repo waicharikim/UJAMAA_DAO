@@ -990,10 +990,18 @@ Return JSON with this exact shape:
   "chokepoints": [{ "location": string, "mechanism": string, "severity": "HIGH"|"MEDIUM"|"LOW", "routeAround": string|null }],
   "revisionSuggestions": string[],
   "baseConsensusRatio": 0-1
-}`,
-    // qwen-max + a larger budget: the conflict map is a big structured object;
-    // qwen-plus / a tight token cap was under-extracting (empty coalitions/conflicts).
-    maxTokens: 4000,
+}
+
+CONSTRAINTS (keep the JSON compact so it is never truncated):
+- Include AT MOST the 10 most significant "credibilityAnnotations" — pick the
+  highest-stakes claims, do not annotate every line.
+- Keep each string field concise (roughly one sentence, under ~240 characters).
+- Return at most 8 "consensus", 8 "unresolved", and 6 "revisionSuggestions" items.`,
+    // qwen-max + a generous budget: the conflict map is a big structured object.
+    // The annotation array is capped in the prompt above; 8000 gives headroom so
+    // the JSON always closes cleanly (a truncated response fails to parse and the
+    // entire synthesis is lost — see the readiness-score fallback below).
+    maxTokens: 8000,
     model: QWEN_ANALYST_MODEL,
   });
 
