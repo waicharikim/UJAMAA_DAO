@@ -82,6 +82,16 @@ export function isQwenAvailable(): boolean {
   return getQwenClient() !== null;
 }
 
+/**
+ * Disable Qwen "thinking" on every chat call. Qwen3 hybrid models default to
+ * thinking ON (~14s/reply), which makes the council crawl and can time out the
+ * bot. `enable_thinking:false` is DashScope's switch (not in the OpenAI SDK
+ * types, hence the cast); it is ignored by non-hybrid models.
+ */
+function noThink<T>(params: T): T {
+  return { ...(params as object), enable_thinking: false } as unknown as T;
+}
+
 // ─── Backwards-compatibility aliases ─────────────────────────────────────────
 // deliberation.service.ts imports getClaudeClient / complete from core/ai/claude.
 // Re-export under the old names so that file needs zero changes when you
@@ -129,14 +139,16 @@ export async function complete(opts: CompleteOptions): Promise<string | null> {
   if (!qwen) return null;
 
   try {
-    const response = await qwen.chat.completions.create({
-      model: opts.model ?? QWEN_MODEL,
-      max_tokens: opts.maxTokens ?? 1024,
-      messages: [
-        { role: 'system', content: opts.system },
-        { role: 'user', content: opts.userMessage },
-      ],
-    });
+    const response = await qwen.chat.completions.create(
+      noThink({
+        model: opts.model ?? QWEN_MODEL,
+        max_tokens: opts.maxTokens ?? 1024,
+        messages: [
+          { role: 'system', content: opts.system },
+          { role: 'user', content: opts.userMessage },
+        ],
+      })
+    );
 
     return response.choices[0]?.message?.content?.trim() ?? null;
   } catch (err) {
@@ -158,11 +170,13 @@ export async function completeConversation(
   if (!qwen) return null;
 
   try {
-    const response = await qwen.chat.completions.create({
-      model: opts.model ?? QWEN_MODEL,
-      max_tokens: opts.maxTokens ?? 2048,
-      messages: opts.messages,
-    });
+    const response = await qwen.chat.completions.create(
+      noThink({
+        model: opts.model ?? QWEN_MODEL,
+        max_tokens: opts.maxTokens ?? 2048,
+        messages: opts.messages,
+      })
+    );
 
     return response.choices[0]?.message?.content?.trim() ?? null;
   } catch (err) {
@@ -204,6 +218,7 @@ export async function completeWithSearch(
       // DashScope server-side web search (forwarded in the request body).
       enable_search: true,
       search_options: { forced_search: false, enable_citation: true },
+      enable_thinking: false,
     } as unknown as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming);
 
     return response.choices[0]?.message?.content?.trim() ?? null;
@@ -250,13 +265,15 @@ export async function completeWithTools(
   ];
 
   try {
-    let response = await qwen.chat.completions.create({
-      model: opts.model ?? QWEN_MODEL,
-      max_tokens: opts.maxTokens ?? 2048,
-      tools: opts.tools,
-      tool_choice: 'auto',
-      messages,
-    });
+    let response = await qwen.chat.completions.create(
+      noThink({
+        model: opts.model ?? QWEN_MODEL,
+        max_tokens: opts.maxTokens ?? 2048,
+        tools: opts.tools,
+        tool_choice: 'auto',
+        messages,
+      })
+    );
 
     let round = 0;
     while (
@@ -284,13 +301,15 @@ export async function completeWithTools(
         });
       }
 
-      response = await qwen.chat.completions.create({
-        model: opts.model ?? QWEN_MODEL,
-        max_tokens: opts.maxTokens ?? 2048,
-        tools: opts.tools,
-        tool_choice: 'auto',
-        messages,
-      });
+      response = await qwen.chat.completions.create(
+        noThink({
+          model: opts.model ?? QWEN_MODEL,
+          max_tokens: opts.maxTokens ?? 2048,
+          tools: opts.tools,
+          tool_choice: 'auto',
+          messages,
+        })
+      );
     }
 
     return response.choices[0]?.message?.content?.trim() ?? null;
