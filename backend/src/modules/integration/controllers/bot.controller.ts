@@ -1586,15 +1586,17 @@ export async function getTelegramLink(
       },
       select: {
         handle: true,
-        isVerified: true,
         externalUserId: true,
         updatedAt: true,
       },
     });
+    // `externalUserId` is the real binding signal — /verify sets it (and the
+    // safe-binding guard checks it). `isVerified` is never written true here, so
+    // it must NOT gate "connected".
     sendSuccess(res, {
-      connected: Boolean(profile?.isVerified && profile?.externalUserId),
+      connected: Boolean(profile?.externalUserId),
       handle: profile?.handle ?? null,
-      linkedAt: profile?.isVerified ? profile.updatedAt : null,
+      linkedAt: profile?.externalUserId ? profile.updatedAt : null,
     });
   } catch (err) {
     next(err);
