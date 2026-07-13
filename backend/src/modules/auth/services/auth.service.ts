@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from 'crypto';
 import { prisma } from '../../../core/database/client.js';
 import { Prisma } from '@prisma/client';
 import {
@@ -88,6 +89,16 @@ function hasMissingRegistrationFields(params: SendMagicLinkDto): boolean {
 
 const MAX_FAILED_ATTEMPTS = 5;
 const FAILED_ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
+
+/**
+ * Constant-time string comparison (hash both to a fixed length so neither the
+ * length nor the content of the secret leaks via timing).
+ */
+function timingSafeEqualStr(a: string, b: string): boolean {
+  const ha = createHash('sha256').update(a).digest();
+  const hb = createHash('sha256').update(b).digest();
+  return timingSafeEqual(ha, hb);
+}
 
 class AuthService {
   async sendMagicLink(
@@ -612,6 +623,66 @@ class AuthService {
       }
       throw error;
     }
+  }
+
+  /**
+   * Shared-passcode demo login for hackathon judges. A single access code
+   * (`DEMO_ACCESS_CODE`) unlocks a session for a pre-seeded, non-admin demo
+   * account (`DEMO_JUDGE_EMAIL`, default `demo@ujamaadao.org`) so judges can
+   * explore the live AI layer with NO signup and NO magic-link inbox. The
+   * account is sandboxed to a demo community and cannot move real money
+   * (real money is M-Pesa-only regardless). Disabled unless the env code is set.
+   */
+  async loginDemoUser(
+    code: string,
+    context?: VerifyMagicLinkContext
+  ): Promise<MagicLinkAuthResult> {
+    const expected = process.env.DEMO_ACCESS_CODE;
+    // Refuse trivially-guessable / unset codes so the door is only open when
+    // an operator has deliberately configured a real passcode.
+    if (!expected || expected.length < 8) {
+      throw ApiError.notFound('Demo access is not enabled');
+    }
+    if (!timingSafeEqualStr(code, expected)) {
+      logSecurityEvent(
+        'Invalid demo access code',
+        'SUSPICIOUS_ACTIVITY',
+        'LOW',
+        `Bad demo code from ${context?.ipAddress ?? 'unknown'}`,
+        { ipAddress: context?.ipAddress }
+      );
+      throw ApiError.authenticationError('Invalid access code');
+    }
+    const email = (
+      process.env.DEMO_JUDGE_EMAIL || 'demo@ujamaadao.org'
+    ).toLowerCase();
+    const demo = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+    if (!demo) {
+      throw ApiError.notFound(
+        'Demo account is not provisioned — run the demo seed first'
+      );
+    }
+    return this.completeEmailVerificationAndCreateSession(
+      demo.id,
+      'DEMO',
+      context
+    );
+  }
+
+  /**
+   * The demo account's most recent proposal — the "flagship" deliberation the
+   * judges' demo lands on. Null if the demo seed hasn't run yet.
+   */
+  async getDemoFlagshipProposalId(userId: string): Promise<string | null> {
+    const proposal = await prisma.proposal.findFirst({
+      where: { creatorId: userId },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    });
+    return proposal?.id ?? null;
   }
 
   private async detectBruteForce(ipAddress: string): Promise<boolean> {

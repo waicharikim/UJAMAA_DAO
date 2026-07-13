@@ -23,8 +23,23 @@ const GREETING =
  * signed-out visitors (the endpoint requires auth). The conversation is
  * threaded server-side per user, so history survives a page reload.
  */
+/**
+ * A per-browser-session id, used only for the shared judges' demo account so
+ * concurrent judges get isolated Buda threads instead of one colliding thread.
+ * Normal (per-user) accounts don't set this — their thread stays keyed per user.
+ */
+function getDemoConversationId(): string {
+  if (typeof window === "undefined") return ""
+  let id = window.sessionStorage.getItem("uj_demo_convo")
+  if (!id) {
+    id = Math.random().toString(36).slice(2) + Date.now().toString(36)
+    window.sessionStorage.setItem("uj_demo_convo", id)
+  }
+  return id
+}
+
 export function BarazaChatWidget() {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, isDemo } = useAuth()
   const [open, setOpen] = useState(false)
   const [turns, setTurns] = useState<ChatTurn[]>([])
   const [input, setInput] = useState("")
@@ -48,7 +63,10 @@ export function BarazaChatWidget() {
     setTurns((t) => [...t, { role: "user", content: message }])
     setSending(true)
     try {
-      const { answer } = await integrationApi.askBaraza(message)
+      const { answer } = await integrationApi.askBaraza(
+        message,
+        isDemo ? getDemoConversationId() : undefined
+      )
       setTurns((t) => [...t, { role: "assistant", content: answer }])
     } catch {
       setTurns((t) => [

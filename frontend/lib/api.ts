@@ -207,6 +207,17 @@ export const authApi = {
     ),
 
   /**
+   * POST /auth/demo-login
+   * Shared-passcode login for hackathon judges → a pre-seeded demo account.
+   * No signup, no magic link. Returns { sessionToken, user, isDemo }.
+   */
+  demoLogin: (code: string) =>
+    apiFetch<{ sessionToken: string; user: any; session: any; needsProfileCompletion: boolean; isDemo: boolean; demoProposalId: string | null }>(
+      "/auth/demo-login",
+      { method: "POST", body: JSON.stringify({ code }) }
+    ),
+
+  /**
    * GET /auth/verify-email?token=...
    * Exchanges an email verification token (hex, for new users) for a session.
    * Returns { sessionToken, user, session, needsProfileCompletion }
@@ -846,10 +857,10 @@ export const integrationApi = {
 
   /** Ask the in-app Baraza assistant (signed-in users). Reasons over all the
    *  user's communities; conversation is server-threaded per user. */
-  askBaraza: (message: string) =>
+  askBaraza: (message: string, conversationId?: string) =>
     apiFetch<{ answer: string; available: boolean }>("/integration/baraza/ask", {
       method: "POST",
-      body: JSON.stringify({ message }),
+      body: JSON.stringify(conversationId ? { message, conversationId } : { message }),
     }),
 }
 

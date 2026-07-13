@@ -92,6 +92,11 @@ router.get('/baraza-groups', authenticate, getBarazaGroups);
 
 const askBarazaSchema = z.object({
   message: z.string().trim().min(1).max(2000),
+  // Optional per-session thread id. Lets a SHARED account (e.g. the judges'
+  // demo user) hold isolated conversations per browser session instead of one
+  // colliding thread. Namespaced under the userId server-side, so it can only
+  // ever scope the caller's own history.
+  conversationId: z.string().trim().max(64).optional(),
 });
 
 router.post(

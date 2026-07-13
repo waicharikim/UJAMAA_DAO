@@ -54,6 +54,36 @@ export async function verifyEmail(req: AuthRequest, res: Response) {
 }
 
 /**
+ * POST /auth/demo-login
+ * Shared-passcode login for hackathon judges → a pre-seeded demo account.
+ * No signup, no magic link. Returns the same { sessionToken, user } shape as
+ * verifyMagicLink, plus `isDemo: true` so the client can scope per-session state.
+ */
+export async function demoLogin(req: AuthRequest, res: Response) {
+  const { code } = req.body as { code: string };
+
+  const context = {
+    ipAddress: req.ip,
+    userAgent: req.headers['user-agent'],
+  };
+
+  const result = await authService.loginDemoUser(code, context);
+
+  // Point the judge straight at the flagship deliberation (the demo account's
+  // seeded proposal), so they land on the AI council output, not a blank feed.
+  const demoProposalId = await authService.getDemoFlagshipProposalId(
+    result.user.id
+  );
+
+  sendSuccess(
+    res,
+    { ...result, isDemo: true, demoProposalId },
+    'Welcome, judge — exploring the UjamaaDAO demo.',
+    200
+  );
+}
+
+/**
  * GET /auth/login?token=...
  * Verify magic link login token
  */

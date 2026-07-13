@@ -190,6 +190,10 @@ function mapBackendUser(raw: any): User {
 // ─────────────────────────────────────────────────────────
 
 interface AuthContextType extends Pick<AuthState, "user" | "token" | "isAuthenticated" | "isLoading"> {
+  /** True when signed in via the shared judges' demo passcode. */
+  isDemo: boolean
+  /** Judges' demo login: exchanges the shared access code for a demo session. Returns the flagship proposal to land on. */
+  demoLogin: (code: string) => Promise<{ demoProposalId: string | null }>
   /** Step 1 of magic link flow: sends the link email (existing users: email only; new users: full registration params) */
   requestMagicLink: (params: { email: string; name?: string; phoneNumber?: string; primaryWardId?: string; secondaryWardId?: string; industryIds?: string[]; goodsServiceIds?: string[]; messagingPlatforms?: Array<{ platform: "TELEGRAM" | "WHATSAPP" | "DISCORD"; handle?: string }> }) => Promise<void>
   /** Step 2a: called from /auth/callback for existing users (JWT magic link) */
@@ -215,10 +219,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [token, setToken] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  // True when signed in via the shared judges' demo passcode. Used to scope
+  // Buda chat threads per browser session (so concurrent judges don't collide).
+  const [isDemo, setIsDemo] = useState(false)
   const { toast } = useToast()
 
   // ── hydrate from stored tokens on mount ──
   useEffect(() => {
+    if (typeof window !== "undefined" && window.localStorage.getItem("uj_is_demo") === "1") {
+      setIsDemo(true)
+    }
     const stored = tokenStore.getAccess()
     if (!stored) {
       setIsLoading(false)
@@ -283,6 +293,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [toast]
   )
 
+  // ── judges' demo login (shared passcode → pre-seeded demo account) ──
+  const demoLogin = useCallback(
+    async (code: string): Promise<{ demoProposalId: string | null }> => {
+      setIsLoading(true)
+      try {
+        const { sessionToken, user: rawUser, demoProposalId } = await authApi.demoLogin(code)
+        tokenStore.set(sessionToken)
+        setToken(sessionToken)
+        setUser(mapBackendUser(rawUser))
+        setIsDemo(true)
+        if (typeof window !== "undefined") window.localStorage.setItem("uj_is_demo", "1")
+        toast({ title: "Welcome, judge", description: "Exploring the UjamaaDAO live demo." })
+        return { demoProposalId: demoProposalId ?? null }
+      } catch (err) {
+        const message = err instanceof ApiError ? err.message : "Invalid access code."
+        toast({ title: "Access denied", description: message, variant: "destructive" })
+        throw err
+      } finally {
+        setIsLoading(false)
+      }
+    },
+    [toast]
+  )
+
   // ── step 2b: verify email token (new users) ──
   const verifyEmailToken = useCallback(
     async (linkToken: string): Promise<{ needsProfileCompletion: boolean }> => {
@@ -313,6 +347,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     tokenStore.clear()
     setToken(null)
     setUser(null)
+    setIsDemo(false)
+    if (typeof window !== "undefined") window.localStorage.removeItem("uj_is_demo")
     toast({ title: "Logged out", description: "You have been signed out." })
   }, [toast])
 
@@ -356,6 +392,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         token,
         isAuthenticated: !!user && !!token,
         isLoading,
+        isDemo,
+        demoLogin,
         requestMagicLink,
         verifyMagicLink,
         verifyEmailToken,

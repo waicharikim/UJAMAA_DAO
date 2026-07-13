@@ -27,6 +27,7 @@ import {
   sendMagicLinkSchema,
   verifyEmailTokenSchema,
   verifyMagicLinkSchema,
+  demoLoginSchema,
   walletNonceSchema,
   walletVerifySchema,
   walletLinkSchema,
@@ -46,6 +47,7 @@ import {
 // Handlers
 import {
   sendMagicLink,
+  demoLogin,
   verifyEmail,
   verifyMagicLink,
 } from '../handlers/auth.handlers.js';
@@ -125,6 +127,16 @@ router.get(
   '/login',
   validateRequest({ schema: verifyMagicLinkSchema, target: 'query' }),
   asyncHandler(verifyMagicLink)
+);
+
+// Shared-passcode demo login for hackathon judges → pre-seeded demo account.
+// No signup / no magic link. Strictly rate-limited (it guards a shared secret).
+router.post(
+  '/demo-login',
+  strictRateLimit(),
+  buildRateLimiter({ windowMs: 10 * 60 * 1000, max: 20 }),
+  validateRequest({ schema: demoLoginSchema, target: 'body' }),
+  asyncHandler(demoLogin)
 );
 
 router.post(

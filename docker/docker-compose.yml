@@ -116,6 +116,9 @@ services:
       - BARAZA_BOT_MODEL=${BARAZA_BOT_MODEL:-}
       - BARAZA_ANALYST_MODEL=${BARAZA_ANALYST_MODEL:-qwen-max}
       - DELIBERATION_AI_MODEL=${DELIBERATION_AI_MODEL:-qwen-plus}
+      # Judges' shared demo login (empty = disabled; ≥8 chars to enable).
+      - DEMO_ACCESS_CODE=${DEMO_ACCESS_CODE:-}
+      - DEMO_JUDGE_EMAIL=${DEMO_JUDGE_EMAIL:-demo@ujamaadao.org}
       # ── Sentry (error monitoring) ────────────────────────────────────────
       - SENTRY_DSN=${SENTRY_DSN:-}
       # ── Web Push (VAPID) ────────────────────────────────────────────────

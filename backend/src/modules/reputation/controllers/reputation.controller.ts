@@ -12,6 +12,14 @@ import { locationImpactService } from '../service/locationImpact.service.js';
 import { ApiError } from '../../../core/errors/ApiError.js';
 import { prisma } from '../../../core/database/client.js';
 
+// The hackathon judges' demo account is kept off public leaderboards so it can
+// hold demo PR without polluting real community rankings. Isolation, not a hack:
+// the account is real and ACTIVE (so it can log in + drive the demo) but excluded
+// from ranking surfaces here.
+const DEMO_JUDGE_EMAIL = (
+  process.env.DEMO_JUDGE_EMAIL || 'demo@ujamaadao.org'
+).toLowerCase();
+
 export class ReputationController {
   /**
    * GET /reputation/me — authenticated user's full reputation profile
@@ -114,6 +122,7 @@ export class ReputationController {
           ...locationFilter,
           status: 'ACTIVE',
           communityVerified: true,
+          email: { not: DEMO_JUDGE_EMAIL },
         },
         orderBy,
         skip,
@@ -138,6 +147,7 @@ export class ReputationController {
           ...locationFilter,
           status: 'ACTIVE',
           communityVerified: true,
+          email: { not: DEMO_JUDGE_EMAIL },
         },
       }),
     ]);

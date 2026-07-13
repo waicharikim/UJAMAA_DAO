@@ -435,6 +435,7 @@ export async function askBaraza(
     const user = (req as any).user;
     const userId: string = user.userId;
     const message: string = req.body.message;
+    const conversationId: string | undefined = req.body.conversationId;
 
     if (!barazaAiService.isAvailable) {
       sendSuccess(res, {
@@ -448,11 +449,19 @@ export async function askBaraza(
     const communities = await resolveWebUserCommunities(userId);
     const groupIds = communities.map((c) => c.groupId);
     const userContext = await resolveWebUserContext(userId, groupIds);
+    // Thread key is `web:{userId}`, optionally suffixed with a client-supplied
+    // session id (`web:{userId}:{conversationId}`) so a shared demo account gets
+    // isolated per-browser threads. The suffix is always under the caller's own
+    // userId, so it can only namespace their own history — never reach another
+    // user's thread.
+    const threadKey = conversationId
+      ? `web:${userId}:${conversationId}`
+      : `web:${userId}`;
     const answer = await barazaAiService.reply(
       message,
       userContext,
       communities,
-      `web:${userId}`,
+      threadKey,
       'web'
     );
     sendSuccess(res, { answer, available: true });

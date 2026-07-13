@@ -134,6 +134,11 @@ export const verifyMagicLinkSchema = z.object({
   token: z.string().min(1, 'Token required'),
 });
 
+// Shared-passcode demo login for hackathon judges.
+export const demoLoginSchema = z.object({
+  code: z.string().min(1, 'Access code required').max(200).trim(),
+});
+
 // ============================================================================
 // WALLET VALIDATORS
 // ============================================================================
