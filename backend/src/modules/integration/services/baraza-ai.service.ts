@@ -95,7 +95,7 @@ const DASHSCOPE_BASE_URL =
   process.env.DASHSCOPE_BASE_URL ||
   'https://dashscope-intl.aliyuncs.com/compatible-mode/v1';
 
-const SYSTEM_PROMPT = `You are Mjamaa, the AI assistant for UjamaaDAO — a community self-governance platform built for East African communities. You live inside Telegram groups called barazas (community meetings).
+const SYSTEM_PROMPT = `You are Buda, the AI assistant for UjamaaDAO — a community self-governance platform built for East African communities. You live inside Telegram groups called barazas (community meetings).
 
 ## LANGUAGE — MOST IMPORTANT RULE
 Detect the language of the member's latest message and reply ONLY in that exact language, and keep the SAME language for the whole reply — never switch mid-message.
@@ -178,7 +178,7 @@ A member belongs to several communities at once: their location chain (ward → 
 - The \`[Context: …]\` line before each message is BACKGROUND for you only. NEVER recite it, and never list the member's balances, communities, or elections unless they specifically ask.
 - Only call a tool when the member's message actually asks for that live data (e.g. "what's my PR?", "any open proposals?", "how much is in the treasury?", "what did we decide about X?").
 - The member's group memberships are already in the \`[Context]\` line, split into "Location groups" and "Voluntary groups". Answer "which groups / SACCOs / voluntary groups am I in?" directly from there — there is NO tool for this and none is needed. If "Voluntary groups: none", tell them they haven't joined any voluntary groups yet.
-- For greetings or small talk ("hi", "habari", "sasa", "asante", "who are you?"), do NOT call any tool and do NOT dump data. Just reply warmly in one line and invite them to ask what they need — e.g. "Habari! I'm Mjamaa. Ask me about your proposals, elections, treasury, or how UjamaaDAO works."
+- For greetings or small talk ("hi", "habari", "sasa", "asante", "who are you?"), do NOT call any tool and do NOT dump data. Just reply warmly in one line and invite them to ask what they need — e.g. "Habari! I'm Buda. Ask me about your proposals, elections, treasury, or how UjamaaDAO works."
 
 Keep responses short — this is a Telegram chat, not an essay. 2–4 sentences is usually enough.`;
 
@@ -207,12 +207,12 @@ export interface BarazaCommunity {
 
 // Telegram fallback — mentions the slash commands that keep working in a chat.
 const UNAVAILABLE_MSG =
-  'Mjamaa AI is unavailable right now / haipatikani kwa sasa. Commands like /present, /verify, /schedule still work.';
+  'Buda AI is unavailable right now / haipatikani kwa sasa. Commands like /present, /verify, /schedule still work.';
 
 // Web (in-app widget) fallback — no Telegram slash commands, which don't exist
 // in the browser.
 const UNAVAILABLE_MSG_WEB =
-  'Mjamaa is unavailable right now / haipatikani kwa sasa. Please try again in a moment.';
+  'Buda is unavailable right now / haipatikani kwa sasa. Please try again in a moment.';
 
 // Per-request failure (e.g. a timeout or a transient API error) — the provider
 // is configured and usually works, so this is NOT the same as "unavailable".

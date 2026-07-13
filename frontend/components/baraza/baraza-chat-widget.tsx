@@ -15,7 +15,7 @@ const INK = "#0A1F14"
 const TEAL = "#2A6B7C"
 
 const GREETING =
-  "Habari! I'm Mjamaa. Ask me about your communities — proposals, elections, treasury, past decisions, or how UjamaaDAO works."
+  "Habari! I'm Buda. Ask me about your communities — proposals, elections, treasury, past decisions, or how UjamaaDAO works."
 
 /**
  * Floating in-app Baraza assistant. Same brain as the Telegram bot, reasoning
@@ -77,7 +77,7 @@ export function BarazaChatWidget() {
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          aria-label="Ask Mjamaa"
+          aria-label="Ask Buda"
           className="fixed z-40 bottom-28 right-4 md:bottom-6 md:right-6 flex items-center justify-center h-14 w-14 rounded-full shadow-lg transition-transform hover:scale-105 active:scale-95"
           style={{ background: INK, color: "#F7F2E8" }}
         >
@@ -98,7 +98,7 @@ export function BarazaChatWidget() {
                      md:h-[600px] md:max-h-[80vh] md:w-[380px] md:rounded-2xl"
           style={{ boxShadow: "0 8px 40px rgba(14,11,8,0.22)" }}
           role="dialog"
-          aria-label="Mjamaa assistant"
+          aria-label="Buda assistant"
         >
           {/* Header */}
           <div
@@ -108,7 +108,7 @@ export function BarazaChatWidget() {
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4" style={{ color: GOLD }} />
               <div className="leading-tight">
-                <p className="text-sm font-bold">Mjamaa</p>
+                <p className="text-sm font-bold">Buda</p>
                 <p className="text-[11px] opacity-70">Your community assistant</p>
               </div>
             </div>
