@@ -203,13 +203,25 @@ async function runMhenga(
   includeNational: boolean,
   pastDecisions: PastDecisionItem[]
 ): Promise<string> {
-  const events = await historianService.getRelevantHistory(
-    themes,
-    keywords,
-    proposalSummary,
-    groupId,
-    includeNational
-  );
+  // Fail-open: a historian lookup error (e.g. a stale Prisma client missing a
+  // new enum value) must NOT sink the whole deliberation. Degrade to no
+  // historical framing rather than throwing into assembleProposalContext.
+  let events: Awaited<ReturnType<typeof historianService.getRelevantHistory>>;
+  try {
+    events = await historianService.getRelevantHistory(
+      themes,
+      keywords,
+      proposalSummary,
+      groupId,
+      includeNational
+    );
+  } catch (err) {
+    logger.warn(
+      { err },
+      '[BARAZA] Mhenga history lookup failed — proceeding without historical framing'
+    );
+    return '';
+  }
   // Nothing on the (gated) timeline and no past decisions → nothing to frame.
   if (events.length === 0 && pastDecisions.length === 0) return '';
   if (!isQwenAvailable()) return historianService.formatHistory(events);
