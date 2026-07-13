@@ -776,6 +776,18 @@ export const integrationApi = {
   getBarazaGroups: () =>
     apiFetch<BarazaGroupDto[]>("/integration/baraza-groups"),
 
+  /** Caller's own Telegram link status (for profile settings). */
+  getTelegramLink: () =>
+    apiFetch<{ connected: boolean; handle: string | null; linkedAt: string | null }>(
+      "/integration/telegram/link"
+    ),
+
+  /** Disconnect the caller's Telegram — frees re-linking after a device/number change. */
+  disconnectTelegram: () =>
+    apiFetch<{ disconnected: boolean }>("/integration/telegram/link", {
+      method: "DELETE",
+    }),
+
   registerBarazaGroup: (dto: RegisterBarazaGroupDto) =>
     apiFetch<BarazaGroupDto>("/integration/baraza-groups", {
       method: "POST",

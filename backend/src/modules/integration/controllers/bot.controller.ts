@@ -1564,3 +1564,72 @@ export async function closeSessionHttp(
     next(err);
   }
 }
+
+// ─────────────────────────────────────────────
+// Telegram self-service link management (JWT required)
+// ─────────────────────────────────────────────
+
+/**
+ * GET /integration/telegram/link — the caller's own Telegram link status.
+ * Lets the app show "connected as @handle · Disconnect" in profile settings.
+ */
+export async function getTelegramLink(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const user = (req as any).user;
+    const profile = await prisma.userMessagingProfile.findUnique({
+      where: {
+        userId_platform: { userId: user.userId, platform: 'TELEGRAM' },
+      },
+      select: {
+        handle: true,
+        isVerified: true,
+        externalUserId: true,
+        updatedAt: true,
+      },
+    });
+    sendSuccess(res, {
+      connected: Boolean(profile?.isVerified && profile?.externalUserId),
+      handle: profile?.handle ?? null,
+      linkedAt: profile?.isVerified ? profile.updatedAt : null,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * DELETE /integration/telegram/link — disconnect the caller's Telegram.
+ * Deletes the UserMessagingProfile so the account can be re-linked from a
+ * different Telegram (e.g. after a device / number change). Idempotent:
+ * succeeds whether or not a link existed. The safe-binding guard in /verify
+ * then accepts a new Telegram id because no prior binding remains.
+ */
+export async function disconnectTelegram(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const user = (req as any).user;
+    const { count } = await prisma.userMessagingProfile.deleteMany({
+      where: { userId: user.userId, platform: 'TELEGRAM' },
+    });
+    logger.info(
+      { userId: user.userId, removed: count },
+      '[TELEGRAM] Messaging profile disconnected by user'
+    );
+    sendSuccess(
+      res,
+      { disconnected: count > 0 },
+      count > 0
+        ? 'Telegram disconnected — you can now link a different Telegram account.'
+        : 'No Telegram was linked.'
+    );
+  } catch (err) {
+    next(err);
+  }
+}

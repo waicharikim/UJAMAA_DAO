@@ -27,6 +27,8 @@ import {
   openSessionHttp,
   closeSessionHttp,
   askBaraza,
+  getTelegramLink,
+  disconnectTelegram,
 } from '../controllers/bot.controller.js';
 import { aiChatRateLimit } from '../../../core/middleware/rateLimiter.js';
 
@@ -60,6 +62,13 @@ const attendanceSchema = z.object({
 
 router.post('/telegram/webhook', handleTelegramWebhook);
 router.post('/discord/webhook', handleDiscordWebhook);
+
+// ─────────────────────────────────────────────
+// Telegram self-service link management (JWT required)
+// ─────────────────────────────────────────────
+
+router.get('/telegram/link', authenticate, getTelegramLink);
+router.delete('/telegram/link', authenticate, disconnectTelegram);
 
 // ─────────────────────────────────────────────
 // Baraza group management (JWT required)

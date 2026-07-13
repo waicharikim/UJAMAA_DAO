@@ -16,6 +16,7 @@ import { GettingStartedCard } from "@/components/onboarding/getting-started-card
 import { useSectionTour } from "@/hooks/use-section-tour"
 import { profileTour } from "@/lib/tours"
 import { PasskeyManager } from "@/components/auth/passkey-manager"
+import { TelegramLinkCard } from "@/components/integration/telegram-link-card"
 import { ResidenceChangeCard } from "@/components/user/residence-change-card"
 import { SessionManager } from "@/components/auth/session-manager"
 import { TwoFactorCard } from "@/components/auth/two-factor-card"
@@ -276,6 +277,7 @@ export default function ProfilePage() {
         <TabsContent value="settings" className="mt-4 space-y-4">
           <UserProfile />
           <PasskeyManager />
+          <TelegramLinkCard />
           {isVerified && <DuesPaymentCard />}
           <UtWithdrawalCard />
           {isVerified && <ResidenceChangeCard />}
