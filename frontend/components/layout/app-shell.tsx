@@ -10,6 +10,7 @@ import { OnboardingWizard } from "@/components/onboarding/onboarding-wizard"
 import { CompleteLocationPrompt } from "@/components/location/complete-location-prompt"
 import { BarazaChatWidget } from "@/components/baraza/baraza-chat-widget"
 import { BottomNavProvider } from "@/contexts/bottom-nav-context"
+import { useAuth } from "@/contexts/auth-context"
 
 interface AppShellProps {
   children: ReactNode
@@ -21,6 +22,9 @@ const PUBLIC_ROUTES = ["/", "/about", "/auth/register", "/auth/callback", "/dev/
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
+  // The shared judges' demo account skips the first-run onboarding overlays so
+  // judges land straight on the app, not a welcome wizard.
+  const { isDemo } = useAuth()
 
   if (PUBLIC_ROUTES.includes(pathname)) {
     return <>{children}</>
@@ -44,12 +48,17 @@ export function AppShell({ children }: AppShellProps) {
         {/* Mobile floating pill nav */}
         <MobileBottomNav />
 
-        {/* Prompts users with no ward to set one (initial location). Takes
-            priority over the wizard, which assumes a ward already exists. */}
-        <CompleteLocationPrompt />
+        {/* Onboarding overlays — suppressed for the judges' demo account. */}
+        {!isDemo && (
+          <>
+            {/* Prompts users with no ward to set one (initial location). Takes
+                priority over the wizard, which assumes a ward already exists. */}
+            <CompleteLocationPrompt />
 
-        {/* First-time walkthrough wizard — shown once to new users; sets both wizard + audit-gate keys */}
-        <OnboardingWizard />
+            {/* First-time walkthrough wizard — shown once to new users; sets both wizard + audit-gate keys */}
+            <OnboardingWizard />
+          </>
+        )}
 
         {/* In-app Baraza assistant — self-gates to signed-in users */}
         <BarazaChatWidget />
