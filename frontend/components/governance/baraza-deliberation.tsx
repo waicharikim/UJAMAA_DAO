@@ -2,6 +2,7 @@
 
 import { Users, Info, Check, ThumbsUp, Swords, HelpCircle, Construction, Star, Wrench, PencilLine, Lightbulb, HeartHandshake } from "lucide-react"
 import type { BarazaDeliberationDto } from "@/lib/api"
+import { ConflictMapGraph } from "./conflict-map-graph"
 
 interface BarazaDeliberationCardProps {
   deliberation: BarazaDeliberationDto | null | undefined
@@ -144,6 +145,12 @@ export function BarazaDeliberationCard({ deliberation, isCreator = false, editab
       )}
 
       <div className="px-4 md:px-5 py-4 space-y-3">
+        {((map.conflicts?.length ?? 0) > 0 || (map.coalitions?.length ?? 0) > 0) && (
+          <div className="pb-1">
+            <ConflictMapGraph coalitions={map.coalitions} conflicts={map.conflicts} />
+          </div>
+        )}
+
         {agreed.length > 0 && (
           <Section icon={Check} label="What's widely agreed" color="#1A6B3C">
             <Bullets items={agreed} color="#1A6B3C" />
