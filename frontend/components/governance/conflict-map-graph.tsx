@@ -25,7 +25,7 @@ const INK = "#0A1F14"
 
 // What each council agent represents (the "lens" it argues from). Domain agents
 // vary by panel (governance vs cooperative); analysts run in every panel.
-const AGENT_ROLES: Record<string, string> = {
+export const AGENT_ROLES: Record<string, string> = {
   DAKTARI: "health & welfare",
   LINDA: "land & environment",
   TAJIRI: "economy",
@@ -42,9 +42,11 @@ const AGENT_ROLES: Record<string, string> = {
   KADERE: "values",
 }
 
-const title = (k: string) =>
+export const agentName = (k: string) =>
   k ? k.charAt(0).toUpperCase() + k.slice(1).toLowerCase() : k
-const roleOf = (k: string) => AGENT_ROLES[k?.toUpperCase()] ?? ""
+export const agentRole = (k: string) => AGENT_ROLES[k?.toUpperCase()] ?? ""
+const title = agentName
+const roleOf = agentRole
 
 // All unique agents that appear in any coalition or conflict.
 function collectAgents(coalitions: Coalition[], conflicts: Conflict[]): string[] {

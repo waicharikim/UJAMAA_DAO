@@ -3,6 +3,7 @@
 import { Users, Info, Check, ThumbsUp, Swords, HelpCircle, Construction, Star, Wrench, PencilLine, Lightbulb, HeartHandshake } from "lucide-react"
 import type { BarazaDeliberationDto } from "@/lib/api"
 import { ConflictMapGraph } from "./conflict-map-graph"
+import { DeliberationTranscript } from "./deliberation-transcript"
 
 interface BarazaDeliberationCardProps {
   deliberation: BarazaDeliberationDto | null | undefined
@@ -240,6 +241,9 @@ export function BarazaDeliberationCard({ deliberation, isCreator = false, editab
             </ol>
           </Section>
         )}
+
+        {/* Under the hood: the council's full round-by-round debate (opt-in). */}
+        <DeliberationTranscript transcript={deliberation.transcript} />
       </div>
     </div>
   )

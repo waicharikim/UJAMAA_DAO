@@ -1638,16 +1638,22 @@ class BarazaDeliberationService {
         triggeredBy: true,
         completedAt: true,
         transcript: true,
+        contextSnapshot: true,
       },
     });
     if (!delib) return null;
 
-    // Surface Kadere (values voice) from the transcript without leaking the full
-    // internal transcript to the client.
-    const { transcript, ...rest } = delib;
+    // The full internal transcript is now surfaced to members for transparency
+    // ("auditable, not a black box" — ADR vision-check). We expose ONLY the
+    // proposal-scoped debate + the casting *labels*; the rest of contextSnapshot
+    // (ward stats, treasury, member counts, current affairs) is NOT leaked.
+    const { transcript, contextSnapshot, ...rest } = delib;
     const rounds = ((transcript as { rounds?: unknown[] } | null)?.rounds ??
       []) as Array<{
       roundNumber?: number;
+      domainPositions?: Record<string, string>;
+      ukweliAnnotations?: string;
+      kivuliAnnotations?: string;
       kadereValues?: string;
       kadereHasTension?: boolean;
     }>;
@@ -1660,7 +1666,34 @@ class BarazaDeliberationService {
         ? { reading, closing, hasTension: round1?.kadereHasTension ?? false }
         : null;
 
-    return { ...rest, kadere };
+    // Casting = each agent's assigned analytical lens (life-stage × exposure),
+    // extracted from the snapshot. Labels only — framed client-side as lenses,
+    // never as real people's words.
+    const rawCasting =
+      (contextSnapshot as { casting?: Record<string, any> } | null)?.casting ??
+      {};
+    const castingSrc =
+      (rawCasting as { casting?: Record<string, any> }).casting ?? rawCasting;
+    const casting: Record<string, { lifeStage: string; exposure: string }> = {};
+    for (const [agent, c] of Object.entries(castingSrc)) {
+      if (c && (c.lifeStage || c.exposure)) {
+        casting[agent] = {
+          lifeStage: String(c.lifeStage ?? ''),
+          exposure: String(c.exposure ?? ''),
+        };
+      }
+    }
+
+    // Client-safe transcript: the round-by-round debate, labelled per analyst.
+    const safeRounds = rounds.map((r) => ({
+      roundNumber: r.roundNumber ?? null,
+      domainPositions: r.domainPositions ?? {},
+      shahidi: r.ukweliAnnotations ?? null,
+      mpelelezi: r.kivuliAnnotations ?? null,
+      kadere: r.kadereValues ?? null,
+    }));
+
+    return { ...rest, kadere, transcript: { rounds: safeRounds, casting } };
   }
 
   /**

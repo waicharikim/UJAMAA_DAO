@@ -1118,6 +1118,19 @@ export interface BarazaDeliberationDto {
     closing: string | null
     hasTension: boolean
   } | null
+  // Full round-by-round debate (transparency). `casting` = each agent's assigned
+  // analytical lens (life-stage × exposure) — framed in the UI as a lens, never
+  // as a real person's words. Proposal-scoped only; no ward/treasury snapshot.
+  transcript?: {
+    rounds: Array<{
+      roundNumber: number | null
+      domainPositions: Record<string, string>
+      shahidi: string | null
+      mpelelezi: string | null
+      kadere: string | null
+    }>
+    casting: Record<string, { lifeStage: string; exposure: string }>
+  } | null
 }
 
 export interface ProposalAnnotationDto {
