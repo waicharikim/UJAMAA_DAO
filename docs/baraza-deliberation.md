@@ -44,19 +44,37 @@ Each domain agent argues from a **cast lived perspective** — a *life-stage × 
 
 ---
 
-## Debate flow
+## Debate flow (AI-layer architecture)
 
-```
-Context assembly  → proposal + treasury + member count + last 5 group proposals + agent memory
-Round 1 (Initial) → 5 domain agents in parallel → Ukweli annotates → Kivuli annotates
-Round 2 (Cross)   → each agent must name + rebut a specific other agent, then update → Ukweli → Kivuli
-Round 3 (Final)   → each agent states final position (conceded / allied / held) → Ukweli → Kivuli
-Mkutano           → Ukweli reads Kivuli's full transcript & vice versa → convergence / contradiction / fixability
-Scoring           → readiness 0–100, partially gated on Mkutano convergence
-Persist           → BarazaDeliberation row + all 7 BarazaAgentState records updated
+This is the internal pipeline of the "Baraza council" box in the [system architecture](./architecture.md) — the worker-driven, multi-agent deliberation that runs on Qwen before any human vote.
+
+```mermaid
+flowchart TB
+  P["Proposal"] --> CTX["Context assembly<br/>proposal · treasury · members ·<br/>last 5 proposals · agent memory ·<br/>CurrentAffairs (EPRA…) · Mhenga history"]
+  CTX --> MJ["Mjamaa — convener<br/>picks the panel · casts each agent's<br/>life-stage × economic-exposure voice"]
+  MJ --> RDS
+
+  subgraph RDS["Rounds 1–3  ·  R2: each agent must name &amp; rebut a specific other"]
+    direction TB
+    DA["Domain panel — run in parallel<br/>governance: Daktari·Linda·Tajiri·Foreman·Mwalimu<br/>cooperative: Mkurugenzi·Mwananchi·Fundi·Hustler"]
+    SH["Shahidi — premise / fact-check<br/>web_search tool → Tavily"]
+    MP["Mpelelezi — feasibility &amp; power<br/>read-only DB tools"]
+    DA --> SH --> MP
+  end
+
+  RDS --> MK["Mkutano — convergence check<br/>Shahidi ⟷ Mpelelezi (once, after the rounds)"]
+  MK --> SC["Scoring — readiness 0–100<br/>gated on convergence + Mjamaa structural severity"]
+  SC --> OUT["Persist: BarazaDeliberation<br/>readiness · conflict-map · transcript · revisions<br/>+ per-agent memory (BarazaAgentState)"]
+
+  KN[("Knowledge / RAG<br/>text-embedding-v3")] -. "search_knowledge" .-> DA
+  KD["Kadere — values voice<br/>advisory · labelled · NOT in the score"] -.-> RDS
+  MHfr["Mhenga — historian framing"] -.-> CTX
+
+  classDef ai fill:#eef6f8,stroke:#2A6B7C,color:#0A1F14;
+  class SH,MP,KN ai;
 ```
 
-The Round-2 "name a specific agent and rebut" constraint is what produces genuine disagreement instead of parallel monologues.
+The Round-2 "name a specific agent and rebut" constraint is what produces genuine disagreement instead of parallel monologues. Shahidi and Mpelelezi annotate each round but only meet in **Mkutano**; the framing voices (Mjamaa, Mhenga) and Kadere run once, not per round, to bound cost.
 
 ### Readiness score (0–100)
 

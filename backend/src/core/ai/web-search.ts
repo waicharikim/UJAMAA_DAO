@@ -95,7 +95,12 @@ export async function executeWebSearchTool(
   if (name !== 'web_search') return JSON.stringify({ error: 'unknown tool' });
   const query = String(args.query ?? '').trim();
   if (!query) return JSON.stringify({ error: 'empty query' });
+  logger.info({ query, operationType: 'AI' }, '[AI] web_search invoked');
   const { answer, results } = await webSearch(query);
+  logger.info(
+    { query, resultCount: results.length, operationType: 'AI' },
+    '[AI] web_search returned'
+  );
   if (results.length === 0) {
     return JSON.stringify({
       note: 'No web results available. Do NOT assert unverifiable current facts; reason from the provided context only.',
