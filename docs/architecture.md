@@ -227,7 +227,7 @@ Three features ride on it:
 | **Baraza deliberation engine** | worker — `governance/baraza/` | 7-agent council that debates a proposal *before* the vote → readiness score + conflict map. See `docs/baraza-deliberation.md`. |
 
 - **Models:** `qwen-plus` (domain agents + Q&A bot) / `qwen-max` (analysts + JSON extraction/scoring). Env: `BARAZA_AI_MODEL`, `BARAZA_ANALYST_MODEL`, `DASHSCOPE_BASE_URL`.
-- **Info-fetching:** Ukweli uses DashScope server-side web search (`enable_search`); deliberation agents call read-only, group-scoped DB tools for real local data.
+- **Info-fetching:** Shahidi (fact-checker) verifies external/current claims with a real **`web_search` function tool** (Tavily, via `completeWithTools` — the pattern Qwen's own reference agents use; DashScope's `enable_search` flag is silently ignored on the intl endpoint, so we don't rely on it). Activated by `TAVILY_API_KEY`; fail-open (no key → Shahidi reasons from context and is instructed not to assert unverifiable current facts). Deliberation agents also call read-only, group-scoped DB tools for real local data.
 - **Provider is env-switchable** (the OpenAI-compatible path is the point): hackathon → DashScope Qwen; post-hackathon → DO Qwen3-32B (swap base URL/key/model); Claude later would re-add an Anthropic client path. The shared client keeps `getClaudeClient`/`isClaudeAvailable` aliases from when this was Claude-based (migrated 2026-06-25).
 
 ---

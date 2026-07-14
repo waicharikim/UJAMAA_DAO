@@ -185,49 +185,11 @@ export async function completeConversation(
   }
 }
 
-// ─── completeWithSearch() ─────────────────────────────────────────────────────
-
-/**
- * Completion with Qwen's real, server-side web search enabled (Shahidi only).
- *
- * DashScope does NOT expose web search as an OpenAI function tool — it's a
- * request flag (`enable_search`). When set, Qwen performs the retrieval itself
- * and folds the results into its answer; there is no client-side tool loop.
- * `forced_search: false` lets the model decide when a query actually needs the
- * web (so Shahidi only searches when a premise warrants it).
- *
- * `enable_search`/`search_options` are DashScope extensions not in the OpenAI
- * SDK types, so the params are passed through with a cast. Falls back to a plain
- * completion (no search) on any error. Returns null only when the client is
- * unavailable.
- */
-export async function completeWithSearch(
-  opts: CompleteOptions
-): Promise<string | null> {
-  const qwen = getQwenClient();
-  if (!qwen) return null;
-
-  try {
-    const response = await qwen.chat.completions.create({
-      model: opts.model ?? QWEN_ANALYST_MODEL,
-      max_tokens: opts.maxTokens ?? 2048,
-      messages: [
-        { role: 'system', content: opts.system },
-        { role: 'user', content: opts.userMessage },
-      ],
-      // DashScope server-side web search (forwarded in the request body).
-      enable_search: true,
-      search_options: { forced_search: false, enable_citation: true },
-      enable_thinking: false,
-    } as unknown as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming);
-
-    return response.choices[0]?.message?.content?.trim() ?? null;
-  } catch (err) {
-    logger.warn({ err }, '[AI] Qwen search completion failed');
-    // Fall back to a standard completion without search.
-    return complete(opts);
-  }
-}
+// NOTE: web search is done via a real `web_search` function tool (see
+// `core/ai/web-search.ts`) routed through `completeWithTools` — the pattern
+// Qwen Cloud's own reference agents use. DashScope's `enable_search` flag is
+// silently ignored on the international compatible-mode endpoint, so the former
+// `completeWithSearch()` helper was removed (it never actually searched).
 
 // ─── completeWithTools() ──────────────────────────────────────────────────────
 

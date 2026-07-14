@@ -21,7 +21,6 @@ import { prisma } from '../../../core/database/client.js';
 import { logger } from '../../../core/logger/logger.js';
 import {
   complete,
-  completeWithSearch,
   completeWithTools,
   completeJSON,
   isQwenAvailable,
@@ -29,6 +28,11 @@ import {
   QWEN_ANALYST_MODEL,
 } from '../../../core/ai/qwen.js';
 import { DELIBERATION_TOOLS, executeDeliberationTool } from './agents/tools.js';
+import {
+  isWebSearchAvailable,
+  WEB_SEARCH_TOOL,
+  executeWebSearchTool,
+} from '../../../core/ai/web-search.js';
 import {
   CONVENER_SYSTEM,
   buildConvenerUserMessage,
@@ -769,13 +773,27 @@ async function runShahidi(
     ROUND_N_TRANSCRIPT: fullContext,
   });
 
-  // Shahidi uses web search for premise interrogation
-  const response = await completeWithSearch({
-    system: systemPrompt,
-    userMessage: `Round ${roundNumber} — produce your credibility annotations for the positions above.`,
-    maxTokens: 1500,
-    model: QWEN_ANALYST_MODEL,
-  });
+  // Shahidi verifies premises with a REAL web-search tool (the Qwen-reference
+  // pattern) when TAVILY_API_KEY is set; otherwise it degrades to reasoning from
+  // the provided context and is told NOT to assert unverifiable current facts.
+  const response = isWebSearchAvailable()
+    ? await completeWithTools({
+        system: systemPrompt,
+        userMessage: `Round ${roundNumber} — interrogate the positions above. Use web_search to verify any external or current claim (prices, dates, laws, statistics) before annotating, and cite the source URL. Then produce your credibility annotations.`,
+        tools: [WEB_SEARCH_TOOL],
+        executeTool: executeWebSearchTool,
+        maxRounds: 2,
+        maxTokens: 1500,
+        model: QWEN_ANALYST_MODEL,
+      })
+    : await complete({
+        system:
+          systemPrompt +
+          '\n\n(Live web search is unavailable in this run — interrogate premises using reasoning and the provided context only; do NOT assert external statistics or current figures you cannot verify from the context.)',
+        userMessage: `Round ${roundNumber} — produce your credibility annotations for the positions above.`,
+        maxTokens: 1500,
+        model: QWEN_ANALYST_MODEL,
+      });
 
   return response ?? '[Shahidi did not respond]';
 }

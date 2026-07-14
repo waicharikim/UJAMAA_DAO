@@ -116,6 +116,7 @@ services:
       - BARAZA_BOT_MODEL=${BARAZA_BOT_MODEL:-}
       - BARAZA_ANALYST_MODEL=${BARAZA_ANALYST_MODEL:-qwen-max}
       - DELIBERATION_AI_MODEL=${DELIBERATION_AI_MODEL:-qwen-plus}
+      - TAVILY_API_KEY=${TAVILY_API_KEY:-}
       # Judges' shared demo login (empty = disabled; ≥8 chars to enable).
       - DEMO_ACCESS_CODE=${DEMO_ACCESS_CODE:-}
       - DEMO_JUDGE_EMAIL=${DEMO_JUDGE_EMAIL:-demo@ujamaadao.org}
@@ -258,6 +259,7 @@ services:
       - BARAZA_BOT_MODEL=${BARAZA_BOT_MODEL:-}
       - BARAZA_ANALYST_MODEL=${BARAZA_ANALYST_MODEL:-qwen-max}
       - DELIBERATION_AI_MODEL=${DELIBERATION_AI_MODEL:-qwen-plus}
+      - TAVILY_API_KEY=${TAVILY_API_KEY:-}
       # ── DataDog APM ──────────────────────────────────────────────────────
       - DD_AGENT_HOST=datadog
       - DD_TRACE_AGENT_PORT=8126

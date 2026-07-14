@@ -106,6 +106,8 @@ services:
       - BARAZA_BOT_MODEL=${BARAZA_BOT_MODEL:-}
       - BARAZA_ANALYST_MODEL=${BARAZA_ANALYST_MODEL:-qwen-max}
       - DELIBERATION_AI_MODEL=${DELIBERATION_AI_MODEL:-qwen-plus}
+      # Real web search for Shahidi (Tavily). Empty = Shahidi reasons from context only.
+      - TAVILY_API_KEY=${TAVILY_API_KEY:-}
       # Hackathon judges' shared demo login (POST /auth/demo-login + /judges).
       # Empty DEMO_ACCESS_CODE = feature disabled. Must be ≥8 chars to enable.
       - DEMO_ACCESS_CODE=${DEMO_ACCESS_CODE:-}
@@ -172,6 +174,8 @@ services:
       - BARAZA_BOT_MODEL=${BARAZA_BOT_MODEL:-}
       - BARAZA_ANALYST_MODEL=${BARAZA_ANALYST_MODEL:-qwen-max}
       - DELIBERATION_AI_MODEL=${DELIBERATION_AI_MODEL:-qwen-plus}
+      # Real web search for Shahidi (Tavily). Empty = Shahidi reasons from context only.
+      - TAVILY_API_KEY=${TAVILY_API_KEY:-}
       - BUNI_CLIENT_ID=${BUNI_CLIENT_ID}
       - BUNI_CLIENT_SECRET=${BUNI_CLIENT_SECRET}
       - BUNI_BASE_URL=${BUNI_BASE_URL}
