@@ -1,24 +1,63 @@
 # UjamaaDAO – System Architecture
 
-**Last updated:** May 2026
+**Last updated:** July 2026
 
 ---
 
 ## High-Level Overview
 
+The whole dockerized stack runs on **Alibaba Cloud ECS**; **all AI inference is Qwen Cloud (DashScope)**. The multi-agent **Baraza council is advisory** — it informs the human vote, it never decides.
+
+```mermaid
+flowchart TB
+  subgraph clients["Clients"]
+    W["Community member<br/>(web)"]
+    T["Telegram user"]
+  end
+
+  subgraph ecs["Alibaba Cloud ECS — dockerized stack"]
+    TR["Traefik<br/>HTTPS / routing"]
+    FE["Frontend<br/>Next.js + React"]
+    API["API · web<br/>Express · stateless JWT"]
+    WK["Worker<br/>BullMQ consumer<br/>Baraza council"]
+    PG[("Postgres")]
+    RD[("Redis<br/>queue + cache")]
+  end
+
+  subgraph qwen["Qwen Cloud · DashScope — all inference"]
+    Q1["qwen-plus<br/>domain agents + Buda"]
+    Q2["qwen-max<br/>analysts + JSON scoring"]
+    Q3["text-embedding-v3<br/>RAG knowledge layer"]
+  end
+
+  subgraph ext["External"]
+    MP["M-Pesa · Buni<br/>(platform accounts)"]
+    TG["Telegram Bot API"]
+    BASE["Base L2<br/>governance + token anchoring"]
+  end
+
+  W --> TR --> FE --> API
+  T --> TG --> API
+  API -- "1· submit → enqueue" --> RD
+  RD -- "2· job" --> WK
+  WK -- "3· multi-round council" --> Q1
+  WK --> Q2
+  WK -- "search_knowledge" --> Q3
+  WK -- "4· readiness / conflict-map / transcript" --> PG
+  API -- "5· read deliberation" --> PG
+  FE -- "6· HUMAN VOTE (binding)" --> API
+  WK -- "7· anchor vote + outcome" --> BASE
+  API -- "Buda Q&A (RAG)" --> Q1
+  API -- "dues / payouts" --> MP
+  API --> PG
+
+  classDef ai fill:#eef6f8,stroke:#2A6B7C,color:#0A1F14;
+  classDef store fill:#f6f1e7,stroke:#7A4F1E,color:#0A1F14;
+  class Q1,Q2,Q3 ai;
+  class PG,RD store;
 ```
-┌─────────────────┐     ┌──────────────────────────┐     ┌──────────────────────┐
-│   Frontend      │────▶│   Backend REST API        │────▶│   Blockchain Layer   │
-│   (Next.js)     │     │   Node.js / Express       │     │   Base L2 (Sepolia)  │
-│   Port :3000    │     │   Port :4000              │     │   PrToken + UtToken  │
-└─────────────────┘     └──────────────────────────┘     └──────────────────────┘
-                                    │
-                         ┌──────────┴──────────┐
-                         │   Worker Process    │
-                         │   BullMQ queues     │
-                         │   (background jobs) │
-                         └─────────────────────┘
-```
+
+**Flow:** (1) a member submits a proposal to the stateless **API**, which **enqueues** a deliberation to **BullMQ/Redis** and returns immediately; (2) a **worker** picks it up; (3) it runs the **Baraza council** (domain panel + analysts + historian + values voice, convened by Mjamaa) over structured rounds on **Qwen** (`qwen-plus`/`qwen-max`) with **`text-embedding-v3`** RAG; (4) it writes the readiness score, conflict map, and full transcript to Postgres; (5) the frontend renders them; (6) **humans vote — the binding decision** (the AI never votes, moves funds, or gates a proposal); (7) the worker **anchors** the vote + outcome on **Base L2**. The council is async so the ~4–6 min run never blocks the API, and every AI call is **fail-open**.
 
 ---
 
