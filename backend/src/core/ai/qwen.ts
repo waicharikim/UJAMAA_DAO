@@ -274,7 +274,21 @@ export async function completeWithTools(
       );
     }
 
-    return response.choices[0]?.message?.content?.trim() ?? null;
+    const content = response.choices[0]?.message?.content?.trim();
+    if (content) return content;
+
+    // The model exhausted its tool rounds (or returned empty) without a final
+    // text answer — force one from the tool results it already gathered, with
+    // no tools this time so it must respond. (`messages` ends with tool results,
+    // a valid state; the unanswered tool-call response was never pushed.)
+    const forced = await qwen.chat.completions.create(
+      noThink({
+        model: opts.model ?? QWEN_MODEL,
+        max_tokens: opts.maxTokens ?? 2048,
+        messages,
+      })
+    );
+    return forced.choices[0]?.message?.content?.trim() ?? null;
   } catch (err) {
     logger.warn({ err }, '[AI] Qwen tool completion failed');
     return complete({
