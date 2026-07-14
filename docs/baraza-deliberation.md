@@ -131,8 +131,8 @@ Runs as a BullMQ job (`BARAZA_DELIBERATION`) on the governance queue/worker. Con
 Powered by **Alibaba DashScope** (Qwen Cloud, OpenAI-compatible) via `core/ai/qwen.ts` (which replaced `claude.ts`; keeps `getClaudeClient`/`isClaudeAvailable` aliases). Models: `qwen-plus` (domain agents) / `qwen-max` (analysts + JSON extraction/scoring). The path is OpenAI-compatible, so the **post-hackathon fallback is DO's Qwen3-32B** (swap base URL + key + model id, no code change); Claude-later would re-add the Anthropic client path.
 
 Agents argue from **real data**, not just model priors:
-- **Ukweli — live web search:** `completeWithSearch()` uses DashScope's server-side `enable_search` (`forced_search:false` + citations), folded into the answer. Falls back to a plain completion on error.
-- **Domain agents (Round 1) + Kivuli (every round) — DB tools:** `completeWithTools()` + `agents/tools.ts` expose read-only, group-scoped tools — `get_ward_stats`, `get_group_treasury`, `search_past_decisions`, `get_election_results`. Domain agents fetch only in Round 1 (rounds 2–3 react to the transcript) to bound cost; Kivuli fetches each round.
+- **Shahidi — live web search:** a real `web_search` **function tool** (`core/ai/web-search.ts`, Tavily-backed) routed through `completeWithTools()` — the pattern Qwen's own reference agents use. (DashScope's `enable_search` flag is silently ignored on the intl compatible-mode endpoint, so the old `completeWithSearch()` was removed.) Activated by `TAVILY_API_KEY`; fail-open — with no key Shahidi reasons from context and is told not to assert unverifiable current facts.
+- **Domain agents (Round 1) + Mpelelezi (every round) — DB tools:** `completeWithTools()` + `agents/tools.ts` expose read-only, group-scoped tools — `get_ward_stats`, `get_group_treasury`, `search_past_decisions`, `get_election_results`, `search_knowledge` (RAG). Domain agents fetch only in Round 1 (rounds 2–3 react to the transcript) to bound cost; Mpelelezi fetches each round.
 
 ### Environment
 
