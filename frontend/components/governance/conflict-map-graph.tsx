@@ -89,12 +89,35 @@ export function ConflictMapGraph({
     const ky = my + (cy - my) * 0.55
     return `M${A.x.toFixed(1)},${A.y.toFixed(1)} Q${kx.toFixed(1)},${ky.toFixed(1)} ${B.x.toFixed(1)},${B.y.toFixed(1)}`
   }
-  const pairs = (xs: string[]) => {
-    const out: [string, string][] = []
-    for (let i = 0; i < xs.length; i++)
-      for (let j = i + 1; j < xs.length; j++) out.push([xs[i], xs[j]])
-    return out
+  // A coalition is drawn as a soft blob enclosing its members (not an O(n²) web
+  // of chords). 2 members → a rounded capsule; 3+ → a smooth padded hull.
+  type Pt = { x: number; y: number }
+  const centroid = (ps: Pt[]): Pt => ({
+    x: ps.reduce((s, p) => s + p.x, 0) / ps.length,
+    y: ps.reduce((s, p) => s + p.y, 0) / ps.length,
+  })
+  const push = (p: Pt, c: Pt, pad: number): Pt => {
+    const dx = p.x - c.x
+    const dy = p.y - c.y
+    const len = Math.hypot(dx, dy) || 1
+    return { x: p.x + (dx / len) * pad, y: p.y + (dy / len) * pad }
   }
+  const mid = (a: Pt, b: Pt): Pt => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 })
+  const hullPath = (raw: Pt[], pad = 15): string => {
+    const c = centroid(raw)
+    const ps = raw
+      .map((p) => push(p, c, pad))
+      .sort((a, b) => Math.atan2(a.y - c.y, a.x - c.x) - Math.atan2(b.y - c.y, b.x - c.x))
+    const start = mid(ps[ps.length - 1], ps[0])
+    let d = `M${start.x.toFixed(1)},${start.y.toFixed(1)}`
+    for (let i = 0; i < ps.length; i++) {
+      const m = mid(ps[i], ps[(i + 1) % ps.length])
+      d += ` Q${ps[i].x.toFixed(1)},${ps[i].y.toFixed(1)} ${m.x.toFixed(1)},${m.y.toFixed(1)}`
+    }
+    return d + "Z"
+  }
+  const memberPts = (c: Coalition): Pt[] =>
+    (c.agents ?? []).map((a) => pos[a]).filter(Boolean) as Pt[]
 
   return (
     <figure className="m-0">
@@ -105,22 +128,43 @@ export function ConflictMapGraph({
           aria-label="Diagram of which council agents aligned and which clashed"
           style={{ width: "100%", height: "auto", overflow: "visible" }}
         >
-          {/* alignment chords (teal, subtle) */}
-          {coalitions.flatMap((c, ci) =>
-            pairs(c.agents ?? []).map(([p, q], pi) => (
+          {/* coalition blobs (teal, subtle) — a soft hull/capsule enclosing each
+              aligned group, instead of an O(n²) web of chords */}
+          {coalitions.map((c, ci) => {
+            const pts = memberPts(c)
+            if (pts.length < 2) return null
+            const strength = c.strength ?? 0.5
+            const fillOp = 0.06 + strength * 0.1
+            const label = `Aligned: ${c.sharedConcern ?? (c.agents ?? []).map(title).join(", ")}`
+            if (pts.length === 2) {
+              return (
+                <path
+                  key={`co-${ci}`}
+                  d={`M${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)} L${pts[1].x.toFixed(1)},${pts[1].y.toFixed(1)}`}
+                  fill="none"
+                  stroke={TEAL}
+                  strokeWidth={24}
+                  strokeOpacity={fillOp}
+                  strokeLinecap="round"
+                >
+                  <title>{label}</title>
+                </path>
+              )
+            }
+            return (
               <path
-                key={`co-${ci}-${pi}`}
-                d={chord(p, q)}
-                fill="none"
+                key={`co-${ci}`}
+                d={hullPath(pts)}
+                fill={TEAL}
+                fillOpacity={fillOp}
                 stroke={TEAL}
-                strokeWidth={0.8 + (c.strength ?? 0.5) * 1.6}
-                strokeOpacity={0.16 + (c.strength ?? 0.5) * 0.14}
-                strokeLinecap="round"
+                strokeOpacity={0.18 + strength * 0.14}
+                strokeWidth={1}
               >
-                <title>{`Aligned: ${c.sharedConcern ?? (c.agents ?? []).map(title).join(", ")}`}</title>
+                <title>{label}</title>
               </path>
-            ))
-          )}
+            )
+          })}
           {/* tension chords (red, prominent) */}
           {conflicts.map((c, i) => {
             const [p, q] = c.between ?? []
