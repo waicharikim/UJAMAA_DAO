@@ -1130,6 +1130,9 @@ export interface BarazaDeliberationDto {
       kadere: string | null
     }>
     casting: Record<string, { lifeStage: string; exposure: string }>
+    // Mkaguzi (auditor) — procedural/compliance review, a JSON string
+    // {regulatory,financial,method,instruments} (rendered client-side).
+    mkaguzi?: string | null
   } | null
 }
 

@@ -62,6 +62,7 @@ import {
   ROUND_INSTRUCTIONS,
   MKUTANO_SHAHIDI_SYSTEM,
   MKUTANO_MPELELEZI_SYSTEM,
+  MKAGUZI_SYSTEM,
   injectPrompt,
   type AgentKey,
 } from './agents/prompts.js';
@@ -798,6 +799,43 @@ async function runShahidi(
   return response ?? '[Shahidi did not respond]';
 }
 
+// ─── Mkaguzi (the auditor) — run-once procedural / compliance due-diligence ──────
+
+/**
+ * Mkaguzi produces the due-diligence checklist the specialised agents skip:
+ * applicable Kenyan regulators/permits (web-searched), budget-arithmetic gaps,
+ * standard M&E/pilot/KPI design, and required legal instruments. Runs ONCE after
+ * the rounds; its findings are folded into the deliberation's chokepoints +
+ * revision suggestions (see computeReadinessScore). Not an AgentKey (solo
+ * auditor, not a debater), so no per-group memory / enum.
+ */
+async function runMkaguzi(
+  proposalContextStr: string,
+  rounds: RoundOutput[]
+): Promise<string> {
+  const transcript = rounds.map(formatRoundTranscript).join('\n\n---\n\n');
+  const userMessage = `PROPOSAL CONTEXT:\n${proposalContextStr}\n\nWHAT THE COUNCIL DEBATED:\n${transcript}\n\nProduce your procedural / compliance due-diligence review. Use web_search to name the correct current Kenyan regulators, permits and requirements, and cite sources. JSON only.`;
+  const response = isWebSearchAvailable()
+    ? await completeWithTools({
+        system: MKAGUZI_SYSTEM,
+        userMessage,
+        tools: [WEB_SEARCH_TOOL],
+        executeTool: executeWebSearchTool,
+        maxRounds: 4,
+        maxTokens: 1200,
+        model: QWEN_ANALYST_MODEL,
+      })
+    : await complete({
+        system:
+          MKAGUZI_SYSTEM +
+          '\n\n(Live web search is unavailable this run — name the most likely applicable Kenyan bodies from knowledge, but flag that the specifics need verification.)',
+        userMessage,
+        maxTokens: 1200,
+        model: QWEN_ANALYST_MODEL,
+      });
+  return response ?? '[Mkaguzi did not respond]';
+}
+
 async function runMpelelezi(
   roundNumber: 1 | 2 | 3,
   proposalContextStr: string,
@@ -977,7 +1015,8 @@ async function computeReadinessScore(
   rounds: RoundOutput[],
   mkutano: MkutanoOutput,
   agentStates: Partial<Record<AgentKey, any>>,
-  structuralSeverity: StructuralSeverity = 'NONE'
+  structuralSeverity: StructuralSeverity = 'NONE',
+  mkaguziReview = ''
 ): Promise<{
   score: number;
   band: string;
@@ -1008,7 +1047,7 @@ ${mkutano.convergencePoints.join('\n')}
 
 MKUTANO CONTRADICTION POINTS:
 ${mkutano.contradictionPoints.join('\n')}
-
+${mkaguziReview ? `\nPROCEDURAL / COMPLIANCE REVIEW (Mkaguzi — the auditor):\n${mkaguziReview}\n` : ''}
 Return JSON with this exact shape:
 {
   "coalitions": [{ "agents": AgentKey[], "strength": 0-1, "sharedConcern": string }],
@@ -1026,7 +1065,8 @@ CONSTRAINTS (keep the JSON compact so it is never truncated):
 - Include AT MOST the 10 most significant "credibilityAnnotations" — pick the
   highest-stakes claims, do not annotate every line.
 - Keep each string field concise (roughly one sentence, under ~240 characters).
-- Return at most 8 "consensus", 8 "unresolved", and 6 "revisionSuggestions" items.`,
+- Return at most 8 "consensus", 8 "unresolved", and 8 "revisionSuggestions" items.
+- FOLD Mkaguzi's procedural review (if present) into the output: turn each material regulatory/permit, budget-arithmetic, monitoring/KPI, or legal-instrument gap into a "chokepoints" entry (severity by how much it blocks execution) and/or a concrete "revisionSuggestions" item. Name the specific Kenyan body where Mkaguzi did. These procedural gaps are load-bearing — do not drop them.`,
     // qwen-max + a generous budget: the conflict map is a big structured object.
     // The annotation array is capped in the prompt above; 8000 gives headroom so
     // the JSON always closes cleanly (a truncated response fails to parse and the
@@ -1575,13 +1615,18 @@ class BarazaDeliberationService {
       agentMemories.MPELELEZI
     );
 
-    // ── 5. Score ─────────────────────────────────────────────────────────────
+    // ── 4b. Mkaguzi — procedural / compliance due-diligence (run once) ────────
+    logger.info({ deliberationId }, '[BARAZA] Running Mkaguzi (auditor)');
+    const mkaguziReview = await runMkaguzi(proposalContextStr, rounds);
+
+    // ── 5. Score (Mkaguzi's findings fold into chokepoints + suggestions) ─────
     const { score, band, conflictMap, revisionSuggestions } =
       await computeReadinessScore(
         rounds,
         mkutano,
         {},
-        casting.structuralSeverity
+        casting.structuralSeverity,
+        mkaguziReview
       );
 
     // ── 5b. Mjamaa's closing structural review of the proposed revisions ──────
@@ -1624,6 +1669,7 @@ class BarazaDeliberationService {
       transcript: {
         rounds,
         mkutano,
+        mkaguzi: mkaguziReview,
       },
       contextSnapshot: {
         ...ctx,
@@ -1711,7 +1757,13 @@ class BarazaDeliberationService {
       kadere: r.kadereValues ?? null,
     }));
 
-    return { ...rest, kadere, transcript: { rounds: safeRounds, casting } };
+    const mkaguzi =
+      (transcript as { mkaguzi?: string } | null)?.mkaguzi ?? null;
+    return {
+      ...rest,
+      kadere,
+      transcript: { rounds: safeRounds, casting, mkaguzi },
+    };
   }
 
   /**

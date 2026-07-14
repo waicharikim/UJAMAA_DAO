@@ -18,6 +18,26 @@ interface Round {
 interface Transcript {
   rounds: Round[]
   casting: Record<string, { lifeStage: string; exposure: string }>
+  mkaguzi?: string | null
+}
+
+const MKAGUZI_AXES: Array<{ key: string; label: string }> = [
+  { key: "regulatory", label: "Regulatory — bodies, permits, laws" },
+  { key: "financial", label: "Financial — budget & arithmetic" },
+  { key: "method", label: "Method — baseline, M&E, KPIs" },
+  { key: "instruments", label: "Instruments — MoUs, licences, agreements" },
+]
+
+/** Mkaguzi's review is a JSON string {regulatory,financial,method,instruments}. */
+function parseMkaguzi(raw?: string | null): Record<string, string[]> | null {
+  if (!raw) return null
+  try {
+    const j = JSON.parse(raw.replace(/^```json\s*|\s*```$/g, "").trim())
+    if (j && typeof j === "object") return j
+  } catch {
+    /* fall through */
+  }
+  return null
 }
 
 /**
@@ -120,6 +140,41 @@ export function DeliberationTranscript({ transcript }: { transcript?: Transcript
               <Analyst label="Kadere" role="values" text={r.kadere} />
             </div>
           ))}
+
+          {/* Mkaguzi — the once-run procedural / compliance audit */}
+          {(() => {
+            const m = parseMkaguzi(transcript?.mkaguzi)
+            if (!m) return null
+            const hasAny = MKAGUZI_AXES.some((a) => Array.isArray(m[a.key]) && m[a.key].length)
+            if (!hasAny) return null
+            return (
+              <div className="mb-2">
+                <div
+                  className="text-[11px] font-bold uppercase tracking-wide mb-2 pb-1 border-b"
+                  style={{ color: GOLD, borderColor: "rgba(122,79,30,0.2)" }}
+                >
+                  Mkaguzi — the auditor{" "}
+                  <span className="font-normal normal-case" style={{ color: "rgba(14,31,20,0.5)" }}>
+                    · procedural &amp; compliance due-diligence
+                  </span>
+                </div>
+                {MKAGUZI_AXES.map((a) =>
+                  Array.isArray(m[a.key]) && m[a.key].length ? (
+                    <div key={a.key} className="mb-2">
+                      <div className="text-[12px] font-semibold" style={{ color: TEAL }}>{a.label}</div>
+                      <ul className="mt-1 space-y-0.5 list-disc list-inside">
+                        {m[a.key].map((item, i) => (
+                          <li key={i} className="text-[13px] leading-relaxed" style={{ color: "rgba(14,31,20,0.82)" }}>
+                            {String(item)}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null
+                )}
+              </div>
+            )
+          })()}
         </div>
       )}
     </div>
