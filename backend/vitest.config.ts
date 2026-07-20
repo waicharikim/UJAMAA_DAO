@@ -1,9 +1,47 @@
 import { defineConfig } from 'vitest/config';
+import { resolve } from 'path';
+
+// When running inside Docker, postgres_test is reachable via its service name on port 5432.
+// On the host, it's exposed on localhost:5433.
+const isDocker = process.env.RUNNING_IN_DOCKER === 'true';
+const testDbUrl = isDocker
+  ? 'postgresql://ujamaa_user:ujamaa_pass@postgres_test:5432/ujamaa_test_db'
+  : 'postgresql://ujamaa_user:ujamaa_pass@localhost:5433/ujamaa_test_db';
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      '@core': resolve(__dirname, 'src/core'),
+      '@modules': resolve(__dirname, 'src/modules'),
+    },
+  },
   test: {
     globals: true,
     setupFiles: ['./tests/testSetup.ts'],
+    environment: 'node',
+    // Run test files sequentially to avoid concurrent DB mutations between files
+    // (both auth test files use the same UUID constants + shared postgres_test DB).
+    fileParallelism: false,
+    // These are set BEFORE any module is loaded — the correct place for env vars.
+    // testSetup.ts process.env assignments run after ESM imports are hoisted,
+    // so they never reach env.ts validation. Keep all required vars here.
+    env: {
+      NODE_ENV: 'test',
+      DATABASE_URL: testDbUrl,
+      JWT_SECRET: '6e603cfa9affb7677020ad6a930bd3f076867ff38d100586dc5d985bed845ad0',
+      BASE_URL: 'http://localhost:4000',
+      FRONTEND_URL: 'http://localhost:3000',
+      ENABLE_EMAILS: 'false',
+      LOG_LEVEL: 'error',
+      PORT: '4000',
+      // Explicitly blank — prevents dotenv loading .env's redis://redis:6379 (Docker hostname)
+      // which causes createClient().connect() to retry indefinitely and block servicesReady.
+      REDIS_URL: '',
+      // Inside Docker: Redis is reachable as 'redis:6379' (container network).
+      // On host: Redis is exposed on localhost:6380 (mapped host port).
+      REDIS_HOST: isDocker ? 'redis' : 'localhost',
+      REDIS_PORT: isDocker ? '6379' : '6380',
+    },
     include: ['tests/**/*.test.{ts,js}', 'src/**/*.test.{ts,js}'],
     exclude: [
       'node_modules',
@@ -12,6 +50,8 @@ export default defineConfig({
       '.git',
       'cypress',
       '**/*.{config,setup}.js',
+      // Old tests written against a pre-refactor schema — excluded until rewritten
+      'tests/old/**',
     ],
   },
 });

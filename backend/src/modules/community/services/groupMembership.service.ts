@@ -1,0 +1,607 @@
+/**
+ * @file src/modules/community/services/groupMembership.service.ts
+ * @description
+ * Group Membership Service — System Group Auto-Enrollment
+ *
+ * UPDATED: Now uses proper foreign key relations instead of composite IDs
+ * Works with the better Group schema (progressive enhancement design)
+ *
+ * Version: 2.3 — February 2026 — Aligned with actual Prisma schema
+ */
+
+import { prisma } from '../../../core/database/client.js';
+import { Prisma } from '@prisma/client';
+import { logger } from '../../../core/logger/logger.js';
+import { ApiError } from '../../../core/errors/ApiError.js';
+
+// Import Prisma enums (auto-generated from merged schema)
+import {
+  LocationScope,
+  GroupRole,
+  GroupStatus,
+  SystemGroupType,
+} from '@prisma/client';
+
+class GroupMembershipService {
+  /**
+   * Enroll user in system groups based on primary and secondary wards.
+   *
+   * Groups created (up to 7):
+   * - Primary Ward + Constituency + County
+   * - Secondary Ward + Constituency + County (if different)
+   * - National (all users)
+   */
+  async enrollInSystemGroups(
+    userId: string,
+    primaryWardId: string,
+    secondaryWardId?: string | null
+  ): Promise<void> {
+    try {
+      const wardSelect = {
+        id: true,
+        name: true,
+        constituencyId: true,
+        constituency: {
+          select: {
+            id: true,
+            name: true,
+            countyId: true,
+            county: { select: { id: true, name: true } },
+          },
+        },
+      } as const;
+
+      const primaryWard = await prisma.ward.findUnique({
+        where: { id: primaryWardId },
+        select: wardSelect,
+      });
+
+      if (!primaryWard) throw ApiError.notFound('Ward', primaryWardId);
+
+      const secondaryWard =
+        secondaryWardId && secondaryWardId !== primaryWardId
+          ? await prisma.ward.findUnique({
+              where: { id: secondaryWardId },
+              select: wardSelect,
+            })
+          : null;
+
+      await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        // Sequential — avoids deadlocks when wards share constituency/county groups.
+        // Concurrent upserts on the same group name inside one transaction deadlock
+        // because the first upsert holds a row lock the second is waiting for.
+        await this.ensureSystemGroupAndEnroll(
+          tx,
+          userId,
+          primaryWard.id,
+          LocationScope.WARD,
+          `${primaryWard.name} Community`
+        );
+        await this.ensureSystemGroupAndEnroll(
+          tx,
+          userId,
+          primaryWard.constituency.id,
+          LocationScope.CONSTITUENCY,
+          `${primaryWard.constituency.name} Community`
+        );
+        await this.ensureSystemGroupAndEnroll(
+          tx,
+          userId,
+          primaryWard.constituency.county.id,
+          LocationScope.COUNTY,
+          `${primaryWard.constituency.county.name} Community`
+        );
+
+        if (secondaryWard) {
+          await this.ensureSystemGroupAndEnroll(
+            tx,
+            userId,
+            secondaryWard.id,
+            LocationScope.WARD,
+            `${secondaryWard.name} Community`
+          );
+          if (primaryWard.constituency.id !== secondaryWard.constituency.id) {
+            await this.ensureSystemGroupAndEnroll(
+              tx,
+              userId,
+              secondaryWard.constituency.id,
+              LocationScope.CONSTITUENCY,
+              `${secondaryWard.constituency.name} Community`
+            );
+          }
+          if (
+            primaryWard.constituency.county.id !==
+            secondaryWard.constituency.county.id
+          ) {
+            await this.ensureSystemGroupAndEnroll(
+              tx,
+              userId,
+              secondaryWard.constituency.county.id,
+              LocationScope.COUNTY,
+              `${secondaryWard.constituency.county.name} Community`
+            );
+          }
+        }
+
+        await this.ensureNationalGroupAndEnroll(tx, userId);
+      });
+
+      logger.info(
+        {
+          operationType: 'COMMUNITY',
+          userId,
+          metadata: { primaryWardId, secondaryWardId },
+        },
+        'User enrolled in system groups'
+      );
+    } catch (error) {
+      logger.error(
+        {
+          operationType: 'COMMUNITY',
+          userId,
+          metadata: {
+            primaryWardId,
+            secondaryWardId,
+            error: error instanceof Error ? error.message : String(error),
+          },
+        },
+        'Failed to enroll user in system groups'
+      );
+
+      if (error instanceof ApiError) throw error;
+
+      throw ApiError.systemError('Failed to enroll in system groups', {
+        reason: 'enrollment_failed',
+      });
+    }
+  }
+
+  /**
+   * PRIVATE: Ensure system group exists and enroll user.
+   * Uses upsert on group name (unique constraint) to avoid race conditions
+   * when concurrent registrations hit the same geographic group.
+   */
+  private async ensureSystemGroupAndEnroll(
+    tx: any,
+    userId: string,
+    locationId: string,
+    locationScope: LocationScope,
+    groupName: string
+  ): Promise<void> {
+    // Upsert is atomic — avoids race condition when concurrent registrations
+    // both see null from findFirst and both attempt create() on the same group name.
+    const group = await tx.group.upsert({
+      where: { name: groupName },
+      create: {
+        name: groupName,
+        description: `Official ${locationScope.toLowerCase()} community group`,
+        locationScope,
+        isSystemGroup: true,
+        systemType: this.getSystemGroupType(locationScope),
+        status: GroupStatus.ACTIVE,
+        wardId: locationScope === LocationScope.WARD ? locationId : null,
+        constituencyId:
+          locationScope === LocationScope.CONSTITUENCY ? locationId : null,
+        countyId: locationScope === LocationScope.COUNTY ? locationId : null,
+      },
+      update: { lastActivity: new Date() },
+      select: { id: true, memberCount: true },
+    });
+
+    // Check if user is already a member
+    const existingMembership = await tx.groupMember.findUnique({
+      where: {
+        userId_groupId: { userId, groupId: group.id },
+      },
+    });
+
+    // Enroll user (upsert to handle re-enrollments)
+    await tx.groupMember.upsert({
+      where: {
+        userId_groupId: { userId, groupId: group.id },
+      },
+      create: {
+        userId,
+        groupId: group.id,
+        role: GroupRole.MEMBER,
+        autoEnrolled: true,
+        active: true,
+        joinedAt: new Date(),
+      },
+      update: {
+        active: true,
+      },
+    });
+
+    // Update member count only if this is a new or reactivated membership
+    if (!existingMembership || !existingMembership.active) {
+      await tx.group.update({
+        where: { id: group.id },
+        data: { memberCount: { increment: 1 } },
+      });
+    }
+  }
+
+  /**
+   * PRIVATE: Handle national group enrollment (special case — no location ID)
+   */
+  private async ensureNationalGroupAndEnroll(
+    tx: any,
+    userId: string
+  ): Promise<void> {
+    const group = await tx.group.upsert({
+      where: { name: 'Kenya National Community' },
+      create: {
+        name: 'Kenya National Community',
+        description: 'Official national community group for all citizens',
+        locationScope: LocationScope.NATIONAL,
+        isSystemGroup: true,
+        systemType: SystemGroupType.NATIONAL,
+        status: GroupStatus.ACTIVE,
+      },
+      update: { lastActivity: new Date() },
+      select: { id: true, memberCount: true },
+    });
+
+    const existingMembership = await tx.groupMember.findUnique({
+      where: {
+        userId_groupId: { userId, groupId: group.id },
+      },
+    });
+
+    await tx.groupMember.upsert({
+      where: {
+        userId_groupId: { userId, groupId: group.id },
+      },
+      create: {
+        userId,
+        groupId: group.id,
+        role: GroupRole.MEMBER,
+        autoEnrolled: true,
+        active: true,
+        joinedAt: new Date(),
+      },
+      update: {
+        active: true,
+      },
+    });
+
+    if (!existingMembership || !existingMembership.active) {
+      await tx.group.update({
+        where: { id: group.id },
+        data: { memberCount: { increment: 1 } },
+      });
+    }
+  }
+
+  /**
+   * PRIVATE: Map LocationScope to SystemGroupType
+   */
+  private getSystemGroupType(scope: LocationScope): SystemGroupType {
+    switch (scope) {
+      case LocationScope.WARD:
+        return SystemGroupType.WARD;
+      case LocationScope.CONSTITUENCY:
+        return SystemGroupType.CONSTITUENCY;
+      case LocationScope.COUNTY:
+        return SystemGroupType.COUNTY;
+      case LocationScope.NATIONAL:
+        return SystemGroupType.NATIONAL;
+      default:
+        return SystemGroupType.WARD;
+    }
+  }
+
+  /**
+   * Update user's group memberships when residence changes.
+   */
+  async updateResidenceGroups(
+    userId: string,
+    newPrimaryWardId: string,
+    newSecondaryWardId?: string
+  ): Promise<void> {
+    try {
+      if (!newSecondaryWardId) {
+        const user = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { secondaryWardId: true },
+        });
+
+        if (!user || !user.secondaryWardId) {
+          throw ApiError.notFound('User or secondary ward not found');
+        }
+
+        newSecondaryWardId = user.secondaryWardId;
+      }
+
+      // Deactivate auto-enrolled group memberships
+      await prisma.groupMember.updateMany({
+        where: {
+          userId,
+          autoEnrolled: true,
+        },
+        data: {
+          active: false,
+        },
+      });
+
+      // Re-enroll in new groups
+      await this.enrollInSystemGroups(
+        userId,
+        newPrimaryWardId,
+        newSecondaryWardId
+      );
+
+      logger.info(
+        {
+          operationType: 'COMMUNITY',
+          userId,
+          metadata: { newPrimaryWardId, newSecondaryWardId },
+        },
+        "Updated user's system group memberships after residence change"
+      );
+    } catch (error) {
+      logger.error(
+        {
+          operationType: 'COMMUNITY',
+          userId,
+          metadata: {
+            newPrimaryWardId,
+            newSecondaryWardId,
+            error: error instanceof Error ? error.message : String(error),
+          },
+        },
+        'Failed to update residence groups'
+      );
+
+      if (error instanceof ApiError) throw error;
+
+      throw ApiError.systemError('Failed to update residence groups', {
+        reason: 'update_failed',
+      });
+    }
+  }
+
+  /**
+   * Get user's group memberships.
+   */
+  async getUserGroups(
+    userId: string,
+    includeSystem: boolean = true,
+    includeVoluntary: boolean = true
+  ) {
+    const memberships = await prisma.groupMember.findMany({
+      where: {
+        userId,
+        active: true,
+        group: {
+          isSystemGroup:
+            includeSystem && !includeVoluntary
+              ? true
+              : includeVoluntary && !includeSystem
+                ? false
+                : undefined,
+        },
+      },
+      include: {
+        group: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            isSystemGroup: true,
+            systemType: true,
+            voluntaryType: true,
+            locationScope: true,
+            status: true,
+            memberCount: true,
+            ward: { select: { id: true, name: true } },
+            constituency: { select: { id: true, name: true } },
+            county: { select: { id: true, name: true } },
+          },
+        },
+      },
+      orderBy: { joinedAt: 'desc' },
+    });
+
+    return memberships.map((m: any) => ({
+      groupId: m.group.id,
+      groupName: m.group.name,
+      systemType: m.group.systemType,
+      voluntaryType: m.group.voluntaryType,
+      isSystem: m.group.isSystemGroup,
+      locationScope: m.group.locationScope,
+      role: m.role,
+      joinedAt: m.joinedAt,
+      memberCount: m.group.memberCount,
+      ward: m.group.ward,
+      constituency: m.group.constituency,
+      county: m.group.county,
+    }));
+  }
+
+  /**
+   * Get single group detail with the requesting user's membership role.
+   */
+  async getGroupById(groupId: string, userId: string) {
+    const group = await prisma.group.findUnique({
+      where: { id: groupId },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        isSystemGroup: true,
+        systemType: true,
+        voluntaryType: true,
+        locationScope: true,
+        status: true,
+        memberCount: true,
+        createdAt: true,
+        ward: { select: { id: true, name: true } },
+        constituency: { select: { id: true, name: true } },
+        county: { select: { id: true, name: true } },
+        members: {
+          where: { userId, active: true },
+          select: { role: true, joinedAt: true },
+          take: 1,
+        },
+      },
+    });
+
+    if (!group) {
+      throw ApiError.notFound('Group not found');
+    }
+
+    const userMembership = group.members[0] ?? null;
+    return {
+      groupId: group.id,
+      groupName: group.name,
+      description: group.description,
+      isSystem: group.isSystemGroup,
+      systemType: group.systemType,
+      voluntaryType: group.voluntaryType,
+      locationScope: group.locationScope,
+      memberCount: group.memberCount,
+      createdAt: group.createdAt.toISOString(),
+      ward: group.ward,
+      constituency: group.constituency,
+      county: group.county,
+      userRole: userMembership?.role ?? null,
+      userJoinedAt: userMembership?.joinedAt?.toISOString() ?? null,
+    };
+  }
+
+  /**
+   * Discover all groups (paginated, filterable).
+   * Returns isMember + myRole for the requesting user.
+   */
+  async getGroups(
+    userId: string,
+    filters: {
+      isSystem?: boolean;
+      voluntaryType?: string;
+      systemType?: string;
+      search?: string;
+      wardId?: string;
+      constituencyId?: string;
+      countyId?: string;
+      limit?: number;
+      offset?: number;
+    } = {}
+  ) {
+    const {
+      isSystem,
+      voluntaryType,
+      systemType,
+      search,
+      wardId,
+      constituencyId,
+      countyId,
+      limit = 20,
+      offset = 0,
+    } = filters;
+
+    // Build OR clause so selecting a ward also surfaces constituency/county/national groups
+    const locationClauses: Prisma.GroupWhereInput[] = [];
+    if (wardId) locationClauses.push({ wardId });
+    if (constituencyId) locationClauses.push({ constituencyId });
+    if (countyId) locationClauses.push({ countyId });
+    if (locationClauses.length > 0) {
+      locationClauses.push({ locationScope: LocationScope.NATIONAL });
+    }
+
+    const where: Prisma.GroupWhereInput = {
+      status: GroupStatus.ACTIVE,
+      ...(isSystem !== undefined && { isSystemGroup: isSystem }),
+      ...(voluntaryType && { voluntaryType: voluntaryType as any }),
+      ...(systemType && { systemType: systemType as SystemGroupType }),
+      ...(search && {
+        name: { contains: search, mode: 'insensitive' as const },
+      }),
+      ...(locationClauses.length > 0 && { OR: locationClauses }),
+    };
+
+    const [groups, total] = await Promise.all([
+      prisma.group.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          isSystemGroup: true,
+          systemType: true,
+          voluntaryType: true,
+          locationScope: true,
+          memberCount: true,
+          status: true,
+          members: {
+            where: { userId, active: true },
+            select: { role: true },
+          },
+        },
+        orderBy: [{ isSystemGroup: 'desc' }, { memberCount: 'desc' }],
+        take: limit,
+        skip: offset,
+      }),
+      prisma.group.count({ where }),
+    ]);
+
+    return {
+      groups: groups.map((g) => ({
+        id: g.id,
+        name: g.name,
+        description: g.description,
+        isSystemGroup: g.isSystemGroup,
+        systemType: g.systemType,
+        voluntaryType: g.voluntaryType,
+        locationScope: g.locationScope,
+        memberCount: g.memberCount,
+        status: g.status,
+        isMember: g.members.length > 0,
+        myRole: g.members[0]?.role ?? null,
+      })),
+      total,
+      limit,
+      offset,
+    };
+  }
+
+  /**
+   * Get group members.
+   */
+  async getGroupMembers(
+    groupId: string,
+    limit: number = 50,
+    offset: number = 0
+  ) {
+    const memberships = await prisma.groupMember.findMany({
+      where: { groupId, active: true },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            avatarUrl: true,
+            verificationLevel: true,
+            participationRights: true,
+          },
+        },
+      },
+      orderBy: { joinedAt: 'asc' },
+      take: limit,
+      skip: offset,
+    });
+
+    return memberships.map((m: any) => ({
+      userId: m.user.id,
+      userName: m.user.name,
+      avatarUrl: m.user.avatarUrl,
+      verificationLevel: m.user.verificationLevel,
+      participationRights: m.user.participationRights,
+      role: m.role,
+      joinedAt: m.joinedAt,
+    }));
+  }
+}
+
+export const groupMembershipService = new GroupMembershipService();

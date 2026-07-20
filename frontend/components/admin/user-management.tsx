@@ -1,174 +1,162 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { formatAddress, formatDate } from "@/lib/utils"
-import { Search, Shield, Ban, UserCheck, Mail, MapPin, Calendar, Award, Coins, Users } from "lucide-react"
+import { formatDate } from "@/lib/utils"
+import { useToast } from "@/components/ui/use-toast"
+import { Search, Shield, Ban, UserCheck, Mail, MapPin, Calendar, Award, Coins, Users, X, Plus, PlusCircle, MinusCircle } from "lucide-react"
+import { adminApi, type AdminUserDto } from "@/lib/api"
 
-interface User {
-  id: string
-  walletAddress: string
-  username?: string
-  email?: string
-  county: string
-  constituency: string
-  roles: string[]
-  status: "active" | "suspended" | "pending"
-  impactPoints: number
-  tokenBalance: number
-  joinedAt: string
-  lastActive: string
-  verificationLevel: "unverified" | "email" | "phone" | "full"
-}
+const AVAILABLE_ROLES = [
+  "system:super_admin",
+  "system:compliance_officer",
+  "system:blockchain_admin",
+  "system:contract_deployer",
+  "system:multisig_signer",
+  "location:ward_admin",
+  "location:constituency_admin",
+  "location:county_admin",
+]
 
 export function UserManagement() {
-  const [users, setUsers] = useState<User[]>([
-    {
-      id: "1",
-      walletAddress: "0x1234567890123456789012345678901234567890",
-      username: "john_doe",
-      email: "john.doe@example.com",
-      county: "Nairobi",
-      constituency: "Westlands",
-      roles: ["user", "county_member"],
-      status: "active",
-      impactPoints: 1250,
-      tokenBalance: 500,
-      joinedAt: "2024-01-15T10:30:00Z",
-      lastActive: "2024-01-20T14:22:00Z",
-      verificationLevel: "full",
-    },
-    {
-      id: "2",
-      walletAddress: "0x9876543210987654321098765432109876543210",
-      username: "sarah_wilson",
-      email: "sarah.wilson@example.com",
-      county: "Kisumu",
-      constituency: "Kisumu Central",
-      roles: ["user", "group_admin"],
-      status: "active",
-      impactPoints: 890,
-      tokenBalance: 320,
-      joinedAt: "2024-01-10T09:15:00Z",
-      lastActive: "2024-01-20T16:45:00Z",
-      verificationLevel: "email",
-    },
-    {
-      id: "3",
-      walletAddress: "0x5555666677778888999900001111222233334444",
-      username: "mike_johnson",
-      email: "mike.johnson@example.com",
-      county: "Mombasa",
-      constituency: "Mvita",
-      roles: ["user"],
-      status: "pending",
-      impactPoints: 45,
-      tokenBalance: 50,
-      joinedAt: "2024-01-19T11:20:00Z",
-      lastActive: "2024-01-19T11:20:00Z",
-      verificationLevel: "unverified",
-    },
-  ])
+  const { toast } = useToast()
+  const queryClient = useQueryClient()
+  const PAGE_SIZE = 50
+  const [searchInput, setSearchInput] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [verificationFilter, setVerificationFilter] = useState("all")
+  const [page, setPage] = useState(1)
+  const debounceTimer = useRef<NodeJS.Timeout | null>(null)
+  const [showRolesDialog, setShowRolesDialog] = useState(false)
+  const [rolesUser, setRolesUser] = useState<AdminUserDto | null>(null)
+  const [selectedRoleToAdd, setSelectedRoleToAdd] = useState("")
 
-  const [filters, setFilters] = useState({
-    search: "",
-    status: "all",
-    role: "all",
-    county: "all",
+  useEffect(() => {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current)
+    debounceTimer.current = setTimeout(() => { setDebouncedSearch(searchInput); setPage(1) }, 500)
+    return () => { if (debounceTimer.current) clearTimeout(debounceTimer.current) }
+  }, [searchInput])
+
+  // Reset to page 1 whenever filters change
+  useEffect(() => { setPage(1) }, [statusFilter, verificationFilter])
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["admin", "users", debouncedSearch, statusFilter, verificationFilter, page],
+    queryFn: () => adminApi.getUsers({
+      search: debouncedSearch || undefined,
+      status: statusFilter !== "all" ? statusFilter : undefined,
+      verificationLevel: verificationFilter !== "all" ? verificationFilter : undefined,
+      limit: PAGE_SIZE,
+      offset: (page - 1) * PAGE_SIZE,
+    }),
+    staleTime: 30_000,
   })
 
-  const [selectedUser, setSelectedUser] = useState<User | null>(null)
+  const suspendMutation = useMutation({
+    mutationFn: ({ userId, suspend, reason }: { userId: string; suspend: boolean; reason: string }) =>
+      adminApi.suspendUser(userId, { suspend, reason }),
+    onSuccess: (_, { suspend }) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] })
+      queryClient.invalidateQueries({ queryKey: ["admin", "stats"] })
+      toast({ title: suspend ? "User suspended" : "User activated", description: "User status updated." })
+      setShowUserDialog(false)
+      setSelectedUser(null)
+    },
+    onError: () => toast({ title: "Action failed", description: "Could not update user status.", variant: "destructive" }),
+  })
+
+  const [selectedUser, setSelectedUser] = useState<AdminUserDto | null>(null)
   const [showUserDialog, setShowUserDialog] = useState(false)
-  const [actionType, setActionType] = useState<"edit" | "suspend" | "promote" | null>(null)
+  const [actionType, setActionType] = useState<"suspend" | null>(null)
+  const [reason, setReason] = useState("")
 
-  const filteredUsers = users.filter((user) => {
-    if (
-      filters.search &&
-      !user.username?.toLowerCase().includes(filters.search.toLowerCase()) &&
-      !user.email?.toLowerCase().includes(filters.search.toLowerCase()) &&
-      !user.walletAddress.toLowerCase().includes(filters.search.toLowerCase())
-    ) {
-      return false
-    }
-    if (filters.status !== "all" && user.status !== filters.status) return false
-    if (filters.role !== "all" && !user.roles.includes(filters.role)) return false
-    if (filters.county !== "all" && user.county !== filters.county) return false
-    return true
+  const [showPRDialog, setShowPRDialog] = useState(false)
+  const [prUser, setPRUser] = useState<AdminUserDto | null>(null)
+  const [prAmount, setPRAmount] = useState("")
+  const [prType, setPRType] = useState<"ADD" | "DEDUCT">("ADD")
+  const [prReason, setPRReason] = useState("")
+
+  const prMutation = useMutation({
+    mutationFn: ({ userId, amount, type, reason }: { userId: string; amount: number; type: "ADD" | "DEDUCT"; reason: string }) =>
+      adminApi.adjustPR({ userId, amount, type, reason }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] })
+      queryClient.invalidateQueries({ queryKey: ["admin", "stats"] })
+      toast({ title: "PR balance updated" })
+      setShowPRDialog(false)
+      setPRUser(null)
+      setPRAmount("")
+      setPRReason("")
+    },
+    onError: () => toast({ title: "Failed", description: "Could not adjust PR balance.", variant: "destructive" }),
   })
+
+  const { data: userRolesData, isLoading: rolesLoading } = useQuery({
+    queryKey: ["admin", "user-roles", rolesUser?.id],
+    queryFn: () => adminApi.getUserRoles(rolesUser!.id),
+    enabled: !!rolesUser && showRolesDialog,
+  })
+
+  const assignRoleMutation = useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: string }) =>
+      adminApi.assignRole(userId, role),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "user-roles", rolesUser?.id] })
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] })
+      setSelectedRoleToAdd("")
+      toast({ title: "Role assigned", description: "Role has been assigned successfully." })
+    },
+    onError: () => toast({ title: "Failed", description: "Could not assign role.", variant: "destructive" }),
+  })
+
+  const revokeRoleMutation = useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: string }) =>
+      adminApi.revokeRole(userId, role),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "user-roles", rolesUser?.id] })
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] })
+      toast({ title: "Role removed", description: "Role has been removed." })
+    },
+    onError: () => toast({ title: "Failed", description: "Could not remove role.", variant: "destructive" }),
+  })
+
+  const mapStatus = (s: string): "active" | "suspended" | "pending" =>
+    s === "ACTIVE" ? "active" : s === "SUSPENDED" ? "suspended" : "pending"
+
+  const mapVerification = (v: string): "unverified" | "email" | "phone" | "full" => {
+    if (v === "COMMUNITY_VERIFIED" || v === "FULL_VERIFIED") return "full"
+    if (v === "PHONE_VERIFIED") return "phone"
+    if (v === "EMAIL_VERIFIED") return "email"
+    return "unverified"
+  }
 
   const getStatusColor = (status: string) => {
-    switch (status) {
-      case "active":
-        return "bg-green-100 text-green-800"
-      case "suspended":
-        return "bg-red-100 text-red-800"
-      case "pending":
-        return "bg-yellow-100 text-yellow-800"
-      default:
-        return "bg-gray-100 text-gray-800"
-    }
+    if (status === "active") return "bg-green-100 text-green-800"
+    if (status === "suspended") return "bg-red-100 text-red-800"
+    return "bg-yellow-100 text-yellow-800"
   }
 
   const getVerificationColor = (level: string) => {
-    switch (level) {
-      case "full":
-        return "bg-green-100 text-green-800"
-      case "phone":
-        return "bg-blue-100 text-blue-800"
-      case "email":
-        return "bg-yellow-100 text-yellow-800"
-      case "unverified":
-        return "bg-gray-100 text-gray-800"
-      default:
-        return "bg-gray-100 text-gray-800"
-    }
+    if (level === "full") return "bg-green-100 text-green-800"
+    if (level === "phone") return "bg-blue-100 text-blue-800"
+    if (level === "email") return "bg-yellow-100 text-yellow-800"
+    return "bg-gray-100 text-gray-800"
   }
 
-  const handleUserAction = (user: User, action: "edit" | "suspend" | "promote") => {
-    setSelectedUser(user)
-    setActionType(action)
-    setShowUserDialog(true)
-  }
-
-  const executeUserAction = () => {
-    if (!selectedUser || !actionType) return
-
-    // Mock action execution
-    console.log(`Executing ${actionType} for user:`, selectedUser.id)
-
-    // Update user in state based on action
-    setUsers((prev) =>
-      prev.map((user) => {
-        if (user.id === selectedUser.id) {
-          switch (actionType) {
-            case "suspend":
-              return { ...user, status: user.status === "suspended" ? "active" : ("suspended" as const) }
-            case "promote":
-              return { ...user, roles: [...user.roles, "admin"] }
-            default:
-              return user
-          }
-        }
-        return user
-      }),
-    )
-
-    setShowUserDialog(false)
-    setSelectedUser(null)
-    setActionType(null)
-  }
+  const users = data?.users ?? []
 
   return (
     <div className="space-y-6">
-      {/* Filters */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -177,232 +165,297 @@ export function UserManagement() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
               <Input
-                placeholder="Search users..."
-                value={filters.search}
-                onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
+                placeholder="Search by name or email..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 className="pl-10"
               />
             </div>
-
-            <Select
-              value={filters.status}
-              onValueChange={(value) => setFilters((prev) => ({ ...prev, status: value }))}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="suspended">Suspended</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="ACTIVE">Active</SelectItem>
+                <SelectItem value="SUSPENDED">Suspended</SelectItem>
               </SelectContent>
             </Select>
-
-            <Select value={filters.role} onValueChange={(value) => setFilters((prev) => ({ ...prev, role: value }))}>
-              <SelectTrigger>
-                <SelectValue placeholder="Role" />
-              </SelectTrigger>
+            <Select value={verificationFilter} onValueChange={setVerificationFilter}>
+              <SelectTrigger><SelectValue placeholder="Verification" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Roles</SelectItem>
-                <SelectItem value="user">User</SelectItem>
-                <SelectItem value="admin">Admin</SelectItem>
-                <SelectItem value="county_member">County Member</SelectItem>
-                <SelectItem value="group_admin">Group Admin</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select
-              value={filters.county}
-              onValueChange={(value) => setFilters((prev) => ({ ...prev, county: value }))}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="County" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Counties</SelectItem>
-                <SelectItem value="Nairobi">Nairobi</SelectItem>
-                <SelectItem value="Kisumu">Kisumu</SelectItem>
-                <SelectItem value="Mombasa">Mombasa</SelectItem>
+                <SelectItem value="all">All Levels</SelectItem>
+                <SelectItem value="UNVERIFIED">Unverified</SelectItem>
+                <SelectItem value="EMAIL_VERIFIED">Email verified</SelectItem>
+                <SelectItem value="PHONE_VERIFIED">Phone verified</SelectItem>
+                <SelectItem value="COMMUNITY_VERIFIED">Community verified</SelectItem>
+                <SelectItem value="FULL_VERIFIED">Fully verified</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </CardContent>
       </Card>
 
-      {/* Users Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Users ({filteredUsers.length})</CardTitle>
+          <CardTitle>Users ({isLoading ? "…" : (data?.total ?? 0)})</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {filteredUsers.map((user) => (
-              <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50">
-                <div className="flex items-center gap-4">
-                  <Avatar className="h-12 w-12">
-                    <AvatarImage src={`/placeholder.svg`} />
-                    <AvatarFallback>
-                      {user.username?.[0]?.toUpperCase() || formatAddress(user.walletAddress)[0]}
-                    </AvatarFallback>
-                  </Avatar>
-
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{user.username || formatAddress(user.walletAddress)}</span>
-                      <Badge className={getStatusColor(user.status)}>{user.status}</Badge>
-                      <Badge className={getVerificationColor(user.verificationLevel)}>{user.verificationLevel}</Badge>
-                    </div>
-
-                    <div className="flex items-center gap-4 text-sm text-slate-600">
-                      <div className="flex items-center gap-1">
-                        <Mail className="h-3 w-3" />
-                        {user.email}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <MapPin className="h-3 w-3" />
-                        {user.county}, {user.constituency}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        Joined {formatDate(user.joinedAt)}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-4 text-sm">
-                      <div className="flex items-center gap-1">
-                        <Award className="h-3 w-3 text-orange-500" />
-                        <span>{user.impactPoints} points</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Coins className="h-3 w-3 text-yellow-500" />
-                        <span>{user.tokenBalance} tokens</span>
-                      </div>
-                      <div className="flex gap-1">
-                        {user.roles.map((role) => (
-                          <Badge key={role} variant="outline" className="text-xs">
-                            {role}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Button size="sm" variant="outline" onClick={() => handleUserAction(user, "edit")}>
-                    Edit
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => handleUserAction(user, "promote")}>
-                    <Shield className="h-4 w-4 mr-1" />
-                    Promote
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={user.status === "suspended" ? "default" : "destructive"}
-                    onClick={() => handleUserAction(user, "suspend")}
-                  >
-                    {user.status === "suspended" ? (
-                      <>
-                        <UserCheck className="h-4 w-4 mr-1" />
-                        Activate
-                      </>
-                    ) : (
-                      <>
-                        <Ban className="h-4 w-4 mr-1" />
-                        Suspend
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* User Action Dialog */}
-      <Dialog open={showUserDialog} onOpenChange={setShowUserDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {actionType === "edit" && "Edit User"}
-              {actionType === "suspend" && (selectedUser?.status === "suspended" ? "Activate User" : "Suspend User")}
-              {actionType === "promote" && "Promote User"}
-            </DialogTitle>
-            <DialogDescription>
-              {actionType === "edit" && "Update user information and settings."}
-              {actionType === "suspend" &&
-                (selectedUser?.status === "suspended"
-                  ? "Reactivate this user account?"
-                  : "Suspend this user account? They will lose access to the platform.")}
-              {actionType === "promote" && "Grant additional roles and permissions to this user."}
-            </DialogDescription>
-          </DialogHeader>
-
-          {selectedUser && (
+          {isLoading ? (
+            <div className="flex justify-center py-8">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#C9922A] border-t-transparent" />
+            </div>
+          ) : (
             <div className="space-y-4">
-              <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-                <Avatar>
-                  <AvatarFallback>
-                    {selectedUser.username?.[0]?.toUpperCase() || formatAddress(selectedUser.walletAddress)[0]}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <div className="font-medium">
-                    {selectedUser.username || formatAddress(selectedUser.walletAddress)}
+              {users.map((user) => {
+                const status = mapStatus(user.status)
+                const verification = mapVerification(user.verificationLevel)
+                return (
+                  <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50">
+                    <div className="flex items-center gap-4">
+                      <Avatar className="h-12 w-12">
+                        <AvatarFallback>{user.name?.[0]?.toUpperCase() ?? user.email?.[0]?.toUpperCase() ?? "?"}</AvatarFallback>
+                      </Avatar>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{user.name ?? user.email ?? user.id.slice(0, 8)}</span>
+                          <Badge className={getStatusColor(status)}>{status}</Badge>
+                          <Badge className={getVerificationColor(verification)}>{verification}</Badge>
+                        </div>
+                        <div className="flex items-center gap-4 text-sm text-slate-600">
+                          {user.email && <div className="flex items-center gap-1"><Mail className="h-3 w-3" />{user.email}</div>}
+                          {user.county && <div className="flex items-center gap-1"><MapPin className="h-3 w-3" />{user.county}{user.constituency ? `, ${user.constituency}` : ""}</div>}
+                          <div className="flex items-center gap-1"><Calendar className="h-3 w-3" />Joined {formatDate(user.createdAt)}</div>
+                        </div>
+                        <div className="flex items-center gap-4 text-sm">
+                          <div className="flex items-center gap-1"><Award className="h-3 w-3 text-orange-500" /><span>{user.globalImpactPoints} IP</span></div>
+                          <div className="flex items-center gap-1"><Coins className="h-3 w-3 text-yellow-500" /><span>{user.participationRights} PR</span></div>
+                          <div className="flex gap-1">
+                            {user.roles.map((role) => (
+                              <Badge key={role} variant="outline" className="text-xs">{role.replace("system:", "").replace(/_/g, " ")}</Badge>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => { setRolesUser(user); setSelectedRoleToAdd(""); setShowRolesDialog(true) }}
+                      >
+                        <Shield className="h-4 w-4 mr-1" />Roles
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => { setPRUser(user); setPRAmount(""); setPRType("ADD"); setPRReason(""); setShowPRDialog(true) }}
+                      >
+                        <Coins className="h-4 w-4 mr-1" />PR
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={status === "suspended" ? "default" : "destructive"}
+                        onClick={() => { setSelectedUser(user); setActionType("suspend"); setReason(""); setShowUserDialog(true) }}
+                      >
+                        {status === "suspended" ? <><UserCheck className="h-4 w-4 mr-1" />Activate</> : <><Ban className="h-4 w-4 mr-1" />Suspend</>}
+                      </Button>
+                    </div>
                   </div>
-                  <div className="text-sm text-slate-600">{selectedUser.email}</div>
-                </div>
-              </div>
+                )
+              })}
+              {users.length === 0 && <p className="text-center py-8 text-slate-500">No users found.</p>}
+            </div>
+          )}
 
-              {actionType === "suspend" && (
-                <div>
-                  <Label htmlFor="reason">
-                    Reason for {selectedUser.status === "suspended" ? "activation" : "suspension"}
-                  </Label>
-                  <Textarea id="reason" placeholder="Enter reason..." className="mt-1" />
-                </div>
-              )}
-
-              {actionType === "promote" && (
-                <div>
-                  <Label>Select additional roles:</Label>
-                  <div className="space-y-2 mt-2">
-                    {["admin", "county_admin", "super_admin"].map((role) => (
-                      <label key={role} className="flex items-center gap-2">
-                        <input type="checkbox" disabled={selectedUser.roles.includes(role)} className="rounded" />
-                        <span className="capitalize">{role.replace("_", " ")}</span>
-                        {selectedUser.roles.includes(role) && (
-                          <Badge variant="secondary" className="text-xs">
-                            Current
-                          </Badge>
-                        )}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="flex justify-end gap-2 pt-4">
-                <Button variant="outline" onClick={() => setShowUserDialog(false)}>
-                  Cancel
+          {/* Pagination */}
+          {!isLoading && (data?.total ?? 0) > PAGE_SIZE && (
+            <div className="flex items-center justify-between mt-6 pt-4 border-t text-sm text-slate-600">
+              <span>
+                {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, data!.total)} of {data!.total.toLocaleString()} users
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page === 1}
+                  onClick={() => setPage((p) => p - 1)}
+                >
+                  ← Previous
                 </Button>
                 <Button
-                  onClick={executeUserAction}
-                  variant={actionType === "suspend" && selectedUser.status !== "suspended" ? "destructive" : "default"}
+                  variant="outline"
+                  size="sm"
+                  disabled={page * PAGE_SIZE >= data!.total}
+                  onClick={() => setPage((p) => p + 1)}
                 >
-                  {actionType === "edit" && "Save Changes"}
-                  {actionType === "suspend" && (selectedUser.status === "suspended" ? "Activate" : "Suspend")}
-                  {actionType === "promote" && "Promote User"}
+                  Next →
                 </Button>
               </div>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={showUserDialog} onOpenChange={setShowUserDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{selectedUser && mapStatus(selectedUser.status) === "suspended" ? "Activate User" : "Suspend User"}</DialogTitle>
+            <DialogDescription>
+              {selectedUser && mapStatus(selectedUser.status) === "suspended"
+                ? "Reactivate this user account?"
+                : "Suspend this user? They will lose access to the platform."}
+            </DialogDescription>
+          </DialogHeader>
+          {selectedUser && (
+            <div className="space-y-4">
+              <div className="p-3 bg-slate-50 rounded-lg text-sm">
+                <span className="font-medium">{selectedUser.name ?? selectedUser.email}</span>
+              </div>
+              <div>
+                <Label htmlFor="reason">Reason</Label>
+                <Textarea id="reason" placeholder="Enter reason..." className="mt-1" value={reason} onChange={(e) => setReason(e.target.value)} />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => setShowUserDialog(false)}>Cancel</Button>
+                <Button
+                  variant={mapStatus(selectedUser.status) !== "suspended" ? "destructive" : "default"}
+                  disabled={suspendMutation.isPending}
+                  onClick={() => suspendMutation.mutate({ userId: selectedUser.id, suspend: mapStatus(selectedUser.status) !== "suspended", reason })}
+                >
+                  {suspendMutation.isPending ? "Saving…" : (mapStatus(selectedUser.status) === "suspended" ? "Activate" : "Suspend")}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showRolesDialog} onOpenChange={setShowRolesDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Shield className="h-4 w-4" />
+              Manage Roles — {rolesUser?.name ?? rolesUser?.email}
+            </DialogTitle>
+            <DialogDescription>Add or remove system roles for this user.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label className="text-sm font-medium">Current Roles</Label>
+              {rolesLoading ? (
+                <div className="h-6 w-24 animate-pulse bg-slate-200 rounded mt-2" />
+              ) : (
+                <div className="flex flex-wrap gap-2 mt-2 min-h-[2rem]">
+                  {(userRolesData ?? []).length === 0 && (
+                    <span className="text-sm text-slate-500">No roles assigned</span>
+                  )}
+                  {(userRolesData ?? []).map((r) => (
+                    <Badge key={r.role} variant="secondary" className="flex items-center gap-1 pr-1">
+                      {r.role.replace("system:", "").replace("location:", "").replace(/_/g, " ")}
+                      <button
+                        className="ml-1 hover:text-red-600"
+                        disabled={revokeRoleMutation.isPending}
+                        onClick={() => rolesUser && revokeRoleMutation.mutate({ userId: rolesUser.id, role: r.role })}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div>
+              <Label className="text-sm font-medium">Add Role</Label>
+              <div className="flex gap-2 mt-2">
+                <Select value={selectedRoleToAdd} onValueChange={setSelectedRoleToAdd}>
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="Select role…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {AVAILABLE_ROLES.map((r) => (
+                      <SelectItem key={r} value={r}>{r.replace("system:", "").replace("location:", "").replace(/_/g, " ")}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  size="sm"
+                  disabled={!selectedRoleToAdd || assignRoleMutation.isPending}
+                  onClick={() => rolesUser && assignRoleMutation.mutate({ userId: rolesUser.id, role: selectedRoleToAdd })}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            <div className="flex justify-end pt-2">
+              <Button variant="outline" onClick={() => setShowRolesDialog(false)}>Done</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* PR Adjustment dialog */}
+      <Dialog open={showPRDialog} onOpenChange={setShowPRDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Adjust PR Balance — {prUser?.name ?? prUser?.email ?? "User"}</DialogTitle>
+            <DialogDescription>
+              Current balance: <strong>{prUser?.participationRights ?? 0} PR</strong>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant={prType === "ADD" ? "default" : "outline"}
+                onClick={() => setPRType("ADD")}
+                className="flex-1"
+              >
+                <PlusCircle className="h-4 w-4 mr-1" />Add
+              </Button>
+              <Button
+                size="sm"
+                variant={prType === "DEDUCT" ? "destructive" : "outline"}
+                onClick={() => setPRType("DEDUCT")}
+                className="flex-1"
+              >
+                <MinusCircle className="h-4 w-4 mr-1" />Deduct
+              </Button>
+            </div>
+            <div>
+              <Label>Amount (PR)</Label>
+              <Input
+                type="number"
+                min={1}
+                value={prAmount}
+                onChange={(e) => setPRAmount(e.target.value)}
+                placeholder="e.g. 10"
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label>Reason (required)</Label>
+              <Textarea
+                value={prReason}
+                onChange={(e) => setPRReason(e.target.value)}
+                placeholder="Why are you adjusting this balance?"
+                rows={2}
+                className="mt-1"
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setShowPRDialog(false)}>Cancel</Button>
+              <Button
+                disabled={!prAmount || Number(prAmount) < 1 || !prReason.trim() || prMutation.isPending}
+                variant={prType === "DEDUCT" ? "destructive" : "default"}
+                onClick={() => prUser && prMutation.mutate({ userId: prUser.id, amount: Number(prAmount), type: prType, reason: prReason.trim() })}
+              >
+                {prMutation.isPending ? "Saving…" : `${prType === "ADD" ? "Add" : "Deduct"} ${prAmount || "?"} PR`}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

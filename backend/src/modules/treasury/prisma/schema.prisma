@@ -1,0 +1,168 @@
+// ============================================================================
+// TREASURY MODULE - Prisma schema fragment
+// (Place this in backend/src/modules/treasury/prisma/schema.prisma)
+// ----------------------------------------------------------------------------
+// NOTE:
+//  - This file *extends* base models via relations (User, Group, Proposal, Project).
+//  - Do NOT redeclare enums or models that exist in base.prisma (e.g. TransactionType).
+//  - Keep module-specific models here and reference base models by id fields.
+// ============================================================================
+
+/// Module-specific enums (minimal; reuse core enums when available)
+enum EscrowStatus {
+  PENDING
+  HELD
+  RELEASED
+  DISPUTED
+  REFUNDED
+}
+
+enum TreasuryAction {
+  ALLOCATE        // allocate money to a budget line
+  FUND_RELEASE    // release funds for a project/milestone
+  REFUND          // refund to payer
+  ADJUSTMENT      // manual adjustment by admin
+  FEE             // system fee
+}
+
+/// WALLET LEDGER / TREASURY CONTROLS
+
+/** GroupTreasury
+ * - One per Group (for group treasuries). System-wide treasuries (national) are represented
+ *   by Group records for system groups (e.g. groupType = NATIONAL_CAMPAIGN).
+ */
+model GroupTreasury {
+  id            String   @id @default(uuid()) @db.Uuid
+  groupId       String   @db.Uuid
+  group         Group    @relation(fields: [groupId], references: [id])
+
+  // current on-ledger fiat balance (KES), kept for quick queries; authoritative ledger is transactions
+  balance       Decimal  @db.Decimal(20, 2) @default(0)
+
+  // optional: logical utility token balance (if group holds tokens separate from TokenBalance)
+  tokenBalance  Int?     @default(0)
+
+  // Multi-sig / governance rules
+  multiSigPolicy Json?   // e.g. { thresholds: { small:1, medium:2, large:3 }, signers: [...] }
+  spendingLimits Json?   // e.g. { daily: 10000, monthly: 100000 }
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  walletTransactions WalletTransaction[]    @relation("GroupTreasuryTransactions")
+  escrows            Escrow[]               @relation("GroupTreasuryEscrows")
+
+  duesAllocations DuesAllocation[]
+
+  @@unique([groupId])
+  @@index([groupId])
+}
+
+
+// ============================================================================
+// UPDATED ESCROW - Add proposal relation
+// ============================================================================
+
+model Escrow {
+  id                String        @id @default(uuid()) @db.Uuid
+  treasuryId        String?       @db.Uuid
+  amount            Decimal       @db.Decimal(20, 2)
+  currency          String        @default("KES")
+  status            EscrowStatus  @default(PENDING)
+  createdById       String?       @db.Uuid
+  releaseToId       String?       @db.Uuid
+  releaseToType     HolderType?
+  releaseReason     String?
+  relatedProposalId String?       @db.Uuid
+  createdAt         DateTime      @default(now())
+  releasedAt        DateTime?
+  disputeNotes      String?
+
+  // RELATIONS
+  treasury        GroupTreasury?  @relation("GroupTreasuryEscrows", fields: [treasuryId], references: [id])
+  createdBy       User?           @relation(fields: [createdById], references: [id])
+  relatedProposal Proposal?       @relation("ProposalEscrows", fields: [relatedProposalId], references: [id]) // UPDATED
+  releases        EscrowRelease[]
+
+  @@index([treasuryId])
+  @@index([relatedProposalId])
+  @@index([status])
+}
+
+
+/// EscrowRelease (audit trail for escrow movements)
+model EscrowRelease {
+  id         String    @id @default(uuid()) @db.Uuid
+  escrowId   String    @db.Uuid
+  escrow     Escrow    @relation(fields: [escrowId], references: [id])
+  amount     Decimal   @db.Decimal(20, 2)
+  releasedById String? @db.Uuid
+  releasedBy User?     @relation(fields: [releasedById], references: [id])
+  recipientId String?  @db.Uuid
+  recipientType HolderType?
+  note       String?
+  createdAt  DateTime  @default(now())
+
+  @@index([escrowId])
+}
+
+/// TreasuryPolicy: group / system policies about fees, limits, quotas
+model TreasuryPolicy {
+  id         String   @id @default(uuid()) @db.Uuid
+  groupId    String?  @db.Uuid   // null => system/global policy
+  group      Group?   @relation(fields: [groupId], references: [id])
+  key        String   // e.g. "fee.fixed_pct", "spend.limit_daily"
+  value      String   // JSON/text
+  description String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([groupId, key])
+}
+
+/// Audit table for treasury-related actions (fine-grained)
+model TreasuryAudit {
+  id            String   @id @default(uuid()) @db.Uuid
+  transactionId String?  @db.Uuid
+  escrowId      String?  @db.Uuid
+  action        String
+  payload       Json?
+  actorId       String?  @db.Uuid
+  actor         User?    @relation(fields: [actorId], references: [id])
+  createdAt     DateTime @default(now())
+
+  @@index([transactionId])
+  @@index([escrowId])
+}
+
+// ============================================================================
+// WALLET TRANSACTIONS
+// The on-ledger record of every credit/debit to a GroupTreasury.
+// Referenced by governance (Proposal), projects (Project), and treasury itself.
+// ============================================================================
+
+model WalletTransaction {
+  id              String        @id @default(uuid()) @db.Uuid
+  treasuryId      String        @db.Uuid
+  amount          Decimal       @db.Decimal(20, 2)
+  currency        String        @default("KES")
+  transactionType String        // "CREDIT", "DEBIT"
+  description     String?
+  referenceType   String?       // "PROPOSAL", "PROJECT", "DUES", "ESCROW", "MANUAL"
+  proposalId      String?       @db.Uuid
+  projectId       String?       @db.Uuid
+  initiatedById   String?       @db.Uuid
+  anchorTxHash    String?       @db.VarChar(66) // on-chain mirror tx hash (null until anchored; dormant until TREASURY_CONTRACT_ADDRESS is set)
+  metadata        Json?
+  createdAt       DateTime      @default(now())
+
+  treasury GroupTreasury @relation("GroupTreasuryTransactions", fields: [treasuryId], references: [id], onDelete: Cascade)
+  proposal Proposal?     @relation("ProposalTransactions", fields: [proposalId], references: [id], onDelete: SetNull)
+  project  Project?      @relation("ProjectTransactions", fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([treasuryId, createdAt])
+  @@index([proposalId])
+  @@index([projectId])
+  @@index([createdAt])
+  @@map("wallet_transactions")
+}

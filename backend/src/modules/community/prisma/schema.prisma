@@ -1,0 +1,444 @@
+// ============================================================================
+// COMMUNITY MODULE - Groups, Assets, Conflicts
+// ============================================================================
+
+enum SystemGroupType {
+  WARD
+  CONSTITUENCY
+  COUNTY
+  NATIONAL
+}
+
+enum VoluntaryGroupType {
+  // ECONOMIC
+  BUSINESS_COLLECTIVE
+  SAVINGS_CREDIT
+  AGRICULTURE_COOPERATIVE
+  TRADE_ASSOCIATION
+
+  // PROJECT
+  PROJECT_EXECUTION
+  INFRASTRUCTURE_COMMITTEE
+  CONSTRUCTION_TEAM
+
+  // WELFARE
+  NON_PROFIT
+  COMMUNITY_WELFARE
+  POVERTY_ALLEVIATION
+
+  // PROFESSIONAL
+  PROFESSIONAL_NETWORK
+  EXPERT_PANEL
+  QUALITY_ASSURANCE
+  ACADEMIC_RESEARCH
+
+  // EMERGENCY
+  EMERGENCY_RESPONSE
+  FIRST_RESPONDERS
+  SECURITY_WATCH
+  CRISIS_MANAGEMENT
+
+  // DEMOGRAPHIC
+  YOUTH_ORGANIZATION
+  WOMEN_EMPOWERMENT
+  ELDERLY_SUPPORT
+  DISABILITY_ADVOCACY
+
+  // SECTOR
+  HEALTH_INITIATIVE
+  EDUCATION_INITIATIVE
+  ENVIRONMENTAL_GROUP
+  TECHNOLOGY_HUB
+  ARTS_CULTURE
+  SPORTS_RECREATION
+
+  // FAITH & CULTURE
+  RELIGIOUS_ORGANIZATION
+  CULTURAL_PRESERVATION
+  INTERFAITH_DIALOGUE
+
+  // ADVOCACY
+  ADVOCACY_GROUP
+  CIVIC_EDUCATION
+  POLICY_RESEARCH
+  TRANSPARENCY_WATCHDOG
+
+  // GENERAL
+  SPECIAL_INTEREST
+  SOCIAL_CLUB
+  ALUMNI_NETWORK
+  NEIGHBORHOOD_ASSOCIATION
+}
+
+// ============================================================================
+// UPDATED GROUP MODEL - Add proposal/project relations
+// ============================================================================
+
+model Group {
+  id            String  @id @default(uuid()) @db.Uuid
+  name          String  @unique
+  description   String?
+  metadata      Json?
+  walletAddress String? @unique
+
+  isSystemGroup Boolean             @default(false)
+  systemType    SystemGroupType?
+  voluntaryType VoluntaryGroupType?
+
+  canBeDeleted Boolean @default(true)
+  canBeRenamed Boolean @default(true)
+
+  locationScope   LocationScope
+  wardId          String?       @db.Uuid
+  constituencyId  String?       @db.Uuid
+  countyId        String?       @db.Uuid
+  industryFocusId String?       @db.Uuid
+
+  status          GroupStatus @default(FORMING)
+  memberCount     Int         @default(0)
+  treasuryBalance Decimal     @default(0) @db.Decimal(20, 2)
+  lastActivity    DateTime    @default(now())
+  
+  contributesToNational    Boolean @default(false)
+  nationalContributionRate Decimal @default(0.01) @db.Decimal(3, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Set when SUPER_ADMIN has been alerted that this community crossed the member
+  // threshold without a Telegram baraza. Cleared when a baraza is registered, so
+  // demand re-surfaces if the baraza is later removed.
+  barazaAlertSentAt DateTime?
+
+  ward         Ward?         @relation("GroupWard", fields: [wardId], references: [id], onDelete: SetNull)
+  constituency Constituency? @relation(fields: [constituencyId], references: [id], onDelete: SetNull)
+  county       County?       @relation("CountyGroups", fields: [countyId], references: [id], onDelete: SetNull)
+
+  declaration         WardDeclaration?
+
+  members             GroupMember[]
+  proposals           Proposal[]              @relation("GroupProposals")
+  votes               GroupMemberVote[]       @relation("GroupVotes")
+  emergencyAlerts     EmergencyAlert[]
+  marketplaceListings MarketplaceListing[]    @relation("GroupListings")
+  communityAssets     CommunityAsset[]        @relation("GroupAssets")
+  duesAllocations     DuesAllocation[]
+  events              Event[]
+  treasury            GroupTreasury[]
+  treasuryPolicies    TreasuryPolicy[]
+  ownedProjects       Project[]               @relation("GroupProjects") // UPDATED relation name
+  elections             Election[]          @relation("GroupElections")
+  nationalContributions NationalContribution[]
+  barazaGroups          BarazaGroup[]
+  deliberations         BarazaDeliberation[] @relation("GroupDeliberations")
+  agentStates           BarazaAgentState[]   @relation("GroupAgentStates")
+
+  @@index([isSystemGroup, systemType])
+  @@index([isSystemGroup, voluntaryType])
+  @@index([locationScope, wardId])
+  @@index([status])
+  @@index([contributesToNational])
+}
+
+model GroupMember {
+  id   String    @id @default(uuid()) @db.Uuid
+  userId   String    @db.Uuid
+  groupId  String    @db.Uuid
+  role     GroupRole @default(MEMBER)
+
+  // System membership tracking
+  autoEnrolled Boolean @default(false)
+  canLeave     Boolean @default(true)
+
+  joinedAt DateTime @default(now())
+  active   Boolean  @default(true)
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, groupId])
+  @@index([groupId, role])
+  @@index([userId, active])
+  @@index([autoEnrolled])
+}
+
+model CommunityAsset {
+  id           String     @id @default(uuid()) @db.Uuid
+  name         String
+  description  String
+  assetType    String
+  ownerType    HolderType
+  ownerUserId  String?    @db.Uuid
+  ownerGroupId String?    @db.Uuid
+  wardId       String     @db.Uuid
+  location     String?
+  status       String     @default("AVAILABLE")
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  ward  Ward   @relation(fields: [wardId], references: [id], onDelete: Cascade)
+  group Group? @relation("GroupAssets", fields: [ownerGroupId], references: [id], onDelete: SetNull)
+
+  @@index([wardId])
+  @@index([ownerGroupId])
+  @@index([status])
+}
+
+model ConflictCase {
+  id            String    @id @default(uuid()) @db.Uuid
+  complainantId String    @db.Uuid
+  respondentId  String    @db.Uuid
+  description   String
+  evidence      String[]
+  status        String    @default("OPEN")
+  mediatorId    String?   @db.Uuid
+  resolution    String?
+  resolvedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  complainant User @relation("Complainant", fields: [complainantId], references: [id], onDelete: Cascade)
+  respondent  User @relation("Respondent", fields: [respondentId], references: [id], onDelete: Cascade)
+
+  @@index([complainantId])
+  @@index([respondentId])
+  @@index([status])
+}
+
+// ============================================================================
+// ENGAGEMENT & ACTIVITY
+// ============================================================================
+
+model Activity {
+  id          String         @id @default(uuid()) @db.Uuid
+  actorId     String         @db.Uuid
+  actorType   HolderType
+  actionType  String
+  entityType  String?
+  entityId    String?        @db.Uuid
+  scope       LocationScope?
+  locationId  String?        @db.Uuid
+  description String
+  metadata    Json?
+  isPublic    Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([scope, locationId, createdAt])
+  @@index([entityType, entityId])
+}
+
+model Comment {
+  id         String   @id @default(uuid()) @db.Uuid
+  authorId   String   @db.Uuid
+  entityType String   // "PROPOSAL", "PROJECT", "MILESTONE", "LISTING", etc.
+  entityId   String   @db.Uuid
+  content    String   @db.Text
+  parentId   String?  @db.Uuid
+  upvotes    Int      @default(0)
+  downvotes  Int      @default(0)
+  flagged    Boolean  @default(false)
+  deleted    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // RELATIONS
+  author     User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parent     Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies    Comment[] @relation("CommentReplies")
+  
+  // NEW: Polymorphic relations (use entityType to determine which)
+  proposal   Proposal? @relation("ProposalComments", fields: [entityId], references: [id], onDelete: Cascade, map: "comment_proposal_fk")
+  project    Project?  @relation("ProjectComments", fields: [entityId], references: [id], onDelete: Cascade, map: "comment_project_fk")
+  milestone  Milestone? @relation("MilestoneComments", fields: [entityId], references: [id], onDelete: Cascade, map: "comment_milestone_fk")
+
+  @@index([entityType, entityId, createdAt])
+  @@index([authorId])
+  @@index([parentId])
+}
+
+model Event {
+  id          String        @id @default(uuid()) @db.Uuid
+  title       String
+  description String
+  eventType   String
+  organizerId String        @db.Uuid
+  groupId     String?       @db.Uuid
+  scope       LocationScope
+  locationId  String        @db.Uuid
+  venue       String?
+  virtualUrl  String?
+  startTime   DateTime
+  endTime     DateTime
+  capacity    Int?
+  attendeeCount Int         @default(0)
+  status      String        @default("SCHEDULED")
+  metadata    Json?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  organizer User   @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  group     Group? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  attendees EventAttendee[]
+
+  @@index([scope, locationId, startTime])
+  @@index([status, startTime])
+  @@index([organizerId])
+}
+
+model EventAttendee {
+  id           String    @id @default(uuid()) @db.Uuid
+  eventId      String    @db.Uuid
+  userId       String    @db.Uuid
+  status       String    @default("REGISTERED")
+  checkedInAt  DateTime?
+  registeredAt DateTime  @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([userId])
+  @@index([eventId, status])
+}
+
+model UserEngagementMetric {
+  id               String   @id @default(uuid()) @db.Uuid
+  userId           String   @db.Uuid
+  date             DateTime @db.Date
+  proposalsVoted   Int      @default(0)
+  eventsAttended   Int      @default(0)
+  commentsPosted   Int      @default(0)
+  timeSpentMinutes Int      @default(0)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([date])
+}
+
+// ============================================================================
+// BARAZA INTEGRATION — External messaging groups (Telegram / Discord / WhatsApp)
+// ============================================================================
+
+model BarazaGroup {
+  id           String            @id @default(uuid()) @db.Uuid
+  groupId      String            @db.Uuid
+  platform     MessagingPlatform
+  externalId   String            // Telegram chat ID / Discord channel ID
+  name         String            // display name on the external platform
+  inviteLink   String?
+  isActive     Boolean           @default(true)
+  registeredBy String            @db.Uuid
+  metadata     Json?             // platform extras (Discord guildId, etc.)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  group        Group             @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  attendances  BarazaAttendance[]
+  sessions     BarazaSession[]
+
+  @@unique([groupId, platform, externalId])
+  @@index([groupId, isActive])
+  @@index([platform, externalId])
+  @@map("baraza_groups")
+}
+
+model BarazaSession {
+  id            String      @id @default(uuid()) @db.Uuid
+  barazaGroupId String      @db.Uuid
+  scheduledAt   DateTime
+  openedAt      DateTime?
+  closedAt      DateTime?
+  createdBy     String      @db.Uuid
+  reminderJobId String?     // BullMQ job ID — stored to allow future cancellation
+  createdAt     DateTime    @default(now())
+
+  barazaGroup   BarazaGroup      @relation(fields: [barazaGroupId], references: [id], onDelete: Cascade)
+  attendances   BarazaAttendance[]
+
+  @@index([barazaGroupId, scheduledAt])
+  @@map("baraza_sessions")
+}
+
+model BarazaAttendance {
+  id              String         @id @default(uuid()) @db.Uuid
+  barazaGroupId   String         @db.Uuid
+  userId          String         @db.Uuid
+  barazaSessionId String?        @db.Uuid
+  sessionDate     String         // "YYYY-MM-DD" — one reward per user per baraza per day
+  prAwarded       Boolean        @default(false)
+  prAmount        Int            @default(0)
+  reportedAt      DateTime       @default(now())
+  reportedBy      String?        // "telegram_bot" | "discord_bot" | "manual"
+
+  barazaGroup     BarazaGroup    @relation(fields: [barazaGroupId], references: [id], onDelete: Cascade)
+  barazaSession   BarazaSession? @relation(fields: [barazaSessionId], references: [id])
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, barazaGroupId, sessionDate])
+  @@index([barazaGroupId, sessionDate])
+  @@index([userId, prAwarded])
+  @@map("baraza_attendance")
+}
+
+// ============================================================================
+// WARD DECLARATION — Genesis document stored on group creation
+// ============================================================================
+
+model WardDeclaration {
+  id              String   @id @default(uuid()) @db.Uuid
+  groupId         String   @unique @db.Uuid
+  wardName        String
+  registeredAt    DateTime
+  declarationText String   @db.Text
+
+  createdAt DateTime @default(now())
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@map("ward_declarations")
+}
+
+// ============================================================================
+// VERIFICATION & VOUCHING (moved from base.prisma)
+// ============================================================================
+
+// Tracks the multi-step community verification process for a user
+model VerificationRequest {
+  id              String    @id @default(uuid()) @db.Uuid
+  userId          String    @db.Uuid
+  type            String    // "COMMUNITY"
+  status          String    // "PENDING", "VOUCHING", "PAYMENT_PENDING", "APPROVED", "REJECTED", "EXPIRED"
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  expiresAt       DateTime?
+  rejectionReason String?
+  reviewedBy      String?   @db.Uuid // Admin user ID
+  reviewedAt      DateTime?
+
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type])
+  @@index([userId, status])
+  @@map("verification_requests")
+}
+
+// Tracks vouches given by existing community members to new members
+model CommunityVouch {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid // New user being vouched for
+  voucherId String   @db.Uuid // Existing user vouching
+  wardId    String   @db.Uuid // Ward where vouching happens (must match both users' ward)
+  createdAt DateTime @default(now())
+
+  user    User @relation("VouchedFor", fields: [userId], references: [id], onDelete: Cascade)
+  voucher User @relation("VouchesGiven", fields: [voucherId], references: [id], onDelete: Cascade)
+  ward    Ward @relation(fields: [wardId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, voucherId]) // Prevent duplicate vouches
+  @@index([userId])
+  @@index([voucherId])
+  @@index([wardId])
+  @@map("community_vouches")
+}

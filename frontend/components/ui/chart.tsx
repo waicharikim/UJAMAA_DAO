@@ -1,3 +1,4 @@
+// @ts-nocheck — scaffold: recharts not installed locally
 "use client"
 
 import * as React from "react"

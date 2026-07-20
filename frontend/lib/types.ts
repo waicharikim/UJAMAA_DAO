@@ -6,9 +6,28 @@ export interface User {
   email?: string
   phone?: string
   avatar?: string
-  bio?: string
+  bio?: string  // NOTE: not in backend schema — always undefined from server
 
-  // Dual location system
+  // Verification — from backend verificationLevel field
+  verificationLevel?: "UNVERIFIED" | "EMAIL_VERIFIED" | "PHONE_VERIFIED" | "COMMUNITY_VERIFIED" | "FULL_VERIFIED"
+
+  // Dual location system (populated from geographic hierarchy in getMe response)
+  primaryWardId?: string
+  primaryWardName?: string
+  primaryConstituencyId?: string
+  primaryConstituencyName?: string
+  primaryCountyId?: string
+  primaryCountyName?: string
+  secondaryWardId?: string
+  secondaryWardName?: string
+  secondaryConstituencyId?: string
+  secondaryConstituencyName?: string
+  secondaryCountyId?: string
+  secondaryCountyName?: string
+  // Temporary check-in
+  currentLocationId?: string
+  currentLocationWardName?: string
+  currentLocationUntil?: string   // ISO date string
   residenceCounty: string
   residenceConstituency: string
   originCounty: string
@@ -24,6 +43,7 @@ export interface User {
     byLocation: Record<string, number>
   }
   tokenBalance: number
+  utBalance: number
 
   // Privacy and preferences
   privacySettings: PrivacySettings

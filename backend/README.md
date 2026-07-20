@@ -8,102 +8,353 @@ This backend provides all core APIs, business logic, authentication, and integra
 
 ---
 
+## 🚀 Quick Start
+
+**New to the project?** Start here:
+
+1. **Setup Infrastructure**: See [INFRASTRUCTURE.md](./INFRASTRUCTURE.md) for Docker setup and deployment
+2. **Run the Application**: `make dev` (after following infrastructure setup)
+3. **Read the Docs**: Explore `/docs` for API documentation
+
+---
+
 ## Key Features
 
-- **User Management**: Wallet-based authentication, dual-location user profiles (origin & residence), impact points and tokens tracking.
+- **User Management**: Email magic-link authentication, dual-location user profiles (origin & residence wards), impact points and participation rights tracking.
 - **Group Governance**: Creation and management of community and company groups, membership invitations, roles, and admin elections.
 - **County Groups**: System-created federated groups representing counties with dynamic membership based on impact points.
 - **Proposal System**: Multi-level proposal creation (local, constituency, county, national) with privacy and voting scopes.
 - **Voting Mechanism**: Combined individual and group block voting with quorum and consensus enforcement.
 - **Project & Milestones**: Projects built from proposals, milestone tracking with funding tied to verified completion.
-- **Token & Impact Points Economy**: Token minting, burning, transfers, and impact points for reputation and governance participation.
-- **Authentication**: Wallet-signature-based login using nonce challenges, JWT session tokens.
-- **Logging & Error Handling**: Structured logging with Pino, consistent ApiError-based error handling.
-- **Testing**: Comprehensive unit and integration tests with Vitest and Supertest.
-- **Dockerized**: Multi-service docker-compose setup with PostgreSQL, backend API, and optionally blockchain node.
+- **Economy**: Participation Rights (PR) soulbound tokens + Utility Tokens (UT), dues commitments, impact points for reputation and governance.
+- **Authentication**: Email magic links (JWT + hex token), phone OTP via Africa's Talking, JWT session management.
+- **Logging & Error Handling**: Structured logging with Pino (`operationType` context), consistent ApiError-based error handling.
+- **Testing**: 679 tests green across 42 test files — all 16 modules tested (Vitest + Supertest). CI runs on every push.
+- **Dockerized**: Multi-service docker-compose setup with PostgreSQL, Redis, Traefik, MailHog, and frontend.
 
 ---
 
 ## Repository Structure
 
-backend/ # Backend service code
+```
+ujamaadao-backend/
 ├── src/
-│ ├── app.ts # Express app initialization
-│ ├── index.ts # Server entrypoint
-│ ├── routes/ # Express route definitions per module (user, group, auth, ...)
-│ ├── controllers/ # HTTP request handlers per resource
-│ ├── services/ # Business logic and database operations
-│ ├── middlewares/ # Express middlewares (auth, error handling, validation)
-│ ├── validation/ # Request input validation schemas using Zod
-│ ├── prismaClient.ts# Prisma client singleton instance
-│ └── utils/ # Utilities (logger, ApiError, etc.)
-├── prisma/ # Prisma schema and migrations
-├── tests/ # Vitest test suites and helpers
-├── package.json # Backend dependencies and scripts
-├── Dockerfile # Backend Docker image build instructions
-└── .env # Environment variables (not committed)
-docker/ # Docker-compose configurations and related files
-docs/ # Project documentation (API docs, architecture, setup guides)
-frontend/ # Frontend application code (separate repo or folder)
-blockchain/ # Smart contracts and blockchain integration code
-
-
----
-
-## Environment Variables
-
-The backend depends on these environment variables (set in `.env` or docker-compose):
-
-- `DATABASE_URL`: PostgreSQL connection string
-- `JWT_SECRET`: Secret key for JWT token signing and verification
-- `LOG_LEVEL`: Optional log level (e.g., debug, info, warn, error)
-- Other variables as needed for integration or third-party services
+│   ├── app.ts              # Express app initialization
+│   ├── index.ts            # Server entrypoint (web)
+│   ├── workers.ts          # Background worker entrypoint
+│   ├── core/               # Core infrastructure
+│   │   ├── database/       # Prisma client
+│   │   ├── events/         # Event bus
+│   │   ├── jobs/           # BullMQ jobs
+│   │   ├── logger/         # Pino logger
+│   │   ├── middleware/     # Express middlewares
+│   │   ├── queue/          # Queue setup
+│   │   └── services/       # Shared services
+│   ├── modules/            # Feature modules (16 modules)
+│   │   ├── auth/           # Authentication (magic link, OTP, sessions)
+│   │   ├── user/           # User profile, verification, residence
+│   │   ├── economy/        # PR/UT tokens, dues, commitments
+│   │   ├── community/      # Groups, members, vouching
+│   │   ├── governance/     # Proposals, voting (2-stage review chain)
+│   │   ├── projects/       # Projects, milestones, verification
+│   │   ├── marketplace/    # Discovery listings (Rule 1: no payments)
+│   │   ├── emergency/      # Alert lifecycle + responder coordination
+│   │   ├── notifications/  # In-app + email + SMS notifications
+│   │   ├── onboarding/     # Tutorial, milestones, progress
+│   │   ├── reputation/     # Impact points, location impact
+│   │   ├── education/      # Learning modules with PR rewards
+│   │   ├── admin/          # Role assignment, reports, config
+│   │   ├── audit/          # Audit log (searchable, sortable)
+│   │   ├── treasury/       # Group treasury ledger, dues allocation
+│   │   └── integration/    # Baraza (Telegram/Discord/WhatsApp) attendance
+│   └── worker-events.ts    # Event listeners
+│
+├── prisma/                 # Merged schema (83 models) + migrations
+├── tests/                  # Vitest test suites (679 tests, 42 files)
+├── docs/                   # API & architecture docs
+│
+├── Dockerfile              # Container build
+├── Makefile                # Development commands
+├── INFRASTRUCTURE.md       # 👈 Infrastructure & deployment guide
+│
+# Note: Docker Compose is in docker/ at the project root (../docker/docker-compose.yml)
+# Use `make dev` from this directory — the Makefile handles the path.
+├── UPGRADE-GUIDE.md        # Observability upgrade path
+│
+├── package.json
+├── tsconfig.json
+└── .env.example
+```
 
 ---
 
 ## Development Workflow
 
-1. **Setup**
-   - Install all backend dependencies: `npm install`
-   - Configure `.env` with required variables
-   - Initialize database with Prisma migrations: `npx prisma migrate dev`
-   
-2. **Running**
-   - Start the backend locally: `npm run dev`
-   - Use Docker Compose to run backend + database + blockchain: `docker-compose up --build`
-   
-3. **Testing**
-   - Run tests with Vitest: `npm test` or `npx vitest run --threads=false` for sequential tests.
+### 1. Setup (First Time)
 
-4. **Code Quality**
-   - Use ESLint and Prettier (configured) for linting and formatting.
-   - Add new features with accompanying tests and documentation updates.
-   - Commit with descriptive messages and push for code review.
+```bash
+# Install dependencies
+npm install
+
+# Copy environment template
+cp .env.example .env
+
+# Edit .env with your values
+nano .env
+
+# Start Docker services
+make dev
+
+# Run database migrations
+make db-migrate
+```
+
+### 2. Daily Development
+
+```bash
+# Start all services
+make dev
+
+# View logs
+make logs
+
+# Run tests
+npm test
+
+# Access database
+make db-shell
+```
+
+See [INFRASTRUCTURE.md](./INFRASTRUCTURE.md) for detailed setup instructions.
+
+### 3. Testing
+
+```bash
+# Run all tests (679 tests — all 16 modules) — MUST run inside the container
+docker exec -e RUNNING_IN_DOCKER=true ujamaa_web npx vitest run
+
+# Run specific module
+docker exec -e RUNNING_IN_DOCKER=true ujamaa_web npx vitest run tests/auth/
+docker exec -e RUNNING_IN_DOCKER=true ujamaa_web npx vitest run tests/community/
+```
+
+> **Always run tests inside the Docker container** with `RUNNING_IN_DOCKER=true`.
+> This ensures the test DB (`postgres_test:5432`) is reachable.
+> Running `npx vitest run` directly on the host will fail — the test DB is only accessible via `localhost:5433` from outside Docker, which the container Prisma client cannot reach.
+
+### 4. Code Quality
+
+```bash
+# Lint code
+npm run lint
+
+# Format code
+npm run format
+
+# Type check
+npm run type-check
+```
 
 ---
 
-## Logging & Error Handling
+## Environment Variables
 
-- Uses [Pino](https://github.com/pinojs/pino) for structured JSON logging with pretty-printing in dev.
-- API errors are represented uniformly using `ApiError` class.
-- Global error handler appropriately sends HTTP status codes and messages.
+The backend depends on these environment variables (set in `.env`):
+
+### Required
+
+- `DATABASE_URL`: PostgreSQL connection string
+- `REDIS_HOST` / `REDIS_PORT`: Redis connection (BullMQ uses these, not `REDIS_URL`)
+- `JWT_SECRET`: Secret key for JWT signing (use strong secret in production)
+- `NODE_ENV`: Environment (`development`, `production`, `test`)
+- `PORT`: Server port (default: `4000`)
+
+### Optional
+
+- `LOG_LEVEL`: Log level (`debug`, `info`, `warn`, `error`)
+- `FRONTEND_URL`: Frontend URL for magic link emails (default: `http://localhost:3000`)
+- `SMTP_HOST` / `SMTP_PORT`: Email relay (MailHog in dev)
+- `AT_API_KEY` / `AT_USERNAME`: Africa's Talking credentials for SMS OTP
+- `MINTER_PRIVATE_KEY`: Backend EOA for minting PR/UT tokens on Base L2 (worker only)
+- `PR_TOKEN_ADDRESS` / `UT_TOKEN_ADDRESS`: Deployed contract addresses (post-blockchain session)
+
+See `.env.example` for complete list with descriptions.
+
+---
+
+## Architecture
+
+### Services
+
+- **Web API**: Express server handling HTTP requests
+- **Worker**: Background job processor (BullMQ)
+- **Event System**: Event-driven architecture for decoupling
+- **PostgreSQL**: Main database (Prisma ORM)
+- **Redis**: Cache + job queues
+
+### Key Patterns
+
+- **Event-Driven**: Heavy operations processed asynchronously via events
+- **Queue-Based**: Background jobs for cleanup, economy, notifications
+- **Modular**: Features organized in self-contained modules
+- **Type-Safe**: Full TypeScript with Prisma for database
 
 ---
 
 ## API Documentation
 
-- Detailed API docs per module reside in `/docs`, e.g., `user-api.md`, `group-api.md`.
-- Optionally generate OpenAPI specs from code for frontend and user reference.
+Detailed API documentation per module:
+
+- `docs/auth-api.md` — Authentication flow (magic link, OTP, sessions)
+- `docs/user-api.md` — User profile, verification, residence
+- `docs/economy-api.md` — PR/UT tokens, dues, commitments
+- `docs/group-api.md` — Groups (discovery, management, membership)
+- `docs/proposal-api.md` — Governance proposals and voting
+- `docs/admin-api.md` — Admin operations (roles, reports, config)
+- `docs/architecture.md` — Full system architecture and module status
+- `docs/economy-design.md` — Token economics, earning rules, regen, decay
+
+**API Base URL**: `http://localhost:4000/api/v1`
 
 ---
 
-## Contribution
+## Deployment
 
-- Follow commit message conventions (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`).
-- Write tests for all new logic, targeting >80% coverage.
-- Keep documentation up-to-date.
-- Resolve linting and formatting issues before committing.
-- Use feature branches and pull requests for collaborative development.
+### Development
+
+See [INFRASTRUCTURE.md](./INFRASTRUCTURE.md) for local development setup.
+
+### Production
+
+Images are built by GitHub Actions and pushed to GHCR; the droplet **pulls**
+them rather than compiling (see [docs/server-runbook.md](../docs/server-runbook.md)).
+
+```bash
+# Deploy (pull prebuilt images + restart) — the normal path
+make prod-deploy
+
+# Run migrations (web start script also runs these on boot)
+docker compose -f ../docker/docker-compose.prod.yml exec web npx prisma migrate deploy
+
+# Fallback only — build on the droplet (slow, RAM-heavy):
+make prod-build && make prod
+```
+
+See [INFRASTRUCTURE.md](./INFRASTRUCTURE.md) for detailed production deployment guide.
+
+---
+
+## Monitoring & Observability
+
+When ready for advanced monitoring:
+
+```bash
+# Check available observability features
+make check-configs
+
+# Enable monitoring stack
+make enable-monitoring
+```
+
+See [UPGRADE-GUIDE.md](./UPGRADE-GUIDE.md) for observability options.
+
+---
+
+## Testing Strategy
+
+### Unit Tests
+- Business logic in services
+- Utility functions
+- Validation schemas
+
+### Integration Tests
+- API endpoints (Supertest)
+- Database operations (Prisma)
+- Queue processing (BullMQ)
+
+### Coverage Goals
+- Target: >80% code coverage
+- Critical paths: >90% coverage
+
+---
+
+## Contribution Guidelines
+
+1. **Branching**: Create feature branches from `develop`
+2. **Commits**: Use conventional commits (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`)
+3. **Testing**: Write tests for all new features
+4. **Linting**: Ensure code passes ESLint and Prettier
+5. **Documentation**: Update relevant docs
+6. **Pull Requests**: Get review before merging
+
+---
+
+## Project Structure Philosophy
+
+- **`core/`**: Infrastructure code used across the app
+- **`modules/`**: Feature-specific code (auth, user, economy, etc.)
+- **Event-driven**: Heavy operations don't block HTTP responses
+- **Type-safe**: Leverage TypeScript and Prisma for safety
+- **Testable**: Modular design enables easy testing
+
+---
+
+## Logging & Error Handling
+
+- **Logger**: Pino for structured logging (`backend/src/core/logger/logger.ts`)
+- **Error Handling**: Custom `ApiError` class for consistent errors
+- **Request Logging**: All HTTP requests logged with correlation IDs
+- **Operation Logging**: Business operations logged with context
+
+---
+
+## Technology Stack
+
+- **Runtime**: Node.js 22
+- **Language**: TypeScript (strict)
+- **Framework**: Express
+- **Database**: PostgreSQL 15 + Prisma ORM (83 models)
+- **Cache/Queue**: Redis + BullMQ (5 scheduled jobs across 4 queues)
+- **Testing**: Vitest + Supertest — 679 tests (42 files), CI green
+- **Logging**: Pino (structured, `operationType` context)
+- **Validation**: Zod
+- **Authentication**: Email magic links + Africa's Talking SMS OTP + JWT sessions
+
+---
+
+## Useful Commands
+
+```bash
+# Development
+make dev              # Start all services
+make logs             # View logs
+make restart          # Restart services
+make down             # Stop services
+
+# Database
+make db-shell         # Access PostgreSQL
+make db-migrate       # Run migrations
+make backup           # Create backup
+
+# Observability (when needed)
+make check-configs    # Check observability status
+make enable-monitoring # Enable Prometheus + Grafana
+
+# Production
+make prod-deploy      # Pull prebuilt images from GHCR + restart (normal deploy)
+make prod             # Start with existing images
+make prod-build       # Fallback: build images on the droplet
+```
+
+See [Makefile](./Makefile) for all available commands.
+
+---
+
+## Documentation
+
+- **[INFRASTRUCTURE.md](./INFRASTRUCTURE.md)**: Docker setup, deployment, troubleshooting
+- **[UPGRADE-GUIDE.md](./UPGRADE-GUIDE.md)**: Observability features upgrade path
+- **`/docs`**: API documentation, architecture guides
 
 ---
 
@@ -113,4 +364,10 @@ For questions or requests, reach out to the dev team or project leads as per int
 
 ---
 
-*This document serves as a high-level backend overview for UjamaaDAO.*
+## License
+
+[Your License Here]
+
+---
+
+*This document serves as a high-level project overview for UjamaaDAO backend.*

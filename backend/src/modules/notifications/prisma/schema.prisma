@@ -1,0 +1,125 @@
+// ============================================================================
+// AUDIT MODULE - Notifications, Logs, Privacy, Feedback
+// ============================================================================
+
+enum NotificationType {
+  SYSTEM
+  PROPOSAL
+  VERIFICATION
+  ECONOMIC
+}
+
+enum NotificationPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+model Notification {
+  id        String               @id @default(uuid()) @db.Uuid
+  userId    String               @db.Uuid
+  title     String
+  message   String
+  type      NotificationType     @default(SYSTEM)
+  priority  NotificationPriority @default(NORMAL)
+  read      Boolean              @default(false)
+  actionUrl String?
+  metadata  Json?
+  createdAt DateTime             @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+  @@index([createdAt])
+  @@index([priority, read])
+}
+
+model NotificationPreference {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  channel   String
+  category  String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, channel, category])
+  @@index([userId])
+}
+
+model UserAudit {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  action    String
+  details   Json?
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, action])
+  @@index([createdAt])
+}
+
+model UserConsent {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @db.Uuid
+  policyKey  String
+  accepted   Boolean   @default(false)
+  version    String
+  acceptedAt DateTime?
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, policyKey])
+  @@index([userId, accepted])
+}
+
+model PlatformFeedback {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @db.Uuid
+  category    String
+  description String
+  rating      Int?
+  status      String   @default("NEW")
+  response    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([category, status])
+  @@index([userId])
+}
+
+model SystemLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  level     String
+  message   String
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  @@index([level, createdAt])
+}
+
+model PushSubscription {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}

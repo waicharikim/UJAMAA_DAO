@@ -1,0 +1,1093 @@
+// backend/prisma/base.prisma
+// -----------------------------------------------------------------------------
+// UJAMAADAO - BASE PRISMA SCHEMA
+// Shared core models and enums for the whole platform.
+// Modules should NOT redefine these models. Module schema files should instead
+// add new models and/or relations that reference these core models' id fields.
+// -----------------------------------------------------------------------------
+
+
+generator client {
+  provider = "prisma-client-js"
+  // previewFeatures = ["referentialIntegrity"] // enable if/when required
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// -------------------------
+/// GLOBAL ENUMS
+/// -------------------------
+
+enum LocationScope {
+  WARD
+  CONSTITUENCY
+  COUNTY
+  NATIONAL
+}
+
+enum HolderType {
+  USER
+  GROUP
+}
+
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL
+  SPEND
+  REFUND
+  ADJUSTMENT
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum SystemRole {
+  super_admin
+  auditor
+  compliance_officer
+  support_staff
+  general_user
+  governor_admin
+}
+
+enum GroupType {
+  WARD_COMMUNITY
+  CONSTITUENCY_PROJECT
+  COUNTY_INITIATIVE
+  NATIONAL_CAMPAIGN
+  BUSINESS
+  NON_PROFIT
+  EDUCATION
+  RELIGIOUS
+  HEALTH
+  AGRICULTURE
+  YOUTH
+  WOMEN
+  PROJECT_GROUP
+  TECHNICAL_ADVISORY
+  QUALITY_ASSURANCE
+  PROFESSIONAL_NETWORK
+  EXPERT_PANEL
+  EMERGENCY_RESPONSE
+  DISASTER_MANAGEMENT
+  ENVIRONMENTAL
+  CULTURAL
+  INFRASTRUCTURE
+  SAVINGS_CREDIT
+  SELF_HELP
+}
+
+enum GroupRole {
+  MEMBER
+  LEADER
+  TREASURER
+  AUDITOR
+  FACILITATOR
+  MENTOR
+}
+
+enum ParticipantRole {
+  MEMBER
+  ADMIN
+  MILESTONE_VERIFIER
+  QUALITY_CONTROLLER
+}
+
+enum ProposalType {
+  COMMUNITY_INITIATIVE
+  MAJOR_PROJECT
+  STRATEGIC_DECISION
+  EMERGENCY
+}
+
+enum ProposalStatus {
+  DRAFT
+  VOTING
+  APPROVED
+  REJECTED
+  EXECUTING
+  COMPLETED
+  CANCELLED
+}
+
+enum ProjectStatus {
+  ACTIVE
+  COMPLETED
+  ON_HOLD
+  CANCELLED
+}
+
+enum MilestoneStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum GroupStatus {
+  FORMING
+  ACTIVE
+  SUSPENDED
+  INACTIVE
+  DISSOLVED
+  MERGED
+}
+
+enum ImpactPointType {
+  LOCATION_BASED
+  SYSTEM
+}
+
+enum EducationalContentLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  EXPERT
+}
+
+enum EmergencyType {
+  NATURAL_DISASTER
+  HEALTH_CRISIS
+  CONFLICT
+  INFRASTRUCTURE_FAILURE
+  ENVIRONMENTAL
+}
+
+enum EmergencySeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+/// -------------------------
+/// CORE SHARED MODELS
+/// -------------------------
+
+/// User - core identity and shared account/economic fields.
+/// Modules may add relations that reference User.id (do not re-declare user here).
+model User {
+  id            String   @id @default(uuid()) @db.Uuid
+  walletAddress String?  @unique
+  email         String?  @unique
+  passwordHash  String?
+  name          String?
+  phoneNumber   String?  @unique
+
+  // Geographic references (optional at registration)
+  primaryWardId   String? @db.Uuid
+  primaryWard     Ward?   @relation("UserPrimaryWard", fields: [primaryWardId], references: [id])
+  secondaryWardId String? @db.Uuid
+  secondaryWard   Ward?   @relation("UserSecondaryWard", fields: [secondaryWardId], references: [id])
+
+  avatarUrl String?
+  industryId String? @db.Uuid
+
+  nonce String? // wallet auth nonce, optional
+
+  // Verification flags
+  emailVerified     Boolean @default(false)
+  phoneVerified     Boolean @default(false)
+  communityVerified Boolean @default(false)
+  locationVerified  Boolean @default(false)
+
+  isActive     Boolean @default(true)
+  tokenVersion Int     @default(0)
+
+  // Economic core (shared)
+  globalImpactPoints  Int     @default(0) // aggregated, may be system-level + location-based
+  utilityTokens       Int     @default(0)
+  participationRights Int     @default(0)
+  lastPRReset         DateTime?
+
+  // MFA and metadata
+  mfaEnabled  Boolean   @default(false)
+  mfaSecret   String?
+  lastLoginAt DateTime?
+  metadata    Json?
+
+  // Relations (module schemas will add other relations)
+  authTokens    AuthToken[]
+  refreshTokens RefreshToken[]
+
+  userRoles UserRole[]
+  walletBalances WalletBalance[] @relation("UserWalletBalances")
+  tokenBalances  TokenBalance[]  @relation("UserTokenBalances")
+  privacySettings UserPrivacySettings? @relation("UserPrivacy")
+  notificationPreferences NotificationPreference[] @relation("UserNotificationPreferences")
+  audits UserAudit[] @relation("UserAudits")
+  consents UserConsent[] @relation("UserConsents")
+
+  locationImpacts UserLocationImpact[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([walletAddress])
+  @@index([email])
+}
+
+/// Role & RBAC
+model Role {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  namespace String?
+  builtin   Boolean  @default(false)
+  description String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userRoles        UserRole[]
+  rolePermissions  RolePermission[]
+}
+
+model UserRole {
+  id         String  @id @default(uuid()) @db.Uuid
+  userId     String  @db.Uuid
+  roleId     Int
+  scope      String?
+  active     Boolean @default(true)
+  assignedBy String? @db.Uuid
+  assignedAt DateTime @default(now())
+  expiresAt  DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+  role Role @relation(fields: [roleId], references: [id])
+
+  @@unique([userId, roleId, scope])
+  @@index([roleId, scope])
+  @@index([userId])
+}
+
+model RolePermission {
+  id         String   @id @default(uuid()) @db.Uuid
+  roleId     Int
+  permission String
+  description String?
+  createdAt  DateTime @default(now())
+
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permission])
+  @@index([permission])
+}
+
+/// Locations - seedable static data
+model County {
+  id          String        @id @default(uuid()) @db.Uuid
+  code        String        @unique
+  name        String        @unique
+  constituencies Constituency[]
+  wards       Ward[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Groups may reference counties (module schemas can add relations)
+  groups Group[] // safe: groups are declared below in core; modules can expand
+}
+
+model Constituency {
+  id       String   @id @default(uuid()) @db.Uuid
+  name     String
+  countyId String   @db.Uuid
+  county   County   @relation(fields: [countyId], references: [id])
+  wards    Ward[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name, countyId])
+}
+
+model Ward {
+  id             String      @id @default(uuid()) @db.Uuid
+  name           String
+  code           String?     @unique
+  constituencyId String      @db.Uuid
+  constituency   Constituency @relation(fields: [constituencyId], references: [id])
+
+  // Relations
+  primaryUsers   User[]      @relation("UserPrimaryWard")
+  secondaryUsers User[]      @relation("UserSecondaryWard")
+  locationImpacts UserLocationImpact[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([constituencyId])
+}
+
+/// Industries and goods/services (seeded)
+model Industry {
+  id   String @id @default(uuid()) @db.Uuid
+  name String @unique
+
+  users  User[]
+  groups Group[] // groups exist here; modules can add more specific relations
+}
+
+model GoodsService {
+  id   String @id @default(uuid()) @db.Uuid
+  name String @unique
+
+  users  User[]
+  groups Group[]
+}
+
+/// Wallets & Tokens - shared ledger primitives
+model WalletBalance {
+  id         String   @id @default(uuid()) @db.Uuid
+  holderType HolderType
+  userId     String?  @db.Uuid
+  groupId    String?  @db.Uuid
+  balance    Decimal  @db.Decimal(20, 2) @default(0)
+  currency   String   @default("KES")
+  updatedAt  DateTime @updatedAt
+
+  user  User?  @relation("UserWalletBalances", fields: [userId], references: [id])
+  group Group? @relation("GroupWalletBalances", fields: [groupId], references: [id])
+
+  walletTransactions WalletTransaction[]
+
+  @@unique([holderType, userId], name: "holderType_userId_wallet")
+  @@unique([holderType, groupId], name: "holderType_groupId_wallet")
+  @@index([userId])
+  @@index([groupId])
+}
+
+model WalletTransaction {
+  id              String          @id @default(uuid()) @db.Uuid
+  walletBalanceId String          @db.Uuid
+  type            TransactionType
+  amount          Decimal         @db.Decimal(20, 2)
+  mpesaReceipt    String?
+  description     String?
+  status          TransactionStatus
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  walletBalance WalletBalance @relation(fields: [walletBalanceId], references: [id])
+
+  @@index([walletBalanceId])
+  @@index([mpesaReceipt])
+}
+
+/// TokenBalance: logical fungible token (Utility Token - UT)
+model TokenBalance {
+  id         String   @id @default(uuid()) @db.Uuid
+  holderType HolderType
+  userId     String?  @db.Uuid
+  groupId    String?  @db.Uuid
+  balance    Int      @default(0)
+  updatedAt  DateTime @updatedAt
+
+  user  User?  @relation("UserTokenBalances", fields: [userId], references: [id])
+  group Group? @relation("GroupTokenBalances", fields: [groupId], references: [id])
+
+  @@unique([holderType, userId], name: "holderType_userId")
+  @@unique([holderType, groupId], name: "holderType_groupId")
+}
+
+/// Auth tokens & refresh tokens
+model AuthToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  tokenHash String
+  type      String   // e.g., VERIFY_EMAIL, RESET_PASSWORD, MFA_CHALLENGE
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  ip        String?
+  userAgent String?
+  metadata  Json?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@index([type])
+}
+
+model RefreshToken {
+  id         Int      @id @default(autoincrement())
+  userId     String   @db.Uuid
+  tokenHash  String
+  expiresAt  DateTime?
+  revoked    Boolean  @default(false)
+  revokedAt  DateTime?
+  replacedBy Int?
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime?
+  ip         String?
+  userAgent  String?
+  deviceName String?
+  metadata   Json?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@index([revoked])
+  @@index([expiresAt])
+}
+
+/// Location-bound impact points (per-ward)
+model UserLocationImpact {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @db.Uuid
+  wardId       String   @db.Uuid
+  points       Int      @default(0)
+  tier         String
+  type         ImpactPointType @default(LOCATION_BASED)
+  lastActivity DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+  ward Ward @relation(fields: [wardId], references: [id])
+
+  @@unique([userId, wardId])
+  @@index([wardId, points])
+  @@index([userId, lastActivity])
+}
+
+/// Privacy, audit & consent
+model UserPrivacySettings {
+  id        String @id @default(uuid()) @db.Uuid
+  userId    String @unique @db.Uuid
+  settings  Json
+  updatedAt DateTime @updatedAt
+
+  user User @relation("UserPrivacy", fields: [userId], references: [id])
+}
+
+model UserAudit {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  field     String
+  oldValue  String?
+  newValue  String?
+  changedBy String?  // userId of who made change
+  timestamp DateTime @default(now())
+
+  user User @relation("UserAudits", fields: [userId], references: [id])
+
+  @@index([userId, timestamp])
+}
+
+model UserConsent {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @db.Uuid
+  policyType  String
+  version     String
+  consentedAt DateTime
+  ipAddress   String?
+  userAgent   String?
+
+  user User @relation(fields: [userId], references: [id])
+  @@index([userId])
+}
+
+/// Notifications
+model NotificationPreference {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  channel   String
+  eventType String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation("UserNotificationPreferences", fields: [userId], references: [id])
+
+  @@unique([userId, channel, eventType])
+}
+
+/// Platform feedback & minimal content models
+model PlatformFeedback {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  category String
+  title   String
+  description String
+  urgency String @default("MEDIUM")
+  upvotes Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  user User @relation("PlatformFeedback_User", fields: [userId], references: [id])
+}
+
+/// Community asset (minimal)
+model CommunityAsset {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String
+  description  String
+  assetType    String
+  ownerType    HolderType
+  ownerUserId  String?  @db.Uuid
+  ownerGroupId String?  @db.Uuid
+  wardId       String   @db.Uuid
+  location     String?
+  status       String   @default("AVAILABLE")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now())
+
+  ward Ward @relation(fields: [wardId], references: [id])
+  // owner relations (user/group) may be added or completed in module schemas
+}
+
+/// Conflict resolution (core)
+model ConflictCase {
+  id          String @id @default(uuid()) @db.Uuid
+  title       String
+  description String
+  caseType    String
+  complainantId String @db.Uuid
+  respondentId  String @db.Uuid
+  severity    String
+  status      String @default("DIRECT_MEDIATION")
+  evidence    Json?
+  currentLevel Int @default(1)
+  resolution   String?
+  resolvedAt   DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  complainant User @relation("Complainant", fields: [complainantId], references: [id])
+  respondent  User @relation("Respondent", fields: [respondentId], references: [id])
+}
+
+/// Mediation Session
+model MediationSession {
+  id         String       @id @default(uuid()) @db.Uuid
+  conflictId String       @db.Uuid
+  level      Int          @default(1)
+  mediators  String[]     // array of userIds
+  scheduledAt DateTime
+  completedAt DateTime?
+  outcome    String?
+  notes      String?
+  agreements Json?
+  createdAt  DateTime @default(now())
+
+  conflict ConflictCase @relation(fields: [conflictId], references: [id])
+}
+
+/// System configuration store for thresholds, rates, etc.
+model SystemConfiguration {
+  id        String   @id @default(uuid()) @db.Uuid
+  configKey String   @unique
+  configValue Json
+  description String?
+  updatedBy String?   @db.Uuid
+  updatedAt DateTime @updatedAt
+
+  updatedByUser User? @relation(fields: [updatedBy], references: [id])
+}
+
+/// -------------------------
+/// CORE GOVERNANCE PRIMITIVES (CAPABILITY LAYER)
+/// - Proposals and votes are core because governance is cross-cutting.
+/// - Project-specific details can live in the Projects module, which references
+///   Proposal.id for funding/approval flows.
+/// -------------------------
+
+model Proposal {
+  id           String       @id @default(uuid()) @db.Uuid
+  title        String
+  description  String
+  proposalType ProposalType @default(COMMUNITY_INITIATIVE)
+
+  // votingTier kept as string to allow future extension; tie to ProposalType in logic
+  votingTier String @default("COMMUNITY_INITIATIVE")
+
+  funded         Boolean        @default(false)
+  budget         Int?
+  timeline       String?
+  locationScope  LocationScope
+  wardId         String?        @db.Uuid
+  constituencyId String?        @db.Uuid
+  countyId       String?        @db.Uuid
+  isPrivate      Boolean        @default(false)
+  purposeDetails Json?
+  status         ProposalStatus @default(DRAFT)
+
+  creatorUserId  String? @db.Uuid
+  creatorGroupId String? @db.Uuid
+
+  // Relations
+  creatorUser  User?  @relation("UserProposals", fields: [creatorUserId], references: [id])
+  creatorGroup Group? @relation("GroupProposals", fields: [creatorGroupId], references: [id])
+
+  votes Vote[]
+  groupMemberVotes GroupMemberVote[] @relation("GroupMemberVote_Proposal")
+
+  requiredQuorum   Decimal @db.Decimal(3,2) @default(0.40) // default quorum
+  requiredApproval Decimal @db.Decimal(3,2) @default(0.50)
+
+  internalApproved  Boolean @default(false)
+  internalVoteCount Json?
+
+  isEmergency            Boolean @default(false)
+  emergencyJustification String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Vote {
+  id          String   @id @default(uuid()) @db.Uuid
+  proposalId  String   @db.Uuid
+  voterId     String   @db.Uuid
+  isGroup     Boolean  @default(false)
+  vote        Boolean
+  tokensSpent Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  proposal Proposal @relation(fields: [proposalId], references: [id])
+
+  @@index([proposalId])
+  @@index([voterId])
+}
+
+model GroupMemberVote {
+  id         String   @id @default(uuid()) @db.Uuid
+  proposalId String   @db.Uuid
+  groupId    String   @db.Uuid
+  userId     String   @db.Uuid
+  vote       Boolean
+  createdAt  DateTime @default(now())
+
+  proposal Proposal @relation("GroupMemberVote_Proposal", fields: [proposalId], references: [id])
+  group    Group    @relation("GroupMemberVote_Group", fields: [groupId], references: [id])
+  user     User     @relation("GroupMemberVote_User", fields: [userId], references: [id])
+
+  @@unique([proposalId, groupId, userId])
+}
+
+/// Projects - core skeleton. Module may extend with budget breakdown, procurement.
+model Project {
+  id            String        @id @default(uuid()) @db.Uuid
+  proposalId    String?       @db.Uuid // optional link to a Proposal
+  title         String
+  description   String
+  metadata      Json?
+  budget        Int?
+  timeline      String?
+  status        ProjectStatus @default(ACTIVE)
+  locationScope LocationScope
+  wardId        String?       @db.Uuid
+  constituencyId String?      @db.Uuid
+  countyId      String?       @db.Uuid
+
+  projectType String? // e.g., INFRASTRUCTURE, SOCIAL, ECONOMIC
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  proposal Proposal? @relation("ProposalToProject", fields: [proposalId], references: [id])
+  participants ProjectParticipant[]
+  milestones   ProjectMilestone[]
+  physicalWorkLogs PhysicalWorkLog[]
+  educationalModules EducationalModule[]
+
+  projectComplexity String? @default("SIMPLE")
+  riskLevel         String? @default("LOW")
+  environmentalImpact Json?
+  requiredExpertise String[]
+  assignedExperts   String[] @db.Uuid
+  isTemplate        Boolean @default(false)
+  templateFor       String?
+  replicationGuide  Json?
+}
+
+model ProjectParticipant {
+  id          String          @id @default(uuid()) @db.Uuid
+  projectId   String          @db.Uuid
+  userId      String          @db.Uuid
+  role        ParticipantRole @default(MEMBER)
+  joinedAt    DateTime        @default(now())
+
+  project Project @relation(fields: [projectId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@unique([projectId, userId])
+  @@index([projectId, role])
+}
+
+model ProjectMilestone {
+  id            String          @id @default(uuid()) @db.Uuid
+  projectId     String          @db.Uuid
+  title         String
+  description   String
+  dueDate       DateTime?
+  status        MilestoneStatus @default(PENDING)
+  fundingAmount Int
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id])
+}
+
+/// Physical work logging (sparse core fields)
+model PhysicalWorkLog {
+  id        String  @id @default(uuid()) @db.Uuid
+  projectId String  @db.Uuid
+  userId    String  @db.Uuid
+  workDate  DateTime
+  hours     Decimal  @db.Decimal(4,2)
+  workType  String
+  description String
+  location    String?
+
+  status     String @default("PENDING")
+  verifiedBy String? @db.Uuid
+  verifiedAt DateTime?
+
+  photoUrls  String[]
+  witnessIds String[] @db.Uuid
+
+  qualityRating Int?
+  notes         String?
+
+  baseIP            Int
+  qualityMultiplier Decimal @db.Decimal(3,2) @default(1.00)
+  totalIPEarned     Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@index([projectId, workDate])
+  @@index([userId, status])
+}
+
+/// Work verification records (core)
+model WorkVerification {
+  id         String          @id @default(uuid()) @db.Uuid
+  workLogId  String          @db.Uuid
+  verifierId String          @db.Uuid
+  method     String
+  status     String
+  comments   String?
+  evidence   String[]
+  createdAt  DateTime @default(now())
+
+  workLog PhysicalWorkLog @relation(fields: [workLogId], references: [id])
+  verifier User              @relation(fields: [verifierId], references: [id])
+
+  @@unique([workLogId, verifierId])
+  @@index([verifierId, createdAt])
+}
+
+/// Educational modules (core scaffold)
+model EducationalModule {
+  id          String                  @id @default(uuid()) @db.Uuid
+  title       String
+  description String
+  content     String
+  mediaUrls   String[]
+  duration    Int
+  difficulty  EducationalContentLevel
+  category    String
+
+  creatorId String  @db.Uuid
+  groupId   String? @db.Uuid
+
+  verified       Boolean @default(false)
+  expertApproved Boolean @default(false)
+  completionIP   Int     @default(0)
+
+  views         Int     @default(0)
+  averageRating Decimal @default(0) @db.Decimal(3,2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  creator User @relation(fields: [creatorId], references: [id])
+  progress    UserEducationalProgress[]
+  assessments EducationalAssessment[]
+  reviews     EducationalReview[]
+  projects    Project[]
+}
+
+model UserEducationalProgress {
+  id       String            @id @default(uuid()) @db.Uuid
+  userId   String            @db.Uuid
+  moduleId String            @db.Uuid
+  status      String         @default("IN_PROGRESS")
+  progress    Int            @default(0)
+  startedAt   DateTime       @default(now())
+  completedAt DateTime?
+  score       Int?
+
+  user User @relation(fields: [userId], references: [id])
+  module EducationalModule @relation(fields: [moduleId], references: [id])
+
+  @@unique([userId, moduleId])
+}
+
+model EducationalAssessment {
+  id       String            @id @default(uuid()) @db.Uuid
+  moduleId String            @db.Uuid
+  questions Json
+  passingScore Int  @default(70)
+  maxAttempts  Int  @default(3)
+  createdAt DateTime @default(now())
+
+  module EducationalModule @relation(fields: [moduleId], references: [id])
+}
+
+model EducationalReview {
+  id       String            @id @default(uuid()) @db.Uuid
+  moduleId String            @db.Uuid
+  userId   String            @db.Uuid
+  rating  Int
+  comment String?
+  helpful Int     @default(0)
+  createdAt DateTime @default(now())
+
+  module EducationalModule @relation(fields: [moduleId], references: [id])
+  user   User             @relation(fields: [userId], references: [id])
+
+  @@unique([userId, moduleId])
+}
+
+/// Emergency response core scaffolding
+model EmergencyAlert {
+  id            String            @id @default(uuid()) @db.Uuid
+  title         String
+  description   String
+  emergencyType EmergencyType
+  severity      EmergencySeverity
+  location      String
+  reporterId    String            @db.Uuid
+  status        String            @default("ACTIVE")
+  assignedGroupId String?         @db.Uuid
+  neededResources    Json
+  availableResources Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  reporter User @relation(fields: [reporterId], references: [id])
+  responses EmergencyResponse[]
+}
+
+model EmergencyResponse {
+  id          String         @id @default(uuid()) @db.Uuid
+  emergencyId String         @db.Uuid
+  userId      String         @db.Uuid
+  role        String
+  status      String   @default("AVAILABLE")
+  skills      String[]
+  location    String?
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  emergency EmergencyAlert @relation(fields: [emergencyId], references: [id])
+  user      User           @relation(fields: [userId], references: [id])
+
+  @@unique([emergencyId, userId])
+}
+
+/// -------------------------
+/// GROUP (CORE primitive)
+/// - Groups are core system primitives because they exist across many modules.
+/// - Modules may extend Group in their own schema files (e.g., marketplace relations).
+/// -------------------------
+
+model Group {
+  id            String  @id @default(uuid()) @db.Uuid
+  name          String  @unique
+  description   String?
+  metadata      Json?
+  walletAddress String? @unique
+
+  // Geographic scope
+  locationScope  LocationScope
+  wardId         String?       @db.Uuid
+  constituencyId String?       @db.Uuid
+  countyId       String?       @db.Uuid
+
+  ward         Ward?         @relation(fields: [wardId], references: [id])
+  constituency Constituency? @relation(fields: [constituencyId], references: [id])
+  county       County?       @relation(fields: [countyId], references: [id])
+
+  industryFocusId String?   @db.Uuid
+  industryFocus   Industry? @relation(fields: [industryFocusId], references: [id])
+
+  productsServices GoodsService[] @relation("GroupGoodsServices")
+
+  status          GroupStatus @default(FORMING)
+  memberCount     Int         @default(0)
+  treasuryBalance Decimal     @default(0) @db.Decimal(20,2)
+  lastActivity    DateTime    @default(now())
+
+  groupType GroupType @default(WARD_COMMUNITY)
+
+  walletBalances WalletBalance[] @relation("GroupWalletBalances")
+
+  members       GroupMember[]
+  proposals     Proposal[]     @relation("GroupProposals")
+  tokenBalances TokenBalance[] @relation("GroupTokenBalances")
+
+  // Controls & governance constitution
+  multiSigThresholds Json? // {small:1, medium:2, large:3}
+  spendingLimits     Json?
+  constitution       Json?
+  amendmentProcess   Json?
+
+  successRate        Decimal @default(0) @db.Decimal(3,2)
+  memberSatisfaction Decimal @default(0) @db.Decimal(3,2)
+
+  dissolutionWarningSent Boolean   @default(false)
+  dissolutionDate        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  emergencyAlerts EmergencyAlert[]
+
+  // Marketplace and asset relations can be added by module schemas
+  marketplaceListingsAsSeller MarketplaceListing[] @relation("MarketplaceListing_SellerGroup")
+  communityAssets   CommunityAsset[]    @relation("CommunityAsset_OwnerGroup")
+  EducationalModule EducationalModule[]
+}
+
+/// Group membership
+model GroupMember {
+  id       String    @id @default(uuid()) @db.Uuid
+  userId   String    @db.Uuid
+  groupId  String    @db.Uuid
+  role     GroupRole @default(MEMBER)
+  joinedAt DateTime  @default(now())
+  active   Boolean   @default(true)
+
+  user  User  @relation(fields: [userId], references: [id])
+  group Group @relation(fields: [groupId], references: [id])
+
+  @@unique([userId, groupId])
+  @@index([groupId, role])
+  @@index([userId])
+}
+
+/// -------------------------
+/// MARKETPLACE (light placeholders in base)
+/// Module schema should extend and add business logic for marketplace.
+/// -------------------------
+
+model MarketplaceListing {
+  id          String  @id @default(uuid()) @db.Uuid
+  title       String
+  description String
+  price       Decimal @db.Decimal(20, 2)
+  quantity    Int     @default(1)
+  listingType String
+  marketTier  String  @default("LOCAL")
+  wardId      String? @db.Uuid
+  sellerType  HolderType
+  sellerUserId  String?  @db.Uuid
+  sellerGroupId String?  @db.Uuid
+  status        String  @default("ACTIVE")
+  verified      Boolean @default(false)
+  qualityRating Decimal @default(0) @db.Decimal(3,2)
+  views      Int @default(0)
+  salesCount Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  ward Ward? @relation(fields: [wardId], references: [id])
+  sellerUser User? @relation("MarketplaceListing_SellerUser", fields: [sellerUserId], references: [id])
+  sellerGroup Group? @relation("MarketplaceListing_SellerGroup", fields: [sellerGroupId], references: [id])
+
+  transactions MarketplaceTransaction[]
+  reviews      MarketplaceReview[]
+}
+
+model MarketplaceTransaction {
+  id        String             @id @default(uuid()) @db.Uuid
+  listingId String             @db.Uuid
+  buyerId   String             @db.Uuid
+  sellerId  String             @db.Uuid
+  sellerType HolderType
+  quantity  Int
+  totalPrice Decimal @db.Decimal(20,2)
+  status    String  @default("PENDING")
+  escrowRelease Boolean @default(false)
+  deliveryDetails Json?
+  completedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  listing MarketplaceListing @relation(fields: [listingId], references: [id])
+  buyer   User               @relation("MarketplaceTransaction_Buyer", fields: [buyerId], references: [id])
+
+  review  MarketplaceReview?
+}
+
+model MarketplaceReview {
+  id            String                 @id @default(uuid()) @db.Uuid
+  transactionId String                 @unique @db.Uuid
+  reviewerId    String                 @db.Uuid
+  reviewedId    String                 @db.Uuid
+  reviewedType  HolderType
+  rating        Int
+  comment       String?
+  verifiedPurchase Boolean @default(true)
+  createdAt DateTime @default(now())
+
+  transaction MarketplaceTransaction @relation(fields: [transactionId], references: [id])
+  reviewer    User @relation("MarketplaceReview_Reviewer", fields: [reviewerId], references: [id])
+
+  @@index([reviewedId, reviewedType])
+}
+
+/// -------------------------
+/// OTHER CORE MODELS (analytics, feedback etc.)
+/// -------------------------
+
+model CommunityDashboard {
+  id     String @id @default(uuid()) @db.Uuid
+  wardId String @db.Uuid
+  metrics     Json
+  trends      Json
+  comparisons Json
+  customMetrics Json
+  updatedAt DateTime @updatedAt
+
+  ward Ward @relation(fields: [wardId], references: [id])
+}
+
+model SystemLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  level     String
+  message   String
+  meta      Json?
+  createdAt DateTime @default(now())
+}
+
+/// -------------------------
+/// END OF BASE SCHEMA
+/// -------------------------
+/// Notes:
+/// - Add module-specific models in module schema files located at:
+///   backend/src/modules/<module>/prisma/schema.prisma
+/// - Module schema files should import/declare only new models and references
+///   to existing base models by id; do NOT re-declare base models here.
+/// - Keep base schema stable: changes here ripple to all modules.
+/// -----------------------------------------------------------------------------

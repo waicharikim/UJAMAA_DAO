@@ -1,9 +1,7 @@
 "use client"
 
 import type React from "react"
-
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { ArrowLeft } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -26,19 +24,20 @@ export function PageHeader({
   onBack,
   actions,
   className,
-  gradient = false,
 }: PageHeaderProps) {
   return (
     <div
-      className={cn(
-        "relative overflow-hidden rounded-2xl border bg-white p-8 shadow-sm",
-        gradient && "bg-gradient-to-br from-blue-50 via-white to-purple-50",
-        className,
-      )}
+      className={cn("relative overflow-hidden rounded-2xl p-8", className)}
+      style={{
+        background: "linear-gradient(135deg, #FAF7F2 0%, #F6F0E6 100%)",
+        border: "1px solid rgba(212,145,30,0.18)",
+      }}
     >
-      {gradient && (
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-purple-500/5" />
-      )}
+      {/* Subtle amber glow top-right */}
+      <div
+        className="pointer-events-none absolute -top-12 right-8 h-32 w-32 rounded-full opacity-30"
+        style={{ background: "radial-gradient(circle, rgba(212,145,30,0.35) 0%, transparent 70%)" }}
+      />
 
       <div className="relative">
         <div className="flex items-start justify-between">
@@ -48,7 +47,7 @@ export function PageHeader({
                 variant="ghost"
                 size="sm"
                 onClick={onBack || (() => window.history.back())}
-                className="mb-4 -ml-2"
+                className="mb-4 -ml-2 text-[#0E0B08]/50 hover:text-[#0E0B08] hover:bg-[rgba(201,146,42,0.08)]"
               >
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back
@@ -56,20 +55,29 @@ export function PageHeader({
             )}
 
             <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-900 to-slate-600 bg-clip-text text-transparent">
-                {title}
-              </h1>
+              <h1 className="font-serif font-bold text-3xl text-[#1A120B]">{title}</h1>
               {badge && (
-                <Badge variant="secondary" className="bg-blue-100 text-blue-700">
+                <span
+                  className="text-xs font-semibold px-2.5 py-1 rounded-full"
+                  style={{
+                    background: "rgba(212,145,30,0.12)",
+                    color: "#C9922A",
+                    border: "1px solid rgba(212,145,30,0.25)",
+                  }}
+                >
                   {badge}
-                </Badge>
+                </span>
               )}
             </div>
 
-            {description && <p className="text-lg text-slate-600 max-w-2xl">{description}</p>}
+            {description && (
+              <p className="text-base max-w-2xl" style={{ color: "rgba(26,18,11,0.55)" }}>
+                {description}
+              </p>
+            )}
           </div>
 
-          {actions && <div className="flex items-center gap-2">{actions}</div>}
+          {actions && <div className="flex items-center gap-2 ml-4">{actions}</div>}
         </div>
       </div>
     </div>

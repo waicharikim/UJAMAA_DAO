@@ -1,31 +1,83 @@
-# Use full Node 22 Alpine base
-FROM node:22-alpine
-
+# ────────────────────────
+# COMMON BASE
+# ────────────────────────
+FROM node:22-slim AS base
 WORKDIR /usr/src/app
 
-# Install runtime/build deps and netcat for wait script
-RUN apk add --no-cache build-base python3 netcat-openbsd
+# Install required system packages for Debian slim
+RUN apt-get update -y && \
+    apt-get install -y --no-install-recommends \
+      openssl \
+      ca-certificates \
+      netcat-openbsd \
+      bash \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install all deps including dev
-
-RUN npm config set fetch-timeout 600000
-RUN npm config set registry https://registry.npmjs.org/
-RUN npm cache clean --force
-
+# ────────────────────────
+# DEPENDENCIES (shared)
+# ────────────────────────
+FROM base AS deps
 COPY package*.json ./
 RUN npm ci
 
-# Copy all source files
+# ────────────────────────
+# BUILD STAGE
+# ────────────────────────
+FROM base AS builder
+COPY --from=deps /usr/src/app/node_modules ./node_modules
 COPY . .
 
-RUN chmod +x ./docker/postgrescheck.sh ./docker/start.sh || true
+RUN DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" npm run db:generate && \
+    NODE_OPTIONS="--max-old-space-size=3072" npm run build && \
+    NODE_OPTIONS="--max-old-space-size=1024" npx tsc -p tsconfig.seed.json && \
+    npm prune --omit=dev --ignore-scripts
 
-# Generate Prisma client
-RUN npx prisma generate || true
+# ──────────────────────── 
+# DEVELOPMENT IMAGE (hot reload)
+# Used by both web and worker containers
+# ────────────────────────
+FROM base AS dev
+COPY --from=deps /usr/src/app/node_modules ./node_modules
+COPY . .
 
-# No build command; ts-node will run TS files directly in dev
+RUN echo "alias ls='ls -la --color=auto'" >> /etc/bash.bashrc && \
+    echo "export PS1='\\[\e[32m\\]/usr/src/app\\[\e[0m\\]# '" >> /etc/bash.bashrc && \
+    echo "export TERM=xterm-256color" >> /etc/bash.bashrc
 
-# Expose port
+# bash is already installed in base
+RUN bash --version
+
+# Make ALL scripts executable (handles all your new scripts)
+RUN chmod +x ./docker/*.sh
+
 EXPOSE 4000
 
-CMD ["sh", "-c", "./docker/start.sh"]
+# Default command (overridden by docker-compose for worker)
+CMD ["sh", "./docker/start-web.sh"]
+
+# ────────────────────────
+# PRODUCTION WEB IMAGE
+# ────────────────────────
+FROM base AS prod-web
+COPY --from=builder /usr/src/app/dist ./dist
+COPY --from=builder /usr/src/app/node_modules ./node_modules
+COPY --from=builder /usr/src/app/package*.json ./
+COPY --from=builder /usr/src/app/prisma ./prisma
+COPY --from=builder /usr/src/app/prisma.config.ts ./prisma.config.ts
+COPY --from=builder /usr/src/app/docker ./docker
+RUN chmod +x ./docker/*.sh
+EXPOSE 4000
+CMD ["sh", "./docker/start-web.prod.sh"]
+
+# ────────────────────────
+# PRODUCTION WORKER IMAGE
+# ────────────────────────
+FROM base AS prod-worker
+COPY --from=builder /usr/src/app/dist ./dist
+COPY --from=builder /usr/src/app/node_modules ./node_modules
+COPY --from=builder /usr/src/app/package*.json ./
+COPY --from=builder /usr/src/app/prisma ./prisma
+COPY --from=builder /usr/src/app/prisma.config.ts ./prisma.config.ts
+COPY --from=builder /usr/src/app/docker ./docker
+RUN chmod +x ./docker/*.sh
+CMD ["sh", "./docker/start-worker.prod.sh"]

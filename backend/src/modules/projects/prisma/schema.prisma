@@ -1,0 +1,257 @@
+// -----------------------------------------------------
+// PROJECT MODULE
+// -----------------------------------------------------
+
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  ON_HOLD
+  CANCELLED
+  COMPLETED
+}
+
+enum ProjectRole {
+  LEAD
+  MANAGER
+  CONTRIBUTOR
+  VIEWER
+}
+
+enum MilestoneStatus {
+  PENDING
+  IN_PROGRESS
+  AWAITING_VERIFICATION
+  VERIFIED
+  REJECTED
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  BLOCKED
+}
+
+enum WorkSessionStatus {
+  OPEN
+  APPROVED
+  FLAGGED
+}
+
+// Who may participate (join/claim/contribute) in a project.
+// MEMBERS_ONLY = owning-group members only. WARD/CONSTITUENCY/COUNTY open the
+// project to anyone whose residence falls within the owning group's geography
+// at that tier (used by voluntary groups; system-group projects already span
+// their tier via auto-enrolled membership).
+enum ProjectParticipation {
+  MEMBERS_ONLY
+  WARD
+  CONSTITUENCY
+  COUNTY
+}
+
+model Project {
+  id           String        @id @default(uuid()) @db.Uuid
+  title        String
+  description  String?       @db.Text
+  coverImage   String?
+  status       ProjectStatus @default(PLANNING)
+
+  ownerGroupId String? @db.Uuid
+  ownerUserId  String? @db.Uuid
+
+  participationScope ProjectParticipation @default(MEMBERS_ONLY)
+
+  // PROJECT-SETUP DETAILS — captured at the from-proposal gate (after the vote
+  // passes), not at idea stage. These answer the Baraza council's most frequent
+  // HIGH-severity gaps: who keeps it running, where it sits, who it serves.
+  maintenancePlan     String?  @db.Text          // who keeps it working in year two
+  recurrentCostKes    Decimal? @db.Decimal(20, 2) // ongoing upkeep cost
+  recurrentCostPeriod String?                     // MONTHLY | QUARTERLY | YEARLY
+  siteLocation        String?  @db.Text          // where exactly (plot/landmark)
+  landTenure          String?  @db.Text          // tenure status + consent of rights-holders
+  beneficiaries       String?  @db.Text          // who benefits, who contributes, who is exempt
+
+  // NEW: Link to original proposal
+  proposalId   String?  @unique @db.Uuid
+
+  // RELATIONS
+  ownerGroup         Group?              @relation("GroupProjects", fields: [ownerGroupId], references: [id])
+  ownerUser          User?               @relation("UserProjects", fields: [ownerUserId], references: [id])
+  proposal           Proposal?           @relation("ProposalToProject", fields: [proposalId], references: [id]) // NEW
+  
+  members            ProjectMember[]
+  milestones         Milestone[]
+  tasks              Task[]
+  verifiers          MilestoneVerifier[]
+  walletTransactions WalletTransaction[] @relation("ProjectTransactions")
+  workLogs           PhysicalWorkLog[]
+  workSessions       WorkSession[]
+  comments           Comment[]           @relation("ProjectComments") // NEW
+  projectUpdates     ProjectUpdate[]     @relation("ProjectUpdates")
+
+  anchorTxHash String? @db.VarChar(66) // on-chain anchor of PROJECT_CREATED (null until anchored; dormant until PROJECT_REGISTRY_ADDRESS is set)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerGroupId])
+  @@index([ownerUserId])
+  @@index([status])
+  @@index([proposalId])
+}
+
+// ============================================================================
+// UPDATED MILESTONE MODEL
+// ============================================================================
+
+model Milestone {
+  id          String          @id @default(uuid())  @db.Uuid
+  projectId   String          @db.Uuid
+  title       String
+  description String?         @db.Text
+  status      MilestoneStatus @default(PENDING)
+  dueDate     DateTime?
+  orderIndex  Int             @default(0)
+  
+  // NEW: Link to original proposal milestone
+  proposalMilestoneId String?           @unique @db.Uuid
+
+  // Submission & verification tracking
+  startedAt             DateTime?
+  submittedById         String?           @db.Uuid
+  submittedAt           DateTime?
+  proofUrl              String?
+  submissionDescription String?           @db.Text
+  verifiedById          String?           @db.Uuid
+  verifiedAt            DateTime?
+  feedback              String?           @db.Text
+
+  // RELATIONS
+  project           Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  proposalMilestone ProposalMilestone?  @relation("ProposalToProjectMilestone", fields: [proposalMilestoneId], references: [id]) // NEW
+  submittedByUser   User?               @relation("MilestoneSubmitter", fields: [submittedById], references: [id])
+  verifiedByUser    User?               @relation("MilestoneVerifier_VerifiedBy", fields: [verifiedById], references: [id])
+
+  tasks        Task[]
+  verifiers    MilestoneVerifier[]
+  workLogs     PhysicalWorkLog[]
+  workSessions WorkSession[]
+  comments     Comment[]           @relation("MilestoneComments") // NEW
+
+  anchorTxHash String? @db.VarChar(66) // on-chain anchor of MILESTONE_VERIFIED
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([status])
+  @@index([proposalMilestoneId])
+}
+
+model ProjectMember {
+  id         String      @id @default(cuid())
+  projectId  String      @db.Uuid
+  userId     String      @db.Uuid
+  role       ProjectRole @default(CONTRIBUTOR)
+
+  project    Project     @relation(fields: [projectId], references: [id])
+  user       User        @relation(fields: [userId], references: [id])
+
+  joinedAt   DateTime    @default(now())
+
+  @@unique([projectId, userId])
+}
+
+
+model Task {
+  id            String         @id @default(cuid())
+  projectId     String?        @db.Uuid
+  milestoneId   String         @db.Uuid
+  assignedToId  String?        @db.Uuid // a project member (User)
+  title         String
+  description   String?
+  status        TaskStatus     @default(TODO)
+  skillCategory String?
+  maxAssignees  Int            @default(1)
+  dueDate       DateTime?
+
+  milestone     Milestone      @relation(fields: [milestoneId], references: [id])
+  assignedTo    User?          @relation(fields: [assignedToId], references: [id])
+
+  project   Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model MilestoneVerifier {
+  id            String             @id @default(cuid())
+  milestoneId   String             @db.Uuid
+  projectId     String?            @db.Uuid
+  verifierId    String             @db.Uuid // a User OR a Group-appointed verifier
+  assignedById  String             @db.Uuid // group admin or project lead
+  status        VerificationStatus @default(PENDING)
+  notes         String?
+
+  milestone     Milestone          @relation(fields: [milestoneId], references: [id])
+  verifier      User               @relation("MilestoneVerifier_Verifier", fields: [verifierId], references: [id])
+  assignedBy    User               @relation("MilestoneVerifier_AssignedBy", fields: [assignedById], references: [id])
+
+  project   Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  
+  @@unique([milestoneId, verifierId])
+  @@index([milestoneId])
+  @@index([verifierId])
+  @@index([assignedById])
+  @@index([status])
+}
+
+model WorkSession {
+  id          String            @id @default(uuid()) @db.Uuid
+  milestoneId String            @db.Uuid
+  projectId   String            @db.Uuid
+  createdById String            @db.Uuid
+  qrSecret    String            @unique
+  expiresAt   DateTime
+  status      WorkSessionStatus @default(OPEN)
+  closedAt    DateTime?
+  closeJobId  String?
+
+  milestone   Milestone         @relation(fields: [milestoneId], references: [id])
+  project     Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy   User              @relation("WorkSessionCreator", fields: [createdById], references: [id])
+  presences   WorkPresence[]
+
+  anchorTxHash String?          @db.VarChar(66) // on-chain anchor of WORK_APPROVED (labor verified)
+
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([milestoneId])
+  @@index([projectId])
+  @@index([status])
+}
+
+model WorkPresence {
+  id           String       @id @default(uuid()) @db.Uuid
+  sessionId    String       @db.Uuid
+  userId       String       @db.Uuid
+  attestedById String?      @db.Uuid
+  depth        Int          @default(0)
+  ipAwarded    Int          @default(0)
+  awardedAt    DateTime?
+
+  session      WorkSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user         User         @relation("WorkPresenceUser", fields: [userId], references: [id])
+  attestedBy   User?        @relation("WorkPresenceAttestor", fields: [attestedById], references: [id])
+
+  createdAt    DateTime     @default(now())
+
+  @@unique([sessionId, userId])
+  @@index([sessionId])
+  @@index([userId])
+}

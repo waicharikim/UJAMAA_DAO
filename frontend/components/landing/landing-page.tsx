@@ -1,406 +1,1582 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { ConnectWallet } from "@/components/auth/connect-wallet"
+import Image from "next/image"
 import { useAuth } from "@/contexts/auth-context"
+import { cn } from "@/lib/utils"
 import {
-  Users,
+  Menu,
+  X,
+  ShieldCheck,
+  TrendingUp,
   Vote,
-  Coins,
-  Shield,
+  Droplets,
+  Landmark,
+  Wrench,
+  Mail,
+  Loader2,
+  ExternalLink,
   Award,
-  ArrowRight,
-  Star,
-  TreePine,
-  Target,
+  Zap,
+  Coins,
+  Ban,
+  Users,
+  Globe,
+  ChevronLeft,
   ChevronRight,
-  Heart,
 } from "lucide-react"
 
-const features = [
-  {
-    icon: Vote,
-    title: "Democratic Governance",
-    subtitle: "Transparent Decision Making",
-    description:
-      "Participate in transparent, blockchain-based voting and proposal systems that embody the spirit of community cooperation.",
-    color: "from-orange-500 to-red-500",
-  },
-  {
-    icon: Users,
-    title: "Community Groups",
-    subtitle: "Ubuntu Networks",
-    description:
-      "Join location-based groups that reflect our diverse African communities, fostering Ubuntu and collective growth.",
-    color: "from-green-500 to-emerald-500",
-  },
-  {
-    icon: Coins,
-    title: "Shared Economy",
-    subtitle: "Community Tokens",
-    description:
-      "Earn and spend community tokens through meaningful contributions, building wealth together as one people.",
-    color: "from-yellow-500 to-orange-500",
-  },
-  {
-    icon: Award,
-    title: "Impact Recognition",
-    subtitle: "Contribution Rewards",
-    description:
-      "Get recognized for positive community impact with our point system that celebrates African values of giving back.",
-    color: "from-purple-500 to-pink-500",
-  },
-  {
-    icon: Shield,
-    title: "Digital Security",
-    subtitle: "Blockchain Protection",
-    description:
-      "Built on secure blockchain technology that protects our community's interests and maintains transparency.",
-    color: "from-blue-500 to-indigo-500",
-  },
-  {
-    icon: TreePine,
-    title: "Environmental Focus",
-    subtitle: "Sustainable Development",
-    description: "Support eco-friendly projects that protect our beautiful African landscape for future generations.",
-    color: "from-green-600 to-teal-500",
-  },
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const IS_DEV = process.env.NODE_ENV === "development"
+
+const NGUZO_SABA = [
+  "Umoja",        // Unity
+  "Kujitambua", // Self-determination
+  "Haki",         // Justice & Rights
+  "Ujamaa",       // Cooperative economics
+  "Nia",          // Purpose
+  "Ubunifu",      // Creativity
+  "Imani",        // Faith
 ]
 
-const stats = [
-  { label: "Active Members", value: "2,847", icon: Users },
-  { label: "Proposals", value: "156", icon: Vote },
-  { label: "Projects", value: "89", icon: Target },
-  { label: "Tokens Distributed", value: "1.2M", icon: Coins },
-]
+// ── Sign-in modal ─────────────────────────────────────────────────────────────
 
-const testimonials = [
-  {
-    name: "Amina Wanjiku",
-    role: "Community Leader",
-    location: "Nairobi, Kenya",
-    content:
-      "UJAMAA has transformed how our community makes decisions. The transparency and inclusivity reflect our true African values.",
-    avatar: "AW",
-  },
-  {
-    name: "Kwame Asante",
-    role: "Social Entrepreneur",
-    location: "Accra, Ghana",
-    content:
-      "Through UJAMAA, I've connected with like-minded individuals across Africa. Together, we're building something beautiful.",
-    avatar: "KA",
-  },
-  {
-    name: "Fatima Diallo",
-    role: "Teacher & Activist",
-    location: "Lagos, Nigeria",
-    content:
-      "The impact point system motivates me to contribute more to my community. It's like digital community building!",
-    avatar: "FD",
-  },
-]
+function SignInModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { requestMagicLink } = useAuth()
+  const [email, setEmail] = useState("")
+  const [sending, setSending] = useState(false)
+  const [sent, setSent] = useState(false)
+  const [notFound, setNotFound] = useState(false)
 
-const coreValues = [
-  {
-    icon: Heart,
-    title: "Ubuntu",
-    description: "I am because we are - our interconnectedness defines us",
-    color: "from-red-500 to-pink-500",
-  },
-  {
-    icon: Users,
-    title: "Harambee",
-    description: "Pulling together - collective effort for community progress",
-    color: "from-orange-500 to-yellow-500",
-  },
-  {
-    icon: TreePine,
-    title: "Sustainability",
-    description: "Environmental stewardship - caring for our shared home",
-    color: "from-green-500 to-emerald-500",
-  },
-]
+  const handleSend = async () => {
+    if (!email.trim()) return
+    setSending(true)
+    setNotFound(false)
+    try {
+      await requestMagicLink({ email: email.trim() })
+      setSent(true)
+    } catch (err: unknown) {
+      const status = (err as { status?: number })?.status
+      if (status === 404) setNotFound(true)
+      // toast already shown inside requestMagicLink
+    } finally {
+      setSending(false)
+    }
+  }
 
-export function LandingPage() {
-  const { isAuthenticated } = useAuth()
-  const [activeFeature, setActiveFeature] = useState(0)
+  const handleClose = () => {
+    onClose()
+    setTimeout(() => { setSent(false); setEmail(""); setNotFound(false) }, 300)
+  }
+
+  if (!open) return null
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-green-50">
-      {/* Hero Section */}
-      <section className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 via-transparent to-green-500/10" />
-        <div className="container mx-auto px-4 py-20 relative">
-          <div className="text-center max-w-4xl mx-auto">
-            <Badge className="mb-6 bg-gradient-to-r from-orange-500 to-red-500 text-white border-0">
-              🌍 African Digital Community DAO
-            </Badge>
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center px-4"
+      onClick={handleClose}
+    >
+      <div className="absolute inset-0 bg-chai/70 backdrop-blur-sm" />
+      <div
+        className="relative w-full max-w-md rounded-2xl p-8 shadow-2xl"
+        style={{ background: "#142F22", border: "1px solid rgba(212,145,30,0.22)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={handleClose}
+          className="absolute top-4 right-4 h-8 w-8 flex items-center justify-center rounded-lg text-cream/40 hover:text-cream transition-colors"
+          style={{ background: "rgba(247,242,232,0.06)" }}
+          aria-label="Close"
+        >
+          <X size={16} />
+        </button>
 
-            <h1 className="text-5xl md:text-7xl font-bold mb-6 bg-gradient-to-r from-orange-600 via-red-600 to-green-600 bg-clip-text text-transparent">
-              UJAMAA
-            </h1>
-
-            <p className="text-xl md:text-2xl text-slate-600 mb-4 font-medium">
-              Decentralized Community Governance for Africa
-            </p>
-
-            <p className="text-lg text-slate-500 mb-8 max-w-2xl mx-auto">
-              A Decentralized Autonomous Organization (DAO) that brings together African communities through blockchain
-              technology, embodying the spirit of Ubuntu: <em>"I am because we are"</em>
-            </p>
-
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
-              {isAuthenticated ? (
-                <Link href="/dashboard">
-                  <Button
-                    size="lg"
-                    className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white px-8 py-3 text-lg"
-                  >
-                    Go to Dashboard
-                    <ArrowRight className="ml-2 h-5 w-5" />
-                  </Button>
-                </Link>
-              ) : (
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <ConnectWallet />
-                  <Link href="/about">
-                    <Button
-                      variant="outline"
-                      size="lg"
-                      className="border-orange-500 text-orange-600 hover:bg-orange-50 px-8 py-3 text-lg"
-                    >
-                      Learn More
-                      <ChevronRight className="ml-2 h-5 w-5" />
-                    </Button>
-                  </Link>
-                </div>
-              )}
-            </div>
-
-            {/* Quick Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-3xl mx-auto">
-              {stats.map((stat, index) => {
-                const Icon = stat.icon
-                return (
-                  <div
-                    key={index}
-                    className="text-center p-4 rounded-lg bg-white/50 backdrop-blur-sm border border-orange-100"
-                  >
-                    <Icon className="h-6 w-6 text-orange-500 mx-auto mb-2" />
-                    <div className="text-2xl font-bold text-slate-900">{stat.value}</div>
-                    <div className="text-sm font-medium text-slate-600">{stat.label}</div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Core Values Section */}
-      <section className="py-20 bg-gradient-to-br from-green-50 to-yellow-50">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold mb-4 text-slate-900">Our Foundation</h2>
-            <p className="text-xl text-slate-600">
-              Built on African values that have guided communities for generations
-            </p>
-          </div>
-          <div className="grid grid-cols-1 gap-8 sm:grid-cols-3">
-            {coreValues.map((value, index) => {
-              const Icon = value.icon
-              return (
-                <Card key={index} className="text-center border-0 shadow-lg hover:shadow-xl transition-shadow">
-                  <CardHeader>
-                    <div
-                      className={`h-16 w-16 rounded-full bg-gradient-to-br ${value.color} flex items-center justify-center mx-auto mb-4`}
-                    >
-                      <Icon className="h-8 w-8 text-white" />
-                    </div>
-                    <CardTitle className="text-xl">{value.title}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-gray-600">{value.description}</p>
-                  </CardContent>
-                </Card>
-              )
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* Features Section */}
-      <section className="py-20 bg-white">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold mb-4 text-slate-900">Powerful Features</h2>
-            <p className="text-xl text-slate-600">
-              Everything you need to participate in and manage community governance
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {features.map((feature, index) => {
-              const Icon = feature.icon
-              return (
-                <Card
-                  key={index}
-                  className="group hover:shadow-xl transition-all duration-300 border-0 bg-gradient-to-br from-white to-slate-50 hover:scale-105"
-                  onMouseEnter={() => setActiveFeature(index)}
-                >
-                  <CardHeader>
-                    <div
-                      className={`w-12 h-12 rounded-lg bg-gradient-to-r ${feature.color} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300`}
-                    >
-                      <Icon className="h-6 w-6 text-white" />
-                    </div>
-                    <CardTitle className="text-xl font-bold text-slate-900">{feature.title}</CardTitle>
-                    <CardDescription className="text-sm font-medium text-orange-600">
-                      {feature.subtitle}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-slate-600 leading-relaxed">{feature.description}</p>
-                  </CardContent>
-                </Card>
-              )
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* How It Works */}
-      <section className="py-20 bg-gradient-to-br from-orange-50 to-green-50">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold mb-4 text-slate-900">How It Works</h2>
-            <p className="text-xl text-slate-600">Simple steps to join our digital community</p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-            {[
-              {
-                step: "01",
-                title: "Connect Wallet",
-                description: "Connect your Web3 wallet to join our secure blockchain community",
-                icon: Shield,
-              },
-              {
-                step: "02",
-                title: "Join a Group",
-                description: "Find and join your local group or create a new community initiative",
-                icon: Users,
-              },
-              {
-                step: "03",
-                title: "Participate & Vote",
-                description: "Engage in governance, vote on proposals, and earn impact points",
-                icon: Vote,
-              },
-            ].map((step, index) => {
-              const Icon = step.icon
-              return (
-                <div key={index} className="text-center relative">
-                  <div className="w-16 h-16 bg-gradient-to-r from-orange-500 to-red-500 rounded-full flex items-center justify-center text-white font-bold text-xl mx-auto mb-6">
-                    {step.step}
-                  </div>
-                  <Icon className="h-8 w-8 text-orange-500 mx-auto mb-4" />
-                  <h3 className="text-xl font-bold mb-2 text-slate-900">{step.title}</h3>
-                  <p className="text-slate-600">{step.description}</p>
-
-                  {index < 2 && (
-                    <div className="hidden md:block absolute top-8 left-full w-full">
-                      <ArrowRight className="h-6 w-6 text-orange-300 mx-auto" />
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* Testimonials */}
-      <section className="py-20 bg-white">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold mb-4 text-slate-900">Community Voices</h2>
-            <p className="text-xl text-slate-600">Hear from our active community members across Africa</p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-            {testimonials.map((testimonial, index) => (
-              <Card key={index} className="border-0 bg-gradient-to-br from-orange-50 to-white">
-                <CardContent className="p-6">
-                  <div className="flex items-center mb-4">
-                    <div className="w-12 h-12 bg-gradient-to-r from-orange-500 to-red-500 rounded-full flex items-center justify-center text-white font-bold mr-4">
-                      {testimonial.avatar}
-                    </div>
-                    <div>
-                      <div className="font-bold text-slate-900">{testimonial.name}</div>
-                      <div className="text-sm text-orange-600">{testimonial.role}</div>
-                      <div className="text-xs text-slate-500">{testimonial.location}</div>
-                    </div>
-                  </div>
-                  <p className="text-slate-600 italic">"{testimonial.content}"</p>
-                  <div className="flex text-yellow-400 mt-4">
-                    {[...Array(5)].map((_, i) => (
-                      <Star key={i} className="h-4 w-4 fill-current" />
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="py-20 bg-gradient-to-r from-orange-500 via-red-500 to-green-500">
-        <div className="container mx-auto px-4 text-center">
-          <h2 className="text-4xl font-bold mb-6 text-white">Join UJAMAA Today</h2>
-          <p className="text-xl text-orange-100 mb-8 max-w-2xl mx-auto">
-            Be part of Africa's digital transformation. Together, we build stronger, more connected communities.
+        <div className="mb-6">
+          <span className="font-serif text-xl font-bold text-cream">Sign in</span>
+          <p className="mt-1 text-sm text-cream/50">
+            Enter your email and we&apos;ll send a secure, passwordless login link.
           </p>
+        </div>
 
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+        {sent ? (
+          <div className="text-center space-y-3 py-4">
+            <div className="text-4xl">📬</div>
+            <p className="font-medium text-cream">Check your email</p>
+            <p className="text-sm text-cream/50">
+              We sent a link to{" "}
+              <strong className="text-amber-bright">{email}</strong>. Click it to sign in.
+            </p>
+            {IS_DEV && (
+              <a
+                href="http://localhost:8025"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-amber/70 hover:text-amber transition-colors"
+              >
+                <ExternalLink size={12} />
+                Dev mode — view in MailHog
+              </a>
+            )}
+            <button
+              onClick={() => setSent(false)}
+              className="block mx-auto text-sm text-cream/40 hover:text-cream/70 transition-colors mt-2"
+            >
+              Try a different email
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="relative">
+              <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-cream/30" />
+              <input
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => { setEmail(e.target.value); setNotFound(false) }}
+                onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                autoFocus
+                className="w-full rounded-xl pl-9 pr-4 py-3 text-sm text-cream placeholder-cream/30 outline-none transition-all focus:border-amber/40"
+                style={{
+                  background: "rgba(247,242,232,0.07)",
+                  border: "1px solid rgba(247,242,232,0.12)",
+                }}
+              />
+            </div>
+
+            {notFound && (
+              <p className="text-sm text-amber-bright/90 rounded-xl px-3 py-2" style={{ background: "rgba(212,145,30,0.12)", border: "1px solid rgba(212,145,30,0.25)" }}>
+                No account found.{" "}
+                <Link href="/auth/register" onClick={handleClose} className="font-semibold underline underline-offset-2 hover:text-amber-bright">
+                  Create one here
+                </Link>
+              </p>
+            )}
+
+            <button
+              onClick={handleSend}
+              disabled={sending || !email.trim()}
+              className="w-full rounded-full py-3 text-sm font-bold text-tea-dark transition-all hover:bg-amber-bright hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2"
+              style={{ background: "#D4911E" }}
+            >
+              {sending ? (
+                <>
+                  <Loader2 size={15} className="animate-spin" />
+                  Sending…
+                </>
+              ) : (
+                "Send Login Link"
+              )}
+            </button>
+
+            <p className="text-center text-xs text-cream/30">
+              New to UjamaaDAO?{" "}
+              <Link
+                href="/auth/register"
+                onClick={handleClose}
+                className="text-amber hover:text-amber-bright font-medium transition-colors"
+              >
+                Create your account →
+              </Link>
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── 3D Orbital System (canvas) ────────────────────────────────────────────────
+//
+// Four rings represent the four governance tiers: Community → Constituency → County → National.
+// Each ring is a tilted ellipse with a bright near-arc and dim far-arc for 3-D depth.
+// Dots are positioned in true 3-D, depth-sorted, and rendered with scale/opacity by depth.
+// Mouse parallax shifts the orbit center, reinforcing the spatial feel.
+
+function OrbitalSystem() {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const mouseRef  = useRef({ x: 0, y: 0 })
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return
+
+    let animId: number
+    let dpr = 1
+
+    // tilt: inclination in radians (0 = flat circle, approaching π/2 = edge-on)
+    // axial: rotation of the orbit plane around the view axis
+    const rings = [
+      { r: 62,  tilt: 0.25, axial:  0.30, color: "#D4911E", width: 1.5, speed:  0.00070, dots: 2 },
+      { r: 118, tilt: 0.52, axial: -0.40, color: "#38A063", width: 1.2, speed: -0.00045, dots: 3 },
+      { r: 185, tilt: 0.38, axial:  1.10, color: "#D4911E", width: 1.0, speed:  0.00028, dots: 2 },
+      { r: 265, tilt: 0.62, axial: -0.70, color: "#F7F2E8", width: 0.7, speed: -0.00018, dots: 4 },
+    ] as const
+
+    const dotPalette = ["#E9A52E", "#38A063", "#D4911E", "#C43D28", "#C8A45A"]
+
+    function resize() {
+      if (!canvas) return
+      dpr = window.devicePixelRatio || 1
+      const rect = canvas.getBoundingClientRect()
+      canvas.width  = rect.width  * dpr
+      canvas.height = rect.height * dpr
+      ctx!.setTransform(dpr, 0, 0, dpr, 0, 0)
+    }
+
+    function onMouseMove(e: MouseEvent) {
+      mouseRef.current = {
+        x: e.clientX - window.innerWidth  / 2,
+        y: e.clientY - window.innerHeight / 2,
+      }
+    }
+
+    let t = 0
+    let lastTime = 0
+
+    function draw(time: number = 0) {
+      animId = requestAnimationFrame(draw)
+      // Cap to ~30fps — halves paint work on slow devices
+      if (time - lastTime < 33) return
+      lastTime = time
+      if (!canvas || !ctx) return
+      const W = canvas.width  / dpr
+      const H = canvas.height / dpr
+      const cx = W / 2 + mouseRef.current.x * 0.022
+      const cy = H / 2 + mouseRef.current.y * 0.018
+
+      ctx.clearRect(0, 0, W, H)
+      t += 1
+
+      // Ring back halves — dim (far side of each orbit)
+      for (const ring of rings) {
+        const ry = Math.max(ring.r * Math.cos(ring.tilt), 0.5)
+        ctx.save()
+        ctx.globalAlpha = 0.14
+        ctx.strokeStyle = ring.color
+        ctx.lineWidth   = ring.width
+        ctx.beginPath()
+        ctx.ellipse(cx, cy, ring.r, ry, ring.axial, Math.PI, Math.PI * 2)
+        ctx.stroke()
+        ctx.restore()
+      }
+
+      // Collect all dots across rings, then depth-sort
+      type Dot = {
+        sx: number; sy: number; lz: number
+        color: string; scale: number; alpha: number
+      }
+      const dots: Dot[] = []
+
+      for (let ri = 0; ri < rings.length; ri++) {
+        const ring = rings[ri]
+        for (let d = 0; d < ring.dots; d++) {
+          const theta = t * ring.speed + (d * Math.PI * 2) / ring.dots
+          // 3-D position in ring's local frame
+          const lx =  ring.r * Math.cos(theta)
+          const ly =  ring.r * Math.sin(theta) * Math.cos(ring.tilt)
+          const lz =  ring.r * Math.sin(theta) * Math.sin(ring.tilt)
+          // Axial rotation → screen coords
+          const sx = cx + lx * Math.cos(ring.axial) - ly * Math.sin(ring.axial)
+          const sy = cy + lx * Math.sin(ring.axial) + ly * Math.cos(ring.axial)
+          // Depth [-1 far, +1 near]
+          const maxZ   = ring.r * Math.sin(ring.tilt)
+          const depthN = maxZ > 0.001 ? lz / maxZ : 0
+          const t01    = (depthN + 1) / 2
+          dots.push({
+            sx, sy, lz,
+            color: dotPalette[(d + ri) % dotPalette.length],
+            scale: 0.55 + 0.85 * t01,
+            alpha: 0.28 + 0.72 * t01,
+          })
+        }
+      }
+
+      dots.sort((a, b) => a.lz - b.lz)
+
+      // Ring front halves — bright (near side)
+      for (const ring of rings) {
+        const ry = Math.max(ring.r * Math.cos(ring.tilt), 0.5)
+        ctx.save()
+        ctx.globalAlpha = 0.55
+        ctx.strokeStyle = ring.color
+        ctx.lineWidth   = ring.width
+        ctx.beginPath()
+        ctx.ellipse(cx, cy, ring.r, ry, ring.axial, 0, Math.PI)
+        ctx.stroke()
+        ctx.restore()
+      }
+
+      // Depth-sorted dots
+      for (const dot of dots) {
+        const dr = 3.5 * dot.scale
+        const grad = ctx.createRadialGradient(dot.sx, dot.sy, 0, dot.sx, dot.sy, dr * 3.5)
+        grad.addColorStop(0, dot.color + "50")
+        grad.addColorStop(1, dot.color + "00")
+        ctx.save()
+        ctx.globalAlpha = dot.alpha * 0.75
+        ctx.beginPath()
+        ctx.arc(dot.sx, dot.sy, dr * 3.5, 0, Math.PI * 2)
+        ctx.fillStyle = grad
+        ctx.fill()
+        ctx.restore()
+
+        ctx.save()
+        ctx.globalAlpha = dot.alpha
+        ctx.beginPath()
+        ctx.arc(dot.sx, dot.sy, dr, 0, Math.PI * 2)
+        ctx.fillStyle = dot.color
+        ctx.fill()
+        ctx.restore()
+      }
+
+      // Pulsing central sun
+      const pulse = 1 + 0.12 * Math.sin(t * 0.021)
+
+      const coronaR = 50 * pulse
+      const corona  = ctx.createRadialGradient(cx, cy, 0, cx, cy, coronaR)
+      corona.addColorStop(0,    "rgba(233,165,46,0.24)")
+      corona.addColorStop(0.35, "rgba(233,165,46,0.10)")
+      corona.addColorStop(1,    "rgba(233,165,46,0)")
+      ctx.beginPath()
+      ctx.arc(cx, cy, coronaR, 0, Math.PI * 2)
+      ctx.fillStyle = corona
+      ctx.fill()
+
+      for (let i = 0; i < 8; i++) {
+        const a  = t * 0.003 + (i * Math.PI * 2) / 8
+        const r1 = 7   * pulse
+        const r2 = (16 + 9 * Math.sin(t * 0.018 + i * 1.2)) * pulse
+        const al = 0.10 + 0.08 * Math.sin(t * 0.014 + i * 0.9)
+        ctx.beginPath()
+        ctx.moveTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1)
+        ctx.lineTo(cx + Math.cos(a) * r2, cy + Math.sin(a) * r2)
+        ctx.strokeStyle = `rgba(233,165,46,${al.toFixed(3)})`
+        ctx.lineWidth   = 1
+        ctx.stroke()
+      }
+
+      const innerR = 17 * pulse
+      const inner  = ctx.createRadialGradient(cx, cy, 0, cx, cy, innerR)
+      inner.addColorStop(0,   "rgba(255,225,100,0.95)")
+      inner.addColorStop(0.4, "rgba(233,165,46,0.50)")
+      inner.addColorStop(1,   "rgba(233,165,46,0)")
+      ctx.beginPath()
+      ctx.arc(cx, cy, innerR, 0, Math.PI * 2)
+      ctx.fillStyle = inner
+      ctx.fill()
+
+      ctx.beginPath()
+      ctx.arc(cx, cy, 4.5 * pulse, 0, Math.PI * 2)
+      ctx.fillStyle = "#FFF0A0"
+      ctx.fill()
+
+    }
+
+    // Pause animation when tab is hidden — prevents Lighthouse from accumulating
+    // 100s of main-thread rendering time during background audits
+    function onVisibilityChange() {
+      if (document.hidden) {
+        cancelAnimationFrame(animId)
+      } else {
+        lastTime = 0
+        animId = requestAnimationFrame(draw)
+      }
+    }
+
+    resize()
+    animId = requestAnimationFrame(draw)
+    window.addEventListener("resize", resize)
+    window.addEventListener("mousemove", onMouseMove)
+    document.addEventListener("visibilitychange", onVisibilityChange)
+    return () => {
+      cancelAnimationFrame(animId)
+      window.removeEventListener("resize", resize)
+      window.removeEventListener("mousemove", onMouseMove)
+      document.removeEventListener("visibilitychange", onVisibilityChange)
+    }
+  }, [])
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="pointer-events-none absolute inset-0 h-full w-full"
+      aria-hidden="true"
+    />
+  )
+}
+
+// ── Navbar ────────────────────────────────────────────────────────────────────
+
+const navLinks = [
+  { label: "Vision",       href: "#vision"      },
+  { label: "How It Works", href: "#how-it-works" },
+  { label: "The Protocol", href: "#principles"   },
+  { label: "About",        href: "/about"        },
+]
+
+function LandingNavbar({
+  isAuthenticated,
+  onSignIn,
+}: {
+  isAuthenticated: boolean
+  onSignIn: () => void
+}) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <nav className="fixed top-0 right-0 left-0 z-50 border-b border-cream/[0.08] bg-tea-dark/90 backdrop-blur-xl">
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5 lg:px-8">
+        <Link href="/" className="flex items-center gap-2.5">
+          <span className="font-serif text-xl font-bold text-cream">UjamaaDAO</span>
+          <span className="hidden rounded-full bg-amber/15 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[1.5px] text-amber-bright sm:inline-block">
+            protocol
+          </span>
+        </Link>
+
+        <div className="hidden items-center gap-8 md:flex">
+          {navLinks.map((link) => (
+            <a
+              key={link.href}
+              href={link.href}
+              className="text-[13px] font-medium text-cream/60 transition-colors hover:text-cream"
+            >
+              {link.label}
+            </a>
+          ))}
+        </div>
+
+        <div className="hidden items-center gap-4 md:flex">
+          {isAuthenticated ? (
+            <Link
+              href="/dashboard"
+              className="rounded-full bg-amber px-5 py-2 text-[13px] font-bold text-tea-dark transition-all hover:bg-amber-bright hover:scale-[1.03] active:scale-[0.97]"
+            >
+              Dashboard
+            </Link>
+          ) : (
+            <>
+              <button
+                onClick={onSignIn}
+                className="text-[13px] font-medium text-cream/70 transition-colors hover:text-cream"
+              >
+                Sign In
+              </button>
+              <Link
+                href="/auth/register"
+                className="rounded-full bg-amber px-5 py-2 text-[13px] font-bold text-tea-dark transition-all hover:bg-amber-bright hover:scale-[1.03] active:scale-[0.97]"
+              >
+                Get Started
+              </Link>
+            </>
+          )}
+        </div>
+
+        <button
+          className="flex h-10 w-10 items-center justify-center rounded-lg text-cream/70 transition-colors hover:text-cream md:hidden"
+          onClick={() => setOpen(!open)}
+          aria-label={open ? "Close menu" : "Open menu"}
+        >
+          {open ? <X size={20} /> : <Menu size={20} />}
+        </button>
+      </div>
+
+      <div
+        className={cn(
+          "overflow-hidden border-t border-cream/[0.06] bg-tea-dark/95 backdrop-blur-xl transition-all duration-300 md:hidden",
+          open ? "max-h-80 opacity-100" : "max-h-0 opacity-0"
+        )}
+      >
+        <div className="flex flex-col gap-1 px-5 py-4">
+          {navLinks.map((link) => (
+            <a
+              key={link.href}
+              href={link.href}
+              className="rounded-lg px-3 py-2.5 text-sm font-medium text-cream/60 transition-colors hover:text-cream"
+              onClick={() => setOpen(false)}
+            >
+              {link.label}
+            </a>
+          ))}
+          <div className="mt-3 flex flex-col gap-2 border-t border-cream/[0.08] pt-4">
             {isAuthenticated ? (
-              <Link href="/dashboard">
-                <Button
-                  size="lg"
-                  className="bg-white text-orange-600 hover:bg-orange-50 px-8 py-3 text-lg font-semibold"
-                >
-                  Go to Dashboard
-                  <ArrowRight className="ml-2 h-5 w-5" />
-                </Button>
+              <Link
+                href="/dashboard"
+                className="rounded-full bg-amber px-4 py-2.5 text-center text-sm font-bold text-tea-dark"
+                onClick={() => setOpen(false)}
+              >
+                Dashboard
               </Link>
             ) : (
               <>
-                <ConnectWallet />
-                <Link href="/about">
-                  <Button
-                    variant="outline"
-                    size="lg"
-                    className="border-white text-white hover:bg-white hover:text-orange-600 px-8 py-3 text-lg"
-                  >
-                    Read More
-                    <ChevronRight className="ml-2 h-5 w-5" />
-                  </Button>
+                <Link
+                  href="/auth/register"
+                  className="rounded-full bg-amber px-4 py-2.5 text-center text-sm font-bold text-tea-dark"
+                  onClick={() => setOpen(false)}
+                >
+                  Get Started
                 </Link>
+                <button
+                  onClick={() => { onSignIn(); setOpen(false) }}
+                  className="rounded-full border border-cream/20 px-4 py-2.5 text-center text-sm font-medium text-cream/80 hover:text-cream"
+                >
+                  Sign In
+                </button>
               </>
             )}
           </div>
+        </div>
+      </div>
+    </nav>
+  )
+}
 
-          <div className="mt-12 text-center">
-            <p className="text-orange-100 text-sm">"Unity is strength, division is weakness" - African Proverb</p>
+// ── Hero section ──────────────────────────────────────────────────────────────
+
+function HeroSection({
+  isAuthenticated,
+  onSignIn,
+}: {
+  isAuthenticated: boolean
+  onSignIn: () => void
+}) {
+  return (
+    <section className="relative flex min-h-[100dvh] flex-col overflow-hidden bg-tea-dark">
+      <div
+        className="pointer-events-none absolute inset-0"
+        aria-hidden="true"
+        style={{
+          backgroundImage:
+            "linear-gradient(rgba(247,242,232,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(247,242,232,0.03) 1px, transparent 1px)",
+          backgroundSize: "60px 60px",
+        }}
+      />
+
+      <OrbitalSystem />
+
+      <div
+        className="pointer-events-none absolute inset-0"
+        aria-hidden="true"
+        style={{
+          background:
+            "radial-gradient(ellipse 55% 55% at 50% 50%, rgba(212,145,30,0.07) 0%, transparent 70%)",
+        }}
+      />
+
+      <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-5 pt-28 pb-20 lg:px-8">
+        <div className="mb-8 inline-flex items-center gap-3 rounded-full border border-amber/30 bg-amber/10 px-5 py-2">
+          <div className="h-2 w-2 animate-pulse rounded-full bg-amber-bright" />
+          <span className="text-xs font-bold uppercase tracking-[2.5px] text-amber-bright">
+            {"The People's Protocol"}
+          </span>
+        </div>
+
+        <h1 className="max-w-5xl text-center font-serif text-[clamp(2.8rem,8vw,7rem)] font-bold leading-[0.92] tracking-tight text-cream">
+          Cooperative{" "}
+          <span className="relative inline-block">
+            <span className="relative z-10 text-amber-bright">Ownership</span>
+            <span
+              className="absolute -bottom-2 left-0 h-3 w-full rounded-sm"
+              style={{
+                background: "linear-gradient(to right, rgba(233,165,46,0.35), rgba(56,160,99,0.20))",
+              }}
+              aria-hidden="true"
+            />
+          </span>
+          <br />
+          <span className="text-cream">for Everyone</span>
+        </h1>
+
+        <p className="mt-8 max-w-xl text-center text-lg leading-relaxed text-cream/65 lg:text-xl">
+          African communities have always built together — the chama, the harambee, the sacco.
+          UjamaaDAO is the infrastructure those traditions always deserved:
+          transparent, programmable, and owned by the community itself.
+        </p>
+
+        <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row">
+          {isAuthenticated ? (
+            <Link
+              href="/dashboard"
+              className="group relative inline-flex h-12 items-center gap-2.5 overflow-hidden rounded-full bg-amber px-8 text-sm font-bold text-tea-dark shadow-[0_0_20px_rgba(212,145,30,0.30)] transition-all hover:bg-amber-bright hover:shadow-[0_0_32px_rgba(233,165,46,0.40)] hover:scale-[1.03] active:scale-[0.98]"
+            >
+              <span className="relative z-10">Go to Dashboard</span>
+              <svg className="relative z-10 h-4 w-4 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+              </svg>
+            </Link>
+          ) : (
+            <>
+              <Link
+                href="/auth/register"
+                className="group relative inline-flex h-12 items-center gap-2.5 overflow-hidden rounded-full bg-amber px-8 text-sm font-bold text-tea-dark shadow-[0_0_20px_rgba(212,145,30,0.30)] transition-all hover:bg-amber-bright hover:shadow-[0_0_32px_rgba(233,165,46,0.40)] hover:scale-[1.03] active:scale-[0.98]"
+              >
+                <span className="relative z-10">Get Started</span>
+                <svg className="relative z-10 h-4 w-4 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+              </Link>
+              <button
+                onClick={onSignIn}
+                className="inline-flex h-12 items-center gap-2 rounded-full border border-cream/20 bg-cream/5 px-8 text-sm font-semibold text-cream/80 backdrop-blur-sm transition-all hover:border-cream/40 hover:bg-cream/10 hover:text-cream"
+              >
+                Sign In
+              </button>
+            </>
+          )}
+        </div>
+
+        <div className="mt-16 flex flex-wrap items-center justify-center gap-8 sm:gap-14">
+          {[
+            { value: "47",     label: "Communities Active", color: "#E9A52E" },
+            { value: "12.4M",  label: "KES Pooled",         color: "#38A063" },
+            { value: "2,400+", label: "Decisions Made",     color: "#C43D28" },
+          ].map((stat) => (
+            <div key={stat.label} className="flex flex-col items-center gap-1">
+              <span className="font-mono text-2xl font-bold tabular-nums" style={{ color: stat.color }}>
+                {stat.value}
+              </span>
+              <span className="text-[11px] font-medium uppercase tracking-[1.5px] text-cream/40">
+                {stat.label}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Marquee strip — all 7 Nguzo Saba */}
+      <div className="relative z-10 overflow-hidden border-t border-cream/[0.08] py-4" aria-hidden="true">
+        <div
+          className="flex w-max gap-16"
+          style={{ animation: "marquee 40s linear infinite" }}
+        >
+          {[...NGUZO_SABA, ...NGUZO_SABA].map((word, i) => (
+            <span key={i} className="whitespace-nowrap font-serif text-sm italic text-cream/20">
+              {word}
+            </span>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ── Vision / Philosophy section ───────────────────────────────────────────────
+
+function VisionSection() {
+  return (
+    <section
+      id="vision"
+      className="relative overflow-hidden bg-tea-dark py-28 lg:py-36"
+    >
+      {/* Left accent line */}
+      <div
+        className="pointer-events-none absolute top-0 bottom-0 left-0 w-px"
+        aria-hidden="true"
+        style={{
+          background: "linear-gradient(to bottom, transparent, rgba(212,145,30,0.30), rgba(56,160,99,0.18), transparent)",
+        }}
+      />
+
+      <div className="mx-auto max-w-6xl px-5 lg:px-8">
+
+        {/* Opening statement */}
+        <div className="max-w-3xl">
+          <span className="text-[11px] font-semibold uppercase tracking-[3px] text-amber">
+            The Vision
+          </span>
+          <h2 className="mt-5 font-serif text-[clamp(2rem,5vw,3.75rem)] font-bold leading-[1.05] text-cream">
+            Africa has always known
+            <br />
+            how to build{" "}
+            <span className="text-amber-bright">together</span>
+          </h2>
+          <p className="mt-6 text-lg leading-relaxed text-cream/55">
+            The chama, the harambee, the rotating savings circle, the clan cooperative —
+            collective ownership is not a new idea on this continent.
+            It is the oldest idea. Communities have pooled resources,
+            shared risk, and governed through consensus for centuries.
+          </p>
+          <p className="mt-4 text-lg leading-relaxed text-cream/55">
+            What has been missing is infrastructure. Transparent ledgers. Programmable rules.
+            Permanent records. A way for communities to hold funds, make decisions,
+            and build wealth without trusting a single person to do the right thing.
+          </p>
+          <p className="mt-4 text-lg leading-relaxed text-cream/55">
+            That is what UjamaaDAO is. Not DeFi. Not crypto speculation.
+            Cooperative economics — the practice of building enterprises together for
+            the collective good — finally given the infrastructure it deserves.
+          </p>
+        </div>
+
+        {/* Pull-quote — Marcus Garvey */}
+        <div className="mt-16 border-l-2 border-amber/40 pl-8 lg:pl-12">
+          <blockquote className="font-serif text-2xl font-medium italic leading-relaxed text-cream/80 lg:text-3xl">
+            &ldquo;A people without the knowledge of their past history, origin and culture is like a tree without roots.&rdquo;
+          </blockquote>
+          <p className="mt-5 text-sm font-medium text-amber/70">— Marcus Garvey</p>
+        </div>
+
+        {/* Three philosophy pillars */}
+        <div
+          className="mt-12 grid gap-px md:grid-cols-3"
+          style={{ background: "rgba(247,242,232,0.05)" }}
+        >
+          {[
+            {
+              icon: Ban,
+              heading: "Not DeFi",
+              body: "Decentralised finance optimises for yield and speculation. We optimise for community utility. Every mechanism is designed for people who live and work together, not traders who never meet.",
+              color: "#C8851A",
+            },
+            {
+              icon: Users,
+              heading: "Not Charity",
+              body: "This is not aid. It is economic self-determination. Members pool real money, make real decisions, and build real assets. Wealth stays in the community because the community owns the protocol.",
+              color: "#2E7D4F",
+            },
+            {
+              icon: Globe,
+              heading: "Not Governance Theater",
+              body: "Every vote executes. Every proposal that passes moves funds. Accountability is not a value statement — it is a smart contract. The ledger is public. The rules are code.",
+              color: "#A83220",
+            },
+          ].map((pillar) => (
+            <div
+              key={pillar.heading}
+              className="flex flex-col gap-4 bg-tea-dark/80 p-8 lg:p-10"
+            >
+              <div
+                className="flex h-11 w-11 items-center justify-center rounded-xl"
+                style={{ backgroundColor: `${pillar.color}14`, color: pillar.color }}
+              >
+                <pillar.icon size={22} strokeWidth={1.5} />
+              </div>
+              <h3 className="font-serif text-2xl font-bold text-cream">{pillar.heading}</h3>
+              <p className="text-sm leading-relaxed text-cream/45">{pillar.body}</p>
+            </div>
+          ))}
+        </div>
+
+      </div>
+    </section>
+  )
+}
+
+// ── How It Works ──────────────────────────────────────────────────────────────
+
+const steps = [
+  {
+    num: "01",
+    icon: ShieldCheck,
+    title: "Verify",
+    subtitle: "Community-vouched identity",
+    description:
+      "Register with your phone number and community details. Two existing members vouch for you — replacing bureaucratic KYC with social trust. You receive a Participation Rights token, soulbound to your identity, that proves your stake in the community.",
+    color: "#C8851A",
+  },
+  {
+    num: "02",
+    icon: TrendingUp,
+    title: "Contribute",
+    subtitle: "Build your onchain record",
+    description:
+      "Fund a community project. Offer your skills on the marketplace. Mentor another member. Every contribution earns Impact Points — a permanent, tamper-proof onchain record of what you have built. Your reputation compounds, year after year.",
+    color: "#2E7D4F",
+  },
+  {
+    num: "03",
+    icon: Vote,
+    title: "Govern",
+    subtitle: "Real decisions, real consequences",
+    description:
+      "Raise a spending proposal. Debate with your community. Vote using your Participation Rights. Every vote that passes executes. Funds release. Work begins. No committee discretion, no chairperson veto — the community decides, the contract acts.",
+    color: "#A83220",
+  },
+]
+
+function HowItWorksSection() {
+  return (
+    <section
+      id="how-it-works"
+      className="relative overflow-hidden bg-cream py-24 lg:py-32"
+    >
+      <div
+        className="pointer-events-none absolute top-0 right-0 left-0 h-px"
+        aria-hidden="true"
+        style={{
+          background: "linear-gradient(to right, transparent, rgba(200,133,26,0.4), rgba(46,125,79,0.25), transparent)",
+        }}
+      />
+
+      <div className="mx-auto max-w-6xl px-5 lg:px-8">
+        <div className="max-w-xl">
+          <span className="text-[11px] font-semibold uppercase tracking-[3px] text-amber">
+            How It Works
+          </span>
+          <h2 className="mt-4 font-serif text-4xl font-bold text-chai md:text-5xl">
+            From member to
+            <br />
+            co-owner
+          </h2>
+          <p className="mt-4 text-base text-chai/50">
+            Three steps that transform a community into a self-governing, collectively owned economic institution.
+          </p>
+        </div>
+
+        <div className="relative mt-20">
+          <div
+            className="absolute top-0 bottom-0 left-8 hidden w-px md:block"
+            aria-hidden="true"
+            style={{
+              background: "linear-gradient(to bottom, rgba(200,133,26,0.35), rgba(46,125,79,0.25), rgba(168,50,32,0.20), transparent)",
+            }}
+          />
+
+          <div className="flex flex-col gap-16 md:gap-20">
+            {steps.map((step) => (
+              <div
+                key={step.num}
+                className="group relative flex flex-col gap-6 md:flex-row md:items-start md:gap-16"
+              >
+                <div className="relative flex shrink-0 items-center gap-4 md:w-16 md:flex-col md:items-center md:gap-2">
+                  <div
+                    className="hidden h-3 w-3 rounded-full md:block"
+                    style={{ backgroundColor: step.color, boxShadow: `0 0 12px ${step.color}40` }}
+                  />
+                  <span className="font-mono text-sm font-bold md:text-xs" style={{ color: step.color }}>
+                    {step.num}
+                  </span>
+                </div>
+
+                <div className="flex-1 border-l border-chai/[0.08] pl-6 md:border-l-0 md:border-t md:border-chai/[0.06] md:pt-6 md:pl-0">
+                  <div className="flex items-start gap-4">
+                    <div
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+                      style={{ backgroundColor: `${step.color}12`, color: step.color }}
+                    >
+                      <step.icon size={22} strokeWidth={1.5} />
+                    </div>
+                    <div>
+                      <h3 className="font-serif text-2xl font-bold text-chai md:text-3xl">{step.title}</h3>
+                      <p className="mt-0.5 text-sm font-medium text-warm-gray">{step.subtitle}</p>
+                    </div>
+                  </div>
+                  <p className="mt-4 max-w-md text-base leading-relaxed text-chai/50">
+                    {step.description}
+                  </p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
-      </section>
+      </div>
+    </section>
+  )
+}
+
+// ── See It In Action (proposal walkthrough) ───────────────────────────────────
+//
+// Scrollytelling ported from the draft-v9 landing mockup: as the reader scrolls
+// the beats on the left, the community register on the right fills itself in,
+// row by row, and seals at the end. Two variants — a project and a policy —
+// share one scroll mechanic (mirrors the PROJECT vs POLICY proposal kinds).
+
+type StoryBeat = { n: string; label: string; title: string; body: string; who?: string }
+type ProposalStory = { beats: StoryBeat[]; rows: string[] }
+
+const PROPOSAL_STORIES: Record<"project" | "policy", ProposalStory> = {
+  project: {
+    beats: [
+      { n: "01", label: "Propose", title: "One neighbour names who needs a hand.", body: "On her way to work, Wanjiru passes the children's home that's run low on food and books. She proposes the estate chips in — in two taps, in her own words.", who: "…anyone can start it." },
+      { n: "02", label: "Decide", title: "The community votes — and the vote is binding.", body: "Neighbours talk it over and decide together. 39 verified members vote yes. No chairman's veto, no committee discretion." },
+      { n: "03", label: "Fund", title: "Everyone chips in — by M-Pesa.", body: "KES 48,000 pooled into a treasury no single person controls. Real money on rails you already trust." },
+      { n: "04", label: "Deliver", title: "The gifts are bought and handed over.", body: "Food, mattresses and books — bought together, delivered, and checked by the neighbours who came along." },
+      { n: "05", label: "Sealed", title: "The whole record seals — and can't be rewritten.", body: "Every shilling and every item is on a record no one can quietly change — including us.", who: "…and no line can be erased." },
+    ],
+    rows: ["Children's home support proposed", "39 neighbours voted · binding", "KES 48,000 pooled · M-Pesa", "Food, mattresses, books delivered", "Record sealed — on-chain"],
+  },
+  policy: {
+    beats: [
+      { n: "01", label: "Propose", title: "A member proposes how Ujamaa itself should run.", body: "Wanjiru proposes a rule — every funded project must post its receipts within 30 days — in her own words. No fee, no gatekeeper.", who: "…anyone can shape the rules." },
+      { n: "02", label: "Confirm", title: "Members vote — and the rule is binding.", body: "72 verified members agree it should be the standard. A real decision about how Ujamaa works — not a suggestion that fades." },
+      { n: "03", label: "Record", title: "It goes on the books — a rule, not a project.", body: "Logged as official UjamaaDAO governance everyone can see. No money moves; this is simply how we agree to run things." },
+      { n: "04", label: "Apply", title: "The rule takes effect — for every project after.", body: "From now on the register won't seal a project until its receipts are posted. The change itself is recorded too." },
+      { n: "05", label: "Sealed", title: "The rule seals — and binds us too.", body: "It sits on a record no one can quietly change — including the UjamaaDAO team. We're governed by it as well.", who: "…the makers are bound too." },
+    ],
+    rows: ["Rule proposed — projects must post receipts", "72 members voted · binding", "Logged — UjamaaDAO governance", "In effect for every project after", "Rule sealed — on-chain"],
+  },
+}
+
+const PROPOSAL_STORY_CSS = `
+.ps-book{background:linear-gradient(160deg,#FBF6EC,#F1E7D6)}
+.ps-ok{transition:transform .4s cubic-bezier(.34,1.56,.64,1),background-color .4s,color .4s}
+.ps-ok-on{animation:psPop .5s cubic-bezier(.34,1.56,.64,1)}
+@keyframes psPop{0%{transform:scale(.4)}60%{transform:scale(1.15)}100%{transform:scale(1)}}
+.ps-stamp{display:inline-flex;flex-direction:column;align-items:center;gap:1px;padding:.45rem .8rem;border:2px solid rgba(196,61,40,.55);border-radius:.55rem;color:#C43D28;font-weight:800;font-size:.78rem;letter-spacing:2px;line-height:1;transform:rotate(-6deg) scale(.55);opacity:0;transition:opacity .5s ease,transform .5s cubic-bezier(.34,1.56,.64,1)}
+.ps-stamp small{font-size:.5rem;letter-spacing:.4px;font-weight:600;opacity:.7}
+.ps-stamp-on{opacity:1;transform:rotate(-6deg) scale(1)}
+@media (prefers-reduced-motion: reduce){.ps-ok,.ps-ok-on,.ps-stamp{animation:none!important;transition:none!important}}
+`
+
+function ProposalStorySection() {
+  const [storyKey, setStoryKey] = useState<"project" | "policy">("project")
+  const [active, setActive] = useState(0)
+  const beatRefs = useRef<(HTMLDivElement | null)[]>([])
+
+  const story = PROPOSAL_STORIES[storyKey]
+  const lastIndex = story.beats.length - 1
+
+  useEffect(() => {
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    if (reduce || !("IntersectionObserver" in window)) {
+      setActive(lastIndex)
+      return
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const i = Number((entry.target as HTMLElement).dataset.i)
+            if (!Number.isNaN(i)) setActive(i)
+          }
+        })
+      },
+      { rootMargin: "-45% 0px -45% 0px", threshold: 0 }
+    )
+    beatRefs.current.forEach((el) => el && io.observe(el))
+    return () => io.disconnect()
+  }, [storyKey, lastIndex])
+
+  const sealed = active >= lastIndex
+
+  return (
+    <section id="in-action" className="relative bg-cream py-24 lg:py-32">
+      <div
+        className="pointer-events-none absolute top-0 right-0 left-0 h-px"
+        aria-hidden="true"
+        style={{ background: "linear-gradient(to right, transparent, rgba(212,145,30,0.35), rgba(56,160,99,0.20), transparent)" }}
+      />
+      <style>{PROPOSAL_STORY_CSS}</style>
+
+      <div className="mx-auto max-w-6xl px-5 lg:px-8">
+        <div className="max-w-2xl">
+          <span className="text-[11px] font-semibold uppercase tracking-[3px] text-amber">
+            See It In Action
+          </span>
+          <h2 className="mt-4 font-serif text-4xl font-bold text-chai md:text-5xl">
+            Watch a community
+            <br />
+            act, together
+          </h2>
+          <p className="mt-4 text-base leading-relaxed text-chai/50">
+            Scroll to follow one decision — from a single neighbour&apos;s idea to a sealed,
+            unforgeable record that no one, not even us, can quietly rewrite.
+          </p>
+        </div>
+
+        {/* Story toggle — a project or a policy, same mechanic */}
+        <div
+          className="mt-8 inline-flex rounded-full border border-chai/15 bg-chai/[0.04] p-1"
+          role="tablist"
+          aria-label="Choose an example"
+        >
+          {([["project", "A project · a children's home"], ["policy", "A policy · how Ujamaa runs"]] as const).map(
+            ([key, label]) => (
+              <button
+                key={key}
+                role="tab"
+                aria-selected={storyKey === key}
+                onClick={() => { setStoryKey(key); setActive(0) }}
+                className={cn(
+                  "rounded-full px-4 py-2 text-[12px] font-semibold transition-all sm:text-[13px]",
+                  storyKey === key ? "bg-amber text-tea-dark shadow-sm" : "text-chai/50 hover:text-chai"
+                )}
+              >
+                {label}
+              </button>
+            )
+          )}
+        </div>
+
+        <div className="mt-12 grid gap-8 lg:grid-cols-[1fr_minmax(300px,400px)] lg:gap-16">
+          {/* Register — DOM-first so it sits on top on mobile, on the right on desktop */}
+          <div className="lg:col-start-2 lg:row-start-1">
+            <div className="sticky top-20 lg:top-24">
+              <div className="ps-book rounded-2xl border border-chai/10 p-6 shadow-xl">
+                <div className="flex items-center justify-between border-b border-black/10 pb-3">
+                  <h3 className="font-mono text-[11px] font-bold uppercase tracking-[1.5px] text-tea-dark/70">
+                    Community Register — Kayole
+                  </h3>
+                  <span className="font-mono text-[10px] text-tea-dark/40">no. 001</span>
+                </div>
+
+                <div className="mt-1 divide-y divide-black/[0.06]">
+                  {story.rows.map((row, k) => {
+                    const shown = k <= active
+                    return (
+                      <div
+                        key={k}
+                        className="flex items-center gap-3 py-3 transition-opacity duration-500"
+                        style={{ opacity: shown ? 1 : 0.3 }}
+                      >
+                        <span className="w-5 font-mono text-[11px] text-tea-dark/40">
+                          {String(k + 1).padStart(2, "0")}
+                        </span>
+                        <span className="flex-1 text-[13px] leading-snug text-tea-dark/80">{row}</span>
+                        <span
+                          className={cn(
+                            "ps-ok flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold",
+                            shown && "ps-ok-on"
+                          )}
+                          style={{
+                            backgroundColor: shown ? "#38A063" : "rgba(0,0,0,0.06)",
+                            color: shown ? "#ffffff" : "transparent",
+                          }}
+                        >
+                          ✓
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <div className="mt-4 flex items-center gap-4 border-t border-black/10 pt-4">
+                  <div className={cn("ps-stamp", sealed && "ps-stamp-on")}>
+                    SEALED
+                    <small>ON-CHAIN · CANNOT EDIT</small>
+                  </div>
+                  <p
+                    className="flex-1 text-[11px] leading-snug text-tea-dark/45"
+                    style={{ opacity: sealed ? 1 : 0, transition: "opacity .6s ease" }}
+                  >
+                    Anchored on-chain — the record can&apos;t be changed after the fact, including by us.
+                  </p>
+                </div>
+              </div>
+              <p className="mt-3 pl-1 text-[11px] text-chai/35">
+                * Designed to; activates at public-chain deploy.
+              </p>
+            </div>
+          </div>
+
+          {/* Beats — scroll drives the register */}
+          <div className="lg:col-start-1 lg:row-start-1">
+            {story.beats.map((beat, i) => (
+              <div
+                key={i}
+                data-i={i}
+                ref={(el) => { beatRefs.current[i] = el }}
+                className="flex min-h-[60vh] flex-col justify-center transition-opacity duration-300"
+                style={{ opacity: active === i ? 1 : 0.4 }}
+              >
+                <div className="font-mono text-xs font-bold uppercase tracking-[2px] text-amber">
+                  {beat.n} · {beat.label}
+                </div>
+                <h3 className="mt-3 max-w-md font-serif text-2xl font-bold leading-snug text-chai md:text-3xl">
+                  {beat.title}
+                </h3>
+                <p className="mt-4 max-w-md text-base leading-relaxed text-chai/55">{beat.body}</p>
+                {beat.who && (
+                  <p className="mt-4 font-serif text-sm italic text-amber/80">{beat.who} ✎</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ── Use Cases / Community section ─────────────────────────────────────────────
+
+const showcases = [
+  {
+    icon: Droplets,
+    title: "Fund Community Infrastructure",
+    label: "Community Treasury",
+    description:
+      "Pool contributions from across your community for boreholes, solar grids, clinics, or road repair. Funds release in milestone tranches verified onchain — no upfront trust required, no chairperson holding the account.",
+    metric: "KES 12.4M",
+    metricLabel: "pooled across active communities",
+    accent: "#C8851A",
+    span: "md:col-span-2",
+    photo: "https://images.unsplash.com/photo-1509099836639-18ba1795216d?auto=format&fit=crop&w=900&q=75",
+    photoAlt: "Community gathering around a water source",
+  },
+  {
+    icon: Landmark,
+    title: "Govern Collectively",
+    label: "Direct Democracy",
+    description:
+      "Any verified member can raise a proposal. The community debates and votes. The treasury executes. No middleman. No committee discretion. Every decision is permanent and public.",
+    metric: "2,400+",
+    metricLabel: "proposals passed",
+    accent: "#2E7D4F",
+    span: "md:col-span-1",
+    photo: "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=600&q=75",
+    photoAlt: "Community members in a meeting",
+  },
+  {
+    icon: Wrench,
+    title: "Trade Skills Locally",
+    label: "Skills Marketplace",
+    description:
+      "Connect plumbers, tutors, welders, nurses, and coders within your community. Hire hyperlocal. Keep money circulating. Build the local economy from the inside out.",
+    metric: "860",
+    metricLabel: "skills listed",
+    accent: "#A83220",
+    span: "md:col-span-1",
+    photo: "https://images.unsplash.com/photo-1531685250784-7569952593d2?auto=format&fit=crop&w=600&q=75",
+    photoAlt: "Artisan craftworker at work",
+  },
+]
+
+function UseCaseCard({ item }: { item: (typeof showcases)[number] }) {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <div
+      className={`group relative flex flex-col justify-between overflow-hidden rounded-2xl border transition-all duration-300 ${item.span}`}
+      style={{
+        borderColor: hovered ? `${item.accent}40` : "rgba(247,242,232,0.06)",
+        backgroundColor: "rgba(14,30,20,0.90)",
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {/* Photo header */}
+      <div className="relative h-44 w-full overflow-hidden">
+        <Image
+          src={item.photo}
+          alt={item.photoAlt}
+          fill
+          sizes="(max-width: 768px) 100vw, 50vw"
+          className="object-cover transition-transform duration-700 group-hover:scale-105"
+        />
+        {/* Gradient overlay so text beneath is readable */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background: `linear-gradient(to bottom, rgba(14,30,20,0.25) 0%, rgba(14,30,20,0.85) 100%)`,
+          }}
+        />
+        {/* Label badge on the photo */}
+        <div className="absolute bottom-3 left-4">
+          <span
+            className="rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[1.5px] backdrop-blur-sm"
+            style={{ borderColor: `${item.accent}50`, color: item.accent, background: "rgba(0,0,0,0.35)" }}
+          >
+            {item.label}
+          </span>
+        </div>
+        <div
+          className="absolute bottom-3 right-4 flex h-9 w-9 items-center justify-center rounded-xl backdrop-blur-sm"
+          style={{ backgroundColor: `${item.accent}25`, color: item.accent }}
+        >
+          <item.icon size={18} strokeWidth={1.5} />
+        </div>
+      </div>
+
+      {/* Text body */}
+      <div className="flex flex-col justify-between flex-1 p-6 lg:p-7">
+        <div>
+          <h3 className="font-serif text-xl font-bold text-cream lg:text-2xl">{item.title}</h3>
+          <p className="mt-2.5 text-sm leading-relaxed text-cream/45">{item.description}</p>
+        </div>
+        <div className="mt-6 border-t pt-4" style={{ borderColor: `${item.accent}12` }}>
+          <div className="flex items-baseline gap-2">
+            <span className="font-mono text-2xl font-bold tabular-nums" style={{ color: item.accent }}>
+              {item.metric}
+            </span>
+            <span className="text-xs text-cream/30">{item.metricLabel}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function UseCasesSection() {
+  return (
+    <section
+      id="use-cases"
+      className="relative overflow-hidden bg-tea-green py-24 lg:py-32"
+    >
+      <div
+        className="pointer-events-none absolute top-0 right-0 left-0 h-px"
+        aria-hidden="true"
+        style={{
+          background: "linear-gradient(to right, transparent, rgba(200,133,26,0.3), rgba(46,125,79,0.2), transparent)",
+        }}
+      />
+      <div className="mx-auto max-w-6xl px-5 lg:px-8">
+        <div className="flex flex-col items-end text-right">
+          <span className="text-[11px] font-semibold uppercase tracking-[3px] text-leaf">In Practice</span>
+          <h2 className="mt-4 max-w-lg font-serif text-4xl font-bold text-cream md:text-5xl">
+            What communities
+            <br />
+            are building
+          </h2>
+        </div>
+        <div className="mt-16 grid gap-4 md:grid-cols-3">
+          {showcases.map((item) => (
+            <UseCaseCard key={item.title} item={item} />
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ── History quote break (photo + Nyerere manifesto) ──────────────────────────
+//
+// A visual + quote break after "What communities are building", mirroring the
+// Garvey photo→pull-quote pattern in the Vision section. Photo is grayscaled for
+// the historical B&W feel; TODO swap src for a real independence/Ujamaa-era image
+// in /public/images once sourced.
+
+const HERITAGE_SLIDES = [
+  {
+    img: "/images/nyerere-ujamaa.jpg",
+    alt: "Julius Nyerere, who founded Tanzania on the philosophy of Ujamaa",
+    quote:
+      "Ujamaa means the extended family. It means caring for each other. It means building together. This is not ideology imposed from above. This is what African communities have always done.",
+    cite: "Inspired by Julius Nyerere’s Arusha Declaration, 1967",
+    credit: "Nationaal Archief · CC0",
+  },
+  {
+    img: "/images/maasai-gathering.jpg",
+    alt: "A community gathering under acacia trees in Kajiado County, Kenya",
+    quote:
+      "Umoja ni nguvu, utengano ni udhaifu — unity is strength; division is weakness.",
+    cite: "Swahili proverb",
+    credit: "Photo: Mark Myles Mugambi · CC BY-SA 4.0",
+  },
+  {
+    img: "/images/maasai-walking.jpg",
+    alt: "Community members walking together at a gathering in Kajiado County, Kenya",
+    quote: "If you want to go fast, go alone. If you want to go far, go together.",
+    cite: "African proverb",
+    credit: "Photo: Mark Myles Mugambi · CC BY-SA 4.0",
+  },
+]
+
+function HeritageQuoteSlider() {
+  const [index, setIndex] = useState(0)
+  const [paused, setPaused] = useState(false)
+  const count = HERITAGE_SLIDES.length
+
+  // auto-advance (respects reduced-motion + pauses on hover/focus)
+  useEffect(() => {
+    if (paused) return
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
+    const t = setInterval(() => setIndex((p) => (p + 1) % count), 6500)
+    return () => clearInterval(t)
+  }, [paused, count])
+
+  const go = (delta: number) => setIndex((p) => (p + delta + count) % count)
+  const slide = HERITAGE_SLIDES[index]
+
+  return (
+    <section className="relative bg-tea-dark py-24 lg:py-32">
+      <div
+        className="pointer-events-none absolute top-0 right-0 left-0 h-px"
+        aria-hidden="true"
+        style={{ background: "linear-gradient(to right, transparent, rgba(212,145,30,0.35), rgba(56,160,99,0.20), transparent)" }}
+      />
+      <div
+        className="mx-auto max-w-6xl px-5 lg:px-8"
+        onMouseEnter={() => setPaused(true)}
+        onMouseLeave={() => setPaused(false)}
+        onFocusCapture={() => setPaused(true)}
+        onBlurCapture={() => setPaused(false)}
+      >
+        {/* Photo — crossfading stack */}
+        <div className="relative h-72 w-full overflow-hidden rounded-2xl ring-1 ring-cream/10 md:h-96">
+          {HERITAGE_SLIDES.map((s, k) => (
+            <Image
+              key={s.img}
+              src={s.img}
+              alt={s.alt}
+              fill
+              sizes="(max-width: 768px) 100vw, 1200px"
+              priority={k === 0}
+              className={cn(
+                "object-cover object-center grayscale transition-opacity duration-700",
+                k === index ? "opacity-100" : "opacity-0"
+              )}
+            />
+          ))}
+          <div
+            className="absolute inset-0"
+            aria-hidden="true"
+            style={{ background: "linear-gradient(to top, rgba(10,31,20,0.55), transparent 55%)" }}
+          />
+          <p className="absolute bottom-2 right-3 z-10 text-[10px] text-cream/40">{slide.credit}</p>
+        </div>
+
+        {/* Quote + slider controls */}
+        <div className="mt-10 flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
+          <div className="border-l-2 border-amber/40 pl-8 lg:pl-12 md:max-w-3xl" aria-live="polite">
+            <blockquote className="font-serif text-2xl font-medium italic leading-relaxed text-cream/80 lg:text-3xl">
+              &ldquo;{slide.quote}&rdquo;
+            </blockquote>
+            <p className="mt-5 text-sm font-medium text-amber/70">{slide.cite}</p>
+          </div>
+
+          <div className="flex items-center gap-5 pl-8 md:pl-0">
+            <div className="flex items-center gap-2">
+              {HERITAGE_SLIDES.map((_, k) => (
+                <button
+                  key={k}
+                  onClick={() => setIndex(k)}
+                  aria-label={`Show quote ${k + 1} of ${count}`}
+                  aria-current={k === index}
+                  className="h-2 rounded-full transition-all duration-300"
+                  style={{
+                    width: k === index ? "26px" : "8px",
+                    background: k === index ? "#D4911E" : "rgba(247,242,232,0.25)",
+                  }}
+                />
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => go(-1)}
+                aria-label="Previous quote"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-cream/20 text-cream/70 transition-colors hover:border-cream/40 hover:text-cream"
+              >
+                <ChevronLeft size={18} />
+              </button>
+              <button
+                onClick={() => go(1)}
+                aria-label="Next quote"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-cream/20 text-cream/70 transition-colors hover:border-cream/40 hover:text-cream"
+              >
+                <ChevronRight size={18} />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ── Protocol / Economy section ────────────────────────────────────────────────
+
+const economyPillars = [
+  {
+    icon: Award,
+    title: "Participation Rights",
+    subtitle: "Your voice, not your wallet",
+    description:
+      "PR tokens are soulbound — earned through community verification, never purchased or transferred. Every verified member carries the same governance weight. Rich or poor, your vote counts equally. This is the foundation of equitable governance.",
+    tag: "Soulbound Token",
+    accent: "#C8851A",
+  },
+  {
+    icon: Zap,
+    title: "Impact Points",
+    subtitle: "Contribution leaves a permanent mark",
+    description:
+      "Every shilling contributed, every skill shared, every hour volunteered earns Impact Points. They compound into your onchain reputation — a tamper-proof, public record of what you have built across years and decades. It cannot be faked, bought, or deleted.",
+    tag: "Non-Transferable",
+    accent: "#2E7D4F",
+  },
+  {
+    icon: Coins,
+    title: "Community Treasury",
+    subtitle: "Every shilling, fully accountable",
+    description:
+      "Community funds flow through transparent onchain wallets. No chairperson discretion, no committee gatekeeping, no bank that can freeze your account. Smart contracts hold and release on community vote — and anyone can verify every transaction, anytime.",
+    tag: "Onchain Treasury",
+    accent: "#A83220",
+  },
+]
+
+function EconomyCard({ item }: { item: (typeof economyPillars)[number] }) {
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-chai/[0.08] bg-white/55 p-7 shadow-sm transition-shadow hover:shadow-md">
+      <div
+        className="pointer-events-none absolute top-0 right-0 h-28 w-28 rounded-bl-full opacity-[0.05]"
+        style={{ backgroundColor: item.accent }}
+        aria-hidden="true"
+      />
+      <div
+        className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl"
+        style={{ backgroundColor: `${item.accent}12`, color: item.accent }}
+      >
+        <item.icon size={22} strokeWidth={1.5} />
+      </div>
+      <span
+        className="rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[1.5px]"
+        style={{ borderColor: `${item.accent}30`, color: item.accent }}
+      >
+        {item.tag}
+      </span>
+      <h3 className="mt-4 font-serif text-xl font-bold text-chai">{item.title}</h3>
+      <p className="mt-1 text-[13px] font-medium text-warm-gray">{item.subtitle}</p>
+      <p className="mt-3 text-sm leading-relaxed text-chai/55">{item.description}</p>
+    </div>
+  )
+}
+
+function ProtocolSection() {
+  return (
+    <section
+      id="principles"
+      className="relative overflow-hidden bg-cream py-24 lg:py-32"
+    >
+      <div
+        className="pointer-events-none absolute top-0 right-0 left-0 h-px"
+        aria-hidden="true"
+        style={{
+          background: "linear-gradient(to right, transparent, rgba(168,50,32,0.30), rgba(200,133,26,0.20), transparent)",
+        }}
+      />
+
+      <div className="mx-auto max-w-6xl px-5 lg:px-8">
+        <div className="max-w-2xl">
+          <span className="text-[11px] font-semibold uppercase tracking-[3px] text-amber">
+            The Protocol
+          </span>
+          <h2 className="mt-4 font-serif text-4xl font-bold text-chai md:text-5xl">
+            Built for people,
+            <br />
+            not capital
+          </h2>
+          <p className="mt-5 max-w-lg text-base leading-relaxed text-chai/50">
+            Every mechanism in UjamaaDAO asks the same question: does this serve the community member
+            or the capital holder? When those interests conflict, the community member wins. Every time.
+          </p>
+        </div>
+
+        <div className="mt-16 grid gap-6 md:grid-cols-3">
+          {economyPillars.map((pillar) => (
+            <EconomyCard key={pillar.title} item={pillar} />
+          ))}
+        </div>
+
+        {/* Nguzo Saba strip */}
+        <div className="mt-20 border-t border-chai/[0.06] pt-10">
+          <p className="mb-6 text-[11px] font-semibold uppercase tracking-[3px] text-amber">
+            Nguzo Saba — The Seven Principles
+          </p>
+          <div className="flex flex-wrap gap-x-8 gap-y-4">
+            {[
+              { sw: "Umoja",        en: "Unity"                 },
+              { sw: "Kujitambua", en: "Self-Determination"    },
+              { sw: "Haki",         en: "Justice & Rights"      },
+              { sw: "Ujamaa",       en: "Cooperative Economics" },
+              { sw: "Nia",          en: "Purpose"               },
+              { sw: "Ubunifu",      en: "Creativity"            },
+              { sw: "Imani",        en: "Faith"                 },
+            ].map(({ sw, en }, i) => {
+              const colors = ["#C8851A", "#2E7D4F", "#A83220"]
+              return (
+                <div key={sw} className="flex items-baseline gap-1.5">
+                  <span className="font-serif text-sm font-semibold" style={{ color: colors[i % colors.length] }}>
+                    {sw}
+                  </span>
+                  <span className="text-xs text-chai/30">{en}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ── Footer ────────────────────────────────────────────────────────────────────
+
+const footerLinks = [
+  { label: "Vision",       href: "#vision"        },
+  { label: "How It Works", href: "#how-it-works"  },
+  { label: "The Protocol", href: "#principles"    },
+  { label: "About",        href: "/about"          },
+  { label: "Get Started",  href: "/auth/register" },
+]
+
+function Footer() {
+  return (
+    <footer className="relative overflow-hidden border-t border-cream/[0.04] bg-tea-green">
+      <div
+        className="pointer-events-none absolute bottom-0 left-1/2 -translate-x-1/2 select-none"
+        aria-hidden="true"
+      >
+        <span className="whitespace-nowrap font-serif text-[clamp(6rem,18vw,16rem)] font-bold leading-none text-cream/[0.02]">
+          UjamaaDAO
+        </span>
+      </div>
+
+      <div className="relative z-10 mx-auto max-w-6xl px-5 py-16 lg:px-8 lg:py-20">
+        <div className="flex flex-col gap-12 md:flex-row md:items-start md:justify-between">
+          <div className="max-w-sm">
+            <span className="font-serif text-2xl font-bold text-cream">UjamaaDAO</span>
+            <p className="mt-3 text-sm leading-relaxed text-cream/30">
+              Cooperative economics for the digital age. Built from Africa,
+              for communities that have always known how to build together.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-x-8 gap-y-3">
+            {footerLinks.map((link) => (
+              <Link
+                key={link.label}
+                href={link.href}
+                className="text-sm text-cream/30 transition-colors hover:text-cream"
+              >
+                {link.label}
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-cream/[0.04] pt-6 md:flex-row">
+          <div className="flex flex-wrap gap-3">
+            {NGUZO_SABA.map((principle, i) => {
+              const colors = ["#C8851A", "#2E7D4F", "#A83220"]
+              return (
+                <span
+                  key={principle}
+                  className="text-[11px] font-medium"
+                  style={{ color: `${colors[i % colors.length]}65` }}
+                >
+                  {principle}
+                </span>
+              )
+            })}
+          </div>
+          <p className="text-xs text-cream/20">{new Date().getFullYear()} UjamaaDAO</p>
+        </div>
+      </div>
+    </footer>
+  )
+}
+
+// ── Main export ───────────────────────────────────────────────────────────────
+
+export function LandingPage() {
+  const { isAuthenticated } = useAuth()
+  const [signInOpen, setSignInOpen] = useState(false)
+
+  return (
+    <div className="min-h-screen">
+      <SignInModal open={signInOpen} onClose={() => setSignInOpen(false)} />
+      <LandingNavbar isAuthenticated={isAuthenticated} onSignIn={() => setSignInOpen(true)} />
+      <HeroSection isAuthenticated={isAuthenticated} onSignIn={() => setSignInOpen(true)} />
+      <VisionSection />
+      <HowItWorksSection />
+      <ProposalStorySection />
+      <UseCasesSection />
+      <HeritageQuoteSlider />
+      <ProtocolSection />
+      <Footer />
     </div>
   )
 }

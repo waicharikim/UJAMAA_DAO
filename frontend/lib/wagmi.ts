@@ -1,34 +1,33 @@
-// Mock wagmi configuration for demonstration
-export const config = {
-  chains: [
-    { id: 1, name: "Ethereum" },
-    { id: 11155111, name: "Sepolia" },
-  ],
+import { http, createConfig } from "wagmi"
+import { base, baseSepolia } from "wagmi/chains"
+import { coinbaseWallet } from "wagmi/connectors"
+
+// Active chain is env-selectable so we can flip dev (Base Sepolia) → prod
+// (Base mainnet) without code changes. Set NEXT_PUBLIC_CHAIN=base for mainnet;
+// anything else (or unset) stays on Base Sepolia. The backend paymaster proxy
+// maps the same chainId (8453 / 84532) to the right Pimlico endpoint.
+const ACTIVE_CHAIN = process.env.NEXT_PUBLIC_CHAIN === "base" ? base : baseSepolia
+
+// Coinbase Smart Wallet — passkey-secured self-custody smart account.
+// `preference: "smartWalletOnly"` forces the passkey smart-wallet flow (no
+// browser-extension / EOA path), which is the trustless, mobile-native account
+// we want: the signer is a device passkey, so the platform can never sign for
+// the user. Gasless sponsorship (Pimlico via our backend proxy) is wired at the
+// call site via EIP-5792 capabilities.
+export const wagmiConfig = createConfig({
+  chains: [ACTIVE_CHAIN],
   connectors: [
-    { id: "injected", name: "MetaMask" },
-    { id: "walletConnect", name: "WalletConnect" },
+    coinbaseWallet({
+      appName: "UjamaaDAO",
+      preference: "smartWalletOnly",
+    }),
   ],
-}
-
-// Mock hooks for demonstration
-export const useAccount = () => ({
-  address: "0x1234567890123456789012345678901234567890",
-  isConnected: false,
-})
-
-export const useConnect = () => ({
-  connect: (connector: any) => console.log("Connecting to", connector.name),
-  connectors: config.connectors,
-  isPending: false,
-})
-
-export const useDisconnect = () => ({
-  disconnect: () => console.log("Disconnecting wallet"),
-})
-
-export const useSignMessage = () => ({
-  signMessageAsync: async ({ message }: { message: string }) => {
-    // Mock signature for demonstration
-    return "0xmocksignature1234567890abcdef"
+  transports: {
+    [ACTIVE_CHAIN.id]: http(
+      process.env.NEXT_PUBLIC_BASE_RPC_URL ??
+        ACTIVE_CHAIN.rpcUrls.default.http[0],
+    ),
   },
 })
+
+export { ACTIVE_CHAIN }

@@ -1,230 +1,300 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { Heart, Users, Vote, Coins, Shield, Globe, Award, TreePine, HandHeart, ArrowRight } from "lucide-react"
+import { ArrowLeft, ArrowRight } from "lucide-react"
 
-const values = [
-  {
-    icon: Heart,
-    title: "Ubuntu",
-    description: "I am because we are - the foundation of our community spirit",
-    color: "from-red-500 to-pink-500",
-  },
-  {
-    icon: HandHeart,
-    title: "Harambee",
-    description: "Pulling together for collective progress and mutual support",
-    color: "from-orange-500 to-yellow-500",
-  },
-  {
-    icon: TreePine,
-    title: "Sustainability",
-    description: "Environmental stewardship for sustainable community development",
-    color: "from-green-500 to-emerald-500",
-  },
-]
-
-const features = [
-  {
-    icon: Vote,
-    title: "Decentralized Governance",
-    description: "Transparent, blockchain-based voting system where every voice matters",
-  },
-  {
-    icon: Users,
-    title: "Community Groups",
-    description: "Location-based groups fostering local connections and initiatives",
-  },
-  {
-    icon: Coins,
-    title: "Token Economy",
-    description: "Earn and spend community tokens through meaningful contributions",
-  },
-  {
-    icon: Award,
-    title: "Impact Recognition",
-    description: "Point system that celebrates positive community contributions",
-  },
-  {
-    icon: Shield,
-    title: "Secure & Transparent",
-    description: "Built on blockchain technology ensuring security and transparency",
-  },
-  {
-    icon: Globe,
-    title: "Pan-African Vision",
-    description: "Connecting communities across Africa and beyond",
-  },
-]
+// ── About UjamaaDAO ─────────────────────────────────────────────────────────────
+// This page is about *us*, in *our* context: what UjamaaDAO is, for the Kenyan
+// communities that already run chamas, harambees and welfare groups. Ujamaa the
+// word and Nyerere the source are roots we credit — not the subject. The landing
+// page carries the product story (how it works, tokens, use-cases); this page
+// carries the why.
 
 export default function AboutPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-green-50">
-      <div className="container mx-auto px-4 py-12">
-        {/* Header */}
-        <div className="text-center mb-16">
-          <Badge className="mb-6 bg-gradient-to-r from-orange-500 to-red-500 text-white border-0">
-            🌍 About UJAMAA
-          </Badge>
+    <div className="min-h-screen" style={{ background: "#0A1F14", color: "#F7F2E8" }}>
 
-          <h1 className="text-5xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-orange-600 via-red-600 to-green-600 bg-clip-text text-transparent">
-            UJAMAA DAO
-          </h1>
+      {/* ── Nav back ─────────────────────────────────────────── */}
+      <div className="mx-auto max-w-5xl px-6 pt-8">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 text-sm transition-colors"
+          style={{ color: "rgba(247,242,232,0.45)" }}
+        >
+          <ArrowLeft size={14} />
+          Back to home
+        </Link>
+      </div>
 
-          <p className="text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed">
-            A Decentralized Autonomous Organization that embodies African values of community, cooperation, and
-            collective progress through blockchain technology.
-          </p>
-        </div>
+      {/* ── Hero ─────────────────────────────────────────────── */}
+      <section className="mx-auto max-w-5xl px-6 pt-16 pb-20">
+        <p className="mb-4 text-xs tracking-[0.25em] uppercase" style={{ color: "rgba(212,145,30,0.7)" }}>
+          About UjamaaDAO
+        </p>
 
-        {/* Mission Statement */}
-        <Card className="mb-16 border-0 bg-gradient-to-r from-orange-500 to-red-500 text-white">
-          <CardContent className="p-8 text-center">
-            <h2 className="text-3xl font-bold mb-4">Our Mission</h2>
-            <p className="text-xl leading-relaxed max-w-4xl mx-auto">
-              To create a digital platform that strengthens African communities through transparent governance,
-              collaborative decision-making, and shared economic prosperity, rooted in the timeless African philosophy
-              of Ubuntu and the spirit of Harambee.
+        <h1
+          className="font-serif text-5xl md:text-7xl font-bold leading-tight mb-6"
+          style={{ color: "#F7F2E8" }}
+        >
+          <em>Ujamaa</em> means{" "}
+          <span style={{ color: "#D4911E" }}>familyhood.</span>
+        </h1>
+
+        <p className="max-w-2xl text-lg leading-relaxed" style={{ color: "rgba(247,242,232,0.7)" }}>
+          It&apos;s the name we already give — in the chama, the harambee, the welfare group — to
+          people pooling what they have because they&apos;re answerable to each other. UjamaaDAO
+          gives that instinct the tools it never had: a way for a community to decide together, hold
+          money together, and build together, on a record no one can quietly rewrite.
+        </p>
+      </section>
+
+      {/* ── Amber rule ───────────────────────────────────────── */}
+      <div className="mx-auto max-w-5xl px-6">
+        <div className="h-px" style={{ background: "rgba(212,145,30,0.25)" }} />
+      </div>
+
+      {/* ── You already live this ────────────────────────────── */}
+      <section className="mx-auto max-w-5xl px-6 py-20">
+        <div className="grid lg:grid-cols-2 gap-12 items-start">
+          <div>
+            <p className="mb-3 text-xs tracking-[0.25em] uppercase" style={{ color: "rgba(212,145,30,0.7)" }}>
+              You already live this
             </p>
-          </CardContent>
-        </Card>
-
-        {/* Core Values */}
-        <section className="mb-16">
-          <h2 className="text-4xl font-bold text-center mb-12 text-slate-900">Our Values</h2>
-
-          <div className="grid md:grid-cols-3 gap-8">
-            {values.map((value, index) => {
-              const Icon = value.icon
-              return (
-                <Card
-                  key={index}
-                  className="text-center border-0 bg-white shadow-lg hover:shadow-xl transition-shadow duration-300"
-                >
-                  <CardHeader>
-                    <div
-                      className={`w-16 h-16 rounded-full bg-gradient-to-r ${value.color} flex items-center justify-center mx-auto mb-4`}
-                    >
-                      <Icon className="h-8 w-8 text-white" />
-                    </div>
-                    <CardTitle className="text-2xl font-bold text-slate-900">{value.title}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-slate-600 leading-relaxed">{value.description}</p>
-                  </CardContent>
-                </Card>
-              )
-            })}
+            <h2 className="font-serif text-4xl font-bold mb-6" style={{ color: "#F7F2E8" }}>
+              Cooperation isn&apos;t new here. The tools are.
+            </h2>
+            <div className="space-y-4 text-base leading-relaxed" style={{ color: "rgba(247,242,232,0.65)" }}>
+              <p>
+                Down every road in Kenya there is a group already doing this. The{" "}
+                <em>chama</em> that meets on Saturdays and takes turns lifting each member.
+                The <em>harambee</em> that raises a hospital bill or a school roof in an afternoon.
+                The welfare group that buries its own and celebrates its own. Money pooled, risk
+                shared, decisions made together — because the people are, in the fullest sense of
+                the word, <em>jamaa</em>: family.
+              </p>
+              <p>
+                None of it needed a blockchain to exist. What it has always needed is something
+                harder to come by — a way to keep everyone honest without asking anyone to simply
+                trust that the treasurer wrote the number down right.
+              </p>
+            </div>
           </div>
-        </section>
 
-        {/* What is UJAMAA */}
-        <section className="mb-16">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div>
-              <h2 className="text-4xl font-bold mb-6 text-slate-900">What is UJAMAA?</h2>
-              <div className="space-y-4 text-lg text-slate-600 leading-relaxed">
-                <p>
-                  <strong>UJAMAA</strong> is a Swahili word meaning "familyhood" or "socialism," representing the
-                  African philosophy of collective responsibility and shared prosperity.
+          <div
+            className="rounded-2xl p-8"
+            style={{
+              background: "rgba(247,242,232,0.04)",
+              border: "1px solid rgba(212,145,30,0.22)",
+            }}
+          >
+            <p className="font-mono text-xs tracking-widest uppercase mb-4" style={{ color: "rgba(212,145,30,0.6)" }}>
+              The word
+            </p>
+            <div className="space-y-5">
+              <div>
+                <span className="font-serif text-3xl font-bold" style={{ color: "#D4911E" }}>jamaa</span>
+                <p className="mt-1 text-sm" style={{ color: "rgba(247,242,232,0.55)" }}>
+                  family · kin · the people you answer to
                 </p>
-                <p>
-                  Our DAO (Decentralized Autonomous Organization) brings this concept into the digital age, creating a
-                  platform where African communities can govern themselves transparently, make collective decisions, and
-                  build shared wealth.
+              </div>
+              <div className="h-px" style={{ background: "rgba(247,242,232,0.1)" }} />
+              <div>
+                <span className="font-mono text-sm" style={{ color: "rgba(247,242,232,0.5)" }}>u-</span>
+                <span className="font-serif text-xl" style={{ color: "rgba(247,242,232,0.7)" }}> + jamaa</span>
+                <p className="mt-1 text-sm" style={{ color: "rgba(247,242,232,0.55)" }}>
+                  the prefix that turns a thing into a way of being — &ldquo;-hood&rdquo;
                 </p>
-                <p>
-                  Through blockchain technology, we ensure that every voice is heard, every vote is counted, and every
-                  contribution is recognized and rewarded.
+              </div>
+              <div className="h-px" style={{ background: "rgba(247,242,232,0.1)" }} />
+              <div>
+                <span className="font-serif text-3xl font-bold" style={{ color: "#F7F2E8" }}>ujamaa</span>
+                <p className="mt-1 text-sm" style={{ color: "rgba(247,242,232,0.55)" }}>
+                  familyhood — being one another&apos;s people, and acting like it
                 </p>
               </div>
             </div>
-
-            <Card className="border-0 bg-gradient-to-br from-green-50 to-orange-50">
-              <CardContent className="p-8">
-                <h3 className="text-2xl font-bold mb-4 text-slate-900">Key Principles</h3>
-                <ul className="space-y-3">
-                  {[
-                    "Transparent governance through blockchain",
-                    "Community-driven decision making",
-                    "Equitable distribution of resources",
-                    "Recognition of individual contributions",
-                    "Environmental sustainability",
-                    "Cultural preservation and celebration",
-                  ].map((principle, index) => (
-                    <li key={index} className="flex items-center gap-3">
-                      <div className="w-2 h-2 bg-gradient-to-r from-orange-500 to-red-500 rounded-full" />
-                      <span className="text-slate-700">{principle}</span>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
           </div>
-        </section>
+        </div>
+      </section>
 
-        {/* Features Grid */}
-        <section className="mb-16">
-          <h2 className="text-4xl font-bold text-center mb-12 text-slate-900">Our Features</h2>
+      {/* ── Amber rule ───────────────────────────────────────── */}
+      <div className="mx-auto max-w-5xl px-6">
+        <div className="h-px" style={{ background: "rgba(212,145,30,0.25)" }} />
+      </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {features.map((feature, index) => {
-              const Icon = feature.icon
-              return (
-                <Card key={index} className="border-0 bg-white hover:shadow-lg transition-shadow duration-300">
-                  <CardHeader>
-                    <Icon className="h-8 w-8 text-orange-500 mb-3" />
-                    <CardTitle className="text-xl font-bold text-slate-900">{feature.title}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-slate-600">{feature.description}</p>
-                  </CardContent>
-                </Card>
-              )
-            })}
-          </div>
-        </section>
-
-        {/* How to Join */}
-        <section className="mb-16">
-          <Card className="border-0 bg-gradient-to-br from-orange-500 via-red-500 to-green-500 text-white">
-            <CardContent className="p-12 text-center">
-              <h2 className="text-4xl font-bold mb-6">Join Us</h2>
-              <p className="text-xl mb-8 max-w-2xl mx-auto">
-                Ready to be part of Africa's digital transformation? Connect your wallet and start participating in our
-                community governance today.
+      {/* ── Where the word gets its weight (Nyerere, one beat) ── */}
+      <section className="mx-auto max-w-5xl px-6 py-20">
+        <div className="grid lg:grid-cols-2 gap-12 items-start">
+          <div>
+            <p className="mb-3 text-xs tracking-[0.25em] uppercase" style={{ color: "rgba(212,145,30,0.7)" }}>
+              Where the name comes from
+            </p>
+            <h2 className="font-serif text-4xl font-bold mb-6" style={{ color: "#F7F2E8" }}>
+              A whole country was once built on this word.
+            </h2>
+            <div className="space-y-4 text-base leading-relaxed" style={{ color: "rgba(247,242,232,0.65)" }}>
+              <p>
+                We take the name from Julius Nyerere, who did something bold with an everyday word:
+                he made <em>ujamaa</em> the founding idea of a nation. His argument was that Africa
+                did not need to import socialism or manufacture an enemy class — the model was
+                already here, in the extended family, where you share because the people are yours.
               </p>
+              <p>
+                The state programme that followed was flawed, and often forced. But the idea outlived
+                the policy. We are not reviving a government plan. We are keeping the part that was
+                always true — and building it the way it should have been built: by choice, from the
+                ground up, one community at a time.
+              </p>
+            </div>
+          </div>
 
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Link href="/">
-                  <Button size="lg" className="bg-white text-orange-600 hover:bg-orange-50 px-8 py-3 text-lg">
-                    Get Started
-                    <ArrowRight className="ml-2 h-5 w-5" />
-                  </Button>
-                </Link>
-                <Link href="/dashboard">
-                  <Button
-                    variant="outline"
-                    size="lg"
-                    className="border-white text-white hover:bg-white hover:text-orange-600 px-8 py-3 text-lg"
-                  >
-                    Enter Dashboard
-                  </Button>
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-        </section>
-
-        {/* Footer Quote */}
-        <div className="text-center">
-          <blockquote className="text-2xl font-medium text-slate-600 italic">
-            "Unity is strength, division is weakness"
+          <blockquote
+            className="rounded-2xl p-8"
+            style={{
+              background: "rgba(247,242,232,0.04)",
+              border: "1px solid rgba(212,145,30,0.22)",
+            }}
+          >
+            <p className="font-serif text-xl leading-relaxed mb-6" style={{ color: "rgba(247,242,232,0.85)" }}>
+              &ldquo;The foundation and the objective of African socialism is the extended family.
+              The true African socialist regards all men as his brethren — as members, together,
+              of an ever-extending family.&rdquo;
+            </p>
+            <footer>
+              <span className="text-sm font-medium" style={{ color: "#D4911E" }}>
+                Julius Nyerere
+              </span>
+              <br />
+              <span className="text-xs" style={{ color: "rgba(247,242,232,0.4)" }}>
+                Ujamaa — The Basis of African Socialism, 1962
+              </span>
+            </footer>
           </blockquote>
-          <p className="text-lg text-slate-500 mt-2">African Proverb</p>
+        </div>
+      </section>
+
+      {/* ── Amber rule ───────────────────────────────────────── */}
+      <div className="mx-auto max-w-5xl px-6">
+        <div className="h-px" style={{ background: "rgba(212,145,30,0.25)" }} />
+      </div>
+
+      {/* ── Why UjamaaDAO / why now ──────────────────────────── */}
+      <section className="mx-auto max-w-5xl px-6 py-20">
+        <div className="grid lg:grid-cols-2 gap-12 items-start">
+          <div>
+            <p className="mb-3 text-xs tracking-[0.25em] uppercase" style={{ color: "rgba(212,145,30,0.7)" }}>
+              Why UjamaaDAO
+            </p>
+            <h2 className="font-serif text-4xl font-bold mb-6" style={{ color: "#F7F2E8" }}>
+              Every chama runs on trust — until it doesn&apos;t.
+            </h2>
+            <div className="space-y-4 text-base leading-relaxed" style={{ color: "rgba(247,242,232,0.65)" }}>
+              <p>
+                The oldest weak point in cooperation is not the idea — it&apos;s the custodian. The
+                treasurer holds the cashbox. The chairlady keeps the book. The harambee committee
+                counts the money out of sight. It works right up until it doesn&apos;t: a figure that
+                doesn&apos;t add up, a contribution nobody can prove, a group that quietly falls apart
+                over who was owed what.
+              </p>
+              <p>
+                UjamaaDAO moves the trust off the person and onto the record. The community holds its
+                own funds together, every decision is a binding vote, and the ledger of who gave,
+                who decided, and where it went can&apos;t be edited after the fact — not by a
+                chairman, not by us. The obligations of family, kept by a record that never forgets.
+              </p>
+            </div>
+          </div>
+
+          <div
+            className="rounded-2xl p-8"
+            style={{
+              background: "rgba(56,160,99,0.08)",
+              border: "1px solid rgba(56,160,99,0.2)",
+            }}
+          >
+            <p className="font-mono text-xs tracking-widest uppercase mb-5" style={{ color: "rgba(56,160,99,0.75)" }}>
+              What changes
+            </p>
+            <div className="space-y-5 text-sm leading-relaxed">
+              <div>
+                <p className="font-medium mb-1" style={{ color: "#F7F2E8" }}>The old way — trust the person</p>
+                <p style={{ color: "rgba(247,242,232,0.5)" }}>
+                  The cashbox, the book, the committee. Everyone hopes the custodian does right, and
+                  the group breaks when that hope does.
+                </p>
+              </div>
+              <div className="h-px" style={{ background: "rgba(56,160,99,0.18)" }} />
+              <div>
+                <p className="font-medium mb-1" style={{ color: "#F7F2E8" }}>The new way — trust the record</p>
+                <p style={{ color: "rgba(247,242,232,0.5)" }}>
+                  Funds the community controls together, votes that bind, and a ledger no single
+                  person — including us — can rewrite.
+                </p>
+              </div>
+              <div className="h-px" style={{ background: "rgba(56,160,99,0.18)" }} />
+              <div>
+                <p className="font-medium mb-1" style={{ color: "#F7F2E8" }}>Always — real money, real rails</p>
+                <p style={{ color: "rgba(247,242,232,0.5)" }}>
+                  Contributions move on M-Pesa to accounts the community controls — never
+                  person-to-person, never out of sight.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── CTA ──────────────────────────────────────────────── */}
+      <section className="mx-auto max-w-5xl px-6 pb-24 pt-4">
+        <div
+          className="rounded-3xl p-12 text-center"
+          style={{
+            background: "rgba(56,160,99,0.08)",
+            border: "1px solid rgba(56,160,99,0.2)",
+          }}
+        >
+          <h2 className="font-serif text-4xl font-bold mb-4" style={{ color: "#F7F2E8" }}>
+            Bring the people you already organise with.
+          </h2>
+          <p className="mb-8 max-w-md mx-auto text-base" style={{ color: "rgba(247,242,232,0.55)" }}>
+            You don&apos;t need to be convinced that a community can build together — you already
+            know it. UjamaaDAO just gives your community a record worth trusting.
+          </p>
+
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Link
+              href="/auth/register"
+              className="inline-flex items-center gap-2 rounded-full px-8 py-3 text-sm font-bold transition-all hover:scale-[1.02] active:scale-[0.98]"
+              style={{ background: "#D4911E", color: "#0A1F14" }}
+            >
+              Join the Community
+              <ArrowRight size={16} />
+            </Link>
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2 rounded-full px-8 py-3 text-sm font-bold transition-all hover:bg-cream/10"
+              style={{
+                border: "1px solid rgba(247,242,232,0.25)",
+                color: "rgba(247,242,232,0.75)",
+              }}
+            >
+              Back to Home
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Footer rule ──────────────────────────────────────── */}
+      <div className="mx-auto max-w-5xl px-6 pb-12">
+        <div className="h-px mb-8" style={{ background: "rgba(212,145,30,0.15)" }} />
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <span className="font-serif text-xl font-bold" style={{ color: "rgba(247,242,232,0.25)" }}>
+            UjamaaDAO
+          </span>
+          <span className="text-xs tracking-widest uppercase" style={{ color: "rgba(247,242,232,0.3)" }}>
+            Umoja ni nguvu — unity is strength
+          </span>
         </div>
       </div>
+
     </div>
   )
 }

@@ -1,0 +1,237 @@
+/**
+ * @file src/modules/projects/controllers/project.controller.ts
+ * @description
+ * Project Controller
+ * Version: 2.0 — December 2025
+ */
+
+import { Response } from 'express';
+import { AuthRequest } from '../../../core/types/Ujamaadao.types.js';
+import { sendSuccess, sendCreated } from '../../../core/utils/response.js';
+import { projectService } from '../services/project.service.js';
+import { projectUpdateService } from '../services/project-update.service.js';
+import { ProjectParticipation } from '../types.js';
+
+export class ProjectController {
+  static async listProjects(req: AuthRequest, res: Response) {
+    const { ownerGroupId, ownerUserId, status, limit, offset } =
+      req.query as Record<string, string | undefined>;
+    const result = await projectService.listProjects({
+      ownerGroupId,
+      ownerUserId,
+      status,
+      limit: limit ? parseInt(limit, 10) : undefined,
+      offset: offset ? parseInt(offset, 10) : undefined,
+      viewerId: req.user!.userId,
+    });
+    sendSuccess(res, result);
+  }
+
+  static async getProject(req: AuthRequest, res: Response) {
+    const { projectId } = req.params;
+    const result = await projectService.getProject(projectId);
+    sendSuccess(res, result);
+  }
+
+  static async createFromProposal(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const dto = req.body;
+    const project = await projectService.createFromProposal(userId, dto);
+    sendSuccess(res, project, 'Project created');
+  }
+
+  static async startMilestone(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const dto = req.body;
+    const result = await projectService.startMilestone(userId, dto);
+    sendSuccess(res, result, 'Milestone started');
+  }
+
+  static async submitMilestone(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const dto = req.body;
+    const result = await projectService.submitMilestone(userId, dto);
+    sendSuccess(res, result, 'Milestone submitted');
+  }
+
+  static async verifyMilestone(req: AuthRequest, res: Response) {
+    const verifierId = req.user!.userId;
+    const dto = req.body;
+    const result = await projectService.verifyMilestone(verifierId, dto);
+    sendSuccess(res, result, 'Milestone verified');
+  }
+
+  static async logWork(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const result = await projectService.logWork(userId, req.body);
+    sendSuccess(res, result, 'Work logged successfully', 201);
+  }
+
+  static async verifyWork(req: AuthRequest, res: Response) {
+    const verifierId = req.user!.userId;
+    const result = await projectService.verifyWork(verifierId, req.body);
+    sendSuccess(res, result, 'Work verified');
+  }
+
+  static async listWorkLogs(req: AuthRequest, res: Response) {
+    const { milestoneId } = req.params;
+    const result = await projectService.listWorkLogs(milestoneId);
+    sendSuccess(res, result, 'Work logs retrieved');
+  }
+
+  static async joinProject(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const { projectId } = req.params;
+    const result = await projectService.joinProject(userId, projectId);
+    sendSuccess(res, result, 'Joined project', 201);
+  }
+
+  static async setParticipation(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const { projectId } = req.params;
+    const { scope } = req.body as { scope: ProjectParticipation };
+    const result = await projectService.setParticipationScope(
+      userId,
+      projectId,
+      scope
+    );
+    sendSuccess(res, result, 'Participation scope updated');
+  }
+
+  static async contribute(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const { projectId } = req.params;
+    const result = await projectService.contributeToProject(
+      userId,
+      projectId,
+      req.body
+    );
+    sendSuccess(res, result, 'Contribution recorded', 201);
+  }
+
+  static async createTask(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const result = await projectService.createTask(userId, req.body);
+    sendSuccess(res, result, 'Task created', 201);
+  }
+
+  static async listProjectTasks(req: AuthRequest, res: Response) {
+    const { projectId } = req.params;
+    const { status, skillCategory } = req.query as Record<
+      string,
+      string | undefined
+    >;
+    const result = await projectService.listProjectTasks(projectId, {
+      status,
+      skillCategory,
+    });
+    sendSuccess(res, result);
+  }
+
+  static async getMemberContributions(req: AuthRequest, res: Response) {
+    const { projectId } = req.params;
+    const result = await projectService.getMemberContributions(projectId);
+    sendSuccess(res, result);
+  }
+
+  static async claimTask(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const { taskId } = req.params;
+    const result = await projectService.claimTask(userId, taskId);
+    sendSuccess(res, result, 'Task claimed');
+  }
+
+  static async completeTask(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const { taskId } = req.params;
+    const result = await projectService.completeTask(userId, taskId);
+    sendSuccess(res, result, 'Task completed');
+  }
+
+  // ── QR Work Sessions ──────────────────────────────────────────────────────
+
+  static async createWorkSession(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const result = await projectService.createWorkSession(userId, req.body);
+    sendSuccess(res, result, 'Work session created', 201);
+  }
+
+  static async scanQr(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const { qrSecret } = req.body;
+    const result = await projectService.scanQr(userId, qrSecret);
+    sendSuccess(res, result, 'Checked in successfully');
+  }
+
+  static async attestPresence(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const { sessionId } = req.params;
+    const { targetUserId } = req.body;
+    const result = await projectService.attestPresence(
+      userId,
+      sessionId,
+      targetUserId
+    );
+    sendSuccess(res, result, 'Presence attested', 201);
+  }
+
+  static async closeWorkSession(req: AuthRequest, res: Response) {
+    const { sessionId } = req.params;
+    const result = await projectService.closeWorkSession(sessionId);
+    sendSuccess(res, result, 'Work session closed');
+  }
+
+  static async getWorkSession(req: AuthRequest, res: Response) {
+    const { sessionId } = req.params;
+    const result = await projectService.getWorkSession(sessionId);
+    sendSuccess(res, result);
+  }
+
+  static async createUpdate(req: AuthRequest, res: Response) {
+    const { projectId } = req.params;
+    const { content } = req.body as { content: string };
+    const update = await projectUpdateService.create({
+      projectId,
+      authorId: req.user!.userId,
+      content,
+    });
+    sendCreated(res, update, 'Update posted');
+  }
+
+  static async listUpdates(req: AuthRequest, res: Response) {
+    const { projectId } = req.params;
+    const { cursor, limit } = req.query as { cursor?: string; limit?: string };
+    const result = await projectUpdateService.list({
+      projectId,
+      cursor,
+      limit: limit ? Number(limit) : undefined,
+    });
+    sendSuccess(res, result, 'Updates fetched');
+  }
+
+  static async addMember(req: AuthRequest, res: Response) {
+    const leaderId = req.user!.userId;
+    const { projectId } = req.params;
+    const { userId, role } = req.body as { userId: string; role?: string };
+    const result = await projectService.addMember(leaderId, projectId, {
+      userId,
+      role,
+    });
+    sendCreated(res, result, 'Member added');
+  }
+
+  static async removeMember(req: AuthRequest, res: Response) {
+    const leaderId = req.user!.userId;
+    const { projectId, userId } = req.params;
+    await projectService.removeMember(leaderId, projectId, userId);
+    sendSuccess(res, null, 'Member removed');
+  }
+
+  static async updateMemberRole(req: AuthRequest, res: Response) {
+    const leaderId = req.user!.userId;
+    const { projectId, userId } = req.params;
+    const { role } = req.body as { role: string };
+    await projectService.updateMemberRole(leaderId, projectId, userId, role);
+    sendSuccess(res, null, 'Role updated');
+  }
+}

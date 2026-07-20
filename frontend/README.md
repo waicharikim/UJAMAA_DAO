@@ -1,268 +1,340 @@
-# Web3 Frontend Roadmap - Complete Implementation
+# UjamaaDAO — Frontend
 
-A comprehensive Next.js application demonstrating modern Web3 frontend development with wallet authentication, role-based access control, and group management.
+> **Status: Active development.** Core shell, auth flow, registration, dashboard, profile, and Privy wallet integration are built and functional. Build: 15 routes green.
 
-## 🚀 Features
+---
 
-### ✅ Step 1: Project Setup
-- **Next.js 14** with TypeScript and App Router
-- **Tailwind CSS** for styling
-- **React Query** for data fetching and caching
-- **Wagmi** for wallet integration
-- **ESLint & Prettier** for code quality
+## Quick Start
 
-### ✅ Step 2: Wallet Authentication
-- Connect wallet with multiple providers (MetaMask, WalletConnect)
-- Nonce-based signature authentication
-- JWT token management
-- Secure session handling
-- Protected routes and components
+```bash
+# From repo root — starts everything (backend + frontend + MailHog + DB + Redis)
+cd backend && make dev
 
-### ✅ Step 3: User Registration & Profile
-- Complete user profile management
-- Avatar upload and validation
-- Privacy settings with granular controls
-- Form validation with React Hook Form + Zod
-- Responsive profile editing interface
+# OR run frontend alone (needs backend already running)
+cd frontend
+npm install
+npm run dev
+```
 
-### ✅ Step 4: Role-Based Access Control
-- Dynamic role and permission checking
-- Route protection based on roles/scopes
-- Conditional UI rendering
-- Centralized permission management
-- Admin and user role differentiation
+Frontend runs at **`http://localhost:3000`**
 
-### ✅ Step 5: Notifications System
-- Real-time notification panel
-- Unread count badges
-- Notification preferences management
-- Toast notifications for user feedback
-- Email, SMS, and in-app notification controls
+MailHog (email catcher for magic links) runs at **`http://localhost:8025`**
 
-### ✅ Step 6: Groups Module
-- Groups listing with role badges
-- Group detail pages with member management
-- Role-based group actions (invite, manage)
-- Responsive group cards
-- Member pagination and search
+> **Note:** If the Docker container's node_modules are stale (e.g. after adding a new package), run:
+> `docker exec ujamaa_frontend npm install` then `docker restart ujamaa_frontend`
 
-## 🛠️ Tech Stack
+---
 
-- **Framework**: Next.js 14 with App Router
-- **Language**: TypeScript
-- **Styling**: Tailwind CSS + shadcn/ui
-- **State Management**: React Query + Context API
-- **Wallet Integration**: Wagmi + ethers.js
-- **Form Handling**: React Hook Form + Zod
-- **UI Components**: Radix UI primitives
-- **Icons**: Lucide React
+## Stack
 
-## 📁 Project Structure
+| Technology | Version | Purpose |
+|---|---|---|
+| Next.js | 15 (App Router) | Framework |
+| TypeScript | strict | Language |
+| Tailwind CSS | v3 | Styling |
+| shadcn/ui | latest | Component library |
+| TanStack Query | v5 | Server state / data fetching |
+| Privy | `@privy-io/react-auth` v3.14.1 | Embedded wallets (Base L2) |
+| Lucide React | 0.294 | Icons |
+| Vaul | latest | Mobile drawer (bottom sheet) |
 
-\`\`\`
-src/
-├── app/                    # Next.js App Router pages
-│   ├── groups/[id]/       # Dynamic group pages
-│   ├── layout.tsx         # Root layout
-│   └── page.tsx           # Home page
-├── components/            # Reusable components
-│   ├── auth/              # Authentication components
-│   ├── groups/            # Group-related components
-│   ├── notifications/     # Notification components
-│   ├── ui/                # shadcn/ui components
-│   └── user/              # User profile components
-├── contexts/              # React contexts
-│   ├── auth-context.tsx   # Authentication state
-│   ├── role-context.tsx   # Role management
-│   └── notification-context.tsx
-├── lib/                   # Utilities and configuration
-│   ├── api.ts             # API client
-│   ├── types.ts           # TypeScript types
-│   ├── utils.ts           # Helper functions
-│   └── wagmi.ts           # Wallet configuration
-└── hooks/                 # Custom React hooks
-\`\`\`
+**Fonts:** Inter (sans) + Cormorant Garamond (display/serif) — loaded via `next/font/google`
 
-## 🚀 Getting Started
+---
 
-### Prerequisites
+## Environment Variables
 
-- Node.js 18+ 
-- npm or yarn
-- A Web3 wallet (MetaMask recommended)
+| Variable | Default | Description |
+|---|---|---|
+| `NEXT_PUBLIC_API_URL` | `http://localhost:4000/api/v1` | Backend API base URL |
+| `NEXT_PUBLIC_PRIVY_APP_ID` | — | Privy App ID (App ID only — secret is server-side) |
 
-### Installation
+Add to `frontend/.env.local` for local dev. Do **not** commit `.env.local`.
 
-1. **Clone the repository**
-   \`\`\`bash
-   git clone <repository-url>
-   cd web3-frontend-roadmap
-   \`\`\`
+---
 
-2. **Install dependencies**
-   \`\`\`bash
-   npm install
-   \`\`\`
+## Project Structure
 
-3. **Set up environment variables**
-   \`\`\`bash
-   cp .env.example .env.local
-   \`\`\`
-   
-   Configure the following variables:
-   \`\`\`env
-   NEXT_PUBLIC_API_URL=http://localhost:3001/api
-   NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=your_project_id
-   \`\`\`
+```
+frontend/
+├── app/                          # Next.js App Router pages
+│   ├── page.tsx                  # Landing page (public)
+│   ├── about/page.tsx            # About page (public)
+│   ├── auth/
+│   │   ├── register/page.tsx     # 4-step registration (public)
+│   │   └── callback/page.tsx     # Magic link handler (public)
+│   ├── dashboard/page.tsx        # Main dashboard (auth required)
+│   ├── profile/page.tsx          # User profile + edit (auth required)
+│   ├── projects/
+│   │   ├── page.tsx              # Projects list
+│   │   └── [id]/page.tsx         # Project detail
+│   ├── groups/
+│   │   ├── page.tsx              # Groups list
+│   │   └── [id]/page.tsx         # Group detail
+│   ├── proposals/page.tsx        # Governance proposals
+│   ├── marketplace/page.tsx      # Marketplace (discovery only — no payments ever)
+│   ├── treasury/page.tsx         # Treasury stub
+│   ├── admin/page.tsx            # Admin panel
+│   └── layout.tsx                # Root layout (Providers + AppShell)
+│
+├── components/
+│   ├── layout/
+│   │   ├── app-shell.tsx         # Root wrapper — bypasses for public routes
+│   │   ├── sidebar.tsx           # 272px tea-green sidebar (desktop)
+│   │   ├── topbar.tsx            # 52px frosted glass topbar + WalletButton
+│   │   └── mobile-bottom-nav.tsx # Floating pill nav (mobile)
+│   ├── auth/
+│   │   ├── connect-wallet.tsx    # Magic link sign-in dialog
+│   │   ├── wallet-button.tsx     # Privy connect/disconnect button (topbar)
+│   │   ├── register-form.tsx     # 4-step registration wizard
+│   │   ├── protected-route.tsx   # Auth guard component
+│   │   └── role-guard.tsx        # RBAC guard component
+│   ├── landing/
+│   │   └── landing-page.tsx      # Full landing page + LandingNavbar + SignInModal
+│   ├── dashboard/
+│   │   └── dashboard-content.tsx # Dashboard with live PR balance
+│   ├── user/
+│   │   ├── user-profile.tsx      # Profile display
+│   │   └── profile-edit-form.tsx # Profile edit form
+│   ├── providers.tsx             # TanStack Query + Auth + Wallet + Role providers
+│   └── ui/                       # shadcn/ui components (do not edit directly)
+│
+├── contexts/
+│   ├── auth-context.tsx          # Auth state + magic link flow
+│   ├── wallet-context.tsx        # Privy wallet (PrivyProvider + useWallet hook)
+│   └── role-context.tsx          # RBAC role helpers
+│
+├── lib/
+│   ├── api.ts                    # Typed API client (authApi, userApi, economyApi)
+│   └── types.ts                  # Frontend type definitions
+│
+├── stubs/
+│   └── empty.js                  # Webpack stub for unused Privy transitive deps
+│
+└── styles/
+    └── globals.css               # Tailwind base + Chai palette CSS variables
+```
 
-4. **Run the development server**
-   \`\`\`bash
-   npm run dev
-   \`\`\`
+---
 
-5. **Open your browser**
-   Navigate to [http://localhost:3000](http://localhost:3000)
+## Authentication Flow
 
-## 🔧 Configuration
+UjamaaDAO uses **email magic links** — no passwords.
 
-### Wallet Setup
+### New User (Registration)
+```
+/auth/register                    # 4-step form
+  Step 1: email + name + phone
+  Step 2: primary ward (county → constituency → ward)
+  Step 3: secondary ward (origin/home ward)
+  Step 4: industry + goods/services
+  → POST /api/v1/auth/magic-link/send  (creates account + sends email)
+  → Check email (or MailHog at localhost:8025 in dev)
+  → Click link → /auth/callback?token=...
+  → Redirect to /dashboard
+```
 
-The application supports multiple wallet providers:
+### Returning User (Sign In)
+```
+Landing page "Sign In" button
+  → Enter email in SignInModal
+  → POST /api/v1/auth/magic-link/send  (sends login link)
+  → Click link → /auth/callback?token=...
+  → Redirect to /dashboard
+```
 
-- **MetaMask**: Browser extension wallet
-- **WalletConnect**: Mobile and desktop wallet connection
-- **Injected**: Any injected wallet provider
+### Token Storage
+Tokens stored in `localStorage` (`access_token`, `refresh_token`). Auto-refresh on 401. See `frontend/lib/api.ts` → `tokenStore` and `tryRefresh()`.
 
-Configure additional providers in \`lib/wagmi.ts\`:
+### Wallet (Privy)
+Privy embedded wallet is created automatically when a user first connects. Users never see seed phrases or gas warnings. The `WalletButton` in the topbar handles connect/disconnect.
 
-\`\`\`typescript
-export const config = createConfig({
-  chains: [mainnet, sepolia],
-  connectors: [
-    injected(),
-    metaMask(),
-    walletConnect({ projectId }),
-    // Add more connectors here
-  ],
-  transports: {
-    [mainnet.id]: http(),
-    [sepolia.id]: http(),
-  },
-})
-\`\`\`
+---
 
-### API Integration
+## API Client
 
-The frontend expects a backend API with the following endpoints:
+All backend calls go through `frontend/lib/api.ts`. Never use raw `fetch()` in components.
 
-- \`POST /auth/nonce\` - Get authentication nonce
-- \`POST /auth/verify\` - Verify wallet signature
-- \`GET /users/me\` - Get current user profile
-- \`PATCH /users/me\` - Update user profile
-- \`GET /groups\` - List user groups
-- \`GET /groups/:id\` - Get group details
-- \`GET /notifications\` - Get user notifications
+```ts
+import { authApi, userApi, economyApi } from "@/lib/api"
 
-## 🎨 UI Components
+// Auth
+await authApi.requestMagicLink({ email, name?, phoneNumber?, primaryWardId?, ... })
+await authApi.verifyMagicLink(token)
+await authApi.logout()
 
-Built with **shadcn/ui** components for consistency and accessibility:
+// User profile
+const me = await userApi.getMe()
+await userApi.updateProfile({ name, avatarUrl })
 
-- **Forms**: Input, Textarea, Select with validation
-- **Navigation**: Dropdown menus, popover panels
-- **Feedback**: Toast notifications, loading states
-- **Data Display**: Cards, badges, avatars
-- **Layout**: Responsive grid system
+// Reference data (public, no auth required)
+const counties = await userApi.getCounties()
+const constituencies = await userApi.getConstituencies(countyId)
+const wards = await userApi.getWards(constituencyId)
+const industries = await userApi.getIndustries()
 
-## 🔐 Security Features
+// Economy
+const { balance } = await economyApi.getPRBalance()
+```
 
-### Authentication
-- **Wallet-based authentication** with cryptographic signatures
-- **JWT token management** with secure storage
-- **Session validation** on protected routes
+### TanStack Query in components
 
-### Authorization
-- **Role-based access control** (RBAC)
-- **Scope-based permissions** for granular control
-- **Route protection** at component and page level
+```tsx
+"use client"
+import { useQuery } from "@tanstack/react-query"
+import { economyApi } from "@/lib/api"
+import { useAuth } from "@/contexts/auth-context"
 
-### Privacy
-- **Granular privacy settings** for profile visibility
-- **Data minimization** principles
-- **Secure API communication**
+export function PRBalance() {
+  const { isAuthenticated } = useAuth()
+  const { data, isLoading } = useQuery({
+    queryKey: ["pr-balance"],
+    queryFn: () => economyApi.getPRBalance(),
+    enabled: isAuthenticated,
+    staleTime: 30_000,
+  })
+  if (isLoading) return <Skeleton />
+  return <div>{data?.balance ?? 0} PR</div>
+}
+```
 
-## 📱 Responsive Design
+---
 
-- **Mobile-first approach** with Tailwind CSS
-- **Responsive navigation** and layouts
-- **Touch-friendly interactions**
-- **Optimized for all screen sizes**
+## Design System — Chai Palette
 
-## 🧪 Best Practices Implemented
+| Token | Tailwind class | Hex | Usage |
+|---|---|---|---|
+| Tea Green | `bg-tea-green` | `#1D4731` | Sidebar, nav pills, section backgrounds |
+| Tea Dark | `bg-tea-dark` | `#142F22` | Register page bg, dark overlays |
+| Cream | `bg-cream` | `#F7F2E8` | App background, cards |
+| Amber | `bg-amber` / `text-amber` | `#D4911E` | Primary buttons, active states, CTAs |
+| Amber Bright | `bg-amber-bright` | `#E9A52E` | Hover states, gradient ends |
+| Leaf | `text-leaf` | `#38A063` | Success, positive indicators |
+| Chai | `text-chai` | `#1A120B` | Primary text on light backgrounds |
+| Ember | `text-ember` | `#C43D28` | Error states, destructive actions |
+| Warm Gray | `text-warm-gray` | `#7A6E60` | Muted text, placeholder text |
 
-### Code Quality
-- **TypeScript** for type safety
-- **ESLint + Prettier** for consistent formatting
-- **Component composition** patterns
-- **Custom hooks** for reusable logic
+### Typography
+- **Headings / display:** `font-serif` or `font-display` → Cormorant Garamond
+- **Body / UI:** `font-sans` → Inter
+- Applied via CSS variables `--font-inter` and `--font-cormorant` in `layout.tsx`
 
-### Performance
-- **React Query** for efficient data fetching
-- **Code splitting** with Next.js App Router
-- **Image optimization** with Next.js Image component
-- **Lazy loading** for better performance
+### Layout Zones
+- **Public routes** (`/`, `/about`, `/auth/*`): full-width, no sidebar/topbar — AppShell bypasses
+- **Authenticated routes** (`/dashboard`, `/profile`, etc.): tea-green sidebar (272px) + frosted topbar (52px) + main content + mobile pill nav
 
-### User Experience
-- **Loading states** for all async operations
-- **Error boundaries** for graceful error handling
-- **Toast notifications** for user feedback
-- **Accessible UI** with proper ARIA labels
+### Components
+Uses [shadcn/ui](https://ui.shadcn.com) components in `components/ui/`. Do not edit these files directly — regenerate via `npx shadcn-ui@latest add <component>`.
 
-## 🔄 State Management
+---
 
-### Global State
-- **AuthContext**: User authentication state
-- **RoleContext**: Permission and role management
-- **NotificationContext**: Notification state and preferences
+## Page Inventory
 
-### Server State
-- **React Query**: API data caching and synchronization
-- **Optimistic updates** for better UX
-- **Background refetching** for fresh data
+| Route | Status | Data Source |
+|---|---|---|
+| `/` | ✅ Built | Static content + auth state |
+| `/about` | ✅ Built | Static |
+| `/auth/register` | ✅ Real | `/users/reference/*` + `/auth/magic-link/send` |
+| `/auth/callback` | ✅ Real | `/auth/verify-email` or `/auth/login` (token type detection) |
+| `/dashboard` | ✅ Partial | PR balance live; other cards stubbed |
+| `/profile` | ✅ Partial | `/users/me` live; edit form wired |
+| `/projects` | 🔶 Stub | Static data |
+| `/projects/[id]` | 🔶 Stub | Static data |
+| `/groups` | 🔶 Stub | Static data |
+| `/groups/[id]` | 🔶 Stub | Static data |
+| `/proposals` | 🔶 Stub | Static data |
+| `/marketplace` | 🔶 Empty state | Discovery only — no payments ever |
+| `/treasury` | 🔶 Empty state | Coming later |
+| `/admin` | 🔶 Partial | Role-gated |
 
-## 🚀 Deployment
+---
 
-### Vercel (Recommended)
-\`\`\`bash
-npm run build
-vercel --prod
-\`\`\`
+## Non-Negotiable Rules
 
-### Docker
-\`\`\`bash
-docker build -t web3-frontend .
-docker run -p 3000:3000 web3-frontend
-\`\`\`
+These are absolute — do not build UI that violates them:
 
-### Environment Variables
-Ensure all environment variables are configured in your deployment platform:
-- \`NEXT_PUBLIC_API_URL\`
-- \`NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID\`
+1. **Marketplace = discovery only.** No checkout, cart, payment, or escrow UI.
+2. **No UT cash-out.** Utility tokens cannot be withdrawn or sold — do not build any interface suggesting this.
+3. **PR is not transferable.** No send/trade/gift UI for Participation Rights.
+4. **Blockchain is invisible.** Users see "account" not "wallet". No seed phrases, no gas warnings.
+5. **`NEXT_PUBLIC_API_URL` env var** must configure the backend URL — never hardcode `localhost:4000`.
 
-## 🤝 Contributing
+---
 
-1. Fork the repository
-2. Create a feature branch (\`git checkout -b feature/amazing-feature\`)
-3. Commit your changes (\`git commit -m 'Add amazing feature'\`)
-4. Push to the branch (\`git push origin feature/amazing-feature\`)
-5. Open a Pull Request
+## Development Workflow
 
-## 📄 License
+### Run everything
+```bash
+cd backend && make dev        # starts web, worker, postgres, redis, mailhog, frontend
+```
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+### Frontend only (backend already running)
+```bash
+cd frontend && npm run dev
+```
 
-## 🙏 Acknowledgments
+### Check magic link emails (dev)
+Visit **`http://localhost:8025`** — MailHog catches all emails sent by the backend.
 
-- **Next.js team** for the amazing framework
-- **Wagmi team** for excellent Web3 integration
-- **shadcn** for beautiful UI components
-- **Tailwind CSS** for utility-first styling
+### Build check (must pass before committing)
+```bash
+cd frontend && npm run build
+```
+
+---
+
+## Adding a New Authenticated Page
+
+1. Create `app/<route>/page.tsx`
+2. Add `"use client"` if it uses hooks
+3. Use `useAuth()` to check `isAuthenticated`
+4. Add the route to the sidebar nav in `components/layout/sidebar.tsx` if needed
+5. AppShell wraps it automatically in sidebar + topbar
+
+```tsx
+"use client"
+import { useAuth } from "@/contexts/auth-context"
+import { useRouter } from "next/navigation"
+import { useEffect } from "react"
+
+export default function MyPage() {
+  const { isAuthenticated, isLoading } = useAuth()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) router.replace("/")
+  }, [isAuthenticated, isLoading, router])
+
+  if (isLoading || !isAuthenticated) return null
+  return <div className="p-6">My Page</div>
+}
+```
+
+---
+
+## What's Left to Build
+
+High priority (backend endpoints exist):
+- [ ] Governance: proposals list, proposal detail, voting UI
+- [ ] Community: groups list, group detail, join/leave flows
+- [ ] Dashboard: activity feed, recent projects, community stats (live data)
+- [ ] Profile: phone verification flow (`/auth/phone/send-code`)
+- [ ] Community verification status banner
+
+Medium priority:
+- [ ] Projects: create project, milestone tracking
+- [ ] Notifications: bell icon → notification drawer
+- [ ] Admin: user management, verification approvals
+- [ ] Extend Chai palette to dashboard/profile/proposals (currently partial)
+
+Blocked on backend:
+- [ ] Marketplace: listings, search (backend `partial` status)
+- [ ] Treasury: fund allocation (backend scaffold only)
+
+Blocked on contracts:
+- [ ] On-chain PR/UT balance display (needs deployed `PrToken.sol` + `UtToken.sol`)
+
+---
+
+*Last updated: 2026-02-26 (session 13)*
+*See [`ai_workflows/PROGRESS_LOG.md`](../ai_workflows/PROGRESS_LOG.md) for full session history.*

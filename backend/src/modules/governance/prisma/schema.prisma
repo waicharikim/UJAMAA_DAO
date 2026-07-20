@@ -1,0 +1,432 @@
+// ============================================================================
+// GOVERNANCE MODULE - Proposals, Voting, Projects
+// ============================================================================
+
+enum ProposalType {
+  COMMUNITY_INITIATIVE
+  MAJOR_PROJECT
+  STRATEGIC_DECISION
+  EMERGENCY
+}
+
+// POLICY  = a community decision / rule change. No budget, never produces a
+//           project; on approval it is recorded and completed.
+// PROJECT = builds or funds something; on approval it must go through the
+//           project-setup gate (milestones + budget) before work starts.
+enum ProposalKind {
+  POLICY
+  PROJECT
+}
+
+enum ProposalStatus {
+  DRAFT
+  PENDING_REVIEW       // LEADER forwarded — awaiting location admin approval
+  APPROVED_FOR_VOTING  // Location admin approved — LEADER can open voting
+  VOTING
+  APPROVED
+  REJECTED
+  EXECUTING
+  COMPLETED
+  CANCELLED
+}
+
+enum ProposalScope {
+  GROUP      // Internal to the voluntary group only
+  COMMUNITY  // Public / community-wide
+}
+
+
+// ============================================================================
+// UPDATED PROPOSAL MODEL - With Lean Canvas & Milestones
+// ============================================================================
+
+model Proposal {
+  id                String         @id @default(uuid()) @db.Uuid
+  title             String
+  description       String         @db.Text
+  proposalType      ProposalType
+  kind              ProposalKind   @default(PROJECT)
+  status            ProposalStatus @default(DRAFT)
+  groupId           String?        @db.Uuid
+  creatorId         String         @db.Uuid
+
+  // TARGET AREA — for COMMUNITY-scope proposals, the geography whose residents
+  // are eligible to vote. Resolved at creation (from the group's affiliation
+  // for voluntary groups, or the system group's own location). Null = the
+  // proposal is internal (GROUP scope) or a genuine national/system proposal.
+  targetWardId         String? @db.Uuid
+  targetConstituencyId String? @db.Uuid
+  targetCountyId       String? @db.Uuid
+  
+  // FINANCIAL
+  budget            Decimal?       @db.Decimal(20, 2)
+  fundingSource     String?        // GROUP_TREASURY, EXTERNAL_GRANT, MEMBER_CONTRIBUTIONS
+  
+  // LEAN CANVAS (All optional but recommended)
+  problem           String?        @db.Text
+  solution          String?        @db.Text
+  keyMetrics        Json?          // [{ name, target, unit }]
+  uniqueValue       String?        @db.Text
+  unfairAdvantage   String?        @db.Text
+  customerSegments  Json?          // [{ segment, size, description }]
+  channels          Json?          // [{ name, description, reach }]
+  costStructure     Json?          // [{ category, item, amount, description }]
+  revenueStreams    Json?          // [{ source, amount, frequency, description }]
+  
+  // EXECUTION PLAN
+  timeline          Json?          // Overall timeline with phases
+  team              Json?          // [{ userId, role, commitment }]
+  dependencies      Json?          // [{ name, description, status }]
+  risks             Json?          // [{ risk, impact, mitigation }]
+  
+  // SCOPE & FUNDING
+  proposalScope          ProposalScope  @default(COMMUNITY)
+  groupFundingAmount     Decimal?       @db.Decimal(20, 2)
+  locationFundingRequest Decimal?       @db.Decimal(20, 2)
+
+  // REVIEW
+  reviewedById      String?        @db.Uuid
+  reviewNote        String?        @db.Text
+  resubmissionCount Int            @default(0)
+
+  // VOTING
+  votesFor          Int            @default(0)
+  votesAgainst      Int            @default(0)
+  quorum            Int            @default(0)
+  approvalThreshold Int            @default(0)
+  votingStartsAt    DateTime?
+  votingEndsAt      DateTime?
+  
+  // ATTACHMENTS
+  documents         String[]       // URLs to supporting docs
+  images            String[]       // Proposal images
+
+  // COMMUNITY MEMORY LAYER — reasoning, alternatives, outcomes
+  rationale          String?       @db.Text  // Why this option, not others
+  alternatives       String?       @db.Text  // What else was considered
+  outcome            String?       @db.Text  // What actually happened after execution
+  outcomeRecordedAt  DateTime?               // When outcome was written
+  memoryAnchorTxHash String?       @db.VarChar(66) // on-chain tx hash when outcome anchored
+  // AI-consolidated decision record (fail-open: LLM when available, deterministic
+  // template otherwise). Derived/convenience — the fields above stay authoritative.
+  decisionRecord     Json?         // { decided, why, alternatives, whatHappened }
+
+  // DELIBERATION LAYER — neutral AI digest of community annotations, generated at voting-open
+  deliberationSummary   Json?      // { support: string[], concerns: string[], openQuestions: string[], note?: string }
+  deliberationSummaryAt DateTime?
+
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  // RELATIONS
+  group              Group?              @relation("GroupProposals", fields: [groupId], references: [id], onDelete: SetNull)
+  creator            User                @relation("UserProposals", fields: [creatorId], references: [id], onDelete: Cascade)
+  reviewer           User?               @relation("ProposalReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  votes              GroupMemberVote[]   @relation("ProposalVotes")
+  walletTransactions WalletTransaction[] @relation("ProposalTransactions")
+  escrows            Escrow[]            @relation("ProposalEscrows")
+  milestones         ProposalMilestone[] // NEW
+  project            Project?            @relation("ProposalToProject") // NEW
+  comments           Comment[]           @relation("ProposalComments") // NEW
+  posts              Post[]              @relation("PostProposal")
+  annotations        ProposalAnnotation[] @relation("ProposalAnnotations")
+  deliberations      BarazaDeliberation[] @relation("ProposalDeliberations")
+
+  @@index([groupId, status])
+  @@index([creatorId])
+  @@index([reviewedById])
+  @@index([status, votingEndsAt])
+  @@index([proposalType])
+}
+
+// ============================================================================
+// NEW: PROPOSAL MILESTONES
+// ============================================================================
+
+model ProposalMilestone {
+  id             String   @id @default(uuid()) @db.Uuid
+  proposalId     String   @db.Uuid
+  title          String
+  description    String   @db.Text
+  
+  // Deliverables
+  deliverables   Json     // [{ description, quantity, unit }]
+  
+  // Resources needed
+  budgetAmount   Decimal  @db.Decimal(20, 2)
+  laborHours     Int?
+  materials      Json?    // [{ item, quantity, cost, unit }]
+  
+  // Timeline
+  startOffset    Int      // Days from project start
+  duration       Int      // Days to complete
+  dependencies   String[] @db.Uuid  // IDs of previous milestones in this proposal
+  
+  // Verification requirements
+  verificationMethod   String  // PEER, SUPERVISOR, COMMUNITY_WITNESS, PHOTO_EVIDENCE
+  verifiersNeeded      Int     @default(1)
+  verificationCriteria Json    // [{ criterion, description, required }]
+  
+  // Order
+  orderIndex     Int      @default(0)
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  // RELATIONS
+  proposal         Proposal   @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  projectMilestone Milestone? @relation("ProposalToProjectMilestone")
+  
+  @@index([proposalId])
+  @@index([orderIndex])
+}
+
+
+model GroupMemberVote {
+ id         String   @id @default(uuid()) @db.Uuid
+ groupId    String   @db.Uuid
+ memberId   String   @db.Uuid
+ proposalId String   @db.Uuid
+ vote       Boolean?
+ voteWeight Int      @default(1)
+ comment    String?
+ createdAt  DateTime @default(now())
+ group    Group    @relation("GroupVotes", fields: [groupId], references: [id], onDelete: Cascade)
+ member   User     @relation("UserVotes", fields: [memberId], references: [id], onDelete: Cascade)
+ proposal Proposal @relation("ProposalVotes", fields: [proposalId], references: [id], onDelete: Cascade)
+ @@unique([groupId, memberId, proposalId])
+ @@index([proposalId])
+ @@index([memberId])
+}
+
+// ============================================================================
+// PROPOSAL ANNOTATIONS — inline public participation comments
+// ============================================================================
+
+model ProposalAnnotation {
+  id           String   @id @default(uuid()) @db.Uuid
+  proposalId   String   @db.Uuid
+  authorId     String   @db.Uuid
+  fieldKey     String   @db.VarChar(50)   // "description"|"rationale"|"alternatives"
+  startOffset  Int
+  endOffset    Int
+  quotedText   String   @db.Text          // snapshot of highlighted text
+  comment      String   @db.Text
+  color        String   @db.VarChar(20)   // hex, deterministically assigned per annotator
+  anchorTxHash String?  @db.VarChar(66)   // on-chain tx hash when anchored
+  createdAt    DateTime @default(now())
+
+  proposal  Proposal                     @relation("ProposalAnnotations", fields: [proposalId], references: [id], onDelete: Cascade)
+  author    User                         @relation("UserAnnotations",     fields: [authorId],   references: [id], onDelete: Cascade)
+  reactions ProposalAnnotationReaction[]
+
+  @@index([proposalId, fieldKey])
+  @@index([proposalId, createdAt])
+  @@map("proposal_annotations")
+}
+
+model ProposalAnnotationReaction {
+  id           String   @id @default(uuid()) @db.Uuid
+  annotationId String   @db.Uuid
+  userId       String   @db.Uuid
+  type         String   @db.VarChar(4)    // "UP" | "DOWN"
+  createdAt    DateTime @default(now())
+
+  annotation ProposalAnnotation @relation(fields: [annotationId], references: [id], onDelete: Cascade)
+  user       User               @relation("UserAnnotationReactions", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([annotationId, userId])
+  @@index([annotationId])
+  @@map("proposal_annotation_reactions")
+}
+
+
+// ============================================================================
+// BARAZA DELIBERATION ENGINE — 7-agent pre-vote deliberation (Qwen-powered)
+// ============================================================================
+
+enum BarazaDeliberationStatus {
+  PENDING
+  RUNNING
+  COMPLETE
+  FAILED
+}
+
+enum BarazaAgentKey {
+  // governance domain (system groups)
+  DAKTARI
+  LINDA
+  TAJIRI
+  FOREMAN
+  MWALIMU
+  // cooperative domain (voluntary groups)
+  MKURUGENZI
+  MWANANCHI
+  FUNDI
+  HUSTLER
+  // analysts (run in every panel)
+  SHAHIDI
+  MPELELEZI
+  // convener / framing (run once)
+  MJAMAA
+}
+
+/// Current real-world conditions (fuel, cost of living, …) injected into Baraza
+/// deliberations so the council reasons against the present state of the country.
+/// Populated by best-effort collectors; an admin value always wins over a scrape.
+model CurrentAffairs {
+  id            String   @id @default(uuid()) @db.Uuid
+  indicator     String   @unique // e.g. "fuel_petrol", "cpi_inflation"
+  label         String // human label, e.g. "Petrol pump price"
+  value         String // stored as text, e.g. "217.43"
+  unit          String? // "KES/L", "%"
+  source        String // "EPRA" | "admin" | "X:@moneyacademyKE"
+  sourceUrl     String?  @db.Text
+  asOf          DateTime // the date the figure actually refers to
+  fetchedAt     DateTime @default(now())
+  adminOverride Boolean  @default(false) // admin-set values are never overwritten by a scrape
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([active])
+  @@map("current_affairs")
+}
+
+/// Where a historical-timeline entry came from. Provenance is first-class so the
+/// historian (Mhenga) can cite with calibrated confidence and so LLM-seeded
+/// entries are distinguishable from source-fed and admin-confirmed ones.
+enum HistoryProvenance {
+  LLM_SEED // generated from the model's own knowledge (unverified backbone)
+  COLLECTOR // ingested from a current-affairs source
+  DELIBERATION // accreted from a past deliberation's recorded context
+  ADMIN // entered or corrected by an admin
+  MEMBER // proposed by a community member (pending ratification)
+}
+
+enum HistoryVerification {
+  UNVERIFIED
+  ADMIN_CONFIRMED
+  DISPUTED
+}
+
+/// The national timeline Mhenga reasons from — "how we got here" and the arc a
+/// proposal sits in. Contested history is held to the truth discipline: entries
+/// carry provenance + verification, and corrections supersede rather than delete.
+model HistoricalEvent {
+  id             String              @id @default(uuid()) @db.Uuid
+  era            String // e.g. "Colonial", "Independence", "SAPs", "Devolution 2010"
+  title          String
+  startYear      Int? // for ordering along the arc
+  endYear        Int?
+  summary        String              @db.Text
+  causes         String?             @db.Text
+  consequences   String?             @db.Text
+  themes         String[]            @default([]) // for retrieval: ["land","debt","governance"]
+  provenance     HistoryProvenance
+  sourceRef      String?             @db.Text // URL / deliberationId / model+date
+  verification   HistoryVerification @default(UNVERIFIED)
+  supersededById String?             @db.Uuid // points to the entry that corrects this one
+  groupId        String?             @db.Uuid // null = shared/national timeline; set = this group's own local history
+  active         Boolean             @default(true)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@index([active])
+  @@index([provenance])
+  @@index([groupId])
+  @@map("historical_events")
+}
+
+/// Shared knowledge layer (RAG): chunked, embedded corpus of platform docs +
+/// verified education modules. One provenance-aware substrate the Q&A bot and the
+/// council agents retrieve from via a search_knowledge tool. Rebuilt by an indexer.
+model KnowledgeChunk {
+  id        String   @id @default(uuid()) @db.Uuid
+  source    String // "docs" | "education"
+  sourceRef String // filename or module id
+  title     String
+  text      String   @db.Text
+  embedding Json // number[] — DashScope embedding vector
+  createdAt DateTime @default(now())
+
+  @@index([source])
+  @@map("knowledge_chunks")
+}
+
+enum BarazaTrigger {
+  AUTHOR
+  ADMIN
+  AUTO
+}
+
+model BarazaDeliberation {
+  id          String                   @id @default(uuid()) @db.Uuid
+  proposalId  String                   @db.Uuid
+  groupId     String                   @db.Uuid
+
+  // Dedup key — hash of title + description + budget + problem + solution.
+  contentHash String                   @db.VarChar(64)
+
+  status      BarazaDeliberationStatus @default(PENDING)
+  triggeredBy BarazaTrigger            @default(AUTO)
+
+  readinessScore Int?
+  readinessBand  String?               @db.VarChar(30)
+
+  transcript          Json?
+  conflictMap         Json?
+  revisionSuggestions Json?
+  agentMemorySnapshot Json?
+  contextSnapshot     Json?
+
+  mkutanoConvergence    Json?
+  mkutanoContradictions Json?
+  mkutanoFixability     String?        @db.Text
+
+  errorLog    String?                  @db.Text
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+
+  proposal Proposal @relation("ProposalDeliberations", fields: [proposalId], references: [id], onDelete: Cascade)
+  group    Group    @relation("GroupDeliberations", fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([proposalId, status])
+  @@index([groupId, createdAt])
+  @@index([contentHash, status])
+  @@index([status, createdAt])
+  @@map("baraza_deliberations")
+}
+
+model BarazaAgentState {
+  id       String         @id @default(uuid()) @db.Uuid
+  groupId  String         @db.Uuid
+  agentKey BarazaAgentKey
+
+  deliberationCount Int @default(0)
+  concessionCount   Int @default(0)
+  allianceCount     Int @default(0)
+  holdCount         Int @default(0)
+
+  rigidityScore       Float @default(0.5)
+  responsivenessScore Float @default(0.5)
+
+  staticCore        Json?
+  episodicLog       Json?
+  relationalMap     Json?
+  premisePatterns   Json?
+  powerStructureMap Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  group Group @relation("GroupAgentStates", fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, agentKey])
+  @@index([groupId])
+  @@index([agentKey])
+  @@map("baraza_agent_states")
+}

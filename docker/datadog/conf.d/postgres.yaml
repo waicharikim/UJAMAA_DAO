@@ -1,0 +1,14 @@
+init_config:
+
+instances:
+  - host: postgres
+    port: 5432
+    username: ujamaa_user
+    password: ujamaa_pass
+    dbname: ujamaa_db
+    collect_function_metrics: true
+    collect_count_metrics: true
+    collect_activity_metrics: true
+    collect_database_size_metrics: true
+    relations:
+      - relation_regex: ".*"

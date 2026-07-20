@@ -1,7 +1,74 @@
-node_modules/
-dist/
-.env
-npm-debug.log*
-.vscode/
 *.tsbuildinfo
 .prisma/client/
+/src/generated/prisma
+
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+.env.bak
+
+# Build outputs
+dist/
+build/
+*.log
+
+# Database
+*.db
+*.sqlite
+*.sql
+!prisma/migrations/**/*.sql
+backups/*.sql.gz
+
+# Docker volumes (root-level only, does not affect src/core/data/)
+/data/
+postgres-data/
+redis-data/
+
+# Active observability configs (generated from templates)
+# These are created by `make setup-configs` and should not be committed
+envoy/*
+!envoy/.gitkeep
+fluent-bit/*
+!fluent-bit/.gitkeep
+prometheus/*
+!prometheus/.gitkeep
+grafana/*
+!grafana/.gitkeep
+loki/*
+!loki/.gitkeep
+jaeger/*
+!jaeger/.gitkeep
+statsd/*
+!statsd/.gitkeep
+
+# Keep the templates in version control
+!config-templates/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+# Knowledge-layer index input (copied in at reindex time; do not commit)
+knowledge-docs/

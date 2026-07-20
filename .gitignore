@@ -1,7 +1,24 @@
 node_modules/
 dist/
 .env
+**/.env
+# All env variants (.env.prod, .env.local, etc.) — only *.example may be committed
+.env.*
+**/.env.*
+!*.example
+!**/*.example
 npm-debug.log*
 .vscode/
 *.tsbuildinfo
 .prisma/client/
+
+# Let's Encrypt — never commit live certs
+traefik/acme.json
+
+# Internal AI workflow files — not for public consumption
+ai_workflows/
+CLAUDE.md
+.claude/
+
+# Private growth/marketing/launch strategy — local only, never push
+growth/

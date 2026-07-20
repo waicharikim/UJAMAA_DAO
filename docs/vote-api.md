@@ -1,5 +1,8 @@
 # UjamaaDAO Voting Module Documentation
 
+> **Module status:** `tested` — voting is part of the governance suite: 175 green tests across 6 files (148 proposal lifecycle + 27 annotation tests).
+> `castVote`, `tallyVotes`, `startVoting` all tested. See also [`proposal-api.md`](proposal-api.md).
+
 ## Overview
 
 The Voting module manages the casting, validation, and tallying of votes within UjamaaDAO’s governance system. It supports both individual votes and group block votes, enforces eligibility rules based on impact points and token balances, and ensures proper quorum and consensus in group voting.
@@ -29,7 +32,7 @@ The Voting module manages the casting, validation, and tallying of votes within 
 
 ### Cast Individual Vote
 
-`POST /api/votes/individual`
+`POST /api/v1/governance/votes/individual`
 
 - **Headers:**  
   `Authorization: Bearer <JWT>`
@@ -51,7 +54,7 @@ The Voting module manages the casting, validation, and tallying of votes within 
 
 Cast Group Block Vote
 
-POST /api/votes/group
+POST /api/v1/governance/votes/group
 
     Headers:
     Authorization: Bearer <JWT>
@@ -73,7 +76,7 @@ POST /api/votes/group
 
 Get Vote Tally
 
-GET /api/votes/{proposalId}/tally
+GET /api/v1/governance/votes/{proposalId}/tally
 
     Headers:
     Authorization: Bearer <JWT>
@@ -114,7 +117,7 @@ Code 	Meaning
 500 	Internal Server Error
 Example Request — Cast Individual Vote
 
-curl -X POST https://yourdomain.com/api/votes/individual \
+curl -X POST http://localhost:4000/api/v1/governance/votes/individual \
 -H "Authorization: Bearer <token>" \
 -H "Content-Type: application/json" \
 -d '{

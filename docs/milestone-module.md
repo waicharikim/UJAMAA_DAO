@@ -1,4 +1,9 @@
-Overview
+> **Module status:** `tested` — project/milestone routes at `/api/v1/projects` (41 tests).
+> Milestone submission (`POST /projects/:id/milestones/:mId/submit`) and verification (`POST /projects/:id/milestones/:mId/verify`) live.
+
+# Milestone Module
+
+## Overview
 
 The Milestone module manages discrete phases within a project. Milestones have their own lifecycle allowing submission for review, approval, rejection, and tracking funding allocation and status.
 Core Features
@@ -12,7 +17,7 @@ Core Features
 API Reference
 Base URL
 
-/api/milestones
+/api/v1/projects/milestones
 POST /
 
 Create a new milestone.

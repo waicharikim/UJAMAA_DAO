@@ -1,0 +1,60 @@
+/**
+ * @file src/modules/notifications/controllers/notification.controller.ts
+ * @description
+ * Notification Controller
+ * Version: 2.0 — December 2025
+ */
+
+import { Response } from 'express';
+import { AuthRequest } from '../../../core/types/Ujamaadao.types.js';
+import { sendSuccess } from '../../../core/utils/response.js';
+import { notificationService } from '../services/notification.service.js';
+
+export class NotificationController {
+  static async getNotifications(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const unreadOnly = req.query.unread === 'true';
+    const notifications = await notificationService.getUserNotifications(
+      userId,
+      unreadOnly
+    );
+    sendSuccess(res, notifications, 'Notifications retrieved');
+  }
+
+  static async markAsRead(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const { notificationId } = req.body;
+    await notificationService.markAsRead(userId, notificationId);
+    sendSuccess(res, null, 'Notification marked as read');
+  }
+
+  static async getUnreadCount(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const count = await notificationService.getUnreadCount(userId);
+    sendSuccess(res, { count });
+  }
+
+  static async markAllRead(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    await notificationService.markAllRead(userId);
+    sendSuccess(res, null, 'All notifications marked as read');
+  }
+
+  static async getPreferences(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const preferences = await notificationService.getPreferences(userId);
+    sendSuccess(res, preferences, 'Preferences retrieved');
+  }
+
+  static async updatePreference(req: AuthRequest, res: Response) {
+    const userId = req.user!.userId;
+    const { channel, category, enabled } = req.body;
+    await notificationService.updatePreference(
+      userId,
+      channel,
+      category,
+      enabled
+    );
+    sendSuccess(res, null, 'Preference updated');
+  }
+}

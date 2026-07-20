@@ -1,0 +1,204 @@
+// ============================================================================
+// ECONOMY MODULE - Dues, Payments, Physical Work
+// ============================================================================
+
+enum VerificationMethod {
+  PEER
+  SUPERVISOR
+  COMMUNITY_WITNESS
+  DIGITAL_EVIDENCE
+  EXPERT_REVIEW
+}
+
+enum VerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  DISPUTED
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum DuesTier {
+  ORDINARY // KES 60/month
+  SUPPORTER // KES 200/month
+  SPONSOR // KES 1000/month
+}
+
+model DuesPayment {
+  id            String        @id @default(uuid()) @db.Uuid
+  userId        String        @db.Uuid
+  totalAmount   Decimal       @db.Decimal(10, 2)
+  tier          DuesTier
+  period        String        // "2025-01" (YYYY-MM format)
+  
+  // Payment details
+  paymentMethod String        // MPESA, BANK_TRANSFER, WALLET
+  mpesaReceipt  String?
+  status        PaymentStatus @default(PENDING)
+  paidAt        DateTime?
+  
+  // NEW: Flexible allocation to multiple groups
+  allocations   DuesAllocation[]
+  
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, period])
+  @@index([userId, status])
+  @@index([period, status])
+  @@index([paidAt])
+}
+
+
+model DuesAllocation {
+  id             String      @id @default(uuid()) @db.Uuid
+  duesPaymentId  String      @db.Uuid
+  groupId        String      @db.Uuid
+  amount         Decimal     @db.Decimal(10, 2)
+  percentage     Decimal     @db.Decimal(5, 2)  // What % of total payment
+  
+  // Track which treasury received it
+  treasuryId     String      @db.Uuid
+  
+  createdAt      DateTime    @default(now())
+  
+  duesPayment    DuesPayment    @relation(fields: [duesPaymentId], references: [id], onDelete: Cascade)
+  group          Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  treasury       GroupTreasury  @relation(fields: [treasuryId], references: [id], onDelete: Cascade)
+  
+  @@index([duesPaymentId])
+  @@index([groupId])
+  @@index([treasuryId])
+}
+
+// NEW: Track national contributions from system groups
+model NationalContribution {
+  id              String   @id @default(uuid()) @db.Uuid
+  fromGroupId     String   @db.Uuid
+  toNationalId    String   @db.Uuid
+  amount          Decimal  @db.Decimal(20, 2)
+  sourceType      String   // DUES_PAYMENT, TREASURY_ALLOCATION, PROJECT_SURPLUS
+  period          String?  // "2025-01" for monthly tracking
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  
+  fromGroup       Group    @relation(fields: [fromGroupId], references: [id], onDelete: Cascade)
+  
+  @@index([fromGroupId])
+  @@index([period])
+  @@index([createdAt])
+}
+
+
+// ============================================================================
+// PHYSICAL WORK & VERIFICATION
+// ============================================================================
+
+model PhysicalWorkLog {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @db.Uuid
+  projectId         String?  @db.Uuid
+  milestoneId       String?  @db.Uuid
+  workType          String // MANUAL_LABOR, SKILLED_WORK, SUPERVISION
+  description       String
+  hours             Decimal  @db.Decimal(5, 2)
+  location          Json? // Lat/lng, address
+  photoUrls         String[]
+  witnessIds        String[] @db.Uuid
+  baseIP            Int      @default(0)
+  qualityMultiplier Decimal  @db.Decimal(3, 2) @default(1.0)
+  totalIPEarned     Int      @default(0)
+  verifiedAt        DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project       Project?             @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  milestone     Milestone?           @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  verifications WorkVerification[]
+
+  @@index([userId, createdAt])
+  @@index([projectId])
+  @@index([milestoneId])
+  @@index([verifiedAt])
+}
+
+model WorkVerification {
+  id         String             @id @default(uuid()) @db.Uuid
+  workLogId  String             @db.Uuid
+  verifierId String             @db.Uuid
+  method     VerificationMethod
+  status     VerificationStatus @default(PENDING)
+  notes      String?
+  evidence   String[] // Additional photo URLs, documents
+  verifiedAt DateTime?
+  createdAt  DateTime           @default(now())
+
+  workLog  PhysicalWorkLog @relation(fields: [workLogId], references: [id], onDelete: Cascade)
+  verifier User            @relation("WorkVerifier", fields: [verifierId], references: [id], onDelete: Cascade)
+
+  @@unique([workLogId, verifierId])
+  @@index([verifierId])
+  @@index([status])
+}
+
+// ============================================================================
+// UT WITHDRAWALS (fiatBackedUtBalance → M-Pesa B2C payouts)
+// Rule: Only fiatBackedUtBalance is cashable. earnedUtBalance has no cash-out path.
+// ============================================================================
+
+model UtWithdrawal {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @db.Uuid
+  amountKes   Int                     // 1 UT = 1 KES
+  mpesaPhone  String                  // E.164 format
+  status      String   @default("PENDING") // PENDING | COMPLETED | FAILED
+  completedAt DateTime?
+  failureNote String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([status])
+  @@map("ut_withdrawals")
+}
+
+// ============================================================================
+// COMMITMENTS (moved from base.prisma)
+// Tracks formal commitments a user makes (dues, project contributions, roles)
+// ============================================================================
+
+model Commitment {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @db.Uuid
+  type         String   // "DUES", "PROJECT_CONTRIBUTION", "GROUP_ROLE", "EVENT_ATTENDANCE"
+  targetId     String?  @db.Uuid // Group ID, Project ID, etc.
+  amountKes    Int?     // For monetary commitments
+  amountPR     Int?     // For PR commitments
+  frequency    String?  // "MONTHLY", "ONE_TIME", "WEEKLY"
+  startDate    DateTime
+  endDate      DateTime?
+  status       String   // "ACTIVE", "BREACHED", "COMPLETED", "CANCELLED"
+  missedCount  Int      @default(0)
+  totalPaidKes Int      @default(0)
+  totalPaidPR  Int      @default(0)
+  breachReason String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type, status])
+  @@map("commitments")
+}
+

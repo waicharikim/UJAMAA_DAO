@@ -1,182 +1,381 @@
 /**
- * @file app.ts
- *
+ * @file src/app.ts
  * @description
- * Main Express app setup for UjamaaDAO backend.
- * Configures security, middleware, routing, and error handling.
+ * UJAMAADAO Express Application - Production Ready
+ *
+ * Main Express app setup with strict middleware order.
+ * Exports the app instance and a servicesReady promise for index.ts to await.
+ *
+ * Middleware order (CRITICAL):
+ * 1. Trust proxy
+ * 2. Security (helmet, CORS)
+ * 3. Body parsing
+ * 4. Context initialization
+ * 5. Logging & correlation
+ * 6. Global rate limiting
+ * 7. Routes
+ * 8. Cleanup
+ * 9. 404 handler
+ * 10. Error handler
+ *
+ * Version: 2.5 — February 2026
+ * Updated: Removed cron registrations (moved to separate worker + BullMQ)
+ * Security Hardened: February 2026
  */
 
-import dotenv from 'dotenv';
-import express, { Request, Response, NextFunction } from 'express';
-import path from 'path';
+import * as Sentry from '@sentry/node';
+import express, { RequestHandler } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import morgan from 'morgan';
+import { timingSafeEqual, createHash } from 'crypto';
+import { logger } from './core/logger/logger.js';
 
-import userRoutes from './routes/user.routes.js';
-import authRoutes from './routes/auth.routes.js';
-import groupRoutes from './routes/group.routes.js';
-import impactRoutes from './routes/impactPoint.routes.js';
-import tokenRoutes from './routes/token.routes.js';
-import proposalRoutes from './routes/proposal.routes.js';
-import voteRoutes from './routes/vote.routes.js';
-import projectRoutes from './routes/project.routes.js';
-import milestoneRoutes from './routes/milestone.routes.js';
-import referenceDataRoutes from './routes/referenceData.routes.js';
-import userPrivacyRoutes from './routes/userPrivacy.routes.js';
-import userAuditRoutes from './routes/userAudit.routes.js';
-import notificationRoutes from './routes/notification.routes.js';
-import userConsentRoutes from './routes/userConsent.routes.js';
-import userActivityRoutes from './routes/userActivity.routes.js';
-import WalletRoutes from './routes/wallet.routes.js';
-import geographicRoutes from './routes/geographic.routes.js';
-import economicRoutes from './routes/economic.routes.js';
+// Database & services
+import { prisma } from './core/database/client.js';
+import { redisInitialized } from './core/middleware/rateLimiter.js';
 
+// Event listeners
+import { registerAllListeners } from './core/events/listener-registry.js';
 
-import logger from './utils/logger.js';
+// Middleware
+import {
+  contextMiddleware,
+  requestCleanupMiddleware,
+} from './core/middleware/context.middleware.js';
+import {
+  errorHandler,
+  notFoundHandler,
+} from './core/middleware/errorHandler.js';
+import {
+  attachLogger,
+  requestLogger,
+} from './core/middleware/logging.middleware.js';
+import { globalRateLimit } from './core/middleware/rateLimiter.js';
 
-// New imports for role bootstrapping, metrics and admin routes
-// Note: we import routers/handlers only — we do NOT call DB from this module.
-import { loadDynamicRoles, addExtraAllowedRoles } from './constants/roles.js';
-import adminRolesRouter from './routes/adminRoles.js';
-import { metricsHandler } from './utils/metrics.js';
+// Routes
+import authRoutes from './modules/auth/routes/auth.routes.js';
+import userRoutes from './modules/user/routes/user.routes.js';
+import adminRoutes from './modules/admin/routes/admin.routes.js';
+import economyRoutes from './modules/economy/routes/economy.routes.js';
+import communityRoutes from './modules/community/routes/group.routes.js';
+import conflictRoutes from './modules/community/routes/conflict.routes.js';
+import governanceRoutes from './modules/governance/routes/proposal.routes.js';
+import paymasterRoutes from './modules/governance/routes/paymaster.routes.js';
+import projectRoutes from './modules/projects/routes/project.routes.js';
+import marketplaceRoutes from './modules/marketplace/routes/marketplace.routes.js';
+import notificationRoutes from './modules/notifications/routes/notification.routes.js';
+import emergencyRoutes from './modules/emergency/routes/emergency.routes.js';
+import auditRoutes from './modules/audit/routes/audit.routes.js';
+import feedRoutes from './modules/audit/routes/feed.routes.js';
+import onboardingRoutes from './modules/onboarding/routes/onboarding.routes.js';
+import reputationRoutes from './modules/reputation/routes/reputation.routes.js';
+import educationRoutes from './modules/education/routes/education.routes.js';
+import integrationRoutes from './modules/integration/routes/bot.routes.js';
+import treasuryRoutes from './modules/treasury/routes/treasury.routes.js';
+import paymentRoutes from './modules/payments/routes/payment.routes.js';
+import electionRoutes from './modules/elections/routes/election.routes.js';
+import postRoutes from './modules/posts/routes/post.routes.js';
+import platformConfigRoutes from './modules/admin/routes/platform-config.routes.js';
+import blockchainAdminRoutes from './modules/admin/routes/blockchain.routes.js';
+import searchRoutes from './modules/search/routes/search.routes.js';
 
-dotenv.config();
+// Bull Board dashboard
+import { ExpressAdapter } from '@bull-board/express';
+import { createBullBoard } from '@bull-board/api';
+import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
+import {
+  economyQueue,
+  userCleanupQueue,
+  deadLetterQueue,
+  integrationQueue,
+  notificationsQueue,
+  governanceQueue,
+} from '@core/queue/index.js';
 
 const app = express();
 
-// Enable Cross-Origin Resource Sharing
-app.use(cors());
-
-// Set security-related HTTP headers via Helmet
-app.use(helmet());
-
-// HTTP request logging in combined Apache-style log format
-app.use(morgan('combined'));
-
-// Parse JSON payloads in incoming requests
-app.use(express.json());
-
-// Serve uploaded files statically
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
-
-// Mount reference data-related routes under /api/reference
-app.use('/api/reference', referenceDataRoutes);
-
-
-// Mount economic-related routes under /api/economic
-app.use('/api/economic', economicRoutes);
-
-// Mount geographic-related routes under /api/geographic
-
-app.use('/geographic', geographicRoutes);
-
-// Mount user-related routes under /api/users
-app.use('/api/users', userRoutes);
-
-// Mount wallet-related routes under /api/wallet
-app.use('/api/wallet', WalletRoutes);
-
-// Mount notification-related routes under /api/notifications
-app.use('/api/notifications', notificationRoutes);
-
-// Mount user consent-related routes under /api/user-consent
-app.use('/api/user-consent', userConsentRoutes);
-
-// Mount user activity-related routes under /api/user-activity
-app.use('/api/user-activity', userActivityRoutes);
-
-// Mount group-related routes under /api/groups
-app.use('/api/groups', groupRoutes);
-
-// Mount authentication routes under /api/auth
-app.use('/api/auth', authRoutes);
-
-// Mount impact-related routes under /api
-app.use('/api', impactRoutes);
-
-// Mount token-related routes under /api
-app.use('/api', tokenRoutes);
-
-// Mount proposal-related routes under /api/proposals
-app.use('/api/proposals', proposalRoutes);
-
-// Mount vote-related routes under /api/votes
-app.use('/api/votes', voteRoutes);
-
-// Mount project-related routes under /api/projects
-app.use('/api/projects', projectRoutes);
-
-// Mount milestone-related routes under /api/milestones
-app.use('/api/milestones', milestoneRoutes);
-
-// Mount user privacy-related routes under /api/user-privacy
-app.use('/api/user-privacy', userPrivacyRoutes);
-
-// Mount user audit-related routes under /api/user-audit
-app.use('/api/user-audit', userAuditRoutes);
-
-// Basic health check endpoint
-app.get('/health', (_req: Request, res: Response) => {
-  res.json({ status: 'OK' });
-});
+// ============================================================================
+// ASYNC SERVICE INITIALIZATION (exported for index.ts to await)
+// ============================================================================
 
 /**
- * Metrics and admin routes:
- * - We export initRoles() below which will mount /metrics and /admin/roles (if enabled)
- * - We do NOT call loadDynamicRoles() automatically during import to keep tests and CI safe.
+ * Initialize all async dependencies (Redis, event listeners, etc.)
+ * Called once at startup — index.ts awaits this before listening
  */
+async function initializeServices(): Promise<void> {
+  logger.info({ operationType: 'STARTUP' }, 'Initializing async services...');
 
-// Optional: 404 Not Found handler for unmatched routes (kept)
-app.use((_req: Request, res: Response) => {
-  res.status(404).json({ error: 'Route not found' });
-});
+  try {
+    // 1. Wait for Redis (used by rate limiting, sessions, queues)
+    await redisInitialized;
+    logger.debug({ operationType: 'STARTUP' }, 'Redis connected');
 
-// Global error handler middleware
-app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
-  logger.error('Global error handler caught an error', {
-    error: err,
-  });
+    // 2. Register cross-module event listeners
+    registerAllListeners();
+    logger.debug({ operationType: 'STARTUP' }, 'Event listeners registered');
 
-  let status = 500;
-  let message = 'Internal Server Error';
-
-  if (err && typeof err === 'object' && 'statusCode' in err && 'message' in err) {
-    status = (err as any).statusCode ?? 500;
-    message = (err as any).message ?? message;
-  } else if (err instanceof Error) {
-    message = err.message;
-  }
-
-  res.status(status).json({ error: message });
-});
-
-export default app;
-
-/**
- * initRoles
- *
- * Call this once during application startup (before app.listen).
- * - Loads dynamic roles from DB into the allowlist.
- * - Adds EXTRA_ALLOWED_ROLES from env.
- * - Mounts /metrics and /admin/roles if configured.
- *
- * We accept a prisma client so tests can pass a mock if needed.
- */
-export async function initRoles(prismaClient: any, expressApp = app) {
-  // Load roles from DB. Default: fail-fast (throw) so startup fails if DB unreachable.
-  // If you prefer fallback behavior at startup, catch and handle here.
-  await loadDynamicRoles(prismaClient);
-
-  // Add any extras from env
-  const extras = process.env.EXTRA_ALLOWED_ROLES?.split(',').map((s) => s.trim()).filter(Boolean) ?? [];
-  if (extras.length) addExtraAllowedRoles(extras);
-
-  // Mount /metrics endpoint (public)
-  expressApp.get('/metrics', metricsHandler);
-
-  // Mount admin roles reload endpoint (requires Auth + attachUserRoles to have run on the request)
-  if ((process.env.ROLE_ALLOWLIST_RELOAD_ENABLED ?? 'true') === 'true') {
-    expressApp.use('/admin/roles', adminRolesRouter);
+    logger.info(
+      { operationType: 'STARTUP' },
+      '✅ All async services initialized'
+    );
+  } catch (error) {
+    logger.error(
+      {
+        operationType: 'STARTUP_FAILURE',
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      },
+      '❌ Failed to initialize services'
+    );
+    throw error;
   }
 }
+
+export const servicesReady = initializeServices();
+
+// ============================================================================
+// 1. TRUST PROXY & SECURITY
+// ============================================================================
+
+app.set('trust proxy', 1); // Required for correct IP behind reverse proxy/load balancer
+
+app.use(
+  helmet({
+    contentSecurityPolicy: process.env.NODE_ENV === 'production',
+    crossOriginEmbedderPolicy: process.env.NODE_ENV === 'production',
+    hsts: process.env.NODE_ENV === 'production',
+  })
+);
+
+const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',').map((o) =>
+  o.trim()
+) || ['http://localhost:3000', 'http://localhost:3001'];
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true); // Allow non-browser (Postman, curl, etc.)
+
+      const isAllowed =
+        allowedOrigins.includes('*') || allowedOrigins.includes(origin);
+
+      if (isAllowed) {
+        callback(null, true);
+      } else {
+        logger.warn(
+          { operationType: 'CORS_BLOCKED', origin },
+          'CORS request blocked - origin not allowed'
+        );
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Correlation-ID'],
+    exposedHeaders: ['X-Correlation-ID'],
+    maxAge: 86400,
+  })
+);
+
+// ============================================================================
+// 2. BODY PARSING
+// ============================================================================
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+app.disable('x-powered-by'); // Security: hide Express version
+
+// ============================================================================
+// 3. CONTEXT & LOGGING
+// ============================================================================
+
+app.use(contextMiddleware as RequestHandler);
+app.use(attachLogger);
+app.use(requestLogger);
+
+// ============================================================================
+// 4. GLOBAL RATE LIMITING
+// ============================================================================
+
+app.use(globalRateLimit());
+
+// ============================================================================
+// 5. HEALTH & ROOT ENDPOINTS (public)
+// ============================================================================
+
+app.get('/health', (_req, res) => {
+  res.status(200).json({
+    success: true,
+    status: 'ok',
+    service: 'ujamaadao-backend',
+    version: '2.5',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    uptime: process.uptime(),
+  });
+});
+
+app.get('/ready', async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.status(200).json({
+      success: true,
+      status: 'ready',
+      checks: { database: 'connected' },
+    });
+  } catch (error) {
+    logger.error(
+      { operationType: 'READINESS_CHECK_FAILED', error: String(error) },
+      'Readiness check failed'
+    );
+    res.status(503).json({
+      success: false,
+      status: 'not ready',
+      checks: { database: 'disconnected' },
+    });
+  }
+});
+
+app.get('/', (_req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'Welcome to UjamaaDAO API',
+    version: '2.5',
+    documentation: '/api/v1/docs',
+    status: 'operational',
+  });
+});
+
+// Placeholder API docs (replace with OpenAPI/Swagger later)
+app.get('/api/v1/docs', (_req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'API Documentation',
+    version: '2.5',
+    endpoints: {
+      auth: '/api/v1/auth',
+      users: '/api/v1/users',
+      admin: '/api/v1/admin',
+      economy: '/api/v1/economy',
+      community: '/api/v1/community',
+      governance: '/api/v1/governance',
+      projects: '/api/v1/projects',
+      marketplace: '/api/v1/marketplace',
+      notifications: '/api/v1/notifications',
+      emergency: '/api/v1/emergency',
+      audit: '/api/v1/audit',
+      onboarding: '/api/v1/onboarding',
+      integration: '/api/v1/integration',
+      health: '/health',
+      ready: '/ready',
+    },
+  });
+});
+
+// ============================================================================
+// 6. API ROUTES (v1 namespace)
+// ============================================================================
+
+app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/users', userRoutes);
+app.use('/api/v1/admin', adminRoutes);
+app.use('/api/v1/admin/blockchain', blockchainAdminRoutes);
+app.use('/api/v1/economy', economyRoutes);
+app.use('/api/v1/community', communityRoutes);
+app.use('/api/v1/conflicts', conflictRoutes);
+app.use('/api/v1/governance/paymaster', paymasterRoutes);
+app.use('/api/v1/governance', governanceRoutes);
+app.use('/api/v1/elections', electionRoutes);
+app.use('/api/v1/projects', projectRoutes);
+app.use('/api/v1/marketplace', marketplaceRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
+app.use('/api/v1/emergency', emergencyRoutes);
+app.use('/api/v1/audit', auditRoutes);
+app.use('/api/v1/feed', feedRoutes);
+app.use('/api/v1/posts', postRoutes);
+app.use('/api/v1/onboarding', onboardingRoutes);
+app.use('/api/v1/reputation', reputationRoutes);
+app.use('/api/v1/education', educationRoutes);
+app.use('/api/v1/integration', integrationRoutes);
+app.use('/api/v1/treasury', treasuryRoutes);
+app.use('/api/v1/payments', paymentRoutes);
+app.use('/api/v1/platform-config', platformConfigRoutes);
+app.use('/api/v1/search', searchRoutes);
+
+// ─────────────────────────────────────────────
+// BULL BOARD DASHBOARD — Visual queue monitoring
+// ─────────────────────────────────────────────
+
+// Install required packages first:
+// npm install @bull-board/api @bull-board/express bull-board
+
+// Timing-safe string comparison — prevents timing attacks on credentials
+function safeCompare(a: string, b: string): boolean {
+  const hashA = createHash('sha256').update(a).digest();
+  const hashB = createHash('sha256').update(b).digest();
+  return timingSafeEqual(hashA, hashB);
+}
+
+// Simple basic auth middleware (change DASHBOARD_PASSWORD env var in production!)
+const requireDashboardAuth = (req: any, res: any, next: any) => {
+  const auth = {
+    login: 'admin',
+    password: process.env.DASHBOARD_PASSWORD || 'YourVeryStrongPassword123!',
+  };
+  const b64auth = (req.headers.authorization || '').split(' ')[1] || '';
+  const [login, password] = Buffer.from(b64auth, 'base64')
+    .toString()
+    .split(':');
+
+  if (
+    safeCompare(login || '', auth.login) &&
+    safeCompare(password || '', auth.password)
+  ) {
+    return next();
+  }
+
+  res.set('WWW-Authenticate', 'Basic realm="Admin Queues"');
+  res.status(401).send('Authentication required');
+};
+
+// Mount the dashboard
+const serverAdapter = new ExpressAdapter();
+serverAdapter.setBasePath('/admin/queues');
+
+createBullBoard({
+  queues: [
+    new BullMQAdapter(economyQueue),
+    new BullMQAdapter(userCleanupQueue),
+    new BullMQAdapter(deadLetterQueue),
+    new BullMQAdapter(integrationQueue),
+    new BullMQAdapter(notificationsQueue),
+    new BullMQAdapter(governanceQueue),
+  ],
+  serverAdapter,
+});
+
+// Protect with basic auth and mount the route
+app.use('/admin/queues', requireDashboardAuth, serverAdapter.getRouter());
+
+logger.info(
+  { operationType: 'DASHBOARD' },
+  'Bull Board dashboard enabled at /admin/queues (basic auth required)'
+);
+
+// ============================================================================
+// 7. CLEANUP & ERROR HANDLING (MUST BE LAST)
+// ============================================================================
+
+app.use(requestCleanupMiddleware as RequestHandler);
+Sentry.setupExpressErrorHandler(app);
+
+app.use(notFoundHandler as RequestHandler);
+app.use(errorHandler as any);
+
+// ============================================================================
+// EXPORTS
+// ============================================================================
+
+export default app;

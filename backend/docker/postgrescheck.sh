@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
-# ../backend/docker/wait-for-postgres.sh
-# Usage: wait-for-postgres.sh <host> <port> [timeout_seconds]
+# docker/postgrescheck.sh
+# Usage: postgrescheck.sh <host> <port> [timeout_seconds]
 # Waits for host:port to accept TCP connections. Exits non-zero on timeout.
 
 set -e
@@ -14,7 +14,7 @@ if [ -z "$host" ] || [ -z "$port" ]; then
   exit 2
 fi
 
-echo "Waiting up to ${timeout}s for ${host}:${port}..."
+echo "⏳ Waiting up to ${timeout}s for PostgreSQL at ${host}:${port}..."
 
 start_ts=$(date +%s)
 while ! nc -z "$host" "$port"; do
@@ -22,10 +22,15 @@ while ! nc -z "$host" "$port"; do
   now_ts=$(date +%s)
   elapsed=$((now_ts - start_ts))
   if [ "$elapsed" -ge "$timeout" ]; then
-    echo "Timed out after ${timeout}s waiting for ${host}:${port}"
+    echo "❌ ERROR: Timed out after ${timeout}s waiting for ${host}:${port}"
     exit 1
+  fi
+  
+  # Show progress every 5 seconds
+  if [ $((elapsed % 5)) -eq 0 ] && [ $elapsed -gt 0 ]; then
+    echo "   Still waiting... (${elapsed}s elapsed)"
   fi
 done
 
-echo "${host}:${port} is available"
+echo "✅ PostgreSQL is ready at ${host}:${port}"
 exit 0

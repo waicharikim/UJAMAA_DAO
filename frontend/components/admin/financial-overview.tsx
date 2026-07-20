@@ -3,132 +3,62 @@
 import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   DollarSign,
   TrendingUp,
   TrendingDown,
   Wallet,
-  ArrowUpRight,
-  ArrowDownRight,
   PieChart,
   BarChart3,
+  Download,
+  Loader2,
 } from "lucide-react"
+import { type AdminStatsDto, adminApi } from "@/lib/api"
+import { useToast } from "@/components/ui/use-toast"
 
-interface Transaction {
-  id: string
-  type: "deposit" | "withdrawal" | "transfer" | "reward" | "penalty"
-  amount: number
-  currency: "fiat" | "token"
-  description: string
-  timestamp: string
-  status: "completed" | "pending" | "failed"
-  fromAddress?: string
-  toAddress?: string
+interface Props {
+  stats?: AdminStatsDto
 }
 
-export function FinancialOverview() {
+export function FinancialOverview({ stats }: Props) {
+  const { toast } = useToast()
   const [activeTab, setActiveTab] = useState("overview")
+  const [reportType, setReportType] = useState<"users" | "governance" | "economy">("economy")
+  const [generatingReport, setGeneratingReport] = useState(false)
 
-  const [financialData] = useState({
-    totalFiatBalance: 125000,
-    totalTokenBalance: 50000,
-    monthlyInflow: 15000,
-    monthlyOutflow: 8500,
-    pendingTransactions: 3,
-    totalTransactions: 1247,
-  })
-
-  const [recentTransactions] = useState<Transaction[]>([
-    {
-      id: "1",
-      type: "deposit",
-      amount: 5000,
-      currency: "fiat",
-      description: "Community funding deposit",
-      timestamp: "2024-01-20T14:30:00Z",
-      status: "completed",
-      toAddress: "treasury_wallet",
-    },
-    {
-      id: "2",
-      type: "withdrawal",
-      amount: 2500,
-      currency: "fiat",
-      description: "Milestone funding disbursement",
-      timestamp: "2024-01-20T13:15:00Z",
-      status: "completed",
-      fromAddress: "treasury_wallet",
-    },
-    {
-      id: "3",
-      type: "reward",
-      amount: 100,
-      currency: "token",
-      description: "Voting participation reward",
-      timestamp: "2024-01-20T12:00:00Z",
-      status: "completed",
-    },
-    {
-      id: "4",
-      type: "transfer",
-      amount: 1000,
-      currency: "token",
-      description: "Group funding allocation",
-      timestamp: "2024-01-20T11:30:00Z",
-      status: "pending",
-      fromAddress: "main_treasury",
-      toAddress: "group_wallet_001",
-    },
-  ])
-
-  const getTransactionIcon = (type: string) => {
-    switch (type) {
-      case "deposit":
-        return <ArrowDownRight className="h-4 w-4 text-green-600" />
-      case "withdrawal":
-        return <ArrowUpRight className="h-4 w-4 text-red-600" />
-      case "transfer":
-        return <ArrowUpRight className="h-4 w-4 text-blue-600" />
-      case "reward":
-        return <TrendingUp className="h-4 w-4 text-purple-600" />
-      case "penalty":
-        return <TrendingDown className="h-4 w-4 text-orange-600" />
-      default:
-        return <DollarSign className="h-4 w-4" />
+  async function handleGenerateReport() {
+    setGeneratingReport(true)
+    try {
+      const report = await adminApi.generateReport(reportType, { format: "json" }) as { columns: string[]; rows: Record<string, unknown>[] }
+      const csv = [
+        report.columns.join(","),
+        ...report.rows.map((row: Record<string, unknown>) =>
+          report.columns.map((col: string) => JSON.stringify(row[col] ?? "")).join(",")
+        ),
+      ].join("\n")
+      const blob = new Blob([csv], { type: "text/csv" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `report-${reportType}-${new Date().toISOString().split("T")[0]}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast({ title: "Report downloaded", description: `${reportType} report exported as CSV.` })
+    } catch {
+      toast({ title: "Report failed", description: "Could not generate report.", variant: "destructive" })
+    } finally {
+      setGeneratingReport(false)
     }
   }
 
-  const getTransactionColor = (type: string) => {
-    switch (type) {
-      case "deposit":
-        return "text-green-600"
-      case "withdrawal":
-        return "text-red-600"
-      case "transfer":
-        return "text-blue-600"
-      case "reward":
-        return "text-purple-600"
-      case "penalty":
-        return "text-orange-600"
-      default:
-        return "text-slate-600"
-    }
-  }
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "completed":
-        return "bg-green-100 text-green-800"
-      case "pending":
-        return "bg-yellow-100 text-yellow-800"
-      case "failed":
-        return "bg-red-100 text-red-800"
-      default:
-        return "bg-gray-100 text-gray-800"
-    }
+  const financialData = {
+    totalPR: stats?.economy.totalParticipationRights ?? 0,
+    totalUT: stats?.economy.totalUtilityTokens ?? 0,
+    monthlyInflow: 0,
+    monthlyOutflow: 0,
   }
 
   return (
@@ -157,8 +87,9 @@ export function FinancialOverview() {
                     <div className="flex items-center gap-2">
                       <Wallet className="h-5 w-5 text-green-500" />
                       <div>
-                        <div className="text-2xl font-bold">${financialData.totalFiatBalance.toLocaleString()}</div>
-                        <div className="text-sm text-gray-600">Total Fiat Balance</div>
+                        <div className="text-2xl font-bold">{financialData.totalPR.toLocaleString()}</div>
+                        <div className="text-sm text-gray-600">Total PR</div>
+                        <div className="text-xs text-gray-400">Participation Rights in circulation</div>
                       </div>
                     </div>
                   </CardContent>
@@ -169,8 +100,9 @@ export function FinancialOverview() {
                     <div className="flex items-center gap-2">
                       <DollarSign className="h-5 w-5 text-blue-500" />
                       <div>
-                        <div className="text-2xl font-bold">{financialData.totalTokenBalance.toLocaleString()}</div>
-                        <div className="text-sm text-gray-600">Total Token Balance</div>
+                        <div className="text-2xl font-bold">{financialData.totalUT.toLocaleString()}</div>
+                        <div className="text-sm text-gray-600">Total UT</div>
+                        <div className="text-xs text-gray-400">Utility Tokens in circulation</div>
                       </div>
                     </div>
                   </CardContent>
@@ -216,8 +148,8 @@ export function FinancialOverview() {
                         <span>Monthly Inflow</span>
                         <span>${financialData.monthlyInflow.toLocaleString()}</span>
                       </div>
-                      <Progress value={75} className="h-3 bg-green-100">
-                        <div className="h-full bg-green-500 rounded-full" style={{ width: "75%" }} />
+                      <Progress value={0} className="h-3 bg-green-100">
+                        <div className="h-full bg-green-500 rounded-full" style={{ width: "0%" }} />
                       </Progress>
                     </div>
                     <div>
@@ -225,8 +157,8 @@ export function FinancialOverview() {
                         <span>Monthly Outflow</span>
                         <span>${financialData.monthlyOutflow.toLocaleString()}</span>
                       </div>
-                      <Progress value={45} className="h-3 bg-red-100">
-                        <div className="h-full bg-red-500 rounded-full" style={{ width: "45%" }} />
+                      <Progress value={0} className="h-3 bg-red-100">
+                        <div className="h-full bg-red-500 rounded-full" style={{ width: "0%" }} />
                       </Progress>
                     </div>
                     <div className="pt-2 border-t">
@@ -245,45 +177,13 @@ export function FinancialOverview() {
             <TabsContent value="transactions" className="space-y-6">
               <Card>
                 <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle>Recent Transactions</CardTitle>
-                    <Badge variant="secondary">{financialData.pendingTransactions} pending</Badge>
-                  </div>
+                  <CardTitle>Recent Transactions</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
-                    {recentTransactions.map((transaction) => (
-                      <div key={transaction.id} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div className="flex items-center gap-3">
-                          {getTransactionIcon(transaction.type)}
-                          <div>
-                            <div className="font-medium">{transaction.description}</div>
-                            <div className="text-sm text-slate-600">
-                              {transaction.type.charAt(0).toUpperCase() + transaction.type.slice(1)} •
-                              {new Date(transaction.timestamp).toLocaleDateString()}
-                            </div>
-                            {transaction.fromAddress && transaction.toAddress && (
-                              <div className="text-xs text-slate-500">
-                                {transaction.fromAddress} → {transaction.toAddress}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className={`font-semibold ${getTransactionColor(transaction.type)}`}>
-                            {transaction.type === "withdrawal" || transaction.type === "penalty" ? "-" : "+"}
-                            {transaction.currency === "fiat" ? "$" : ""}
-                            {transaction.amount.toLocaleString()}
-                            {transaction.currency === "token" ? " tokens" : ""}
-                          </div>
-                          <Badge className={getStatusColor(transaction.status)}>{transaction.status}</Badge>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="text-center py-8 text-slate-500">
+                    <DollarSign className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>Transaction history will be available here once the treasury module is wired.</p>
                   </div>
-                  <Button className="w-full mt-4" variant="outline">
-                    View All Transactions
-                  </Button>
                 </CardContent>
               </Card>
             </TabsContent>
@@ -323,16 +223,34 @@ export function FinancialOverview() {
             <TabsContent value="reports" className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>Financial Reports</CardTitle>
+                  <CardTitle>Generate Report</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-center py-12 text-slate-500">
-                    <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <h3 className="text-lg font-semibold mb-2">Financial Reports</h3>
-                    <p>Detailed financial analytics and reports will be available here.</p>
-                    <Button className="mt-4" variant="outline">
-                      Generate Report
-                    </Button>
+                  <div className="flex flex-col items-center gap-6 py-8">
+                    <BarChart3 className="h-12 w-12 opacity-40 text-slate-500" />
+                    <p className="text-sm text-slate-500 text-center">Select a report type and download as CSV.</p>
+                    <div className="flex gap-3 items-center">
+                      <Select value={reportType} onValueChange={(v) => setReportType(v as typeof reportType)}>
+                        <SelectTrigger className="w-48">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="users">User Activity</SelectItem>
+                          <SelectItem value="governance">Governance</SelectItem>
+                          <SelectItem value="economy">Economy</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        variant="outline"
+                        disabled={generatingReport}
+                        onClick={handleGenerateReport}
+                      >
+                        {generatingReport
+                          ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Generating…</>
+                          : <><Download className="h-4 w-4 mr-2" />Download CSV</>
+                        }
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

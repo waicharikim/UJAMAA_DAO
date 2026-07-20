@@ -1,18 +1,43 @@
 {
-    "compilerOptions": {
-      "target": "ES2022",
-      "module": "NodeNext",
-      "strict": true,
-      "esModuleInterop": true,
-      "forceConsistentCasingInFileNames": true,
-      "skipLibCheck": true,
-      "outDir": "./dist",
-      "rootDir": "./src",
-      "moduleResolution": "NodeNext",
-      "allowSyntheticDefaultImports": true,
-      "declaration": false,
-      "sourceMap": true
+  "compilerOptions": {
+  "baseUrl": "./src",
+  "paths": {
+      "@core/*": ["./core/*"],
+      "@modules/*": ["./modules/*"],
+      "@utils/*": ["./utils/*"],
+      "@middlewares/*": ["./middlewares/*"],
+      "@types/*": ["./src/types/*"],
+      "@config/*": ["./src/config/*"]
     },
-    "include": ["src/**/*"],
-    "exclude": ["node_modules", "dist"]
-  }
+
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "esModuleInterop": false,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+
+    "outDir": "./dist",
+    "rootDir": "./src",
+
+    "sourceMap": true,
+    "declaration": false,
+    "emitDeclarationOnly": false,
+    "allowImportingTsExtensions": false,
+    "noEmit": false
+  },
+
+  "include": ["src/**/*"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/core/data/counties.ts",
+    "src/core/data/industries.ts",
+    "src/core/data/goodsServices.ts",
+    "src/core/database/seed.ts",
+    "src/core/jobs/auth-cleanup.jobs.ts",
+    "src/modules/onboarding/seed.ts"
+  ]
+}

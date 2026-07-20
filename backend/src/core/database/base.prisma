@@ -1,0 +1,398 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================================
+// SHARED ENUMS
+// These are referenced by multiple module schemas and MUST appear first
+// in the merged output so module schemas can reference them safely.
+// ============================================================================
+
+enum LocationScope {
+  WARD
+  CONSTITUENCY
+  COUNTY
+  NATIONAL
+}
+
+enum GroupStatus {
+  FORMING      // Initial creation, gathering members
+  ACTIVE       // Fully operational
+  SUSPENDED    // Temporarily inactive (violations, disputes)
+  INACTIVE     // No activity for extended period
+  DISSOLVED    // Permanently closed
+  MERGED       // Combined with another group
+}
+
+enum GroupRole {
+  MEMBER       // Regular member
+  LEADER       // Group leader/chairperson
+  TREASURER    // Financial manager
+  SECRETARY    // Records keeper
+  AUDITOR      // Financial oversight
+  FACILITATOR  // Meeting coordinator
+  MENTOR       // Advisor role
+  MODERATOR    // Content/discussion moderator
+}
+
+enum HolderType {
+  USER
+  GROUP
+  SYSTEM
+}
+
+// ============================================================================
+// GEOGRAPHIC MODELS
+// ============================================================================
+
+model County {
+  id             String         @id @default(uuid()) @db.Uuid
+  code           String         @unique
+  name           String         @unique
+  constituencies Constituency[]
+  wards          Ward[]
+
+  // Community module back-relation
+  groups         Group[]        @relation("CountyGroups")
+  elections      Election[]     @relation("CountyElections")
+
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@map("counties")
+}
+
+model Constituency {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  countyId  String   @db.Uuid
+  county    County   @relation(fields: [countyId], references: [id], onDelete: Cascade)
+  wards     Ward[]
+
+  // Community module back-relation
+  groups    Group[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name, countyId])
+  @@index([countyId])
+  @@map("constituencies")
+}
+
+model Ward {
+  id             String       @id @default(uuid()) @db.Uuid
+  name           String
+  code           String?      @unique
+  constituencyId String       @db.Uuid
+  countyId       String       @db.Uuid
+  constituency   Constituency @relation(fields: [constituencyId], references: [id], onDelete: Cascade)
+  county         County       @relation(fields: [countyId], references: [id], onDelete: Cascade)
+
+  // User module — primary/secondary/current ward
+  usersPrimary   User[]       @relation("PrimaryWard")
+  usersSecondary User[]       @relation("SecondaryWard")
+  usersCurrent   User[]       @relation("CurrentWard")
+
+  // User module — residence change requests
+  newWardRequests ResidenceChangeRequest[] @relation("NewWardRequests")
+  oldWardRequests ResidenceChangeRequest[] @relation("OldWardRequests")
+
+  // Community module
+  groups          Group[]          @relation("GroupWard")
+  communityAssets CommunityAsset[]
+  communityVouches CommunityVouch[]
+
+  // Marketplace module
+  marketplaceListings MarketplaceListing[]
+
+  // Reputation module
+  locationImpacts UserLocationImpact[] @relation("WardLocationImpacts")
+
+  // Posts module
+  posts           Post[]               @relation("PostWard")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([constituencyId])
+  @@index([countyId])
+  @@map("wards")
+}
+
+// ============================================================================
+// INDUSTRY MODELS
+// ============================================================================
+
+model Industry {
+  id             String         @id @default(uuid()) @db.Uuid
+  name           String         @unique
+  goodsServices  GoodsService[]
+  userIndustries UserIndustry[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@map("industries")
+}
+
+model GoodsService {
+  id                String             @id @default(uuid()) @db.Uuid
+  name              String
+  description       String?
+  industryId        String             @db.Uuid
+  category          String?
+  active            Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  industry          Industry           @relation(fields: [industryId], references: [id], onDelete: Cascade)
+  userGoodsServices UserGoodsService[]
+
+  @@unique([name, industryId])
+  @@index([industryId])
+  @@index([industryId, active])
+  @@map("goods_services")
+}
+
+// ============================================================================
+// CORE USER MODEL
+// Back-relations are declared for every module that references User.
+// When module schemas are merged in, Prisma resolves these cross-file relations.
+// ============================================================================
+
+model User {
+  id                   String    @id @default(uuid()) @db.Uuid
+  email                String?   @unique
+  name                 String?
+  phoneNumber          String?
+  walletAddress        String?   @unique
+  passwordHash         String?   @db.Text // For admin accounts only
+  avatarUrl            String?
+
+  // Ward assignments
+  primaryWardId        String?   @db.Uuid
+  secondaryWardId      String?   @db.Uuid
+  currentLocationId    String?   @db.Uuid
+  currentLocationUntil DateTime?
+
+  primaryWard          Ward?     @relation("PrimaryWard", fields: [primaryWardId], references: [id], onDelete: SetNull)
+  secondaryWard        Ward?     @relation("SecondaryWard", fields: [secondaryWardId], references: [id], onDelete: SetNull)
+  currentWard          Ward?     @relation("CurrentWard", fields: [currentLocationId], references: [id], onDelete: SetNull)
+
+  // Verification status
+  verificationLevel    String    @default("UNVERIFIED")
+  emailVerified        Boolean   @default(false)
+  phoneVerified        Boolean   @default(false)
+  communityVerified    Boolean   @default(false)
+  locationVerified     Boolean   @default(false)
+
+  // Economy
+  participationRights  Int       @default(0)
+  fiatBackedUtBalance  Int       @default(0) // M-Pesa deposits — 1 UT = 1 KES, cashable back
+  earnedUtBalance      Int       @default(0) // Platform activity rewards — no cash-out path
+  globalImpactPoints   Int       @default(0)
+
+  // Account status
+  status               String    @default("ACTIVE") // ACTIVE, SUSPENDED, BANNED
+
+  // Roles (convenience array — authoritative source is UserRole table)
+  roles                String[]  @default([])
+
+  // Timestamps
+  onboardingCompletedAt  DateTime?
+  lastResidenceChangeAt  DateTime?
+  lastLoginAt            DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  // ---- Auth module ----
+  sessions              Session[]
+  loginEvents           LoginEvent[]
+  verificationTokens    EmailVerificationToken[]
+  accounts              Account[]
+  recoveryRequests      RecoveryRequest[]
+  phoneVerifications    PhoneVerification[]
+  passwordResets        PasswordReset[]
+  twoFactorAuth         TwoFactorAuth?
+  webauthnCredentials   WebAuthnCredential[]
+  accountRecovery       AccountRecovery?
+  securityEvents        SecurityEvent[]
+  messagingProfiles     UserMessagingProfile[]
+
+  // ---- User module ----
+  userIndustries            UserIndustry[]
+  userGoodsServices         UserGoodsService[]
+  privacySettings           UserPrivacySettings?
+  accessibility             UserAccessibility?
+  residenceChangeRequests   ResidenceChangeRequest[] @relation("UserResidenceRequests")
+  reviewedResidenceRequests ResidenceChangeRequest[] @relation("ResidenceRequestReviewer")
+  participationRightsLogs   ParticipationRightsLog[]
+  onboardingProgress        OnboardingProgress?
+  tutorialCompletions       UserTutorialCompletion[]
+  onboardingMilestones      OnboardingMilestone[]
+
+  // ---- Roles (base) ----
+  userRoles                 UserRole[]
+
+  // ---- Community module ----
+  groupMemberships          GroupMember[]
+  complainantCases          ConflictCase[]         @relation("Complainant")
+  respondentCases           ConflictCase[]         @relation("Respondent")
+  comments                  Comment[]
+  organizedEvents           Event[]
+  eventAttendances          EventAttendee[]
+  engagementMetrics         UserEngagementMetric[]
+  verificationRequests      VerificationRequest[]
+  vouchedFor                CommunityVouch[]       @relation("VouchedFor")
+  vouchesGiven              CommunityVouch[]       @relation("VouchesGiven")
+  barazaAttendances         BarazaAttendance[]
+
+  // ---- Governance module ----
+  proposals                 Proposal[]             @relation("UserProposals")
+  reviewedProposals         Proposal[]             @relation("ProposalReviewer")
+  votes                     GroupMemberVote[]      @relation("UserVotes")
+  proposalAnnotations       ProposalAnnotation[]   @relation("UserAnnotations")
+  annotationReactions       ProposalAnnotationReaction[] @relation("UserAnnotationReactions")
+
+  // ---- Projects module ----
+  ownedProjects             Project[]              @relation("UserProjects")
+  projectMemberships        ProjectMember[]
+  assignedTasks             Task[]
+  verifierAssignments       MilestoneVerifier[]    @relation("MilestoneVerifier_Verifier")
+  assignedVerifications     MilestoneVerifier[]    @relation("MilestoneVerifier_AssignedBy")
+  submittedMilestones       Milestone[]            @relation("MilestoneSubmitter")
+  verifiedMilestones        Milestone[]            @relation("MilestoneVerifier_VerifiedBy")
+  createdWorkSessions       WorkSession[]          @relation("WorkSessionCreator")
+  workPresences             WorkPresence[]         @relation("WorkPresenceUser")
+  attestedPresences         WorkPresence[]         @relation("WorkPresenceAttestor")
+
+  // ---- Economy module ----
+  duesPayments              DuesPayment[]
+  physicalWorkLogs          PhysicalWorkLog[]
+  workVerifications         WorkVerification[]     @relation("WorkVerifier")
+  commitments               Commitment[]
+  utWithdrawals             UtWithdrawal[]
+
+  // ---- Elections module ----
+  electionCandidacies       ElectionCandidate[]    @relation("ElectionCandidates")
+  electionVotes             ElectionVote[]         @relation("ElectionVoters")
+  wonElections              Election[]             @relation("ElectionWinners")
+
+  // ---- Treasury module ----
+  createdEscrows            Escrow[]
+  escrowReleases            EscrowRelease[]
+  treasuryAudits            TreasuryAudit[]
+
+  // ---- Marketplace module ----
+  marketplaceListings       MarketplaceListing[]   @relation("UserListings")
+  marketplacePurchases      MarketplaceTransaction[] @relation("Buyer")
+  marketplaceSales          MarketplaceTransaction[] @relation("Seller")
+  marketplaceReviews        MarketplaceReview[]    @relation("Reviewer")
+
+  // ---- Notifications module ----
+  notifications             Notification[]
+  notificationPreferences   NotificationPreference[]
+  pushSubscriptions         PushSubscription[]
+  auditLogs                 UserAudit[]
+  auditLogEntries           AuditLog[]                 @relation("UserAuditLog")
+  consents                  UserConsent[]
+  feedback                  PlatformFeedback[]
+
+  // ---- Education module ----
+  educationalModules        EducationalModule[]
+  educationalProgress       UserEducationalProgress[]
+  educationalReviews        EducationalReview[]
+
+  // ---- Emergency module ----
+  emergencyAlerts           EmergencyAlert[]   @relation("EmergencyAlertReporter")
+  resolvedEmergencies       EmergencyAlert[]   @relation("EmergencyAlertResolver")
+  emergencyResponses        EmergencyResponse[]
+
+  // ---- Reputation module ----
+  impactPointLogs           ImpactPointLog[]       @relation("UserImpactPointLogs")
+  locationImpacts           UserLocationImpact[]   @relation("UserLocationImpacts")
+
+  // ---- Payments module ----
+  paymentRecords            PaymentRecord[]
+
+  // ---- Posts module ----
+  posts                     Post[]          @relation("PostAuthor")
+  projectUpdates            ProjectUpdate[] @relation("ProjectUpdateAuthor")
+
+  // ---- System ----
+  updatedConfigs            SystemConfiguration[]  @relation("ConfigUpdater")
+  platformConfigUpdates     PlatformConfig[]       @relation("PlatformConfigUpdates")
+
+  @@index([email])
+  @@index([walletAddress])
+  @@index([phoneNumber])
+  @@index([primaryWardId])
+  @@index([verificationLevel])
+  @@index([status])
+  @@map("users")
+}
+
+// ============================================================================
+// ROLES SYSTEM
+// ============================================================================
+
+model Role {
+  id          String     @id @default(uuid()) @db.Uuid
+  name        String     @unique // ADMIN, SUPER_ADMIN, MODERATOR, etc.
+  description String?
+  permissions String[]   @default([])
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  userRoles   UserRole[]
+
+  @@map("roles")
+}
+
+model UserRole {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  roleId    String   @db.Uuid
+  active    Boolean  @default(true)
+  grantedAt DateTime @default(now())
+  grantedBy String?  @db.Uuid
+  revokedAt DateTime?
+  revokedBy String?  @db.Uuid
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@index([userId, active])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+// ============================================================================
+// SYSTEM CONFIGURATION
+// ============================================================================
+
+model SystemConfiguration {
+  id          String   @id @default(uuid()) @db.Uuid
+  key         String   @unique
+  value       Json
+  category    String
+  description String?
+  dataType    String
+  isPublic    Boolean  @default(false)
+
+  updatedBy   String?  @db.Uuid
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  updater     User?    @relation("ConfigUpdater", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  @@index([category])
+  @@index([isPublic])
+  @@index([dataType])
+  @@map("system_configuration")
+}

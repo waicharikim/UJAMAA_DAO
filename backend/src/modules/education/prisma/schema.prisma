@@ -1,0 +1,94 @@
+// ============================================================================
+// EDUCATION MODULE - Learning Content, Progress, Assessments
+// ============================================================================
+
+enum EducationalContentLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  EXPERT
+}
+
+model EducationalModule {
+  id             String                  @id @default(uuid()) @db.Uuid
+  title          String
+  description    String
+  content        String
+  mediaUrls      String[]
+  duration       Int
+  difficulty     EducationalContentLevel
+  category       String
+  creatorId      String                  @db.Uuid
+  groupId        String?                 @db.Uuid
+  verified        Boolean                 @default(false)
+  expertApproved  Boolean                 @default(false)
+  completionIP    Int                     @default(0)
+  views           Int                     @default(0)
+  averageRating   Decimal                 @default(0) @db.Decimal(3, 2)
+  submittedAt     DateTime?
+  rejectionReason String?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  creator     User                      @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  progress    UserEducationalProgress[]
+  assessments EducationalAssessment[]
+  reviews     EducationalReview[]
+
+  @@index([creatorId])
+  @@index([category, verified])
+  @@index([difficulty])
+}
+
+model UserEducationalProgress {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @db.Uuid
+  moduleId      String    @db.Uuid
+  status        String    @default("IN_PROGRESS")
+  progress      Int       @default(0)
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+  score         Int?
+  // Once-ever award guard: IP/PR for this module are paid at most once per user.
+  // Set via compare-and-swap so concurrent /complete calls cannot double-award.
+  rewardAwarded Boolean   @default(false)
+  // Number of comprehension-quiz attempts the user has used on this module.
+  attempts      Int       @default(0)
+
+  user   User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  module EducationalModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, moduleId])
+  @@index([userId])
+  @@index([moduleId, status])
+}
+
+model EducationalAssessment {
+  id           String   @id @default(uuid()) @db.Uuid
+  moduleId     String   @db.Uuid
+  questions    Json
+  passingScore Int      @default(70)
+  maxAttempts  Int      @default(3)
+  createdAt    DateTime @default(now())
+
+  module EducationalModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@index([moduleId])
+}
+
+model EducationalReview {
+  id        String   @id @default(uuid()) @db.Uuid
+  moduleId  String   @db.Uuid
+  userId    String   @db.Uuid
+  rating    Int
+  comment   String?
+  helpful   Int      @default(0)
+  createdAt DateTime @default(now())
+
+  module EducationalModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  user   User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, moduleId])
+  @@index([moduleId])
+  @@index([userId])
+}

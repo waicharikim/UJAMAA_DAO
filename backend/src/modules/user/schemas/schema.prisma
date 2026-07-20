@@ -1,0 +1,12 @@
+// src/modules/user/schemas/user.schema.ts
+import { z } from "zod";
+
+export const updateProfileSchema = z.object({
+  name: z.string().min(2).max(100).optional(),
+  avatarUrl: z.string().url().optional(),
+  phoneNumber: z.string().regex(/^(\+254|0)\d{9}$/).optional(),
+  primaryWardId: z.string().cuid().optional(),
+  secondaryWardId: z.string().cuid().optional().nullable(),
+}).refine(data => data.primaryWardId || data.secondaryWardId, {
+  message: "At least one ward required",
+});

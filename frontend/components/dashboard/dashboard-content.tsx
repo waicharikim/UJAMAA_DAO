@@ -1,244 +1,529 @@
+"use client"
+
 import { Suspense } from "react"
-import { PageHeader } from "@/components/layout/page-header"
-import { StatsGrid } from "@/components/layout/stats-grid"
-import { UserProfile } from "@/components/user/user-profile"
-import { GroupsList } from "@/components/groups/groups-list"
 import Link from "next/link"
-import { Vote, Users, FolderOpen, TrendingUp, Award, Coins, Target } from "lucide-react"
+import { useQuery } from "@tanstack/react-query"
+import Image from "next/image"
+import { Vote, Users, Award, Coins, Zap, AlertCircle, ShieldCheck, MapPin, BarChart3, ArrowRight } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
+import { useAuth } from "@/contexts/auth-context"
+import { economyApi, governanceApi, communityApi } from "@/lib/api"
+import { HomeFeed } from "@/components/feed/home-feed"
+import { BarazaGroupsCard } from "@/components/integration/baraza-groups-card"
+import { SystemGroupsCard } from "@/components/community/system-groups-card"
+import { EmergencyAlertsCard } from "@/components/emergency/emergency-alerts-card"
+import { GettingStartedCard } from "@/components/onboarding/getting-started-card"
+import { useSectionTour } from "@/hooks/use-section-tour"
+import { dashboardTour } from "@/lib/tours"
 
-export function DashboardContent() {
-  const stats = [
-    {
-      title: "Mapendekezo Hai", // Active Proposals
-      subtitle: "Active Proposals",
-      value: 12,
-      change: "+3 wiki hii", // this week
-      changeType: "positive" as const,
-      icon: Vote,
-      color: "bg-gradient-to-br from-orange-500 to-red-600",
-      description: "Mapendekezo ya uongozi",
-    },
-    {
-      title: "Miradi Yangu", // My Projects
-      subtitle: "My Projects",
-      value: 5,
-      change: "2 zinakamilika", // completing
-      changeType: "neutral" as const,
-      icon: FolderOpen,
-      color: "bg-gradient-to-br from-green-500 to-green-600",
-      description: "Ushiriki hai",
-    },
-    {
-      title: "Alama za Athari", // Impact Points
-      subtitle: "Impact Points",
-      value: 1250,
-      change: "+85 mwezi huu", // this month
-      changeType: "positive" as const,
-      icon: Award,
-      color: "bg-gradient-to-br from-yellow-500 to-orange-500",
-      description: "Jumla ya alama",
-    },
-    {
-      title: "Salio la Sarafu", // Token Balance
-      subtitle: "Token Balance",
-      value: 500,
-      change: "Zinapatikana", // Available
-      changeType: "neutral" as const,
-      icon: Coins,
-      color: "bg-gradient-to-br from-blue-500 to-purple-600",
-      description: "Sarafu za uongozi",
-    },
-  ]
+// ─── Stat card skeleton ───────────────────────────────────
+function StatSkeleton() {
+  return (
+    <Card className="border-0 shadow-card">
+      <CardContent className="p-4 md:p-6 space-y-3">
+        <Skeleton className="h-4 w-28" />
+        <Skeleton className="h-8 w-20" />
+        <Skeleton className="h-3 w-24" />
+      </CardContent>
+    </Card>
+  )
+}
+
+// ─── Individual stat card ─────────────────────────────────
+interface StatCardProps {
+  title: string
+  subtitle: string
+  value: number | string
+  change: string
+  changeType: "positive" | "negative" | "neutral"
+  icon: React.ElementType
+  colorClass: string
+}
+
+function StatCard({ title, subtitle, value, change, changeType, icon: Icon, colorClass }: StatCardProps) {
+  return (
+    <Card className="border-0 shadow-card overflow-hidden">
+      <CardContent className="p-3 md:p-5">
+        <div className={`w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center mb-2.5 ${colorClass}`}>
+          <Icon className="h-4 w-4 text-white" />
+        </div>
+        <p className="text-[9px] md:text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1 leading-snug">{subtitle}</p>
+        <p className="text-xl md:text-[28px] font-bold text-[#0E0B08] leading-none mb-1.5">{value}</p>
+        <p
+          className="text-[10px] md:text-xs font-medium"
+          style={{
+            color:
+              changeType === "positive"
+                ? "#1E3D2F"
+                : changeType === "negative"
+                  ? "#B03A1E"
+                  : "rgba(14,11,8,0.4)",
+          }}
+        >
+          {change}
+        </p>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ─── Unauthenticated empty state ──────────────────────────
+function UnauthenticatedState() {
+  return (
+    <Card
+      className="border-0 shadow-card text-center py-16 px-8"
+      style={{ background: "linear-gradient(135deg, #FAF7F2 0%, #F6F0E6 100%)" }}
+    >
+      <CardContent>
+        <div
+          className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
+          style={{ background: "rgba(201,146,42,0.12)" }}
+        >
+          <Award className="h-7 w-7" style={{ color: "#C9922A" }} />
+        </div>
+        <h2 className="font-display font-bold text-2xl text-[#0E0B08] mb-2">Your Ward Dashboard</h2>
+        <p className="text-[#0E0B08]/60 mb-6 max-w-sm mx-auto text-sm">
+          Sign in to see your Participation Rights balance, Impact Points, and your ward&apos;s governance activity.
+        </p>
+        <p className="text-xs text-[#0E0B08]/40">Use the Sign In button in the top right to get started.</p>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ─── Admin overview panel ──────────────────────────────────
+function AdminPanel() {
+  const { data: stats } = useQuery({
+    queryKey: ["admin-stats"],
+    queryFn: adminApi.getStats,
+    staleTime: 60_000,
+  })
+
+  const { data: recentUsers } = useQuery({
+    queryKey: ["admin-users-recent"],
+    queryFn: () => adminApi.getUsers({ limit: 4 }),
+    staleTime: 60_000,
+  })
 
   return (
-    <div className="container mx-auto px-4 py-8 space-y-8">
-      {/* Page Header */}
-      <PageHeader
-        title="Dashboard"
-        description="Karibu kwenye jukwaa lako la uongozi wa kijamii. Shiriki katika mapendekezo, simamia miradi, na jenga athari ya jamii."
-        gradient
-        badge="UJAMAA 🌍"
+    <Card className="border-0 shadow-card" style={{ borderLeft: "4px solid #C9922A" }}>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center justify-between text-sm">
+          <div className="flex items-center gap-2">
+            <BarChart3 className="h-4 w-4" style={{ color: "#C9922A" }} />
+            Platform Overview
+          </div>
+          <Link href="/admin">
+            <Button size="sm" variant="ghost" className="text-xs h-7 px-2 gap-1" style={{ color: "#C9922A" }}>
+              Admin Panel <ArrowRight className="h-3 w-3" />
+            </Button>
+          </Link>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
+          {[
+            { label: "Total Users", value: stats?.users.total ?? "—" },
+            { label: "Active Proposals", value: stats?.governance.activeProposals ?? "—" },
+            { label: "Pending Verif.", value: stats?.pendingActions.verifications ?? "—" },
+          ].map(({ label, value }) => (
+            <div key={label} className="rounded-xl p-3 text-center" style={{ background: "rgba(201,146,42,0.07)" }}>
+              <p className="text-xl font-bold" style={{ color: "#0E0B08" }}>{value}</p>
+              <p className="text-[10px] font-medium mt-0.5" style={{ color: "rgba(14,11,8,0.5)" }}>{label}</p>
+            </div>
+          ))}
+        </div>
+        {recentUsers && recentUsers.users.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "rgba(14,11,8,0.4)" }}>Recent Users</p>
+            {recentUsers.users.map((u) => (
+              <div key={u.id} className="flex items-center justify-between text-xs py-1.5 border-b" style={{ borderColor: "rgba(14,11,8,0.06)" }}>
+                <span className="font-medium truncate max-w-[55%]" style={{ color: "#0E0B08" }}>{u.name ?? u.email}</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-medium" style={{ background: "rgba(30,61,47,0.1)", color: "#1D4731" }}>
+                  {u.verificationLevel?.replace("_", " ")}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ─── Compliance officer panel ──────────────────────────────
+function CompliancePanel() {
+  const { data: pendingUsers } = useQuery({
+    queryKey: ["compliance-pending-verif"],
+    queryFn: () => adminApi.getUsers({ verificationLevel: "PHONE_VERIFIED", limit: 5 }),
+    staleTime: 60_000,
+  })
+
+  const { data: activeProposals } = useQuery({
+    queryKey: ["compliance-proposals"],
+    queryFn: () => governanceApi.getProposals({ limit: 1 }),
+    staleTime: 60_000,
+  })
+
+  return (
+    <Card className="border-0 shadow-card" style={{ borderLeft: "4px solid #1D4731" }}>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-sm">
+          <ShieldCheck className="h-4 w-4" style={{ color: "#1D4731" }} />
+          Compliance Overview
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-xl p-4" style={{ background: "rgba(30,61,47,0.07)" }}>
+            <p className="text-2xl font-bold" style={{ color: "#0E0B08" }}>
+              {pendingUsers?.total ?? "—"}
+            </p>
+            <p className="text-xs mt-1" style={{ color: "rgba(14,11,8,0.5)" }}>Awaiting Community Verification</p>
+            <Link href="/admin">
+              <Button size="sm" variant="ghost" className="text-xs h-7 px-0 mt-2 gap-1" style={{ color: "#1D4731" }}>
+                Review Queue <ArrowRight className="h-3 w-3" />
+              </Button>
+            </Link>
+          </div>
+          <div className="rounded-xl p-4" style={{ background: "rgba(201,146,42,0.07)" }}>
+            <p className="text-2xl font-bold" style={{ color: "#0E0B08" }}>
+              {activeProposals?.total ?? "—"}
+            </p>
+            <p className="text-xs mt-1" style={{ color: "rgba(14,11,8,0.5)" }}>Active Proposals</p>
+            <Link href="/proposals">
+              <Button size="sm" variant="ghost" className="text-xs h-7 px-0 mt-2 gap-1" style={{ color: "#C9922A" }}>
+                View Governance <ArrowRight className="h-3 w-3" />
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ─── County coordinator panel ──────────────────────────────
+function CoordinatorPanel() {
+  const { data: proposals } = useQuery({
+    queryKey: ["coordinator-proposals"],
+    queryFn: () => governanceApi.getProposals({ limit: 4 }),
+    staleTime: 60_000,
+  })
+
+  const { data: groups = [] } = useQuery({
+    queryKey: ["coordinator-groups"],
+    queryFn: communityApi.getMyGroups,
+    staleTime: 60_000,
+  })
+
+  return (
+    <Card className="border-0 shadow-card" style={{ borderLeft: "4px solid #2A5240" }}>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-sm">
+          <MapPin className="h-4 w-4" style={{ color: "#2A5240" }} />
+          County Activity
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {proposals && proposals.proposals && proposals.proposals.length > 0 ? (
+          <div className="space-y-2">
+            <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "rgba(14,11,8,0.4)" }}>Active Proposals</p>
+            {proposals.proposals.slice(0, 3).map((p: any) => (
+              <Link key={p.id} href={`/proposals/${p.id}`}>
+                <div className="flex items-center justify-between text-xs py-2 px-3 rounded-lg hover:bg-black/5 transition-colors cursor-pointer">
+                  <span className="font-medium truncate max-w-[70%]" style={{ color: "#0E0B08" }}>{p.title}</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-medium" style={{ background: "rgba(42,82,64,0.1)", color: "#2A5240" }}>
+                    {p.status?.replace(/_/g, " ")}
+                  </span>
+                </div>
+              </Link>
+            ))}
+            <Link href="/proposals">
+              <Button size="sm" variant="ghost" className="text-xs h-7 px-0 gap-1 w-full justify-end" style={{ color: "#2A5240" }}>
+                All proposals <ArrowRight className="h-3 w-3" />
+              </Button>
+            </Link>
+          </div>
+        ) : (
+          <p className="text-xs py-2" style={{ color: "rgba(14,11,8,0.4)" }}>No active proposals yet.</p>
+        )}
+        <div className="flex items-center justify-between">
+          <p className="text-xs" style={{ color: "rgba(14,11,8,0.5)" }}>
+            Ward Groups: <span className="font-semibold" style={{ color: "#0E0B08" }}>{groups.length}</span>
+          </p>
+          <Link href="/groups">
+            <Button size="sm" variant="ghost" className="text-xs h-7 px-2 gap-1" style={{ color: "#2A5240" }}>
+              View All <ArrowRight className="h-3 w-3" />
+            </Button>
+          </Link>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ─── Verification nudge banner ─────────────────────────────
+function VerificationNudge({ level }: { level: string }) {
+  if (level === "EMAIL_VERIFIED") {
+    return (
+      <Card className="border-0 shadow-sm" style={{ background: "linear-gradient(135deg, #FFF7E6 0%, #FEF3C7 100%)", borderLeft: "4px solid #D4911E" }}>
+        <CardContent className="p-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="h-5 w-5 flex-shrink-0" style={{ color: "#D4911E" }} />
+            <div>
+              <p className="text-sm font-bold" style={{ color: "#0A1F14" }}>Verify your phone number</p>
+              <p className="text-xs" style={{ color: "rgba(14,11,8,0.5)" }}>Complete phone verification to unlock economy features and community access.</p>
+            </div>
+          </div>
+          <Link href="/profile">
+            <Button size="sm" className="flex-shrink-0 font-semibold text-xs" style={{ background: "#D4911E", color: "#0A1F14" }}>
+              Start →
+            </Button>
+          </Link>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (level === "PHONE_VERIFIED") {
+    return (
+      <Card className="border-0 shadow-sm" style={{ background: "linear-gradient(135deg, #F0F7F4 0%, #E6F2EC 100%)", borderLeft: "4px solid #1D4731" }}>
+        <CardContent className="p-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <ShieldCheck className="h-5 w-5 flex-shrink-0" style={{ color: "#1D4731" }} />
+            <div>
+              <p className="text-sm font-bold" style={{ color: "#0A1F14" }}>Complete community verification</p>
+              <p className="text-xs" style={{ color: "rgba(14,11,8,0.5)" }}>Get 3 ward members to vouch for you and unlock governance participation.</p>
+            </div>
+          </div>
+          <Link href="/profile">
+            <Button size="sm" className="flex-shrink-0 font-semibold text-xs" style={{ background: "#1D4731", color: "#fff" }}>
+              Request Vouching →
+            </Button>
+          </Link>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return null
+}
+
+// ─── Welcome header ───────────────────────────────────────
+function WelcomeHeader({
+  user,
+}: {
+  user: { username?: string; email?: string; avatarUrl?: string; primaryWardName?: string; verificationLevel?: string }
+}) {
+  const name = user.username || user.email?.split("@")[0] || "Mwanachama"
+  const wardName = (user as any).primaryWardName ?? "Your Ward"
+  const hour = new Date().getHours()
+  const greeting = hour < 12 ? "Habari za asubuhi" : hour < 17 ? "Habari za mchana" : "Habari za jioni"
+  const initials = name.slice(0, 2).toUpperCase()
+
+  return (
+    <div
+      className="relative overflow-hidden rounded-2xl"
+      style={{ background: "linear-gradient(135deg, #1D4731 0%, #2A5E42 40%, #1E3D2F 100%)" }}
+    >
+      {/* Ward landscape photo — right edge */}
+      <div className="absolute inset-0 opacity-20">
+        <Image
+          src="https://images.unsplash.com/photo-1578662996442-48f60103fc96?auto=format&fit=crop&w=900&q=60"
+          alt=""
+          fill
+          sizes="900px"
+          className="object-cover object-center"
+          aria-hidden="true"
+        />
+      </div>
+      {/* Overlay to keep text sharp */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{ background: "linear-gradient(90deg, rgba(29,71,49,0.95) 0%, rgba(29,71,49,0.70) 60%, rgba(29,71,49,0.30) 100%)" }}
       />
 
-      {/* Stats Grid */}
-      <StatsGrid stats={stats} />
+      {/* Content — single horizontal row */}
+      <div className="relative z-10 px-5 py-4 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          {/* Avatar */}
+          <div className="relative w-10 h-10 rounded-full overflow-hidden flex-shrink-0 border-2 border-white/20">
+            {user.avatarUrl ? (
+              <Image src={user.avatarUrl} alt={name} fill sizes="40px" className="object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-sm font-bold text-white" style={{ background: "rgba(212,145,30,0.40)" }}>
+                {initials}
+              </div>
+            )}
+          </div>
+          <div>
+            <p className="text-[11px] font-medium text-white/50 mb-0.5">{greeting}</p>
+            <h2 className="font-serif font-bold text-xl md:text-2xl text-white leading-tight">{name}</h2>
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <MapPin className="h-3 w-3 text-white/40" />
+          <span className="text-xs text-white/50 font-medium">{wardName}</span>
+          {user.verificationLevel && (
+            <div
+              className="ml-2 flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold"
+              style={{ background: "rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.65)" }}
+            >
+              <ShieldCheck className="h-3 w-3" />
+              <span className="hidden sm:inline">{user.verificationLevel.replace(/_/g, " ")}</span>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <Card className="group hover:shadow-xl transition-all duration-300 border-0 shadow-lg bg-gradient-to-br from-orange-500 to-red-600 text-white overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-          <CardHeader className="relative">
-            <CardTitle className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-white/20 flex items-center justify-center">
-                <Vote className="h-5 w-5" />
-              </div>
-              <div>
-                <div>Mapendekezo Hai</div>
-                <div className="text-sm opacity-80">Active Proposals</div>
-              </div>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="relative">
-            <p className="text-orange-100 mb-4">
-              Shiriki katika uongozi kwa kupiga kura na kuunda mustakabali wetu pamoja.
+// ─── Stats grid (PR · IP · UT · Proposals · Communities) ─
+function StatsGrid({
+  prBalance,
+  impactPoints,
+  utBalance,
+  proposalCount,
+  groupCount,
+  isLoading,
+}: {
+  prBalance: number
+  impactPoints: number
+  utBalance: number
+  proposalCount: number | undefined
+  groupCount: number
+  isLoading: boolean
+}) {
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      {isLoading ? (
+        Array.from({ length: 5 }).map((_, i) => <StatSkeleton key={i} />)
+      ) : (
+        <>
+          <StatCard title="Haki za Ushiriki"  subtitle="Participation Rights" value={prBalance}          change="PR balance"      changeType="neutral"  icon={Coins} colorClass="bg-[#2A5240]" />
+          <StatCard title="Alama za Athari"    subtitle="Impact Points"        value={impactPoints}       change="Reputation score" changeType="positive" icon={Award} colorClass="bg-[#B03A1E]" />
+          <StatCard title="Tokeni za Huduma"   subtitle="Utility Tokens"       value={utBalance}          change="UT balance"      changeType="neutral"  icon={Zap}   colorClass="bg-[#7A4F1E]" />
+          <StatCard title="Mapendekezo Hai"    subtitle="Active Proposals"     value={proposalCount ?? "—"} change="All submitted"  changeType="positive" icon={Vote}  colorClass="bg-[#C9922A]" />
+          <StatCard title="Makundi Yangu"      subtitle="My Communities"       value={groupCount}         change="Groups joined"   changeType="neutral"  icon={Users} colorClass="bg-[#1E3D2F]" />
+        </>
+      )}
+    </div>
+  )
+}
+
+// ─── Needs-action banner ───────────────────────────────────
+function NeedsActionBanner({ total }: { total: number }) {
+  return (
+    <Card className="border-0 shadow-sm" style={{ background: "linear-gradient(135deg, #FFF7E6 0%, #FEF3C7 100%)", borderLeft: "4px solid #D4911E" }}>
+      <CardContent className="p-4 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <AlertCircle className="h-5 w-5 text-amber flex-shrink-0" />
+          <div>
+            <p className="text-sm font-bold text-[#0A1F14]">
+              {total} proposal{total !== 1 ? "s" : ""} need your attention
             </p>
-            <Link href="/proposals">
-              <Button variant="secondary" className="w-full bg-white/20 hover:bg-white/30 text-white border-white/30">
-                <Vote className="h-4 w-4 mr-2" />
-                Ona Mapendekezo 🗳️
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-
-        <Card className="group hover:shadow-xl transition-all duration-300 border-0 shadow-lg bg-gradient-to-br from-green-500 to-emerald-600 text-white overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-          <CardHeader className="relative">
-            <CardTitle className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-white/20 flex items-center justify-center">
-                <FolderOpen className="h-5 w-5" />
-              </div>
-              <div>
-                <div>Miradi Yangu</div>
-                <div className="text-sm opacity-80">My Projects</div>
-              </div>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="relative">
-            <p className="text-green-100 mb-4">Simamia ushiriki wako na ufuatilie maendeleo ya hatua muhimu.</p>
-            <Link href="/projects">
-              <Button variant="secondary" className="w-full bg-white/20 hover:bg-white/30 text-white border-white/30">
-                <FolderOpen className="h-4 w-4 mr-2" />
-                Ona Miradi 📁
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-
-        <Card className="group hover:shadow-xl transition-all duration-300 border-0 shadow-lg bg-gradient-to-br from-purple-500 to-pink-600 text-white overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-          <CardHeader className="relative">
-            <CardTitle className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-white/20 flex items-center justify-center">
-                <Users className="h-5 w-5" />
-              </div>
-              <div>
-                <div>Vikundi vya Jamii</div>
-                <div className="text-sm opacity-80">Community Groups</div>
-              </div>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="relative">
-            <p className="text-purple-100 mb-4">Jiunge na vikundi na ushirikiane na wanajamii wenzako.</p>
-            <Link href="/groups">
-              <Button variant="secondary" className="w-full bg-white/20 hover:bg-white/30 text-white border-white/30">
-                <Users className="h-4 w-4 mr-2" />
-                Chunguza Vikundi 👥
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Recent Activity & Profile */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-6">
-          {/* Recent Activity */}
-          <Card className="border-0 shadow-lg">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-orange-500" />
-                <div>
-                  <div>Shughuli za Hivi Karibuni</div>
-                  <div className="text-sm font-normal text-gray-500">Recent Activity</div>
-                </div>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {[
-                  {
-                    action: "Alipiga kura", // Voted
-                    actionEn: "Voted on proposal",
-                    title: "Mradi wa Nishati ya Jua ya Jamii",
-                    titleEn: "Community Solar Energy Initiative",
-                    time: "masaa 2 yaliyopita", // 2 hours ago
-                    type: "vote",
-                    status: "imeidhinishwa", // approved
-                  },
-                  {
-                    action: "Alikamilisha hatua",
-                    actionEn: "Completed milestone",
-                    title: "Mafunzo ya Ujuzi wa Kidijitali - Awamu ya 1",
-                    titleEn: "Digital Literacy Training - Phase 1",
-                    time: "siku 1 iliyopita",
-                    type: "milestone",
-                    status: "imekamilika",
-                  },
-                  {
-                    action: "Alijiunga na kikundi",
-                    actionEn: "Joined group",
-                    title: "Kikundi cha Nishati Safi",
-                    titleEn: "Green Energy Collective",
-                    time: "siku 3 zilizopita",
-                    type: "group",
-                    status: "hai",
-                  },
-                ].map((activity, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center gap-4 p-4 rounded-lg bg-orange-50 hover:bg-orange-100 transition-colors"
-                  >
-                    <div
-                      className={`h-10 w-10 rounded-full flex items-center justify-center ${
-                        activity.type === "vote"
-                          ? "bg-orange-100 text-orange-600"
-                          : activity.type === "milestone"
-                            ? "bg-green-100 text-green-600"
-                            : "bg-purple-100 text-purple-600"
-                      }`}
-                    >
-                      {activity.type === "vote" && <Vote className="h-4 w-4" />}
-                      {activity.type === "milestone" && <Target className="h-4 w-4" />}
-                      {activity.type === "group" && <Users className="h-4 w-4" />}
-                    </div>
-                    <div className="flex-1">
-                      <div className="font-medium text-slate-900">
-                        {activity.action} • <span className="text-sm text-gray-600">{activity.actionEn}</span>
-                      </div>
-                      <div className="text-sm text-slate-600">
-                        {activity.title}
-                        <br />
-                        <span className="text-xs text-gray-500">{activity.titleEn}</span>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <Badge variant={activity.status === "imekamilika" ? "default" : "secondary"}>
-                        {activity.status}
-                      </Badge>
-                      <div className="text-xs text-slate-500 mt-1">{activity.time}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Groups Section */}
-          <Suspense fallback={<div className="h-32 animate-pulse bg-slate-200 rounded-lg" />}>
-            <GroupsList />
-          </Suspense>
+            <p className="text-xs text-warm-gray">
+              You have pending actions as a proposal creator, group leader, or administrator.
+            </p>
+          </div>
         </div>
+        <Link href="/proposals">
+          <Button size="sm" className="flex-shrink-0 font-semibold text-xs" style={{ background: "#D4911E", color: "#0A1F14" }}>
+            Review Now
+          </Button>
+        </Link>
+      </CardContent>
+    </Card>
+  )
+}
 
-        <div>
-          <Suspense fallback={<div className="h-64 animate-pulse bg-slate-200 rounded-lg" />}>
-            <UserProfile />
-          </Suspense>
-        </div>
+// ─── Activity section ──────────────────────────────────────
+function ActivitySection() {
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+      <div className="lg:col-span-2">
+        <HomeFeed embedded />
       </div>
+      <div className="space-y-4">
+        <GettingStartedCard />
+        <EmergencyAlertsCard />
+        <SystemGroupsCard />
+        <Suspense fallback={<Skeleton className="h-48 w-full rounded-xl" />}>
+          <BarazaGroupsCard />
+        </Suspense>
+      </div>
+    </div>
+  )
+}
+
+// ─── Role-specific panels ──────────────────────────────────
+function RolePanels({ isAdmin, isCompliance, isCoordinator }: { isAdmin: boolean; isCompliance: boolean; isCoordinator: boolean }) {
+  if (isAdmin)       return <AdminPanel />
+  if (isCompliance)  return <CompliancePanel />
+  if (isCoordinator) return <CoordinatorPanel />
+  return null
+}
+
+// ─── Main dashboard ───────────────────────────────────────
+export function DashboardContent() {
+  const { user, isAuthenticated } = useAuth()
+  useSectionTour(dashboardTour.key, dashboardTour.steps)
+
+  const { data: prData, isLoading: prLoading } = useQuery({
+    queryKey: ["pr-balance"],
+    queryFn: () => economyApi.getPRBalance(),
+    staleTime: 30_000,
+    enabled: isAuthenticated,
+  })
+  const { data: proposalsMeta } = useQuery({
+    queryKey: ["proposals-count"],
+    queryFn: () => governanceApi.getProposals({ limit: 1 }),
+    enabled: isAuthenticated,
+    staleTime: 60_000,
+  })
+  const { data: needsAction } = useQuery({
+    queryKey: ["proposals-needs-action"],
+    queryFn: () => governanceApi.getNeedsAction(),
+    enabled: isAuthenticated,
+    staleTime: 30_000,
+  })
+  const { data: myGroups = [] } = useQuery({
+    queryKey: ["system-groups"],
+    queryFn: communityApi.getMyGroups,
+    enabled: isAuthenticated,
+    staleTime: 60_000,
+  })
+
+  const prBalance    = prData?.balance ?? user?.tokenBalance ?? 0
+  const impactPoints = user?.impactPoints?.global ?? 0
+
+  if (!isAuthenticated) {
+    return (
+      <div className="px-4 md:px-8 py-6 max-w-6xl mx-auto">
+        <UnauthenticatedState />
+      </div>
+    )
+  }
+
+  return (
+    <div className="px-4 md:px-8 py-4 md:py-6 space-y-4 md:space-y-8 max-w-6xl mx-auto">
+      {user && <WelcomeHeader user={user} />}
+      {user?.verificationLevel && <VerificationNudge level={user.verificationLevel} />}
+      <StatsGrid
+        prBalance={prBalance}
+        impactPoints={impactPoints}
+        utBalance={user?.utBalance ?? 0}
+        proposalCount={proposalsMeta?.total}
+        groupCount={myGroups.length}
+        isLoading={prLoading}
+      />
+      {needsAction && needsAction.total > 0 && <NeedsActionBanner total={needsAction.total} />}
+      <ActivitySection />
     </div>
   )
 }
