@@ -6,7 +6,7 @@ UjamaaDAO is a neighborhood sovereignty platform for Kenyan wards — cooperativ
 
 ---
 
-## Project Status (May 2026)
+## Project Status (July 2026)
 
 | Layer | Status |
 |---|---|
@@ -14,10 +14,11 @@ UjamaaDAO is a neighborhood sovereignty platform for Kenyan wards — cooperativ
 | Prisma schema | ✅ 80 models, migrations applied, E2E flow verified |
 | Docker/Infra | ✅ All services running (`make dev`) — API, worker, Postgres, Redis, frontend, MailHog, Anvil |
 | Frontend | ✅ 30+ routes, Chai palette design system, magic-link + passkey auth, Coinbase Smart Wallet (passkey self-custody), PWA installable |
+| AI | Qwen via DashScope (OpenAI-compatible, provider-switchable) — Baraza Q&A bot, deliberation digest, 7-agent deliberation engine; live on ujamaadao.org |
 | Payments | ✅ M-Pesa STK push via Buni by KCB — end-to-end verified (push sent, callback received, DB updated) |
 | Smart Contracts | ✅ Deployed + device-tested on **Base Sepolia** — `PrToken.sol` (soulbound) + `UtToken.sol` + **user-signed** `GovernanceVoting.sol` (content-hash anchoring), 39 Foundry tests green; user-signed gasless voting verified on-chain. **Base mainnet deferred** |
 | Observability | ✅ Sentry (backend + frontend), DataDog APM, BrowserStack wired |
-| **Production** | ✅ **LIVE** — `ujamaadao.org` + `api.ujamaadao.org` on DigitalOcean droplet `167.71.55.51` |
+| **Production** | ✅ **LIVE** — `ujamaadao.org` + `api.ujamaadao.org` on Alibaba ECS
 
 ---
 
