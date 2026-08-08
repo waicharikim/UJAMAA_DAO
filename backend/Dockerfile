@@ -28,7 +28,7 @@ COPY --from=deps /usr/src/app/node_modules ./node_modules
 COPY . .
 
 RUN DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" npm run db:generate && \
-    NODE_OPTIONS="--max-old-space-size=3072" npm run build && \
+    NODE_OPTIONS="--max-old-space-size=1536" npm run build && \
     NODE_OPTIONS="--max-old-space-size=1024" npx tsc -p tsconfig.seed.json && \
     npm prune --omit=dev --ignore-scripts
 
